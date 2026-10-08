@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run ReelCore tests (offline)
+        run: |
+          set +e
+          swift test --skip LiveTMDBTests 2>&1 | tee test.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
+          else
+            echo "::notice::$(grep -E 'Executed [0-9]+ tests' test.log | tail -1)"
+          fi
+          exit $code
+
+  live-match:
+    runs-on: ubuntu-24.04
+    container: swift:6.0-noble
+    env:
+      TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+      OMDB_KEY: ${{ secrets.OMDB_KEY }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - name: Match the sample films against TMDB (token is never printed)
+        run: |
+          set +e
+          swift test --filter LiveTMDBTests 2>&1 | tee live.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            grep -E "error:|failed" live.log | head -25 | while read -r l; do echo "::error::${l}"; done
+          fi
+          exit $code
+
+  secrets-check:
+    runs-on: ubuntu-24.04
+    env:
+      TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+      OMDB_KEY: ${{ secrets.OMDB_KEY }}
+    steps:
+      - name: Check API secrets (values are never printed)
+        run: |
+          fail=0
+          if [ -z "$TMDB_TOKEN" ]; then
+            echo "::error::TMDB_TOKEN secret is missing"; fail=1
+          else
+            code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TMDB_TOKEN" https://api.themoviedb.org/3/configuration)
+            if [ "$code" = "200" ]; then echo "::notice::TMDB_TOKEN works"; else echo "::error::TMDB_TOKEN rejected (HTTP $code)"; fail=1; fi
+          fi
+          if [ -z "$OMDB_KEY" ]; then
+            echo "::error::OMDB_KEY secret is missing"; fail=1
+          else
+            body=$(curl -s "https://www.omdbapi.com/?apikey=$OMDB_KEY&i=tt3896198")
+            if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
+          fi
+          exit $fail
+
+  mac-build:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]')
+    env:
+      SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+      SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Swift version
+        run: swift --version
+      - name: Build Reel.app
+        run: |
+          set -o pipefail
+          chmod +x scripts/make-app.sh
+          ./scripts/make-app.sh 2>&1 | tee build.log || {
+            grep -E "error:" build.log | head -25 | while read -r l; do echo "::error::${l}"; done
+            exit 1
+          }
+          count=$({ grep -E "/Sources/.*: warning:" build.log || true; } | sed -E 's#^.*/(Sources/[^:]+:[0-9]+):[0-9]+: #\1 #' | sort -u | tee warnings.txt | wc -l | tr -d ' ')
+          echo "::notice::Compiler warnings: ${count}"
+          head -10 warnings.txt | while read -r l; do echo "::warning::${l}"; done
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Reel-mac
+          path: build/Reel.zip
+          retention-days: 14
+      - name: Render Cinema mode screens (laptop, 1080p, 4K)
+        continue-on-error: true
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          mkdir -p screens
+          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 420; exec @ARGV' build/Reel.app/Contents/MacOS/Reel
+          ls -la screens
+          echo "::notice::Rendered $(ls screens | wc -l | tr -d ' ') screens"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: Reel-screens
+          path: screens/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Publish screens to the screens branch (for review without downloading)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -n "$(ls screens 2>/dev/null)" ] || exit 0
+          cd screens
+          git init -q -b screens
+          git config user.name "Reel CI"
+          git config user.email "ci@users.noreply.github.com"
+          git add . && git commit -qm "Screens for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screens

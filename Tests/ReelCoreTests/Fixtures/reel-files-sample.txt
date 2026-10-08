@@ -1,0 +1,5 @@
+78000000000 /Volumes/Films/Blade Runner 2049 (2017) 2160p UHD BluRay REMUX DV HDR 10bit HEVC [Hindi DDP 2.0 + English TrueHD Atmos 7.1] x265 (GRP).mkv
+11000000000 /Volumes/Films/Dredd 2012 UHD 1080p 10bit HDR BluRay HEVC x265 [Hindi DTH DD 2.0 384kbps + English DDP 7.1] ESub-EXAMPLE.mkv
+9400000000 /Volumes/Films/Gone.Girl.2014.BluRay.Remux.1080p.AVC.DTS-HD.MA.7.1-GRP.mkv.part
+42000000000 /Volumes/Films/T2 Trainspotting 2017 2160p 10bit HDR BluRay HEVC x265 [Hindi NF DDP 5.1 640kbps + English TrueHD Atmos 7.1] ESub-DEMO.mkv
+26500000000 /Volumes/Films/The Northman (2022) 2160p MA WEB-DL DV HDR 10bit HEVC [Hindi DDP 5.1 + English DDP Atmos 5.1] x265 (TEST-GRP).mkv
