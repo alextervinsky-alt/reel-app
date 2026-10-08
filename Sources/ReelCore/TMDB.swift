@@ -487,6 +487,27 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
         try await get("/movie/\(id)", [])
     }
 
+    /// Themes TMDB tags films with ("heist", "time travel", "tokyo, japan"), for Lists' search.
+    public func searchKeywords(_ query: String) async throws -> [ListSearch.Theme] {
+        struct Page: Decodable { let results: [ListSearch.Theme] }
+        let page: Page = try await get("/search/keyword", [URLQueryItem(name: "query", value: query)])
+        return page.results
+    }
+
+    /// Film series ("The Before Collection").
+    public func searchCollections(_ query: String) async throws -> [ListSearch.Series] {
+        struct Page: Decodable { let results: [ListSearch.Series] }
+        let page: Page = try await get("/search/collection", [URLQueryItem(name: "query", value: query)])
+        return page.results
+    }
+
+    /// People, the best known first.
+    public func searchPeople(_ query: String) async throws -> [ListSearch.Person] {
+        struct Page: Decodable { let results: [ListSearch.Person] }
+        let page: Page = try await get("/search/person", [URLQueryItem(name: "query", value: query)])
+        return page.results
+    }
+
     /// A franchise with all its films.
     public func collection(id: Int) async throws -> TMDBCollection {
         try await get("/collection/\(id)", [])

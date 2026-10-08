@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import SwiftUI
 import ReelCore
 
@@ -24,6 +25,7 @@ struct ListsView: View {
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 }
+                ListSearchSection()
                 StartHereSection(preparing: preparing) { preview = $0 }
                 awardsSection
                 IMDbSection(columns: cardColumns)
@@ -235,6 +237,185 @@ struct IMDbSection: View {
     private var postersKey: String {
         if case .ready(let date) = model.lists.imdbState { return "\(year)|\(date.timeIntervalSince1970)" }
         return "\(year)"
+    }
+}
+
+/// A search for lists by any words, above the key lists: themes ("heist", "lighthouse"),
+/// series, people, a country's cinema or a decade, and Wikipedia's "List of … films", to find
+/// films outside what Reel picks for your taste.
+struct ListSearchSection: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var results: ListSearch.Results?
+    @State private var searching = false
+    @State private var searched = ""
+
+    private let columns = [GridItem(.adaptive(minimum: 250), spacing: 16, alignment: .top)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Find lists: heist, time travel, lighthouse, Japanese, 1970s, Kubrick…", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+                    .onSubmit { Task { await search(now: true) } }
+                if searching { ProgressView().controlSize(.small) }
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                        results = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear")
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline))
+            if let results, !text.isEmpty {
+                if results.isEmpty {
+                    Text("No lists for “\(searched)”. Try another word: a theme, a place, a time, a person.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                } else {
+                    found(results)
+                }
+            }
+        }
+        .task(id: text) { await search(now: false) }
+    }
+
+    private func search(now: Bool) async {
+        let words = text.trimmingCharacters(in: .whitespaces)
+        guard words.count >= 2 else {
+            results = nil
+            return
+        }
+        if !now {
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+        }
+        guard words != searched || results == nil else { return }
+        searching = true
+        let found = await model.searchLists(words)
+        searching = false
+        guard !Task.isCancelled || now else { return }
+        searched = words
+        results = found ?? ListSearch.Results()
+    }
+
+    @ViewBuilder
+    private func found(_ results: ListSearch.Results) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            if !results.themes.isEmpty || !results.cinema.isEmpty {
+                group("Lists of Films", note: "Every film with the theme, the best-rated first") {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+                        ForEach(results.cinema, id: \.self) { ListTile(list: $0, symbol: "globe.europe.africa") }
+                        ForEach(results.themes) { ListTile(list: .theme($0), symbol: "tag") }
+                    }
+                }
+            }
+            if !results.series.isEmpty {
+                group("Series", note: nil) {
+                    FlowLayout(spacing: 8) {
+                        ForEach(results.series) { series in
+                            NavigationLink(value: FranchiseRoute(id: series.id, name: series.name)) {
+                                chip(series.name, symbol: "square.stack")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            if !results.people.isEmpty {
+                group("People", note: "Their films, all of them") {
+                    FlowLayout(spacing: 8) {
+                        ForEach(results.people) { person in
+                            NavigationLink(value: PersonRoute(id: person.id, name: person.name)) {
+                                chip(person.role.isEmpty ? person.name : "\(person.name) · \(person.role)", symbol: "person")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            if !results.wikipedia.isEmpty {
+                group("On Wikipedia", note: "Lists to read, opened in your browser") {
+                    FlowLayout(spacing: 8) {
+                        ForEach(results.wikipedia) { list in
+                            Button { NSWorkspace.shared.open(list.url) } label: {
+                                chip(list.title, symbol: "arrow.up.right")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func group<Content: View>(_ title: String, note: String?, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(title.uppercased())
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(Theme.brand)
+                if let note { Text(note).font(.system(size: 12)).foregroundStyle(.secondary) }
+            }
+            content()
+        }
+    }
+
+    private func chip(_ title: String, symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.system(size: 13, weight: .medium))
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .foregroundStyle(Color.white.opacity(0.9))
+            .contentShape(Capsule())
+    }
+}
+
+/// A list found by Lists' search: its name and its first posters; opens the whole list.
+private struct ListTile: View {
+    @Environment(AppModel.self) private var model
+    let list: DiscoverList
+    let symbol: String
+    @State private var hovering = false
+
+    var body: some View {
+        let films = model.exploreFilms(list, mood: nil)
+        NavigationLink(value: DiscoverRoute(list: list)) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 6) {
+                    ForEach(0..<4, id: \.self) { index in
+                        Poster(path: films.indices.contains(index) ? films[index].posterPath : nil, title: "", cornerRadius: 6)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(list.title, systemImage: symbol)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                    Text(model.discover[list] == nil ? "Finding films…" : (films.isEmpty ? "No films you haven't seen" : "\(films.count)\(films.count >= 60 ? "+" : "") films you haven't seen"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(hovering ? Theme.panel.opacity(0.8) : Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .task(id: list) { await model.loadDiscover(list) }
     }
 }
 

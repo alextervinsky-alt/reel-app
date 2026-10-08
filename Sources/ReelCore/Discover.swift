@@ -51,6 +51,8 @@ public enum DiscoverList: Hashable, Sendable {
     case because(id: Int, title: String)
     /// Rated highly by the few who've seen them.
     case hiddenGems
+    /// Films with one of TMDB's themes (Lists' search): "Heist", "Time Travel".
+    case theme(ListSearch.Theme)
 
     /// Countries whose cinema Explore offers a shelf of, one each time Reel opens.
     public static let countries: [(code: String, name: String)] = [
@@ -73,6 +75,7 @@ public enum DiscoverList: Hashable, Sendable {
         case .decade(let start): "The Best of the \(start)s"
         case .because(_, let title): "Because You Loved \(title)"
         case .hiddenGems: "Hidden Gems"
+        case .theme(let theme): theme.title
         }
     }
 
@@ -87,6 +90,7 @@ public enum DiscoverList: Hashable, Sendable {
         case .decade: "The decade's best-loved films · a different decade each time Reel opens"
         case .because: "What people who loved it went on to love · a different film of yours each time"
         case .hiddenGems: "Rated highly by the few who've seen them, from any time"
+        case .theme(let theme): "Films about \(theme.name), the best-rated first"
         }
     }
 
@@ -171,6 +175,13 @@ public enum DiscoverList: Hashable, Sendable {
                 URLQueryItem(name: "primary_release_date.gte", value: "1950-01-01"),
                 noAdult,
             ], 5)
+        case .theme(let theme):
+            return ("/discover/movie", [
+                URLQueryItem(name: "with_keywords", value: String(theme.id)),
+                URLQueryItem(name: "sort_by", value: "vote_average.desc"),
+                URLQueryItem(name: "vote_count.gte", value: "60"),
+                noAdult,
+            ], 3)
         }
     }
 

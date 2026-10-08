@@ -12,9 +12,17 @@ public struct YearFilm: Equatable, Sendable, Identifiable {
     /// Your own stars, if you rated it.
     public let yourRating: Int?
     public let score: Double?
+    /// The original language ("ko").
+    public let language: String?
+    public let countries: [String]
+    /// The leads, billing order.
+    public let cast: [String]
+    /// Seen somewhere else (its date is a guess or a month, not a night).
+    public let elsewhere: Bool
 
     public init(id: String, title: String, releaseYear: Int?, watchedOn: Date, runtime: Int?, genres: [String],
-                directors: [String], yourRating: Int?, score: Double?) {
+                directors: [String], yourRating: Int?, score: Double?, language: String? = nil, countries: [String] = [],
+                cast: [String] = [], elsewhere: Bool = false) {
         self.id = id
         self.title = title
         self.releaseYear = releaseYear
@@ -24,6 +32,10 @@ public struct YearFilm: Equatable, Sendable, Identifiable {
         self.directors = directors
         self.yourRating = yourRating
         self.score = score
+        self.language = language
+        self.countries = countries
+        self.cast = cast
+        self.elsewhere = elsewhere
     }
 }
 
@@ -40,9 +52,14 @@ public struct FilmBrief: Codable, Equatable, Sendable {
     public var voteAverage: Double?
     /// When it came out ("2004-11-20"); missing in briefs kept before Reel 1.7.
     public var released: String?
+    /// The original language, countries and leads, for Year in Film (missing before Reel 1.8).
+    public var language: String?
+    public var countries: [String]?
+    public var cast: [String]?
 
     public init(title: String, year: Int?, runtime: Int?, genres: [String], directors: [String], posterPath: String?,
-                backdropPath: String?, voteAverage: Double?, released: String? = nil) {
+                backdropPath: String?, voteAverage: Double?, released: String? = nil, language: String? = nil,
+                countries: [String]? = nil, cast: [String]? = nil) {
         self.title = title
         self.year = year
         self.runtime = runtime
@@ -52,18 +69,31 @@ public struct FilmBrief: Codable, Equatable, Sendable {
         self.backdropPath = backdropPath
         self.voteAverage = voteAverage
         self.released = released
+        self.language = language
+        self.countries = countries
+        self.cast = cast
     }
 
     public init(_ details: TMDBMovieDetails) {
         self.init(title: details.title, year: details.year, runtime: details.runtime.flatMap { $0 > 0 ? $0 : nil },
                   genres: details.genreNames, directors: details.directors, posterPath: details.posterPath,
-                  backdropPath: details.backdropPath, voteAverage: details.voteAverage, released: details.releaseDate)
+                  backdropPath: details.backdropPath, voteAverage: details.voteAverage, released: details.releaseDate,
+                  language: details.originalLanguage ?? "", countries: (details.productionCountries ?? []).map(\.name),
+                  cast: YearFilm.leads(details))
     }
 
     /// The same, as Year in Film counts it.
     public func yearFilm(id: String, watchedOn: Date, yourRating: Int?) -> YearFilm {
         YearFilm(id: id, title: title, releaseYear: year, watchedOn: watchedOn, runtime: runtime, genres: genres,
-                 directors: directors, yourRating: yourRating, score: voteAverage)
+                 directors: directors, yourRating: yourRating, score: voteAverage, language: language,
+                 countries: countries ?? [], cast: cast ?? [], elsewhere: true)
+    }
+}
+
+extension YearFilm {
+    /// The four leads, in billing order.
+    public static func leads(_ details: TMDBMovieDetails?) -> [String] {
+        (details?.credits?.cast ?? []).sorted { ($0.order ?? 999) < ($1.order ?? 999) }.prefix(4).map(\.name)
     }
 }
 
@@ -107,6 +137,22 @@ public struct YearInFilm: Equatable, Sendable {
     public let favourite: YearFilm?
     public let longest: YearFilm?
     public let oldest: YearFilm?
+    // In numbers:
+    /// The average running time, in minutes.
+    public let averageRuntime: Int?
+    /// The average of your stars (with at least two rated).
+    public let averageStars: Double?
+    /// Films that came out that same year.
+    public let newReleases: Int
+    /// The month with the most films (0 = January), when one stands out.
+    public let busiestMonth: Int?
+    /// The day of the week you watch most (1 = Sunday), from nights on your drives; when one stands out.
+    public let favouriteWeekday: Int?
+    public let languages: [Tally]
+    public let languageCount: Int
+    public let countryCount: Int
+    /// Actors in at least two of the year's films.
+    public let topActors: [Tally]
 
     public init(year: Int, from all: [YearFilm], calendar: Calendar = .current) {
         self.year = year
@@ -128,6 +174,23 @@ public struct YearInFilm: Equatable, Sendable {
             : rated.max { ($0.yourRating ?? 0, $0.score ?? 0) < ($1.yourRating ?? 0, $1.score ?? 0) }
         longest = films.filter { $0.runtime != nil }.max { ($0.runtime ?? 0) < ($1.runtime ?? 0) }
         oldest = films.filter { $0.releaseYear != nil }.min { ($0.releaseYear ?? 0) < ($1.releaseYear ?? 0) }
+
+        let timed = films.compactMap(\.runtime)
+        averageRuntime = timed.isEmpty ? nil : timed.reduce(0, +) / timed.count
+        let stars = films.compactMap(\.yourRating)
+        averageStars = stars.count < 2 ? nil : Double(stars.reduce(0, +)) / Double(stars.count)
+        newReleases = films.filter { $0.releaseYear == year }.count
+        let busiest = months.enumerated().max { $0.element < $1.element }
+        busiestMonth = busiest.flatMap { top in months.filter { $0 == top.element }.count == 1 && top.element >= 2 ? top.offset : nil }
+        var nights = Array(repeating: 0, count: 8)
+        for film in films where !film.elsewhere { nights[calendar.component(.weekday, from: film.watchedOn)] += 1 }
+        let night = nights.enumerated().max { $0.element < $1.element }
+        favouriteWeekday = night.flatMap { top in nights.filter { $0 == top.element }.count == 1 && top.element >= 3 ? top.offset : nil }
+        let spoken = films.compactMap { $0.language.flatMap { $0.isEmpty ? nil : FilmLanguage.name($0) } }
+        languages = Self.tally(spoken, minimum: 1, limit: 4)
+        languageCount = Set(spoken).count
+        countryCount = Set(films.flatMap(\.countries)).count
+        topActors = Self.tally(films.flatMap(\.cast), minimum: 2, limit: 4)
     }
 
     /// Years with at least one dated viewing, newest first.

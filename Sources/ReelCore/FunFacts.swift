@@ -254,7 +254,7 @@ public enum FunFactExtractor {
 /// Finds a film's English Wikipedia article (via its IMDb id on Wikidata), reads its text, and
 /// collects structured facts from Wikidata.
 public struct WikipediaClient: Sendable {
-    private let session: URLSession
+    let session: URLSession
 
     public init(session: URLSession = TMDBClient.sharedSession) {
         self.session = session

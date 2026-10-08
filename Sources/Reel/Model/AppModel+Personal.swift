@@ -167,7 +167,7 @@ extension AppModel {
     /// Fetches what Year in Film needs about films seen elsewhere (once; kept in List Data).
     func loadSeenFilms() async {
         guard let client = tmdb else { return }
-        await lists.fetchBriefs(seenElsewhereFilms.map { $0.id }, using: client)
+        await lists.fetchBriefs(seenElsewhereFilms.map { $0.id }, using: client, refreshingOld: true)
     }
 
     func setYearCountsElsewhere(_ on: Bool) {
@@ -242,7 +242,8 @@ extension AppModel {
             let d = item.main.tmdb
             return YearFilm(id: key, title: item.main.displayTitle, releaseYear: item.main.displayYear, watchedOn: date,
                             runtime: d?.runtime, genres: d?.genreNames ?? [], directors: d?.directors ?? [],
-                            yourRating: personal.record(forKey: key).rating, score: item.score)
+                            yourRating: personal.record(forKey: key).rating, score: item.score, language: d?.originalLanguage,
+                            countries: (d?.productionCountries ?? []).map(\.name), cast: YearFilm.leads(d))
         }
         guard yearCountsElsewhere else { return library }
         return library + seenElsewhereFilms.compactMap { entry in

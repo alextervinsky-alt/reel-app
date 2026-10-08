@@ -92,8 +92,10 @@ private struct YearSummary: View {
             if !summary.films.isEmpty {
                 numbers
                 months
+                inNumbers
                 highlights
-                if !summary.topGenres.isEmpty || !summary.topDirectors.isEmpty { tastes }
+                if !summary.topGenres.isEmpty || !summary.topDirectors.isEmpty || !summary.languages.isEmpty
+                    || !summary.topActors.isEmpty { tastes }
                 everyFilm
             }
             if !elsewhere.isEmpty { seenElsewhere }
@@ -140,6 +142,55 @@ private struct YearSummary: View {
     private var hours: String {
         let h = Double(summary.minutes) / 60
         return h < 10 ? String(format: "%.1f", h) : String(Int(h.rounded()))
+    }
+
+    // MARK: In numbers
+
+    /// The smaller figures, in one quiet panel: only those the year has.
+    @ViewBuilder
+    private var inNumbers: some View {
+        let figures = smallFigures
+        if !figures.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Theme.sectionTitle("In Numbers")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 0, alignment: .topLeading)], alignment: .leading, spacing: 0) {
+                    ForEach(figures, id: \.label) { figure in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(figure.value)
+                                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Text(figure.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+            }
+        }
+    }
+
+    private var smallFigures: [(value: String, label: String)] {
+        var figures: [(value: String, label: String)] = []
+        if let minutes = summary.averageRuntime { figures.append((Format.runtime(minutes), "an average film")) }
+        if let stars = summary.averageStars { figures.append(("★ " + String(format: "%.1f", stars), "your average rating")) }
+        if summary.newReleases > 0 {
+            figures.append(("\(summary.newReleases)", summary.newReleases == 1 ? "film from \(String(summary.year))" : "films from \(String(summary.year))"))
+        }
+        if let month = summary.busiestMonth {
+            figures.append((Calendar.current.monthSymbols[month], "your busiest month · \(summary.months[month]) films"))
+        }
+        if let day = summary.favouriteWeekday {
+            figures.append((Calendar.current.weekdaySymbols[day - 1] + "s", "your film night"))
+        }
+        if summary.countryCount > 1 { figures.append(("\(summary.countryCount)", "countries")) }
+        if summary.languageCount > 1 { figures.append(("\(summary.languageCount)", "languages")) }
+        return figures
     }
 
     // MARK: Months
@@ -215,12 +266,19 @@ private struct YearSummary: View {
     // MARK: Genres and directors
 
     private var tastes: some View {
-        HStack(alignment: .top, spacing: 16) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
             if !summary.topGenres.isEmpty {
                 TallyPanel(title: "Genres", tallies: summary.topGenres, total: summary.films.count)
             }
             if !summary.topDirectors.isEmpty {
                 TallyPanel(title: "Directors you came back to", tallies: summary.topDirectors, total: summary.films.count)
+            }
+            // Only when the year goes beyond one language.
+            if summary.languageCount > 1 {
+                TallyPanel(title: "Languages", tallies: summary.languages, total: summary.films.count)
+            }
+            if !summary.topActors.isEmpty {
+                TallyPanel(title: "Faces you saw most", tallies: summary.topActors, total: summary.films.count)
             }
         }
     }

@@ -299,6 +299,7 @@ struct LibraryGridView: View {
         case .yearInFilm: "Year in Film"
         case .genre(let genre): genre
         case .drive(let id): model.drive(id)?.name ?? "Drive"
+        case .forYou: "For You"
         case .explore: "Explore"
         case .lists: "Lists"
         case .wishlist: "Wishlist"

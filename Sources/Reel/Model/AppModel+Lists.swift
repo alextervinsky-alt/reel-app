@@ -130,4 +130,26 @@ extension PreviewFilm {
                   genres: brief?.genres ?? art?.genres ?? [], note: ListConsensus.summary(pick.lists, limit: 3))
     }
 }
+/// Lists' search: lists of films for any words (see `ListSearch`).
+extension AppModel {
+    /// Themes, series, people, a country's cinema or a decade, and Wikipedia's lists for the
+    /// words. Nil when nothing could be asked (no token, or offline).
+    func searchLists(_ query: String) async -> ListSearch.Results? {
+        let words = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard words.count >= 2, let client = tmdb else { return nil }
+        async let themes = try? client.searchKeywords(words)
+        async let series = try? client.searchCollections(words)
+        async let people = try? client.searchPeople(words)
+        async let wikipedia = try? WikipediaClient().filmLists(words)
+        let found = await (themes, series, people, wikipedia)
+        guard found.0 != nil || found.1 != nil || found.2 != nil else { return nil }
+        return ListSearch.Results(
+            themes: ListSearch.rank(found.0 ?? [], for: words),
+            series: Array((found.1 ?? []).prefix(6)),
+            // The people worth a list: those behind the camera, or well known.
+            people: Array((found.2 ?? []).filter { $0.department != "Acting" || ($0.popularity ?? 0) >= 8 }.prefix(6)),
+            cinema: ListSearch.cinema(for: words),
+            wikipedia: found.3 ?? [])
+    }
+}
 #endif
