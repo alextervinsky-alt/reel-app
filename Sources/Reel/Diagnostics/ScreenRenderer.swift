@@ -105,6 +105,8 @@ enum ScreenRenderer {
                     .frame(width: 900)
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("behind-the-film.png"))
+            // With the interviews it cites and the cinematographer's article.
+            await model.loadCameraReading(for: film)
             render(CameraTab(film: film)
                     .padding(32)
                     .frame(width: 900)

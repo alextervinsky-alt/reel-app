@@ -311,6 +311,21 @@ extension AppModel {
         }
     }
 
+    /// The interviews and craft articles about how the film was shot, and the cinematographer's
+    /// own article, for the Camera tab: once per session. Nothing found at all (offline) is tried
+    /// again next time the tab opens.
+    func loadCameraReading(for film: FilmEntry) async {
+        guard let details = film.tmdb, cameraReadings[details.id] == nil, !cameraReadingsLoading.contains(details.id) else { return }
+        cameraReadingsLoading.insert(details.id)
+        defer { cameraReadingsLoading.remove(details.id) }
+        if film.funFacts == nil { await loadFunFacts(for: film) }
+        let current = self.film(id: film.id) ?? film
+        let reading = await CameraSourcesClient().read(articleTitle: current.funFacts?.articleTitle, filmTitle: details.title,
+                                                       cinematographers: details.cinematographers)
+        guard !reading.sources.isEmpty || !reading.more.isEmpty || reading.cinematographer != nil else { return }
+        cameraReadings[details.id] = reading
+    }
+
     /// Searches for the film's reviews and essays on sites that have no free data to read in Reel.
     func readMoreLinks(for film: FilmEntry) -> [(title: String, url: URL)] {
         let words = [film.displayTitle, film.displayYear.map(String.init) ?? ""].joined(separator: " ")

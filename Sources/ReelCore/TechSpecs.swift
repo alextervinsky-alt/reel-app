@@ -1,15 +1,17 @@
 import Foundation
 
-/// How a film was shot, as its Wikipedia article tells it: the cameras, lenses, lights, film
-/// stock and format it names, and what it says about the approach — the cinematographer's own
-/// words and choices, the lighting and the camera language. Only names of real gear are picked
-/// out (an "Alexa" is a camera when it's an ARRI Alexa, not an actor), formats only where the
-/// sentence is about the shooting, not the release ("released in IMAX" is not "shot in IMAX"),
-/// and the approach never from what critics or awards said, or from sections about the music,
-/// release or reception.
+/// How a film was shot, from what's written about it: the film's Wikipedia article, the
+/// interviews and craft articles it cites (American Cinematographer, British Cinematographer…)
+/// and the cinematographer's own article. It picks out the cameras, lenses, lights, grip, filters,
+/// film stock, format and finish they name, and sorts what they say into the reasons behind the
+/// look, the cinematographer's own words, the camera language, the lighting and the colour —
+/// each with where it was read. Only names of real gear are picked out (an "Alexa" is a camera
+/// when it's an ARRI Alexa, not an actor), formats only where the sentence is about the shooting,
+/// not the release ("released in IMAX" is not "shot in IMAX"), and never from what critics or
+/// awards said, or from sections about the music, release or reception.
 public struct TechSpecs: Equatable, Sendable {
     public enum Kind: String, CaseIterable, Sendable {
-        case camera, lens, light, format
+        case camera, lens, format, light, support, filter, finish
     }
 
     public struct Spec: Equatable, Sendable, Identifiable {
@@ -20,20 +22,54 @@ public struct TechSpecs: Equatable, Sendable {
         public var id: String { kind.rawValue + "|" + name.lowercased() }
     }
 
+    /// A sentence (or two that belong together) and where it was read.
+    public struct Note: Equatable, Sendable, Identifiable {
+        public let text: String
+        /// "American Cinematographer"; nil for the film's own Wikipedia article.
+        public let source: String?
+        public var id: String { text }
+    }
+
+    /// Something written about the film to read: the film's article (no source), an interview or
+    /// craft article, or the cinematographer's article.
+    public struct Text: Equatable, Sendable {
+        public let source: String?
+        public let sections: [FilmArticle.Section]
+        /// An interview or craft article: its first-person sentences and quotes are the
+        /// filmmakers' own words, and only what's about the look is read from it.
+        public let isInterview: Bool
+
+        public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool) {
+            self.source = source
+            self.sections = sections
+            self.isInterview = isInterview
+        }
+
+        public init(source: String, paragraphs: [String], isInterview: Bool = true) {
+            self.init(source: source, sections: [FilmArticle.Section(id: 0, title: "", paragraphs: paragraphs)], isInterview: isInterview)
+        }
+    }
+
     public let specs: [Spec]
     /// Sentences naming gear that aren't in the parts below, in reading order (at most six).
-    public let sentences: [String]
-    /// What the cinematographer said or chose (sentences naming them, or quoting them).
-    public var approach: [String] = []
-    /// How the film was lit: light sources, shadows, colour.
-    public var lighting: [String] = []
+    public let sentences: [Note]
+    /// What the cinematographer said or chose (their words, or sentences about their choices).
+    public var approach: [Note] = []
+    /// Why it looks the way it does: choices with their reasons and references.
+    public var reasons: [Note] = []
+    /// How the film was lit: light sources, shadows, contrast.
+    public var lighting: [Note] = []
     /// How the camera tells the story: movement, framing, takes, lenses chosen for a look.
-    public var cameraLanguage: [String] = []
+    public var cameraLanguage: [Note] = []
+    /// The palette, the grade and the finish.
+    public var colour: [Note] = []
 
     public var isEmpty: Bool { specs.isEmpty }
 
     /// Nothing about the approach either.
-    public var saysNothing: Bool { specs.isEmpty && approach.isEmpty && lighting.isEmpty && cameraLanguage.isEmpty }
+    public var saysNothing: Bool {
+        specs.isEmpty && approach.isEmpty && reasons.isEmpty && lighting.isEmpty && cameraLanguage.isEmpty && colour.isEmpty
+    }
 
     public func names(_ kind: Kind) -> [String] {
         specs.filter { $0.kind == kind }.map(\.name)
@@ -44,14 +80,21 @@ public struct TechSpecs: Equatable, Sendable {
         read(sections: [FilmArticle.Section(id: 0, title: "", paragraphs: paragraphs)], cinematographers: cinematographers)
     }
 
-    /// Reads the article's sections; `cinematographers` are the film's directors of photography
-    /// (their sentences are the approach).
+    /// Reads the film's article alone.
     public static func read(sections: [FilmArticle.Section], cinematographers: [String]) -> TechSpecs {
+        read(texts: [Text(source: nil, sections: sections, isInterview: false)], cinematographers: cinematographers)
+    }
+
+    /// Reads everything written about the film, in the order given; `cinematographers` are the
+    /// film's directors of photography (their sentences are the approach).
+    public static func read(texts: [Text], cinematographers: [String]) -> TechSpecs {
         var found: [Spec] = []
-        var gear: [String] = []
-        var approach: [String] = []
-        var lighting: [String] = []
-        var cameraLanguage: [String] = []
+        var gear: [Note] = []
+        var approach: [Note] = []
+        var reasons: [Note] = []
+        var lighting: [Note] = []
+        var cameraLanguage: [Note] = []
+        var colour: [Note] = []
         // The full name, and the first and last names alone ("Hong" for Hong Kyung-pyo, "Deakins"
         // for Roger Deakins), as articles write them.
         let particles: Set<String> = ["van", "von", "der", "den", "del", "della", "les", "dos", "das"]
@@ -61,54 +104,141 @@ public struct TechSpecs: Equatable, Sendable {
                 .filter { $0.count >= 3 && !particles.contains($0.lowercased()) && $0 != name }
             return [name] + Set(single)
         }
-        for section in sections {
-            let heading = section.title.lowercased()
-            // Never the story, its themes or analysis, even once watched.
-            let commentary = !offTopic.contains { heading.contains($0) } && !Spoilers.isAfterSection([section.title])
-            let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
-            for paragraph in section.paragraphs {
-                // "He wanted…" right after a sentence about the cinematographer is theirs too.
-                var aboutThem = false
-                for sentence in Digest.sentences(in: paragraph) {
-                    let lowered = sentence.lowercased()
-                    var named = false
-                    if triggers.contains(where: { lowered.contains($0) }) {
-                        let aboutShooting = shooting.contains { lowered.contains($0) }
-                        let aboutRelease = release.contains { lowered.contains($0) }
-                        for rule in rules {
-                            if rule.kind == .format, rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
-                            for name in rule.matches(in: sentence) {
-                                named = true
-                                found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil))
+        for text in texts {
+            for section in text.sections {
+                let heading = section.title.lowercased()
+                // Never the story, its themes or analysis, even once watched.
+                let commentary = !offTopic.contains { heading.contains($0) } && !Spoilers.isAfterSection([section.title])
+                let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
+                for paragraph in section.paragraphs {
+                    // "He wanted…" right after a sentence about the cinematographer is theirs too.
+                    var aboutThem = false
+                    let sentences = Digest.sentences(in: paragraph)
+                    var skipNext = false
+                    for (index, sentence) in sentences.enumerated() {
+                        if skipNext {
+                            skipNext = false
+                            continue
+                        }
+                        let lowered = sentence.lowercased()
+                        var named = false
+                        if triggers.contains(where: { lowered.contains($0) }) {
+                            let aboutShooting = shooting.contains { lowered.contains($0) }
+                            let aboutRelease = release.contains { lowered.contains($0) }
+                            for rule in rules {
+                                if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
+                                for name in rule.matches(in: sentence) {
+                                    named = true
+                                    found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil))
+                                }
                             }
                         }
-                    }
-                    // Where it belongs: the cinematographer's words first, then lighting, then
-                    // the camera, then gear only.
-                    let fits = commentary && (25...450).contains(sentence.count) && !matches(reception, sentence)
-                    let theirs = mentions(names, in: sentence) || (aboutThem && matches(pronoun, sentence))
-                    aboutThem = fits && theirs
-                    if fits, theirs, matches(said, sentence) || sentence.contains(where: { "\"“”".contains($0) }) {
-                        add(sentence, to: &approach)
-                    } else if fits, matches(lightTerms, sentence) {
-                        add(sentence, to: &lighting)
-                    } else if fits, visual || matches(cameraTerms, sentence) {
-                        add(sentence, to: &cameraLanguage)
-                    } else if named {
-                        add(sentence, to: &gear)
+                        // An interview talks about much else: only what's about the look is read.
+                        let onTopic = !text.isInterview || named || matches(lookWords, sentence)
+                        let fits = commentary && onTopic && (25...450).contains(sentence.count) && !matches(reception, sentence)
+                        let theirs = mentions(names, in: sentence) || (aboutThem && matches(pronoun, sentence))
+                            || (text.isInterview && (quoted(sentence) || matches(firstPerson, sentence)))
+                        aboutThem = fits && theirs
+                        let light = matches(lightTerms, sentence)
+                        let camera = visual || matches(cameraTerms, sentence)
+                        let colourful = matches(colourTerms, sentence)
+                        // In an interview the sentence after often finishes the thought ("…on film.
+                        // It gave us…"): read together.
+                        var shown = sentence
+                        if text.isInterview, index + 1 < sentences.count, matches(continuation, sentences[index + 1]),
+                           sentence.count + sentences[index + 1].count < 520 {
+                            shown += " " + sentences[index + 1]
+                        }
+                        let note = Note(text: shown, source: text.source)
+                        var placed = true
+                        // Where it belongs: the filmmakers' own words first, then the reasons,
+                        // the lighting, the colour, the camera, then gear only.
+                        if fits, theirs, matches(said, sentence) || quoted(sentence) || text.isInterview {
+                            add(note, to: &approach)
+                        } else if fits, light || camera || colourful || named, matches(reason, sentence) {
+                            add(note, to: &reasons)
+                        } else if fits, light {
+                            add(note, to: &lighting)
+                        } else if fits, colourful {
+                            add(note, to: &colour)
+                        } else if fits, camera {
+                            add(note, to: &cameraLanguage)
+                        } else if named, !text.isInterview || fits {
+                            add(note, to: &gear)
+                        } else {
+                            placed = false
+                        }
+                        if placed, shown != sentence { skipNext = true }
                     }
                 }
             }
         }
         var specs = TechSpecs(specs: tidy(found), sentences: Array(gear.prefix(6)))
-        specs.approach = Array(approach.prefix(6))
+        specs.approach = Array(approach.prefix(8))
+        specs.reasons = Array(reasons.prefix(6))
         specs.lighting = Array(lighting.prefix(6))
         specs.cameraLanguage = Array(cameraLanguage.prefix(6))
+        specs.colour = Array(colour.prefix(5))
         return specs
     }
 
-    private static func add(_ sentence: String, to list: inout [String]) {
-        if !list.contains(sentence) { list.append(sentence) }
+    /// The look in a few plain sentences, from what was found: who shot it, on what, with which
+    /// lenses, on film or digitally, the frame and the light (the grip, filters and finish are in
+    /// the table). `ratio` and `blackAndWhite` come from Wikidata when the texts don't say them.
+    public func brief(by cinematographers: [String], ratio: String? = nil, blackAndWhite: Bool = false) -> String? {
+        func list(_ names: [String]) -> String {
+            let shown = Array(names.prefix(3))
+            switch shown.count {
+            case 0: return ""
+            case 1: return shown[0]
+            default: return shown.dropLast().joined(separator: ", ") + " and " + shown[shown.count - 1]
+            }
+        }
+        /// "Natural light" reads "natural light" mid-sentence; "HMI" and "ARRI SkyPanels" stay.
+        func inline(_ names: [String]) -> [String] {
+            names.map { name in
+                let chars = Array(name)
+                guard chars.count > 1, chars[0].isUppercase, chars[1].isLowercase,
+                      specs.contains(where: { $0.name == name && $0.isFixedName }) else { return name }
+                return name.prefix(1).lowercased() + name.dropFirst()
+            }
+        }
+        var sentences: [String] = []
+        let cameras = names(.camera), lenses = names(.lens)
+        if !cameras.isEmpty || !lenses.isEmpty {
+            var first = "Shot"
+            if !cinematographers.isEmpty { first += " by " + list(cinematographers) }
+            if !cameras.isEmpty { first += " on " + list(cameras) }
+            if !lenses.isEmpty { first += " with " + list(inline(lenses)) + (lenses.count == 1 && !lenses[0].lowercased().contains("lens") ? " lenses" : "") }
+            sentences.append(first + ".")
+        }
+        let formats = names(.format)
+        let ratios = formats.filter { $0.contains(":1") }
+        let media = formats.filter { !$0.contains(":1") && $0 != "Digital" && $0 != "Film" && $0 != "Black and white" }
+        var second: [String] = []
+        if !media.isEmpty {
+            second.append("photographed on " + list(media))
+        } else if formats.contains("Film") {
+            second.append("photographed on film")
+        } else if formats.contains("Digital") {
+            second.append("captured digitally")
+        }
+        if blackAndWhite || formats.contains("Black and white") { second.append("in black and white") }
+        if let frame = ratios.first ?? ratio { second.append("framed at " + frame) }
+        if !second.isEmpty {
+            let joined = second.joined(separator: ", ")
+            sentences.append(joined.prefix(1).uppercased() + joined.dropFirst() + ".")
+        }
+        if !names(.light).isEmpty { sentences.append("Lit with " + list(inline(names(.light))) + ".") }
+        return sentences.isEmpty ? nil : sentences.joined(separator: " ")
+    }
+
+    private static func add(_ note: Note, to list: inout [Note]) {
+        if !list.contains(where: { $0.text == note.text }) { list.append(note) }
+    }
+
+    static func quoted(_ sentence: String) -> Bool {
+        sentence.contains(where: { "\"“”".contains($0) })
     }
 
     private static func matches(_ regex: NSRegularExpression, _ text: String) -> Bool {
@@ -144,8 +274,24 @@ public struct TechSpecs: Equatable, Sendable {
     /// A sentence that starts by referring back to someone ("He wanted…", "Her approach…").
     static let pronoun = try! NSRegularExpression(pattern: #"^(?:He|She|They|His|Her|Their)\b"#)
     static let lightTerms = try! NSRegularExpression(
-        pattern: #"\b(?:lighting|lit|relit|light sources?|natural light|available light|sunlight|daylight|moonlight|candlelight|candles|lamps?|practicals|practical (?:lights?|lighting|lamps?|sources?)|shadows?|chiaroscuro|silhouettes?|magic hour|golden hour|blue hour|overcast|high[- ]contrast|low[- ]contrast|low-key|high-key|colou?r palette|palette|colou?r grad\w*|tungsten|HMIs?|(?-i:LEDs?)|fluorescent|neon (?:lights?|signs?|lighting|glow)|sodium|gaffer|SkyPanels?|Kino Flos?|LUTs?|backlit|backlight\w*|top ?light\w*|rim light|soft light|hard light|hues?|desaturated|saturated)\b"#,
+        pattern: #"\b(?:lighting|lit|relit|light sources?|natural light|available light|sunlight|daylight|moonlight|candlelight|candles|lamps?|practicals|practical (?:lights?|lighting|lamps?|sources?)|shadows?|chiaroscuro|silhouettes?|magic hour|golden hour|blue hour|overcast|high[- ]contrast|low[- ]contrast|low-key|high-key|tungsten|HMIs?|(?-i:LEDs?)|fluorescent|neon (?:lights?|signs?|lighting|glow)|sodium|gaffer|SkyPanels?|Kino Flos?|backlit|backlight\w*|top ?light\w*|rim light|soft light|hard light|exposure|exposed|underexpos\w*|overexpos\w*|contrast ratio|key light|fill light|bounce|bounced|diffused light|unlit|darkness)\b"#,
         options: [.caseInsensitive])
+    /// The palette, the grade and the finish.
+    static let colourTerms = try! NSRegularExpression(
+        pattern: #"\b(?:colou?r (?:palette|grad\w*|timing|timed|science|scheme|temperature|correction|separation|contrast)|palettes?|colou?r ?grad\w*|graded|grading|colou?rists?|LUTs?|hues?|desaturat\w*|saturat\w*|tint\w*|teal|sepia|monochrom\w*|pastels?|warm(?:er)? (?:tones?|colou?rs?)|cool(?:er)? (?:tones?|colou?rs?)|skin tones?|film emulation|bleach[- ]bypass|skip[- ]bleach|digital intermediate|print film|film grain|grain)\b"#,
+        options: [.caseInsensitive])
+    /// A choice with its reason or reference ("because…", "the idea was…", "inspired by…").
+    static let reason = try! NSRegularExpression(
+        pattern: #"\b(?:because|so that|in order to|so as to|the (?:idea|goal|aim|intention|reason|thinking|concept|key) (?:was|is|being|behind)|wanted (?:the|it|to|a|an|us|every|each|this)|felt (?:that|it|the|like)|we felt|inspired by|influenced by|modell?ed (?:on|after)|references?|referenced|referencing|homage|meant to|intended to|in the style of|the way (?:\w+ ){0,3}(?:painted|lit|shot))\b"#,
+        options: [.caseInsensitive])
+    /// What an interview sentence must be about to be read: the look of the film.
+    static let lookWords = try! NSRegularExpression(
+        pattern: #"\b(?:look|looks|image|images|imagery|frames?|framing|framed|shots?|shoot|shooting|shot on|camera|cameras|lens|lenses|light|lights|lighting|lit|colou?rs?|palette|stock|exposure|grain|texture|composition|cinematograph\w*|photograph\w*|visual\w*|aspect ratio|anamorphic|close-ups?|wide|handheld|Steadicam|dolly|crane|focus|contrast|shadows?|sun|daylight|night|darkness|LUT|grade|graded|format|film|digital|tests?|tested)\b"#,
+        options: [.caseInsensitive])
+    /// Said in the first person (an interview's answers).
+    static let firstPerson = try! NSRegularExpression(pattern: #"^(?:I|We|I'd|I've|I'm|We'd|We've|We're|My|Our|For me|For us)\b|\b(?:we|I) (?:wanted|decided|chose|used|shot|lit|tested|felt|tried|knew|thought|went|had|did|were|was)\b"#)
+    /// A sentence that carries on from the one before ("It gave us…", "That meant…").
+    static let continuation = try! NSRegularExpression(pattern: #"^(?:It|That|This|These|Those|So|Which|And|But|Then|The result|The effect|The idea)\b"#)
     static let cameraTerms = try! NSRegularExpression(
         pattern: #"\b(?:handheld|hand-held|Steadicam|long takes?|single takes?|one take|oners?|one-shot|continuous (?:shots?|takes?)|tracking shots?|dolly|dollies|crane shots?|drones?|static (?:shots?|camera)|locked-off|wide shots?|wide-angle|close-ups?|point-of-view|POV|shot compositions?|symmetr\w*|depth of field|shallow focus|deep focus|split diopter|split-screen|zoom(?:s|ed|ing)? (?:in|out|lens\w*|shots?)|crash zooms?|whip pans?|panning|slow[- ]motion|camera movements?|camera moves?|the camera (?:moves?|follows?|stays?|tracks?|pushes|pulls|glides|lingers|never|always|rarely|is)|camerawork|camera work|visual style|visual language|visual approach|lensing|focal lengths?|storyboard\w*|shot lists?|traditional coverage|blocking|aspect ratio|anamorphic|negative space|low[- ]angle|high[- ]angle|Dutch angle|overhead shots?|aerial shots?|360-degree|Snorricam|underwater (?:camera|photography))\b"#,
         options: [.caseInsensitive])
@@ -214,7 +360,18 @@ public struct TechSpecs: Equatable, Sendable {
                            "diopter", "vantage", "gopro", "dji", "millennium", "venice", "cinealta", "light", "hmi", "kino", "skypanel",
                            "astera", "creamsource", "aputure", "litepanel", "litemat", "litegear", "quasar", "dino",
                            "brute", "wendy", "mole", "softsun", "tungsten", "sodium", "fluorescent", "led ", "stagecraft",
-                           "candle", "practical", "hour", "negative fill", "day for night", "day-for-night", "projection"]
+                           "candle", "practical", "hour", "negative fill", "day for night", "day-for-night", "projection",
+                           // Grip and movement
+                           "steadicam", "technocrane", "crane", " arm", "ronin", "movi", "mōvi", "gimbal", "doll", "drone",
+                           "snorri", "easyrig", "trinity", "cable", "spidercam", "motion control", "motion-control",
+                           "tripod", "handheld", "hand-held", "libra", "scorpio", "oculus", "milo", "cinebot", "chapman", "fisher",
+                           // Filters and diffusion
+                           "mist", "glimmer", "satin", "black magic", "diffusion", " fx", "frost", "fog", " con",
+                           "suede", "schneider", "tiffen", "stocking", "net ", "nets ", "filter", "polari", "neutral density",
+                           // Lab, recording and finish
+                           "intermediate", "bleach", "silver retention", "enr", "push", "process", "emulation", "lut",
+                           "film-out", "film out", "printed", "fotokem", "company 3", "efilm", "deluxe", "picture shop",
+                           "light iron", "cinelab", "raw", "prores", "x-ocn", "k "]
 
     static let shooting = ["shot", "film on", "filmed", "photographed", "photography", "cinematograph", "camera", "lens",
                            "stock", "footage", "shooting", "captured", "aspect ratio", "format", "negative", "frame rate",
@@ -339,6 +496,59 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.format, #"\b(?:Academy\s+ratio|4:3\s+aspect\s+ratio|1\.33)\b"#, name: "1.33:1 (Academy)", needsShooting: true),
         Rule(.format, #"\b(?:3|2)-perf(?:oration)?\b"#, needsShooting: true),
         Rule(.format, #"\bopen\s+gate\b"#, name: "Open gate", needsShooting: true),
-        Rule(.format, #"\b(?:48|60|120)\s?(?:fps|frames\s+per\s+second)\b"#, needsShooting: true),
+        Rule(.format, #"\b(?:24|25|48|60|120)\s?(?:fps|frames\s+per\s+second)\b"#, needsShooting: true),
+        // How a digital camera recorded
+        Rule(.format, #"\bARRI\s?RAW\b"#, name: "ARRIRAW"),
+        Rule(.format, #"\bREDCODE(?:\s+RAW)?\b|\bRed\s?Code\s+RAW\b"#, name: "REDCODE RAW"),
+        Rule(.format, #"\bProRes(?:\s+(?:4444(?:\s+XQ)?|422(?:\s+HQ)?|RAW))?\b"#),
+        Rule(.format, #"\bX-OCN(?:\s+(?:XT|ST|LT))?\b"#),
+        Rule(.format, #"\bBlackmagic\s+RAW\b"#),
+        Rule(.format, #"\b(?:2\.8|3\.4|4\.5|4\.6|5\.2|6\.5|6|8|12|16)K\b(?!\s+(?:HMI|tungsten|Fresnel|lights?|lamps?|DI|finish|master|release|UHD|Blu))"#,
+             caseSensitive: true, needsShooting: true),
+
+        // Grip and movement
+        Rule(.support, #"\bSteadicams?\b"#, name: "Steadicam"),
+        Rule(.support, #"\b(?:Super\s+)?Technocranes?\b"#),
+        Rule(.support, #"\bRussian\s+Arm\b|\bUltimate\s+Arm\b|\bEdge\s+Arm\b"#),
+        Rule(.support, #"\b(?:Freefly\s+)?M[oō]VI(?:\s+(?:Pro|XL|M\d{1,2}))?\b"#, caseSensitive: true),
+        Rule(.support, #"\bDJI\s+Ronin(?:\s+(?:2|S|RS\s?\d))?\b(?!\s+4D)|\b(?<!DJI )Ronin\s+(?:2|S|RS\s?\d)\b"#),
+        Rule(.support, #"\bgimbals?\b"#, name: "Gimbal"),
+        Rule(.support, #"\bLibra\s+head\b|\bScorpio\s+head\b|\bOculus\s+head\b"#),
+        Rule(.support, #"\bChapman\s+(?:Hybrid|PeeWee|Pee\s?Wee|Titan|Lenny|Super\s+PeeWee)(?:\s+[IVX]+)?\b|\bFisher\s+(?:10|11)\b"#),
+        Rule(.support, #"\bdoll(?:y|ies)\b"#, name: "Dolly", caseSensitive: true),
+        Rule(.support, #"\bcrane(?:\s+(?:shots?|moves?))?\b(?!\s+(?:operator|fly|bird))|\bcranes\b"#, name: "Crane", caseSensitive: true),
+        Rule(.support, #"\bdrones?\s+(?:shots?|footage|cameras?|photography)\b|\b(?:by|with|from)\s+(?:a\s+)?drones?\b|\bdrones?\s+(?:was|were)\s+used\b"#,
+             name: "Drone"),
+        Rule(.support, #"\bSnorri[Cc]am\b"#, name: "SnorriCam"),
+        Rule(.support, #"\bEasyrig\b"#),
+        Rule(.support, #"\bARRI\s+Trinity\b"#),
+        Rule(.support, #"\bcable\s?cams?\b|\bSpidercam\b"#, name: "Cable cam"),
+        Rule(.support, #"\bmotion[- ]control\b|\bMilo\s+(?:rig|arm)\b|\bBolt\s+(?:High-Speed\s+)?Cinebot\b"#, name: "Motion control"),
+        Rule(.support, #"\bhand-?held\b"#, name: "Handheld"),
+        Rule(.support, #"\btripods?\b|\blocked[- ]off\b"#, name: "Tripod"),
+
+        // Filters and diffusion
+        Rule(.filter, #"\b(?:Tiffen\s+)?(?:Black\s+)?Pro-?Mist(?:\s+\d/\d+)?\b"#),
+        Rule(.filter, #"\b(?:Tiffen\s+)?(?:Glimmerglass|Black\s+Satin|Black\s+Diffusion\s+FX|Soft\s?FX|Black\s+Frost|White\s+Frost|Antique\s+Suede|Low\s+Con|Ultra\s?Con|Double\s+Fog|Smoque)(?:\s+\d/\d+)?\b"#),
+        Rule(.filter, #"\b(?:Schneider\s+)?Hollywood\s+Black\s+Magic(?:\s+\d/\d+)?\b|\bSchneider\s+(?:Classic\s+Soft|Black\s+Frost|Radiant\s+Soft|True-Pol)\b|\bClassic\s+Soft\b"#),
+        Rule(.filter, #"\b(?:stockings?|nylons?|nets?|silk)\s+(?:on|behind|over|in front of)\s+the\s+lens\b"#, name: "A net on the lens"),
+        Rule(.filter, #"\bdiffusion\s+filters?\b|\bdiffusion\s+(?:on|over)\s+the\s+lens\b"#, name: "Diffusion filters"),
+        Rule(.filter, #"\bfog\s+filters?\b"#, name: "Fog filters"),
+        Rule(.filter, #"\bND\s+filters?\b|\bneutral[- ]density\s+filters?\b"#, name: "ND filters"),
+        Rule(.filter, #"\bpolari[sz](?:ing|ed)\s+filters?\b|\bpolari[sz]ers?\b"#, name: "Polariser"),
+        Rule(.filter, #"\b(?:star|streak|coral|sepia|tobacco|graduated|grad|split-field)\s+filters?\b"#),
+
+        // Lab, grade and finish
+        Rule(.finish, #"\bdigital\s+intermediate\b"#, name: "Digital intermediate"),
+        Rule(.finish, #"\b(?:2|4|8)K\s+(?:DI|digital\s+intermediate|finish|master|scans?)\b"#),
+        Rule(.finish, #"\bbleach[- ]bypass\b|\bskip[- ]bleach\b|\bsilver\s+retention\b"#, name: "Bleach bypass"),
+        Rule(.finish, #"\bENR\b"#, name: "ENR", caseSensitive: true),
+        Rule(.finish, #"\bpush[- ]process(?:ed|ing)?\b|\bpushed\s+(?:one|two|a|1|2)\s+stops?\b"#, name: "Push processing"),
+        Rule(.finish, #"\bcross[- ]process(?:ed|ing)?\b"#, name: "Cross processing"),
+        Rule(.finish, #"\bfilm\s+(?:grain\s+)?emulation\b"#, name: "Film emulation"),
+        Rule(.finish, #"\bLUTs?\b"#, name: "A show LUT", caseSensitive: true),
+        Rule(.finish, #"\bfilm[- ]out\b|\b(?:printed|recorded)\s+(?:back\s+)?(?:to|on|onto)\s+film\b"#, name: "Film-out"),
+        Rule(.finish, #"\b(?:FotoKem|Company\s+3|EFILM|Picture\s+Shop|Light\s+Iron|Cinelab|Kodak\s+Film\s+Lab|Technicolor\s+(?:lab|laboratory))\b|\bDeluxe\b(?=\s+(?:lab|laboratory|labs))"#,
+             caseSensitive: true),
     ]
 }

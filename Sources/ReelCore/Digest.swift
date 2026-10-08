@@ -43,13 +43,20 @@ public enum Digest {
         var result: [String] = []
         var current = ""
         let chars = Array(text)
+        let ends: Set<Character> = [".", "!", "?"]
         for (i, ch) in chars.enumerated() {
             current.append(ch)
-            guard ch == "." || ch == "!" || ch == "?" else { continue }
             let next = i + 1 < chars.count ? chars[i + 1] : " "
-            guard next == " " || next == "\"" || next == "”" else { continue }
-            // "Mr. Bong", "J. R. R. Tolkien" and "the U.S. release" carry on.
-            if ch == ".", let word = current.split(separator: " ").last, isAbbreviation(String(word)) { continue }
+            if ends.contains(ch) {
+                // A closing quote right after belongs to this sentence: it ends after the quote.
+                guard next == " " else { continue }
+                // "Mr. Bong", "J. R. R. Tolkien" and "the U.S. release" carry on.
+                if ch == ".", let word = current.split(separator: " ").last, isAbbreviation(String(word)) { continue }
+            } else if ch == "\"" || ch == "”" {
+                guard i > 0, ends.contains(chars[i - 1]), next == " " else { continue }
+            } else {
+                continue
+            }
             let trimmed = current.trimmingCharacters(in: .whitespaces)
             if !trimmed.isEmpty { result.append(trimmed) }
             current = ""

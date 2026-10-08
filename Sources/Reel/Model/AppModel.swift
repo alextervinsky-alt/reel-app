@@ -112,6 +112,9 @@ final class AppModel {
     var articles: [Int: FilmArticle] = [:]
     var articlesLoading: Set<Int> = []
     var articlesMissing: Set<Int> = []
+    /// What the Camera tab read beyond the article (interviews, the cinematographer's article), per session.
+    var cameraReadings: [Int: CameraReading] = [:]
+    var cameraReadingsLoading: Set<Int> = []
 
     // MARK: Cinema mode and playing
 

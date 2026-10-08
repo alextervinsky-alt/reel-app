@@ -4,73 +4,105 @@ import ReelCore
 
 // MARK: - Camera
 
-/// How the film was shot, for the cinematographer in you: who shot it, the cameras, lenses,
-/// lights, film stock and format (from its Wikipedia article and Wikidata), then the approach in
-/// the article's own words — what the cinematographer said and chose, the lighting, the camera
-/// language — the camera, lighting and colour crew, and where to read interviews and the full
-/// technical specifications. What gives the story away stays out until the film is watched.
+/// How the film was shot, for the cinematographer in you. From the film's Wikipedia article, the
+/// interviews and craft articles it cites, American Cinematographer and the cinematographer's own
+/// article (see `CameraReading`): the look in brief, a technical specification sheet, why it looks
+/// the way it does, the filmmakers' own words, the camera language, the lighting and the colour —
+/// each with where it was read — then the crew and the interviews to read in full. What gives the
+/// story away stays out until the film is watched.
 struct CameraTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
-    /// The article read once for what it's made from (not on each redraw).
+    /// Everything read once for what it's made from (not on each redraw).
     @State private var read = ReadSpecs()
 
     var body: some View {
         let id = film.tmdb?.id ?? 0
         let article = model.articles[id]
+        let reading = model.cameraReadings[id]
         let crew = CameraCrew.groups(film.tmdb)
-        let specs = read.specs(article: article, hiding: model.hidesSpoilers(for: film),
-                               cinematographers: crew.first { $0.isLead }?.names ?? [])
+        let lead = crew.first { $0.isLead }?.names ?? []
+        let hiding = model.hidesSpoilers(for: film)
+        let specs = read.specs(article: article, reading: reading, hiding: hiding, cinematographers: lead)
         let bold = specs.specs.filter { !$0.isFixedName }.map(\.name)
-        let quick = film.funFacts?.quick
-        let formats = specs.names(.format) + Self.wikidataFormats(quick, besides: specs.names(.format))
+        let sheet = SpecSheet(specs: specs, quick: film.funFacts?.quick)
+        let loading = model.cameraReadingsLoading.contains(id) || model.articlesLoading.contains(id)
 
         VStack(alignment: .leading, spacing: 34) {
-            if let lead = crew.first, lead.isLead { shotBy(lead) }
-            VStack(alignment: .leading, spacing: 14) {
-                Theme.sectionTitle("Shot On")
-                if specs.isEmpty && formats.isEmpty {
-                    nothingFound(article: article, id: id)
-                } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
-                        tile("Cameras", icon: "video", names: specs.names(.camera))
-                        tile("Lenses", icon: "camera.aperture", names: specs.names(.lens))
-                        tile("Lighting", icon: "lightbulb", names: specs.names(.light))
-                        tile("Film and Format", icon: "film", names: formats)
-                    }
+            if !lead.isEmpty { shotBy(lead, about: reading?.cinematographer) }
+            if let brief = specs.brief(by: lead, ratio: sheet.wikidataRatio, blackAndWhite: sheet.blackAndWhite) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Theme.sectionTitle("The Look")
+                    Text(brief)
+                        .font(.system(size: 18, weight: .medium))
+                        .lineSpacing(5)
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                 }
             }
-            passage("The Cinematographer's Approach", note: "What they said and chose, as the article tells it.",
-                    sentences: specs.approach, bold: bold, quoted: true)
-            passage("Lighting", note: nil, sentences: specs.lighting, bold: bold)
-            passage("Camera Language", note: nil, sentences: specs.cameraLanguage, bold: bold)
-            passage(specs.approach.isEmpty && specs.lighting.isEmpty && specs.cameraLanguage.isEmpty ? "In the Article" : "More in the Article",
-                    note: nil, sentences: specs.sentences, bold: bold)
+            if loading {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading interviews and articles about how it was shot…").foregroundStyle(.secondary)
+                }
+                .font(.system(size: 13))
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                Theme.sectionTitle("Technical Specifications")
+                if sheet.rows.isEmpty {
+                    if !loading { nothingFound(article: article, id: id) }
+                } else {
+                    specTable(sheet.rows)
+                }
+            }
+            passage("Why It Looks This Way", note: "The choices behind the look, and what inspired them.",
+                    notes: specs.reasons, bold: bold)
+            passage("In Their Own Words", note: "The cinematographer and the director on the shoot.",
+                    notes: specs.approach, bold: bold, quoted: true)
+            passage("Camera and Movement", note: nil, notes: specs.cameraLanguage, bold: bold)
+            passage("Lighting", note: nil, notes: specs.lighting, bold: bold)
+            passage("Colour and Grade", note: nil, notes: specs.colour, bold: bold)
+            passage(specs.saysNothing ? "In the Article" : "More on the Gear", note: nil, notes: specs.sentences, bold: bold)
             let others = crew.filter { !$0.isLead }
             if !others.isEmpty { crewGrid(others) }
+            reads(reading)
             links(article: article)
         }
         .frame(maxWidth: 820, alignment: .leading)
-        // The facts first (they say which article it is), then the article: shared with Behind the Film.
+        // The facts first (they say which article it is), then the article: shared with Behind
+        // the Film. The interviews and the cinematographer's article alongside.
         .task(id: id) {
             await model.loadFunFacts(for: film)
-            await model.loadArticle(for: film)
+            async let article: Void = model.loadArticle(for: film)
+            async let more: Void = model.loadCameraReading(for: film)
+            _ = await (article, more)
         }
     }
 
     // MARK: Parts
 
-    private func shotBy(_ lead: CameraCrew.Group) -> some View {
+    private func shotBy(_ names: [String], about: CameraReading.Cinematographer?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Cinematography", systemImage: "camera")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.brand)
-            Text(lead.names.joined(separator: " and "))
+            Text(names.joined(separator: " and "))
                 .font(.system(size: 26, weight: .bold))
                 .fixedSize(horizontal: false, vertical: true)
-            Text(lead.names.count == 1 ? "Director of photography" : "Directors of photography")
+            Text(names.count == 1 ? "Director of photography" : "Directors of photography")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
+            if let about {
+                Text(about.lead)
+                    .font(.system(size: 13.5))
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+                Link("More about \(about.name) on Wikipedia", destination: about.url)
+                    .font(.system(size: 12.5, weight: .medium))
+            }
         }
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,42 +112,42 @@ struct CameraTab: View {
         )
     }
 
-    @ViewBuilder
-    private func tile(_ title: String, icon: String, names: [String]) -> some View {
-        if !names.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Label(title.uppercased(), systemImage: icon)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(.tertiary)
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(names, id: \.self) { name in
-                        Text(name)
-                            .font(.system(size: 15, weight: .medium))
-                            .fixedSize(horizontal: false, vertical: true)
+    /// The specification sheet: one row per kind, its names stacked.
+    private func specTable(_ rows: [SpecSheet.Row]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.title) { index, row in
+                if index > 0 { Divider().overlay(Theme.hairline) }
+                HStack(alignment: .firstTextBaseline, spacing: 18) {
+                    Label(row.title.uppercased(), systemImage: row.icon)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 190, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(row.values, id: \.self) { value in
+                            Text(value)
+                                .font(.system(size: 14.5, weight: .medium))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.vertical, 12)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
         }
+        .padding(.horizontal, 18)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
     }
 
     @ViewBuilder
     private func nothingFound(article: FilmArticle?, id: Int) -> some View {
         Group {
-            if article == nil, model.articlesLoading.contains(id) || model.funFactsLoading.contains(id) {
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("Reading how the film was shot…").foregroundStyle(.secondary)
-                }
-            } else if article == nil, film.funFacts == nil {
+            if article == nil, film.funFacts == nil {
                 Text("This needs an internet connection the first time.").foregroundStyle(.secondary)
             } else {
-                Text(article == nil
-                     ? "Wikipedia has no article about this film yet. IMDb's technical specifications, below, usually list the cameras and lenses."
-                     : "Its Wikipedia article doesn't name the gear. IMDb's technical specifications, below, usually do.")
+                Text("Nothing read about this film names its cameras or lenses. IMDb's technical specifications, below, usually list them.")
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -126,29 +158,34 @@ struct CameraTab: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
     }
 
-    /// Sentences from the article under a heading, the gear in bold; the cinematographer's own
+    /// Notes under a heading, the gear in bold, each with where it was read; the filmmakers' own
     /// words with a bar beside them. Nothing when there are none.
     @ViewBuilder
-    private func passage(_ title: String, note: String?, sentences: [String], bold: [String], quoted: Bool = false) -> some View {
-        if !sentences.isEmpty {
+    private func passage(_ title: String, note: String?, notes: [TechSpecs.Note], bold: [String], quoted: Bool = false) -> some View {
+        if !notes.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     Theme.sectionTitle(title)
                     if let note { Text(note).font(.system(size: 13)).foregroundStyle(.secondary) }
                 }
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(sentences.enumerated()), id: \.offset) { index, sentence in
+                    ForEach(Array(notes.enumerated()), id: \.offset) { index, item in
                         if index > 0 { Divider().overlay(Theme.hairline) }
                         HStack(alignment: .top, spacing: 14) {
                             if quoted {
                                 Capsule().fill(Theme.brand.opacity(0.7)).frame(width: 3)
                             }
-                            Text(Self.emphasised(sentence, names: bold))
-                                .font(.system(size: quoted ? 15 : 14))
-                                .lineSpacing(3)
-                                .foregroundStyle(quoted ? Color.white.opacity(0.9) : Theme.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(Self.emphasised(item.text, names: bold))
+                                    .font(.system(size: quoted ? 15 : 14))
+                                    .lineSpacing(3)
+                                    .foregroundStyle(quoted ? Color.white.opacity(0.9) : Theme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                                Text(item.source ?? "Wikipedia")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                         .padding(.vertical, 12)
                     }
@@ -162,7 +199,7 @@ struct CameraTab: View {
 
     private func crewGrid(_ groups: [CameraCrew.Group]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Theme.sectionTitle("Camera, Lighting and Colour")
+            Theme.sectionTitle("Camera, Lighting and Colour Crew")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
                 ForEach(groups) { group in
                     VStack(alignment: .leading, spacing: 4) {
@@ -182,9 +219,46 @@ struct CameraTab: View {
         }
     }
 
+    /// The interviews and articles found, to read in full.
+    @ViewBuilder
+    private func reads(_ reading: CameraReading?) -> some View {
+        let all = (reading?.sources ?? []) + (reading?.more ?? [])
+        if !all.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Theme.sectionTitle("Read the Interviews")
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(all.prefix(8).enumerated()), id: \.element.id) { index, source in
+                        if index > 0 { Divider().overlay(Theme.hairline) }
+                        Link(destination: source.url) {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(source.title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.92))
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    Text(source.site)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 10)
+                                Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold)).foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+            }
+        }
+    }
+
     private func links(article: FilmArticle?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Interviews and Specifications").font(.system(size: 15, weight: .semibold))
+            Text("Find More").font(.system(size: 15, weight: .semibold))
             FlowLayout(spacing: 8) {
                 ForEach(model.cameraLinks(for: film), id: \.title) { link in
                     Link(destination: link.url) {
@@ -202,7 +276,7 @@ struct CameraTab: View {
                 }
             }
             HStack(spacing: 6) {
-                Text("From Wikipedia and Wikidata (CC BY-SA) and TMDB.")
+                Text("From Wikipedia and Wikidata (CC BY-SA), TMDB and the articles named, quoted briefly.")
                 if let url = article?.url { Link("Open the full article", destination: url) }
             }
             .font(.caption)
@@ -211,22 +285,6 @@ struct CameraTab: View {
     }
 
     // MARK: Helpers
-
-    /// Wikidata's aspect ratio and colour, when the article doesn't already say them (the
-    /// article's ratio wins: two different ones would only confuse).
-    static func wikidataFormats(_ quick: QuickFacts?, besides found: [String]) -> [String] {
-        let known = Set(found.map { $0.lowercased() })
-        let articleHasRatio = found.contains { $0.contains(":1") }
-        let ratios = articleHasRatio ? [] : quick?.aspectRatios ?? []
-        let colour = (quick?.colour ?? []).compactMap { label -> String? in
-            switch label.lowercased() {
-            case "color", "colour": "Colour"
-            case "black-and-white", "black and white": known.contains("black and white") ? nil : "Black and white"
-            default: nil
-            }
-        }
-        return ratios + colour
-    }
 
     /// The sentence with every name of gear found in it in bold.
     static func emphasised(_ sentence: String, names: [String]) -> AttributedString {
@@ -242,19 +300,66 @@ struct CameraTab: View {
     }
 }
 
-/// The article's specs, read again only when the article or what may be shown changes.
+/// The technical specifications as rows, in the order a camera report lists them; Wikidata's
+/// aspect ratio and colour when the texts don't say them (the texts' ratio wins: two different
+/// ones would only confuse).
+struct SpecSheet {
+    struct Row {
+        let title: String
+        let icon: String
+        let values: [String]
+    }
+
+    let rows: [Row]
+    /// Wikidata's ratio, used only when nothing read gives one.
+    let wikidataRatio: String?
+    let blackAndWhite: Bool
+
+    init(specs: TechSpecs, quick: QuickFacts?) {
+        let formats = specs.names(.format)
+        let ratios = formats.filter { $0.contains(":1") }
+        let speeds = formats.filter { $0.contains("fps") || $0.contains("frames") }
+        let media = formats.filter { !ratios.contains($0) && !speeds.contains($0) && $0 != "Black and white" }
+        let colourLabels = (quick?.colour ?? []).map { $0.lowercased() }
+        blackAndWhite = formats.contains("Black and white") || colourLabels.contains { $0.contains("black") }
+        wikidataRatio = ratios.isEmpty ? quick?.aspectRatios?.first : nil
+        var colour: [String] = []
+        if blackAndWhite { colour.append("Black and white") }
+        if colourLabels.contains(where: { $0 == "color" || $0 == "colour" }) { colour.append("Colour") }
+        rows = [
+            Row(title: "Camera", icon: "video", values: specs.names(.camera)),
+            Row(title: "Lenses", icon: "camera.aperture", values: specs.names(.lens)),
+            Row(title: "Film and Format", icon: "film", values: media),
+            Row(title: "Aspect Ratio", icon: "rectangle.ratio.16.to.9", values: ratios.isEmpty ? (quick?.aspectRatios ?? []) : ratios),
+            Row(title: "Frame Rate", icon: "speedometer", values: speeds),
+            Row(title: "Colour", icon: "paintpalette", values: colour),
+            Row(title: "Lighting", icon: "lightbulb", values: specs.names(.light)),
+            Row(title: "Grip and Movement", icon: "move.3d", values: specs.names(.support)),
+            Row(title: "Filters", icon: "camera.filters", values: specs.names(.filter)),
+            Row(title: "Lab and Finish", icon: "slider.horizontal.3", values: specs.names(.finish)),
+        ].filter { !$0.values.isEmpty }
+    }
+}
+
+/// What was read, read again only when the article, the interviews or what may be shown changes.
 @MainActor
 private final class ReadSpecs {
     private var stamp = ""
     private var specs = TechSpecs.read([])
 
-    func specs(article: FilmArticle?, hiding: Bool, cinematographers: [String]) -> TechSpecs {
-        guard let article else { return TechSpecs.read([]) }
-        let now = "\(article.title)|\(article.before.count)|\(article.after.count)|\(hiding)|\(cinematographers)"
+    func specs(article: FilmArticle?, reading: CameraReading?, hiding: Bool, cinematographers: [String]) -> TechSpecs {
+        guard article != nil || reading != nil else { return TechSpecs.read([]) }
+        let now = "\(article?.title ?? "")|\(article?.before.count ?? 0)|\(article?.after.count ?? 0)|"
+            + "\(reading?.sources.count ?? -1)|\(hiding)|\(cinematographers)"
         if now != stamp {
             stamp = now
-            let sections = article.before + (hiding ? [] : article.after)
-            specs = TechSpecs.read(sections: sections, cinematographers: cinematographers)
+            var texts = reading?.texts(hiding: hiding) ?? []
+            if let article {
+                // The interviews first: the filmmakers' own words lead.
+                let sections = article.before + (hiding ? [] : article.after)
+                texts.insert(TechSpecs.Text(source: nil, sections: sections, isInterview: false), at: min(texts.count, reading?.sources.count ?? 0))
+            }
+            specs = TechSpecs.read(texts: texts, cinematographers: cinematographers)
         }
         return specs
     }
