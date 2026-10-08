@@ -258,6 +258,21 @@ final class FilmInfoTests: XCTestCase {
         let best = DiscoverList.bestOf(year: 1994).request(today: today)
         XCTAssertEqual(best.pages, 5)
         XCTAssertTrue(best.query.contains(URLQueryItem(name: "primary_release_year", value: "1994")))
+        let gems = DiscoverList.bestOf(year: 2019, source: .gems).request(today: today)
+        XCTAssertTrue(gems.query.contains(URLQueryItem(name: "vote_count.lte", value: "900")))
+        XCTAssertEqual(DiscoverList.bestOf(year: 2019, source: .popular).request(today: today).query.first { $0.name == "sort_by" }?.value,
+                       "popularity.desc")
+        XCTAssertEqual(DiscoverList.because(id: 496243, title: "Parasite").request(today: today).path, "/movie/496243/recommendations")
+        XCTAssertTrue(DiscoverList.decade(1970).request(today: today).query.contains(URLQueryItem(name: "primary_release_date.lte", value: "1979-12-31")))
+        XCTAssertEqual(DiscoverList.country(code: "JP").title, "Cinema from Japan")
+    }
+
+    func testThreeShelvesEachLaunch() {
+        var generator = SystemRandomNumberGenerator()
+        let shelves = DiscoverList.shelves(loved: [(496243, "Parasite")], using: &generator)
+        XCTAssertEqual(shelves.count, 3)
+        XCTAssertEqual(shelves.first, .because(id: 496243, title: "Parasite"))
+        XCTAssertEqual(DiscoverList.shelves(loved: [], using: &generator).count, 2, "no loved films: no Because You Loved")
     }
 
     func testWikipediaFallbackOnlyAcceptsExactTitles() {

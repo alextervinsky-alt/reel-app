@@ -58,7 +58,7 @@ struct CameraTab: View {
             }
             passage("Why It Looks This Way", note: "The choices behind the look, and what inspired them.",
                     notes: specs.reasons, bold: bold)
-            passage("In Their Own Words", note: "The cinematographer and the director on the shoot.",
+            passage("In Their Own Words", note: "From interviews with the filmmakers.",
                     notes: specs.approach, bold: bold, quoted: true)
             passage("Camera and Movement", note: nil, notes: specs.cameraLanguage, bold: bold)
             passage("Lighting", note: nil, notes: specs.lighting, bold: bold)
@@ -100,7 +100,7 @@ struct CameraTab: View {
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 6)
-                Link("More about \(about.name) on Wikipedia", destination: about.url)
+                TextLink("More about \(about.name) on Wikipedia", destination: about.url)
                     .font(.system(size: 12.5, weight: .medium))
             }
         }
@@ -191,6 +191,7 @@ struct CameraTab: View {
                     }
                 }
                 .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
                 .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
             }
@@ -277,7 +278,7 @@ struct CameraTab: View {
             }
             HStack(spacing: 6) {
                 Text("From Wikipedia and Wikidata (CC BY-SA), TMDB and the articles named, quoted briefly.")
-                if let url = article?.url { Link("Open the full article", destination: url) }
+                if let url = article?.url { TextLink("Open the full article", destination: url) }
             }
             .font(.caption)
             .foregroundStyle(.tertiary)

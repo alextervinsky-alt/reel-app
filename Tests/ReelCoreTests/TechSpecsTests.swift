@@ -133,4 +133,14 @@ final class TechSpecsTests: XCTestCase {
         XCTAssertEqual(specs.brief(by: ["Bradford Young"]),
                        "Shot by Bradford Young with anamorphic lenses. Photographed on 35 mm. Lit with natural light.")
     }
+
+    func testTheSameThingSaidTwiceIsShownOnce() {
+        let interview = TechSpecs.Text(source: "No Film School", paragraphs: [
+            "“We lit the whole house with tungsten practicals and one big soft source outside,” Hong said.",
+            "Hong said they lit the whole house with tungsten practicals and one big soft source outside the windows.",
+            "\"I knew that Korean audiences would react well to this film.\"",
+        ])
+        let specs = TechSpecs.read(texts: [interview], cinematographers: ["Hong Kyung-pyo"])
+        XCTAssertEqual(specs.approach.count, 1, "\(specs.approach.map(\.text))")
+    }
 }

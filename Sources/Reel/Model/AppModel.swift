@@ -91,6 +91,13 @@ final class AppModel {
     /// What Picked for You can draw from this launch, and last launch's picks (left out).
     @ObservationIgnored var exploreCandidates: [ExploreCandidate] = []
     @ObservationIgnored var explorePicksBefore: Set<Int> = []
+    /// Explore's three shelves for this launch (a loved film's, a country's, a decade or hidden gems).
+    @ObservationIgnored var exploreShelvesChosen: [DiscoverList]?
+    /// Explore's rows that rank by quality are reordered once per launch (within a rating band) by this.
+    @ObservationIgnored let exploreLaunch = UUID().uuidString
+    /// Best of a year from the Lists' sources (IMDb, award winners), as films to show.
+    var bestOfLists: [String: [PreviewFilm]] = [:]
+    var bestOfLoading: Set<String> = []
     /// What Picked for You showed last (saved, for the next launch to leave out).
     @ObservationIgnored var explorePicksShown: [Int] = []
     var explorePicksLoading = false

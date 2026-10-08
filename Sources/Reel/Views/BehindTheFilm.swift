@@ -611,7 +611,7 @@ private struct ReadMore: View {
             HStack(spacing: 6) {
                 if model.hidesSpoilers(for: film) { Text("Reviews elsewhere may discuss the story.") }
                 Text("From Wikipedia and Wikidata (CC BY-SA).")
-                if let url = article?.url { Link("Open the full article", destination: url) }
+                if let url = article?.url { TextLink("Open the full article", destination: url) }
             }
             .font(.caption)
             .foregroundStyle(.tertiary)

@@ -38,7 +38,7 @@ extension AppModel {
 
     /// "Teaser" or "Trailer", for the button.
     func trailerLabel(for film: FilmEntry) -> String {
-        trailerVideos(for: film).first?.type == "Teaser" ? "Teaser" : "Trailer"
+        trailerVideos(for: film).first.map(Trailers.isTeaser) == true ? "Teaser" : "Trailer"
     }
 
     func showTrailer(for film: FilmEntry, from origin: CGRect? = nil, offersFilmPage: Bool = false) {

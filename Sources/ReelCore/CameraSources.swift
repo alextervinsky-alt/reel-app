@@ -76,9 +76,8 @@ public enum CameraSources {
         ("thewrap.com", "TheWrap"), ("rogerebert.com", "RogerEbert.com"), ("befilmtv.com", "Be Film"),
     ]
     /// Words in a news article's address that say it's about the camera work.
-    static let craftWords = ["cinematograph", "cinematographer", "camera", "lens", "lighting", "lit-", "-shot", "shot-",
-                             "shooting", "look", "dp-", "-dp", "dop", "director-of-photography", "craft", "imax", "film-stock",
-                             "35mm", "65mm", "16mm", "anamorphic", "visual", "colorist", "color-grade", "framing"]
+    static let craftWords = ["cinematograph", "camera", "lens", "lighting", "-dp-", "dp-interview", "director-of-photography",
+                             "craft", "film-stock", "35mm", "65mm", "16mm", "anamorphic", "colorist", "color-grade", "framing"]
 
     /// The cited links worth reading, best first: craft sites, then news pieces about the shooting;
     /// those naming the cinematographer before the rest. At most `limit`.
@@ -278,7 +277,8 @@ public struct CameraSourcesClient: Sendable {
             let link: String
         }
         var found: [(url: URL, site: String, title: String?)] = []
-        for kind in ["article", "posts"] {
+        // Magazine articles only: the site's blog posts are about the society, not the films.
+        for kind in ["article"] {
             var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/\(kind)")!
             components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
                                      URLQueryItem(name: "_fields", value: "title,link")]

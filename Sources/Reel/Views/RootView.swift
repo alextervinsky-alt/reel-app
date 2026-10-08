@@ -78,6 +78,7 @@ struct RootView: View {
                         WelcomeView()
                     } else {
                         switch shelf {
+                        case .forYou: ForYouView()
                         case .explore: ExploreView(path: $path)
                         case .lists: ListsView()
                         case .recommended: RecommendedView()
@@ -203,6 +204,7 @@ struct SidebarView: View {
                         }
                     }
                     section("Discover") {
+                        row(.forYou, "For You", icon: "sparkles")
                         row(.explore, "Explore", icon: "safari")
                         row(.lists, "Lists", icon: "list.number")
                         row(.wishlist, "Wishlist", icon: "star")
@@ -284,7 +286,7 @@ struct SidebarView: View {
     }
 
     private func row(_ shelf: Shelf, _ title: String, icon: String?, tint: Color? = nil, highlightCount: Bool = false) -> some View {
-        let counted = ![.explore, .lists, .recommended, .yearInFilm, .tonight].contains(shelf)
+        let counted = ![.forYou, .explore, .lists, .recommended, .yearInFilm, .tonight].contains(shelf)
         let count = shelf == .tonight ? model.tonightItems.count : (counted ? model.count(shelf) : nil)
         return SidebarRow(title: title, icon: icon, tint: tint, count: count,
                           countTint: highlightCount && (count ?? 0) > 0 ? Theme.brand : nil,

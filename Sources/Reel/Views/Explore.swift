@@ -5,18 +5,21 @@ import ReelCore
 
 // MARK: - Explore
 
-/// Finding new films: picked for you (new each launch), what's in cinemas, trending, newly out
-/// at home, the best of any year. A mood chip narrows every row to that mood and adds the
-/// best-loved films of the mood from any time.
+/// Finding new films: what's in cinemas, trending and newly out at home, three shelves that
+/// change each time Reel opens (one of your loved films', a country's cinema, a decade or the
+/// hidden gems), and the best of any year from the source you choose. Films you've seen are left
+/// out. A mood chip narrows every row to that mood and adds the best-loved films of the mood
+/// from any time. (Picked for You has its own page, For You.)
 struct ExploreView: View {
     @Environment(AppModel.self) private var model
     @Binding var path: NavigationPath
     @State private var preview: PreviewFilm?
     @State private var year = Calendar.current.component(.year, from: Date()) - 1
+    @State private var source = BestOfSource.tmdb
     @State private var mood: Mood?
 
     private var lists: [DiscoverList] {
-        (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .trending, .newAtHome, .bestOf(year: year)]
+        (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .trending, .newAtHome] + model.exploreShelves
     }
 
     private static let moodChoices = [MoodChoiceCount(choice: .any, count: 0)]
@@ -28,7 +31,7 @@ struct ExploreView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Explore").font(.system(size: 30, weight: .bold))
-                        Text("Find your next film. Ones you own open straight away.")
+                        Text("Find your next film. New shelves each time Reel opens; films you've seen are left out.")
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
@@ -38,10 +41,10 @@ struct ExploreView: View {
                         }
                     }
                 }
-                PickedForYouRow(mood: mood) { preview = $0 }
                 ForEach(lists, id: \.self) { list in
-                    DiscoverRow(list: list, mood: list.mood == nil ? mood : nil, year: isBestOf(list) ? $year : nil) { preview = $0 }
+                    DiscoverRow(list: list, mood: list.mood == nil ? mood : nil) { preview = $0 }
                 }
+                BestOfRow(year: $year, source: $source, mood: mood) { preview = $0 }
             }
             .padding(.horizontal, 32)
             .padding(.top, 18)
@@ -51,10 +54,7 @@ struct ExploreView: View {
         .navigationTitle("Explore")
         .toolbar(removing: .title)
         .filmPreviewSheet($preview)
-        .task {
-            await model.lists.prepare()
-            await model.loadExplorePicks()
-        }
+        .task { await model.lists.prepare() }
         .task(id: lists) {
             await withTaskGroup(of: Void.self) { group in
                 for list in lists {
@@ -63,81 +63,116 @@ struct ExploreView: View {
             }
         }
     }
-
-    private func isBestOf(_ list: DiscoverList) -> Bool {
-        if case .bestOf = list { return true }
-        return false
-    }
 }
 
-/// Films people who loved your favourites went on to love, a different dozen each launch, each
-/// saying which of your films it follows. Shuffle draws another dozen.
-struct PickedForYouRow: View {
+/// "Best of" a year, from the source you choose: TMDB's rating, IMDb's, the most popular, the
+/// award winners or the hidden gems.
+struct BestOfRow: View {
     @Environment(AppModel.self) private var model
     @Environment(\.isSnapshot) private var isSnapshot
-    /// Only films of this mood: the strongest of everything found, not the day's dozen.
-    var mood: Mood? = nil
+    @Binding var year: Int
+    @Binding var source: BestOfSource
+    var mood: Mood?
     let onPreview: (PreviewFilm) -> Void
 
     var body: some View {
-        let picks = model.explorePicks.map { all in mood.map { model.explorePicks(in: $0) } ?? all }
-        if picks?.isEmpty != true || (mood != nil && model.explorePicks?.isEmpty == false), model.hasToken {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Picked for You").font(.system(size: 19, weight: .semibold))
-                        Text(mood.map { "From the films you loved, the \($0.title.lowercased()) ones" }
-                             ?? "From the films you loved, new each time you open Reel")
-                            .font(.system(size: 12.5))
+        let found = model.bestOf(year: year, source: source)
+        let films = (found ?? []).filter { film in
+            !model.isSeen(film.id) && (mood.map { film.genres.isEmpty || MoodGenres.of($0).fits(film.genres) } ?? true)
+        }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Best of \(String(year))").font(.system(size: 19, weight: .semibold))
+                    Text(source.subtitle(year)).font(.system(size: 12.5)).foregroundStyle(.secondary)
+                }
+                YearMenu(year: $year)
+                SourceMenu(source: $source)
+                Spacer()
+                if !films.isEmpty { seeAll }
+            }
+            if films.isEmpty {
+                HStack(spacing: 8) {
+                    if found == nil || model.isLoadingBestOf(year: year, source: source) {
+                        ProgressView().controlSize(.small)
+                        Text(source == .imdb && !model.lists.imdbIsReady ? "Getting IMDb's ratings (the first time takes a minute)…" : "Loading…")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(source == .awards ? "No award winners from \(String(year)) in the lists." : "Nothing found for \(String(year)).")
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    if mood == nil, picks != nil, model.canShuffleExplorePicks {
-                        Button {
-                            withAnimation(.easeOut(duration: 0.25)) { model.shuffleExplorePicks() }
-                        } label: {
-                            Label("Shuffle", systemImage: "shuffle")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Theme.brand)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Another dozen")
-                    }
                 }
-                if let picks, picks.isEmpty, let mood {
-                    Text("None of the films found from the ones you loved are \(mood.title.lowercased()). The rows below have more.")
-                        .foregroundStyle(.secondary)
-                        .frame(height: 60, alignment: .leading)
-                } else if let picks {
-                    if isSnapshot {
-                        HStack(alignment: .top, spacing: 18) { cards(picks) }.snapshotRow()
-                    } else {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(alignment: .top, spacing: 18) { cards(picks) }
-                                .padding(.vertical, 6)
-                        }
-                    }
-                } else {
-                    HStack(spacing: 10) {
-                        if model.explorePicksLoading || !model.explorePicksTried {
-                            ProgressView().controlSize(.small)
-                            Text("Finding films for you…").foregroundStyle(.secondary)
-                        } else {
-                            Text("Couldn't find picks. Check the internet connection.").foregroundStyle(.secondary)
-                            Button("Try Again") { Task { await model.loadExplorePicks() } }
-                                .buttonStyle(SecondaryCapsuleStyle())
-                        }
-                    }
-                    .frame(height: 120)
+                .frame(height: 120)
+            } else if isSnapshot {
+                HStack(alignment: .top, spacing: 18) { cards(films) }.snapshotRow()
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 18) { cards(films) }
+                        .padding(.vertical, 6)
                 }
+            }
+        }
+        .task(id: "\(year)|\(source.rawValue)") {
+            await model.loadBestOf(year: year, source: source)
+            // IMDb's ratings download the first time: look again once they're in.
+            if source == .imdb, model.bestOf(year: year, source: source) == nil {
+                while !Task.isCancelled, !model.lists.imdbIsReady { try? await Task.sleep(for: .seconds(2)) }
+                await model.loadBestOf(year: year, source: source)
             }
         }
     }
 
-    private func cards(_ picks: [ExplorePick]) -> some View {
-        ForEach(picks) { pick in
-            DiscoverCard(film: pick.film, width: 146, reason: pick.reason, onPreview: onPreview)
+    /// Where See All goes: the whole list on TMDB, or IMDb's Top 100 in Lists (the award
+    /// winners are all in the row).
+    @ViewBuilder
+    private var seeAll: some View {
+        switch source {
+        case .tmdb, .popular, .gems:
+            NavigationLink(value: DiscoverRoute(list: .bestOf(year: year, source: source), mood: mood)) { seeAllLabel }
+                .buttonStyle(.plain)
+        case .imdb:
+            NavigationLink(value: ListRoute(kind: .imdbYear(year))) { seeAllLabel }
+                .buttonStyle(.plain)
+        case .awards:
+            EmptyView()
         }
+    }
+
+    private var seeAllLabel: some View {
+        HStack(spacing: 4) {
+            Text("See All")
+            Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
+        }
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(Theme.brand)
+    }
+
+    private func cards(_ films: [PreviewFilm]) -> some View {
+        ForEach(Array(films.prefix(20).enumerated()), id: \.element.id) { index, film in
+            DiscoverCard(film: film, width: 146, rank: source == .tmdb || source == .imdb ? index + 1 : nil,
+                         reason: source == .awards ? film.note : nil, onPreview: onPreview)
+        }
+    }
+}
+
+/// Where the best of a year comes from.
+struct SourceMenu: View {
+    @Binding var source: BestOfSource
+    /// Only TMDB's sources (a list page of TMDB films).
+    var tmdbOnly = false
+
+    var body: some View {
+        Menu {
+            Picker("Source", selection: $source) {
+                ForEach(BestOfSource.allCases.filter { !tmdbOnly || $0.isTMDB }) { Text($0.title).tag($0) }
+            }
+        } label: {
+            FilterPill(icon: "line.3.horizontal.decrease", text: source.title, active: false)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }
 
@@ -148,12 +183,11 @@ struct DiscoverRow: View {
     let list: DiscoverList
     /// Only the films of this mood (by their genres); a row left empty by it isn't shown.
     var mood: Mood? = nil
-    var year: Binding<Int>?
     let onPreview: (PreviewFilm) -> Void
 
     var body: some View {
         let all = model.discover[list] ?? []
-        let films = mood.map { mood in all.filter { MoodGenres.of(mood).fits($0.genreNames) } } ?? all
+        let films = model.exploreFilms(list, mood: mood)
         if mood == nil || !films.isEmpty || all.isEmpty {
             row(films)
         }
@@ -166,7 +200,6 @@ struct DiscoverRow: View {
                     Text(list.title).font(.system(size: 19, weight: .semibold))
                     Text(list.subtitle).font(.system(size: 12.5)).foregroundStyle(.secondary)
                 }
-                if let year { YearMenu(year: year) }
                 Spacer()
                 if !films.isEmpty {
                     NavigationLink(value: DiscoverRoute(list: list, mood: mood)) {
@@ -218,26 +251,31 @@ struct DiscoverListPage: View {
     /// Only the films of this mood (from Explore's mood chips).
     let mood: Mood?
     @State private var year: Int
+    @State private var source: BestOfSource
     @State private var preview: PreviewFilm?
 
     init(list: DiscoverList, mood: Mood? = nil) {
         self.mood = mood
         _list = State(initialValue: list)
-        if case .bestOf(let y) = list {
+        if case .bestOf(let y, let s) = list {
             _year = State(initialValue: y)
+            _source = State(initialValue: s)
         } else {
             _year = State(initialValue: Calendar.current.component(.year, from: Date()) - 1)
+            _source = State(initialValue: .tmdb)
         }
     }
 
     var body: some View {
-        let all = model.discover[list] ?? []
-        let films = mood.map { mood in all.filter { MoodGenres.of(mood).fits($0.genreNames) } } ?? all
+        let films = model.exploreFilms(list, mood: mood)
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(mood.map { "\(list.title) · \($0.title)" } ?? list.title).font(.system(size: 30, weight: .bold))
-                    if case .bestOf = list { YearMenu(year: $year) }
+                    if case .bestOf = list {
+                        YearMenu(year: $year)
+                        SourceMenu(source: Binding(get: { source }, set: { source = $0.isTMDB ? $0 : source }), tmdbOnly: true)
+                    }
                     Spacer()
                 }
                 Text(list.subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
@@ -257,13 +295,13 @@ struct DiscoverListPage: View {
         .navigationTitle(list.title)
         .filmPreviewSheet($preview)
         .task(id: list) { await model.loadDiscover(list) }
-        .onChange(of: year) {
-            if case .bestOf = list { list = .bestOf(year: year) }
+        .onChange(of: "\(year)|\(source.rawValue)") {
+            if case .bestOf = list { list = .bestOf(year: year, source: source) }
         }
     }
 
     private var isRanked: Bool {
-        if case .bestOf = list { return true }
+        if case .bestOf(_, let source) = list { return source == .tmdb }
         return false
     }
 }
@@ -598,7 +636,7 @@ struct FilmPreview: View {
                                                    backdropPath: film.backdropPath ?? details?.backdropPath,
                                                    origin: nil, offersFilmPage: false)
                 } label: {
-                    Label(videos.first?.type == "Teaser" ? "Teaser" : "Trailer", systemImage: "play.rectangle")
+                    Label(videos.first.map(Trailers.isTeaser) == true ? "Teaser" : "Trailer", systemImage: "play.rectangle")
                 }
                 .buttonStyle(PrimaryCapsuleStyle())
                 .disabled(videos.isEmpty)

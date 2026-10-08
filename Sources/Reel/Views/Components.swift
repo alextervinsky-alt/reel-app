@@ -509,4 +509,22 @@ struct NoticeBar: View {
         .padding(14)
     }
 }
+/// A link in running text, in Reel's colour. (A plain button: SwiftUI's own `Link` can't be
+/// drawn into the CI screens, where it shows as a placeholder.)
+struct TextLink: View {
+    let title: String
+    let url: URL
+
+    init(_ title: String, destination: URL) {
+        self.title = title
+        url = destination
+    }
+
+    var body: some View {
+        Button(title) { NSWorkspace.shared.open(url) }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.brand)
+            .help(url.absoluteString)
+    }
+}
 #endif

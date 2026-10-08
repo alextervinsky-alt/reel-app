@@ -47,7 +47,7 @@ public enum Trailers {
 
     /// A real teaser: labelled one and named one ("Official Teaser", "Teaser Trailer"). Shows less
     /// of the story than the trailer.
-    static func isTeaser(_ video: TMDBVideo) -> Bool {
+    public static func isTeaser(_ video: TMDBVideo) -> Bool {
         video.type == "Teaser" || (video.name ?? "").lowercased().contains("teaser")
     }
 

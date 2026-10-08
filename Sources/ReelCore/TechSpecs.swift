@@ -234,7 +234,19 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     private static func add(_ note: Note, to list: inout [Note]) {
-        if !list.contains(where: { $0.text == note.text }) { list.append(note) }
+        let words = wordSet(note.text)
+        // The same thing said twice (a quote and its paraphrase): once.
+        if !list.contains(where: { $0.text == note.text || overlap(wordSet($0.text), words) >= 0.7 }) { list.append(note) }
+    }
+
+    static func wordSet(_ text: String) -> Set<String> {
+        Set(text.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count > 2 })
+    }
+
+    /// How much of the shorter of two sentences the longer one says too (0–1).
+    static func overlap(_ a: Set<String>, _ b: Set<String>) -> Double {
+        let smaller = min(a.count, b.count)
+        return smaller == 0 ? 0 : Double(a.intersection(b).count) / Double(smaller)
     }
 
     static func quoted(_ sentence: String) -> Bool {
@@ -266,7 +278,7 @@ public struct TechSpecs: Equatable, Sendable {
     static let visualHeadings = ["cinematograph", "visual", "look", "lighting", "camera", "style"]
 
     static let reception = try! NSRegularExpression(
-        pattern: #"\b(?:praised|praising|nominated|nominations?|won|wins|awards?|acclaim\w*|critics?|critical|reviewers?|reviews?|box office|grossed|ranked|Oscars?|BAFTAs?|Academy Awards?)\b"#,
+        pattern: #"\b(?:praised|praising|nominated|nominations?|won|wins|awards?|acclaim\w*|critics?|critical|reviewers?|reviews?|box office|grossed|ranked|Oscars?|BAFTAs?|Academy Awards?|premiere[sd]?|debut\w*|screened|re-screened|screenings?|limited release|festivals?|distribut\w*|audiences?|international community)\b"#,
         options: [.caseInsensitive])
     static let said = try! NSRegularExpression(
         pattern: #"\b(?:said|says|explained|recalled|described|told|wanted|noted|stated|felt|aimed|chose|decided|opted|insisted|preferred|used|shot|lit|lensed|designed|inspired|influenced|referenced|wanted|approach|tried|avoided|had|requested|requests|asked|worked|collaborated|planned|tested|took|gave|kept|filmed|framed)\b"#,
@@ -286,7 +298,7 @@ public struct TechSpecs: Equatable, Sendable {
         options: [.caseInsensitive])
     /// What an interview sentence must be about to be read: the look of the film.
     static let lookWords = try! NSRegularExpression(
-        pattern: #"\b(?:look|looks|image|images|imagery|frames?|framing|framed|shots?|shoot|shooting|shot on|camera|cameras|lens|lenses|light|lights|lighting|lit|colou?rs?|palette|stock|exposure|grain|texture|composition|cinematograph\w*|photograph\w*|visual\w*|aspect ratio|anamorphic|close-ups?|wide|handheld|Steadicam|dolly|crane|focus|contrast|shadows?|sun|daylight|night|darkness|LUT|grade|graded|format|film|digital|tests?|tested)\b"#,
+        pattern: #"\b(?:the look|cinematograph\w*|camera|cameras|lens|lenses|lensing|lighting|lit|light|lights|frames?|framing|framed|shots?|composition|compositions|exposure|grain|texture|palette|colou?rs?|storyboard\w*|coverage|blocking|close-ups?|wide shots?|visual\w*|images?|imagery|aspect ratio|anamorphic|film stock|stock|LUT|grade|graded|grading|handheld|Steadicam|dolly|crane|focal|depth of field|contrast|shadows?|silhouettes?|daylight|moonlight|sunlight|darkness)\b"#,
         options: [.caseInsensitive])
     /// Said in the first person (an interview's answers).
     static let firstPerson = try! NSRegularExpression(pattern: #"^(?:I|We|I'd|I've|I'm|We'd|We've|We're|My|Our|For me|For us)\b|\b(?:we|I) (?:wanted|decided|chose|used|shot|lit|tested|felt|tried|knew|thought|went|had|did|were|was)\b"#)

@@ -9,10 +9,10 @@ enum Shelf: Hashable {
     case drive(String)
     /// Films without a full copy on the Backup drive.
     case notOnBackup
-    case explore, lists, wishlist
+    case forYou, explore, lists, wishlist
 
     /// Shelves shown as the poster grid (search and filters apply to them).
-    var isLibrary: Bool { ![.explore, .lists, .wishlist, .recommended, .yearInFilm, .tonight].contains(self) }
+    var isLibrary: Bool { ![.forYou, .explore, .lists, .wishlist, .recommended, .yearInFilm, .tonight].contains(self) }
 }
 
 enum LibrarySort: String, CaseIterable, Identifiable {

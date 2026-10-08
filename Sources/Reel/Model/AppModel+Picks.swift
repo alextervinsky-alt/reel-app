@@ -2,7 +2,7 @@
 import Foundation
 import ReelCore
 
-/// A film Explore's Picked for You shows, and why.
+/// A film For You shows, and why.
 struct ExplorePick: Identifiable {
     let film: PreviewFilm
     let reason: String
@@ -10,10 +10,12 @@ struct ExplorePick: Identifiable {
     var id: Int { film.id }
 }
 
-/// Picked for You: films you don't have and haven't seen, which people who loved your
-/// favourites went on to love, kept when they're truly alike (see `ExplorePicks`). A different
-/// dozen each time Reel opens (and Shuffle draws again).
+/// For You: films you don't have and haven't seen, which people who loved your favourites went
+/// on to love, kept when they're truly alike (see `ExplorePicks`). A different fifteen each time
+/// Reel opens (and New Picks draws again).
 extension AppModel {
+    static let forYouCount = 15
+
     func loadExplorePicks() async {
         guard explorePicks == nil, !explorePicksLoading, let client = tmdb else { return }
         explorePicksLoading = true
@@ -47,7 +49,7 @@ extension AppModel {
         }, today: today)
         // The strongest few dozen looked at closely: their people, themes and tone against the
         // loved film each follows.
-        let closer = Array(found.prefix(40))
+        let closer = Array(found.prefix(70))
         let details = await withTaskGroup(of: (Int, TMDBMovieDetails?).self) { group in
             var all: [Int: TMDBMovieDetails] = [:]
             var started = 0
@@ -60,23 +62,23 @@ extension AppModel {
             for await (id, detail) in group { if let detail { all[id] = detail } }
             return all
         }
-        exploreCandidates = ExplorePicks.refine(closer, details: details, keep: 24, keywordCounts: keywordCounts,
+        exploreCandidates = ExplorePicks.refine(closer, details: details, keep: 48, keywordCounts: keywordCounts,
                                                 libraryCount: items.count)
             + found.dropFirst(closer.count).filter { $0.seed.features == nil }
         drawExplorePicks(avoiding: explorePicksBefore)
     }
 
-    /// Picked for You in one mood (Explore's chips): the strongest dozen of the films found that
+    /// For You in one mood (its chips): the strongest fifteen of the films found that
     /// have it, left out once seen or wished for.
     func explorePicks(in mood: Mood) -> [ExplorePick] {
         exploreCandidates
             .filter { $0.fits(mood) && !isSeen($0.movie.id) && !wishlistIDs.contains($0.movie.id) }
             .sorted(by: ExplorePicks.order)
-            .prefix(12)
+            .prefix(Self.forYouCount)
             .map { ExplorePick(film: PreviewFilm($0.movie, note: $0.reason.long), reason: $0.reason.long) }
     }
 
-    /// Another dozen from the same films, none of the ones showing now.
+    /// Fifteen others from the same films, none of the ones showing now.
     func shuffleExplorePicks() {
         drawExplorePicks(avoiding: Set(explorePicks?.map(\.id) ?? []).union(explorePicksBefore))
     }
@@ -89,12 +91,12 @@ extension AppModel {
         var generator = SystemRandomNumberGenerator()
         // Films marked seen or wished for since they were found are left out.
         let open = exploreCandidates.filter { !isSeen($0.movie.id) && !wishlistIDs.contains($0.movie.id) }
-        var picks = ExplorePicks.sample(open, count: 12, avoiding: avoiding, using: &generator).map { candidate in
+        var picks = ExplorePicks.sample(open, count: Self.forYouCount, avoiding: avoiding, using: &generator).map { candidate in
             ExplorePick(film: PreviewFilm(candidate.movie, note: candidate.reason.long), reason: candidate.reason.long)
         }
         // Without loved films to start from (or too few found), what the lists agree on fills in.
-        if picks.count < 12 {
-            picks += listPicksForExplore(excluding: Set(picks.map(\.id))).prefix(12 - picks.count)
+        if picks.count < Self.forYouCount {
+            picks += listPicksForExplore(excluding: Set(picks.map(\.id))).prefix(Self.forYouCount - picks.count)
         }
         explorePicks = picks
         explorePicksShown = picks.map(\.id)
@@ -105,11 +107,11 @@ extension AppModel {
     private func listPicksForExplore(excluding shown: Set<Int>) -> [ExplorePick] {
         startHere().toFind
             .filter { !shown.contains($0.film.id) && $0.film.id != 0 }
-            .prefix(12)
+            .prefix(Self.forYouCount)
             .map { ExplorePick(film: $0.film, reason: $0.reason) }
     }
 
-    /// Up to six films you loved (4 or 5 stars, or a heart), drawn by chance, five stars twice as
+    /// Up to eight films you loved (4 or 5 stars, or a heart), drawn by chance, five stars twice as
     /// likely; without any, watched films that are well rated.
     private func exploreSeeds() -> [ExploreSeed] {
         func seed(_ key: String, _ id: Int) -> ExploreSeed? {
@@ -132,7 +134,7 @@ extension AppModel {
                 .compactMap { item in item.main.tmdb.flatMap { seed(item.id, $0.id) }.map { ($0, 1) } }
         }
         var chosen: [ExploreSeed] = []
-        while chosen.count < 6, !loved.isEmpty {
+        while chosen.count < 8, !loved.isEmpty {
             var target = Int.random(in: 0..<loved.reduce(0) { $0 + $1.weight })
             var index = 0
             while target >= loved[index].weight {

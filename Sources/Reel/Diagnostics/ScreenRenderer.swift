@@ -113,16 +113,18 @@ enum ScreenRenderer {
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("camera.png"))
         }
-        // Explore's Picked for You (from the sample's watched films), with its posters loaded.
+        // For You (from the sample's watched films): its first six, with their frames and details loaded.
         await model.loadExplorePicks()
-        for pick in model.explorePicks ?? [] {
-            if let path = pick.film.posterPath { _ = await ImageStore.shared.image(path, .poster) }
+        let shown = Array((model.explorePicks ?? []).prefix(6))
+        for pick in shown {
+            if let path = pick.film.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) }
+            _ = await model.previewInfo(for: pick.id)
         }
-        render(PickedForYouRow { _ in }
+        render(ForYouGrid(picks: shown) { _ in }
                 .padding(32)
                 .frame(width: 1300)
                 .background(Theme.background),
-               model: model, scale: 2, to: output.appendingPathComponent("picked-for-you.png"))
+               model: model, scale: 2, to: output.appendingPathComponent("for-you.png"))
         // All Films' banner and a Recommended card, each with the whole synopsis.
         if let item = model.featured ?? model.items.first {
             render(VStack(alignment: .leading, spacing: 30) {
@@ -134,14 +136,20 @@ enum ScreenRenderer {
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("banner-and-card.png"))
         }
-        // Explore in one mood: Picked for You narrowed to it, and the mood's own row.
+        // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
+        // from the award winners.
+        let year = Calendar.current.component(.year, from: Date()) - 2
         await model.loadDiscover(.mood(.dark))
-        let moodPosters = (model.discover[.mood(.dark)] ?? []).prefix(8).compactMap(\.posterPath)
-            + model.explorePicks(in: .dark).compactMap(\.film.posterPath)
-        for path in moodPosters { _ = await ImageStore.shared.image(path, .poster) }
+        for shelf in model.exploreShelves { await model.loadDiscover(shelf) }
+        await model.loadBestOf(year: year, source: .awards)
+        var explorePosters = (model.discover[.mood(.dark)] ?? []).prefix(8).compactMap(\.posterPath)
+        for shelf in model.exploreShelves { explorePosters += model.exploreFilms(shelf, mood: nil).prefix(8).compactMap(\.posterPath) }
+        explorePosters += (model.bestOf(year: year, source: .awards) ?? []).prefix(8).compactMap(\.posterPath)
+        for path in explorePosters { _ = await ImageStore.shared.image(path, .poster) }
         render(VStack(alignment: .leading, spacing: 38) {
-                    PickedForYouRow(mood: .dark) { _ in }
                     DiscoverRow(list: .mood(.dark)) { _ in }
+                    ForEach(model.exploreShelves, id: \.self) { shelf in DiscoverRow(list: shelf) { _ in } }
+                    BestOfRow(year: .constant(year), source: .constant(.awards)) { _ in }
                 }
                 .padding(32)
                 .frame(width: 1300)
