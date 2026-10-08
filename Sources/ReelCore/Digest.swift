@@ -137,7 +137,7 @@ public enum Digest {
             case .making: "Making the Film"
             case .casting: "Casting"
             case .shoot: "The Shoot"
-            case .design: "Design and Effects"
+            case .design: "Design, Effects and Editing"
             case .music: "Music and Sound"
             case .release: "Release"
             case .reception: "How It Was Received"

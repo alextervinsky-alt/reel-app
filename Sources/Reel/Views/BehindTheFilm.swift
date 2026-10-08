@@ -435,7 +435,7 @@ private struct PullQuote: View {
     }
 }
 
-/// The three things most worth knowing, side by side; the first one leads.
+/// The three things most worth knowing: the first across the top, the other two side by side.
 private struct ThingsToKnow: View {
     let facts: [FunFact]
 
@@ -444,35 +444,39 @@ private struct ThingsToKnow: View {
             Label("Three Things to Know", systemImage: "sparkles")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.brand)
-            HStack(alignment: .top, spacing: 14) {
-                ForEach(Array(facts.enumerated()), id: \.element.text) { index, fact in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(fact.category.uppercased())
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(index == 0 ? Theme.brand : Color.secondary)
-                        Text(fact.text)
-                            .font(.system(size: index == 0 ? 16 : 14.5, weight: index == 0 ? .medium : .regular))
-                            .lineSpacing(4)
-                            .foregroundStyle(Color.white.opacity(index == 0 ? 0.95 : 0.85))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(18)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(index == 0
-                                  ? AnyShapeStyle(LinearGradient(colors: [Theme.brand.opacity(0.22), Theme.panel],
-                                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                                  : AnyShapeStyle(Theme.panel))
-                    )
-                    .layoutPriority(index == 0 ? 1 : 0)
+            if let first = facts.first { tile(first, leads: true) }
+            if facts.count > 1 {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(facts.dropFirst(), id: \.text) { tile($0, leads: false) }
                 }
+                // Both as tall as the taller one.
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func tile(_ fact: FunFact, leads: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(fact.category.uppercased())
+                .font(.system(size: 10.5, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(leads ? Theme.brand : Color.secondary)
+            Text(fact.text)
+                .font(.system(size: leads ? 18 : 14.5, weight: leads ? .medium : .regular))
+                .lineSpacing(leads ? 5 : 4)
+                .foregroundStyle(Color.white.opacity(leads ? 0.95 : 0.85))
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(leads ? 22 : 18)
+        .frame(maxWidth: .infinity, maxHeight: leads ? nil : .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: leads ? 18 : 16, style: .continuous)
+                .fill(leads
+                      ? AnyShapeStyle(LinearGradient(colors: [Theme.brand.opacity(0.18), Theme.panel],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                      : AnyShapeStyle(Theme.panel))
+        )
     }
 }
 

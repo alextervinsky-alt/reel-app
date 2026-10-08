@@ -58,8 +58,12 @@ struct CameraTab: View {
             }
             passage("Why It Looks This Way", note: "The choices behind the look, and what inspired them.",
                     notes: specs.reasons, bold: bold)
+            // Interviews are their words; Wikipedia tells of their choices.
+            let fromWikipedia = specs.approach.filter { $0.source == nil || $0.source?.hasPrefix("Wikipedia") == true }
             passage("In Their Own Words", note: "From interviews with the filmmakers.",
-                    notes: specs.approach, bold: bold, quoted: true)
+                    notes: specs.approach.filter { !fromWikipedia.contains($0) }, bold: bold, quoted: true)
+            passage("The Cinematographer's Approach", note: "What they chose, as Wikipedia tells it.",
+                    notes: fromWikipedia, bold: bold)
             passage("Camera and Movement", note: nil, notes: specs.cameraLanguage, bold: bold)
             passage("Lighting", note: nil, notes: specs.lighting, bold: bold)
             passage("Colour and Grade", note: nil, notes: specs.colour, bold: bold)

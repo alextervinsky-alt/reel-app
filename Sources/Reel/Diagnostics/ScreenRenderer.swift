@@ -99,6 +99,7 @@ enum ScreenRenderer {
                model: model, scale: 2, to: output.appendingPathComponent("did-you-finish.png"))
         // Behind the Film for the first film, once its facts and article are fetched.
         await model.loadArticle(for: first)
+        log("article read")
         if let film = model.film(id: first.id) {
             render(BehindTheFilmTab(film: film) { _, _ in }
                     .padding(32)
@@ -107,6 +108,7 @@ enum ScreenRenderer {
                    model: model, scale: 2, to: output.appendingPathComponent("behind-the-film.png"))
             // With the interviews it cites and the cinematographer's article.
             await model.loadCameraReading(for: film)
+            log("interviews read")
             render(CameraTab(film: film)
                     .padding(32)
                     .frame(width: 900)
@@ -115,6 +117,7 @@ enum ScreenRenderer {
         }
         // For You (from the sample's watched films): its first six, with their frames and details loaded.
         await model.loadExplorePicks()
+        log("For You picked")
         let shown = Array((model.explorePicks ?? []).prefix(6))
         for pick in shown {
             if let path = pick.film.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) }
@@ -137,19 +140,20 @@ enum ScreenRenderer {
                    model: model, scale: 2, to: output.appendingPathComponent("banner-and-card.png"))
         }
         // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
-        // from the award winners.
+        // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
         await model.loadDiscover(.mood(.dark))
         for shelf in model.exploreShelves { await model.loadDiscover(shelf) }
-        await model.loadBestOf(year: year, source: .awards)
+        await model.loadBestOf(year: year, source: .gems)
+        log("Explore loaded")
         var explorePosters = (model.discover[.mood(.dark)] ?? []).prefix(8).compactMap(\.posterPath)
         for shelf in model.exploreShelves { explorePosters += model.exploreFilms(shelf, mood: nil).prefix(8).compactMap(\.posterPath) }
-        explorePosters += (model.bestOf(year: year, source: .awards) ?? []).prefix(8).compactMap(\.posterPath)
+        explorePosters += (model.bestOf(year: year, source: .gems) ?? []).prefix(8).compactMap(\.posterPath)
         for path in explorePosters { _ = await ImageStore.shared.image(path, .poster) }
         render(VStack(alignment: .leading, spacing: 38) {
                     DiscoverRow(list: .mood(.dark)) { _ in }
                     ForEach(model.exploreShelves, id: \.self) { shelf in DiscoverRow(list: shelf) { _ in } }
-                    BestOfRow(year: .constant(year), source: .constant(.awards)) { _ in }
+                    BestOfRow(year: .constant(year), source: .constant(.gems)) { _ in }
                 }
                 .padding(32)
                 .frame(width: 1300)
