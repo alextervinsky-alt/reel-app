@@ -154,8 +154,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
+        // A fixed height that fits a laptop screen; the form scrolls (it used to grow to fit everything).
+        .frame(width: 560, height: 580)
         .task {
             timings = model.timings.map { Timing(id: $0.key, time: $0.value) }.sorted { $0.id < $1.id }
             cacheSize = await model.imageCacheSize()

@@ -94,6 +94,12 @@ private struct CinemaHomeContent: View {
                           followSelection: followSelection,
                           showsReasons: row.id == "recommended" || row.id == "loved",
                           hover: { index in
+                              guard let index else {
+                                  // The pointer left its poster: a highlight it made goes with it
+                                  // (one moved with the arrow keys stays).
+                                  if !followSelection { selection = nil }
+                                  return
+                              }
                               guard row.items.indices.contains(index) else { return }
                               followSelection = false
                               selection = (row.id, row.items[index].id)
@@ -179,7 +185,8 @@ struct CinemaRowView: View {
     var showsReasons = false
     /// A line under a poster in place of the year ("Director · Yorgos Lanthimos").
     var captions: [String: String] = [:]
-    let hover: (Int) -> Void
+    /// The pointer entered a poster (its index) or left the highlighted one (nil).
+    let hover: (Int?) -> Void
     let open: (LibraryItem) -> Void
 
     var body: some View {
@@ -227,7 +234,13 @@ struct CinemaRowView: View {
                 open(item)
             }
             .equatable()
-            .onHover { if $0 { hover(index) } }
+            .onHover { inside in
+                if inside {
+                    hover(index)
+                } else if selected == index {
+                    hover(nil)
+                }
+            }
         }
     }
 }
@@ -243,7 +256,7 @@ struct CinemaHoverRow: View {
 
     var body: some View {
         CinemaRowView(title: title, items: items, selected: items.firstIndex { $0.id == selected }, captions: captions,
-                      hover: { index in if items.indices.contains(index) { selected = items[index].id } },
+                      hover: { index in selected = index.flatMap { items.indices.contains($0) ? items[$0].id : nil } },
                       open: { open($0.main.id) })
     }
 }
