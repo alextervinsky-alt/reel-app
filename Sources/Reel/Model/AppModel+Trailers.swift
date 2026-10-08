@@ -27,7 +27,7 @@ extension AppModel {
         guard let details = film.tmdb, !unplayableTrailers.contains(details.id) else { return [] }
         let stored = details.videos?.results ?? []
         let fetched = fetchedVideos[details.id] ?? []
-        return Trailers.candidates(fetched + stored, preferTeaser: hidesSpoilers(for: film),
+        return Trailers.candidates(fetched + stored, title: details.title, preferTeaser: hidesSpoilers(for: film),
                                    originalLanguage: details.originalLanguage)
     }
 

@@ -54,8 +54,10 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertEqual(d.logoPath, "/logo.png")
         XCTAssertEqual(d.collection?.name, "Blade Runner Collection")
         XCTAssertEqual(d.keywordNames, ["dystopia", "artificial intelligence"])
-        XCTAssertEqual(Trailers.candidates(d.videos?.results ?? [], preferTeaser: false, originalLanguage: d.originalLanguage).first?.key, "t1")
-        XCTAssertEqual(d.videos?.results.map(\.key), ["t1"], "only official trailers and teasers are kept")
+        XCTAssertEqual(Trailers.candidates(d.videos?.results ?? [], title: d.title, preferTeaser: false,
+                                           originalLanguage: d.originalLanguage).map(\.key), ["t1"],
+                       "someone else's upload with no name isn't trusted")
+        XCTAssertEqual(d.videos?.results.map(\.key), ["c5", "t1"], "only YouTube trailers and teasers are kept")
     }
 
     func testReceptionFindsLikesAndDislikes() {

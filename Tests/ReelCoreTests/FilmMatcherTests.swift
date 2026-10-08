@@ -84,7 +84,7 @@ final class FilmMatcherTests: XCTestCase {
         let d = try JSONDecoder().decode(TMDBMovieDetails.self, from: Data(json.utf8)).trimmed()
         XCTAssertEqual(d.year, 2012)
         XCTAssertEqual(d.genreNames, ["Action", "Science Fiction"])
-        XCTAssertEqual(Trailers.candidates(d.videos?.results ?? [], preferTeaser: false, originalLanguage: d.originalLanguage).first?.key, "xyz")
+        XCTAssertEqual(Trailers.candidates(d.videos?.results ?? [], title: d.title, preferTeaser: false, originalLanguage: d.originalLanguage).first?.key, "xyz")
         XCTAssertEqual(d.directors, ["Pete Travis"])
         XCTAssertEqual(d.credits?.crew.count, 1)
     }

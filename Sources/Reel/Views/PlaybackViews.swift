@@ -263,7 +263,7 @@ struct TrailerOverlay: View {
             switch key {
             case .escape: if filling { toggleFill() } else { dismiss() }
             case .fullScreen: toggleFill()
-            case .space: TrailerEngine.shared.togglePause(owner: token)
+            case .space: if phase == .ended { playAgain() } else { TrailerEngine.shared.togglePause(owner: token) }
             // Ten seconds back or on.
             case .left, .right:
                 guard phase == .playing || phase == .ended, time.duration > 0 else { return false }
@@ -289,9 +289,10 @@ struct TrailerOverlay: View {
     private var screen: some View {
         ZStack {
             Color.black
+            // At the end YouTube shows other videos to play next: the film's backdrop covers them.
             TrailerWebView(owner: token)
-                .opacity(phase == .playing || phase == .ended ? 1 : 0)
-            if phase == .playing || phase == .ended {
+                .opacity(phase == .playing ? 1 : 0)
+            if phase == .playing {
                 // Over the video: a click pauses or plays, and moving the pointer shows the controls.
                 Color.clear
                     .contentShape(Rectangle())
@@ -305,9 +306,12 @@ struct TrailerOverlay: View {
                 .opacity(controlsShown || !time.playing || scrub != nil ? 1 : 0)
                 .animation(.easeOut(duration: 0.25), value: controlsShown || !time.playing || scrub != nil)
             }
-            if phase != .playing && phase != .ended {
+            if phase != .playing {
                 FocusedBackdrop(path: request.backdropPath)
                     .overlay(Color.black.opacity(phase == .loading ? 0.35 : 0.7))
+            }
+            if phase == .ended {
+                button("Play Again", symbol: "arrow.counterclockwise", primary: true) { playAgain() }
             }
             if phase == .loading {
                 ProgressView().controlSize(.large).tint(.white)
@@ -394,6 +398,12 @@ struct TrailerOverlay: View {
             return
         }
         if let window = AppModel.libraryWindow, window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+    }
+
+    /// From the start, after the end.
+    private func playAgain() {
+        seek(to: 0)
+        TrailerEngine.shared.togglePause(owner: token)
     }
 
     /// Jumps to a point of the video (shown there at once, before the player catches up).

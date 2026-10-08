@@ -317,8 +317,8 @@ public struct TMDBMovieDetails: Codable, Equatable, Sendable {
             )
         }
         if let v = videos {
-            // Only official trailers and teasers are kept: nothing else is ever played.
-            copy.videos = TMDBVideoList(results: Array(v.results.filter(Trailers.isOfficial).prefix(6)))
+            // Only YouTube trailers and teasers are kept; which of them plays is `Trailers.candidates`.
+            copy.videos = TMDBVideoList(results: Array(v.results.filter(Trailers.isKept).prefix(12)))
         }
         if let k = keywords {
             copy.keywords = TMDBKeywordList(keywords: Array(k.keywords.prefix(40)))
@@ -430,17 +430,35 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
         return all
     }
 
-    /// A film's official videos in English, its original language and without a language
+    /// A film's trailers and teasers in English, its original language and without a language
     /// (asked for when a film page opens, so original-language trailers are found too).
     public func videos(id: Int, originalLanguage: String?) async throws -> [TMDBVideo] {
         let languages = ["en", originalLanguage, "null"].compactMap { $0 }.joined(separator: ",")
         let list: TMDBVideoList = try await get("/movie/\(id)/videos", [URLQueryItem(name: "include_video_language", value: languages)])
-        return list.results.filter(Trailers.isOfficial)
+        return list.results.filter(Trailers.isKept)
     }
 
     /// Details for a film outside the library: trailer only, kept light.
     public func previewDetails(id: Int) async throws -> TMDBMovieDetails {
-        try await get("/movie/\(id)", [URLQueryItem(name: "append_to_response", value: "videos")])
+        let details: TMDBMovieDetails = try await get("/movie/\(id)", [
+            URLQueryItem(name: "append_to_response", value: "videos"),
+            URLQueryItem(name: "include_video_language", value: "en,null"),
+        ])
+        return await withOwnLanguageTrailers(details)
+    }
+
+    /// A film from another language often has its trailers only in that language: they're
+    /// asked for too when English gives fewer than two to try (a failed request changes nothing).
+    func withOwnLanguageTrailers(_ details: TMDBMovieDetails) async -> TMDBMovieDetails {
+        guard let language = details.originalLanguage, language != "en", !language.isEmpty,
+              Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: false,
+                                  originalLanguage: language).count < 2,
+              let list: TMDBVideoList = try? await get("/movie/\(details.id)/videos",
+                                                       [URLQueryItem(name: "include_video_language", value: language)])
+        else { return details }
+        var copy = details
+        copy.videos = TMDBVideoList(results: (details.videos?.results ?? []) + list.results.filter(Trailers.isKept))
+        return copy
     }
 
     /// What Picked for You compares a film by (`LikenessFeatures`): its credits and keywords.
@@ -481,10 +499,13 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
 
     /// Everything about one film in a single request, reviews included. Call `trimmed()` before storing.
     public func movieDetails(id: Int) async throws -> TMDBMovieDetails {
-        try await get("/movie/\(id)", [
+        let details: TMDBMovieDetails = try await get("/movie/\(id)", [
             URLQueryItem(name: "append_to_response", value: "videos,credits,keywords,images,reviews"),
             URLQueryItem(name: "include_image_language", value: "en,null"),
+            // Without this TMDB sends English videos only: trailers with no language were missing.
+            URLQueryItem(name: "include_video_language", value: "en,null"),
         ])
+        return await withOwnLanguageTrailers(details)
     }
 
     private func get<T: Decodable>(_ path: String, _ query: [URLQueryItem]) async throws -> T {

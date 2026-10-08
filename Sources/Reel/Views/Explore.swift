@@ -639,10 +639,10 @@ struct FilmPreview: View {
         }
     }
 
-    /// The film's official trailers that haven't failed to play here this session.
+    /// The film's trailers (see `Trailers`) unless they all failed to play here this session.
     private var trailerVideos: [TMDBVideo] {
         guard let details, !model.unplayableTrailers.contains(film.id) else { return [] }
-        return Trailers.candidates(details.videos?.results ?? [], preferTeaser: model.spoilerSafe,
+        return Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: model.spoilerSafe,
                                    originalLanguage: details.originalLanguage)
     }
 
