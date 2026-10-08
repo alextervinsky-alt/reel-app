@@ -4,20 +4,22 @@ import ReelCore
 
 // MARK: - Behind the Film
 
-/// The film's life off screen, short first: "Did you know?", quick facts, then the article as a
-/// few cards, one per heading (Production, Release, Reception…). Each card opens on a sentence
-/// or two and the facts picked from it, and opens in place to read the whole of it. What gives
-/// the story away waits under After You Watch until the film is watched. Then frames from the
-/// film, and where to read more.
+/// The film's life off screen, told as a story: three things to know, the film at a glance, then
+/// its life from the idea to its legacy as numbered chapters, in the order it lived them (the
+/// article's sections regrouped: the idea, the casting, the shoot, design, music, release, how it
+/// was received, awards, legacy). Each chapter opens on its best lines, someone's own words set
+/// apart and a fact or two, and opens in place to read the whole of it. What gives the story
+/// away waits under After You Watch until the film is watched. Then frames from the film, and
+/// where to read more.
 struct BehindTheFilmTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
     let openStill: ([String], Int) -> Void
-    /// Cards opened to their full text.
+    /// Chapters opened to their full text.
     @State private var opened: Set<String> = []
     /// After You Watch (and facts that give the story away) shown anyway, for this visit.
     @State private var showAfter = false
-    /// The cards, worked out once for what they're made from (not on each redraw).
+    /// The chapters, worked out once for what they're made from (not on each redraw).
     @State private var built = Built()
 
     var body: some View {
@@ -26,9 +28,9 @@ struct BehindTheFilmTab: View {
         let article = model.articles[id]
         let content = built.content(film: film, article: article, hiding: hiding)
 
-        VStack(alignment: .leading, spacing: 34) {
-            if let highlight = content.highlight { DidYouKnow(text: highlight) }
-            QuickFactsGrid(film: film)
+        VStack(alignment: .leading, spacing: 38) {
+            if !content.toKnow.isEmpty { ThingsToKnow(facts: content.toKnow) }
+            AtAGlance(film: film)
             if content.hiddenFacts > 0, article?.after.isEmpty != false {
                 // Nothing else to open: say what's held back, with a way to see it.
                 HStack(spacing: 10) {
@@ -43,13 +45,10 @@ struct BehindTheFilmTab: View {
                 }
                 .font(.system(size: 13))
             }
-            let before = content.before
-            let after = content.after
-            let more = content.more
-            if !before.isEmpty || more != nil {
-                part("Before You Watch", note: "How the film was made, its context and how it was received, without the story.") {
-                    ForEach(before) { card($0) }
-                    if let more { card(more) }
+            let before = content.before + (content.more.map { [$0] } ?? [])
+            if !before.isEmpty {
+                part("From Idea to Legacy", note: "How the film came to be and the life it had, without the story. \(Self.readingTime(before)).") {
+                    Timeline(topics: before) { card($0) }
                 }
             }
             if let article, !article.after.isEmpty {
@@ -59,7 +58,7 @@ struct BehindTheFilmTab: View {
                     }
                 } else {
                     part("After You Watch", note: "The story, its themes and the ending.") {
-                        ForEach(after) { card($0) }
+                        Timeline(topics: content.after) { card($0) }
                     }
                 }
             }
@@ -85,8 +84,14 @@ struct BehindTheFilmTab: View {
         }
     }
 
+    /// "About 14 minutes to read in full"
+    static func readingTime(_ topics: [Topic]) -> String {
+        let minutes = topics.reduce(0) { $0 + ($1.parts.isEmpty ? 0 : $1.minutes) }
+        return minutes <= 1 ? "A minute to read in full" : "About \(minutes) minutes to read in full"
+    }
+
     private func part<Content: View>(_ title: String, note: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title.uppercased())
                     .font(.system(size: 11.5, weight: .semibold))
@@ -122,13 +127,15 @@ struct BehindTheFilmTab: View {
 
     // MARK: Topics
 
-    /// One card: a chapter of the article, made short.
+    /// One chapter: a stage of the film's life, made short.
     struct Topic: Identifiable {
         let id: String
         let title: String
         let symbol: String
-        /// Its opening sentence or two.
+        /// Its opening sentences.
         let lead: String
+        /// Someone's own words, set apart (not in the lead).
+        let quote: String?
         /// The whole of it, section by section (none for a card of facts only).
         let parts: [Chapter.Part]
         /// Facts picked from it, beyond the lead.
@@ -138,22 +145,39 @@ struct BehindTheFilmTab: View {
         let hasMore: Bool
     }
 
-    /// The cards for one part, each opening without repeating the "Did you know?".
-    static func topics(_ sections: [FilmArticle.Section], facts: [FunFact], highlight: String?, prefix: String) -> [Topic] {
-        Digest.chapters(sections).map { chapter in
-            let paragraphs = chapter.paragraphs
-            let lead = Digest.lead(of: paragraphs, skipping: highlight)
-            return Topic(id: "\(prefix)-\(chapter.id)", title: chapter.title, symbol: symbol(for: chapter.title), lead: lead,
-                         parts: chapter.parts, facts: Digest.facts(facts, in: paragraphs, lead: lead),
-                         minutes: Digest.minutes(paragraphs), hasMore: Digest.hasMore(paragraphs, lead: lead))
+    /// The chapters before watching: the film's life in the order it lived it.
+    static func story(_ sections: [FilmArticle.Section], facts: [FunFact], shown: [String]) -> [Topic] {
+        Digest.story(sections).map { stage, chapter in
+            topic(chapter, id: "before-\(stage.rawValue)", symbol: symbol(for: stage), facts: facts, shown: shown)
         }
+    }
+
+    /// The chapters after watching, under the article's own headings.
+    static func topics(_ sections: [FilmArticle.Section], facts: [FunFact], shown: [String]) -> [Topic] {
+        Digest.chapters(sections).map { chapter in
+            topic(chapter, id: "after-\(chapter.id)", symbol: symbol(for: chapter.title), facts: facts, shown: shown)
+        }
+    }
+
+    private static func topic(_ chapter: Chapter, id: String, symbol: String, facts: [FunFact], shown: [String]) -> Topic {
+        let paragraphs = chapter.paragraphs
+        // A lead a little longer than before: two or three sentences that tell, not one that labels.
+        let lead = Digest.lead(of: paragraphs, limit: 330, skipping: shown.first)
+        let quote = Digest.pullQuote(in: paragraphs, skipping: ([lead] + shown).joined(separator: " "))
+        let picked = Digest.facts(facts, in: paragraphs, lead: lead + " " + (quote ?? ""))
+            .filter { !shown.contains($0.text) }
+        return Topic(id: id, title: chapter.title, symbol: symbol, lead: lead, quote: quote,
+                     parts: chapter.parts, facts: picked, minutes: Digest.minutes(paragraphs),
+                     hasMore: Digest.hasMore(paragraphs, lead: lead))
     }
 
     /// Facts from outside the article's sections (Wikidata, or sections not shown), as one card.
     static func leftover(_ facts: [FunFact], sections: [FilmArticle.Section]) -> Topic? {
-        let rest = Digest.leftover(facts, sections: sections)
+        // The introduction's facts sum up what the film page already says.
+        let rest = Digest.leftover(facts, sections: sections.filter { $0.title != "About the Film" })
+            .filter { $0.category != "At a glance" }
         guard !rest.isEmpty else { return nil }
-        return Topic(id: "more", title: sections.isEmpty ? "Facts" : "More Facts", symbol: "sparkles", lead: "",
+        return Topic(id: "more", title: sections.isEmpty ? "Facts" : "More Facts", symbol: "sparkles", lead: "", quote: nil,
                      parts: [], facts: rest, minutes: 1, hasMore: rest.count > TopicCard.closedFacts)
     }
 
@@ -168,11 +192,27 @@ struct BehindTheFilmTab: View {
         return shown
     }
 
-    /// What the cards are made from, kept until the film's facts, its article or hiding change.
+    /// The three things most worth knowing: the highlight, then the best facts from two other
+    /// kinds (one about the making, one about its life), each making sense on its own.
+    static func thingsToKnow(_ facts: FunFacts?) -> [FunFact] {
+        guard let facts else { return [] }
+        var chosen: [FunFact] = []
+        if let highlight = facts.highlight {
+            chosen.append(facts.facts.first { $0.text == highlight } ?? FunFact(category: "Did you know?", text: highlight))
+        }
+        for fact in facts.facts where chosen.count < 3 {
+            guard fact.category != "At a glance", FunFactExtractor.standsAlone(fact.text), fact.text.count <= 260,
+                  !chosen.contains(where: { $0.text == fact.text || $0.category == fact.category }) else { continue }
+            chosen.append(fact)
+        }
+        return chosen
+    }
+
+    /// What the chapters are made from, kept until the film's facts, its article or hiding change.
     @MainActor
     final class Built {
         struct Content {
-            var highlight: String?
+            var toKnow: [FunFact] = []
             var hiddenFacts = 0
             var before: [Topic] = []
             var after: [Topic] = []
@@ -187,36 +227,75 @@ struct BehindTheFilmTab: View {
             if stamp == key { return content }
             let all = film.funFacts
             let facts = all.map { BehindTheFilmTab.withoutStory($0, hiding: hiding) }
-            let picked = (facts?.facts ?? []).filter { $0.text != facts?.highlight }
-            let highlight = facts?.highlight
+            let toKnow = BehindTheFilmTab.thingsToKnow(facts)
+            let shown = toKnow.map(\.text)
+            // Each fact once: those at the top aren't repeated in the chapters.
+            let picked = (facts?.facts ?? []).filter { !shown.contains($0.text) }
             content = Content(
-                highlight: highlight,
+                toKnow: toKnow,
                 hiddenFacts: (all?.facts.count ?? 0) - (facts?.facts.count ?? 0),
-                before: article.map { BehindTheFilmTab.topics($0.before, facts: picked, highlight: highlight, prefix: "before") } ?? [],
-                after: article.map { BehindTheFilmTab.topics($0.after, facts: picked, highlight: highlight, prefix: "after") } ?? [],
+                before: article.map { BehindTheFilmTab.story($0.before, facts: picked, shown: shown) } ?? [],
+                after: article.map { BehindTheFilmTab.topics($0.after, facts: picked, shown: shown) } ?? [],
                 more: BehindTheFilmTab.leftover(picked, sections: (article?.before ?? []) + (article?.after ?? [])))
             key = stamp
             return content
         }
     }
 
+    private static func symbol(for stage: Digest.Stage) -> String {
+        switch stage {
+        case .idea: "lightbulb"
+        case .making: "film.stack"
+        case .casting: "person.2"
+        case .shoot: "video"
+        case .design: "wand.and.stars"
+        case .music: "music.note"
+        case .release: "ticket"
+        case .reception: "quote.bubble"
+        case .awards: "trophy"
+        case .legacy: "clock.arrow.circlepath"
+        case .other: "text.alignleft"
+        }
+    }
+
     private static func symbol(for title: String) -> String {
         let t = title.lowercased()
         func has(_ words: [String]) -> Bool { words.contains { t.contains($0) } }
-        if t == "about the film" { return "film" }
         if has(["plot", "synopsis", "story", "ending"]) { return "book" }
         if has(["theme", "analysis", "interpretation", "style"]) { return "sparkles" }
-        if has(["development", "writing", "screenplay", "script", "pre-production", "origin"]) { return "text.book.closed" }
-        if has(["casting", "cast "]) { return "person.2" }
-        if has(["filming", "photography", "production", "shooting", "design", "cinematography"]) { return "video" }
-        if has(["effects", "visual", "animation"]) { return "wand.and.stars" }
-        if has(["music", "soundtrack", "score"]) { return "music.note" }
-        if has(["release", "box office", "marketing", "distribution", "home media", "premiere"]) { return "ticket" }
-        if has(["reception", "critical", "response", "reviews"]) { return "quote.bubble" }
-        if has(["accolades", "awards", "honours", "honors"]) { return "trophy" }
-        if has(["legacy", "influence", "sequel", "impact", "culture"]) { return "clock.arrow.circlepath" }
-        if has(["controvers", "lawsuit", "legal"]) { return "exclamationmark.bubble" }
         return "text.alignleft"
+    }
+}
+
+/// Chapters down a line, each with its number: the film's life read in order.
+private struct Timeline<Card: View>: View {
+    let topics: [BehindTheFilmTab.Topic]
+    @ViewBuilder let card: (BehindTheFilmTab.Topic) -> Card
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(Array(topics.enumerated()), id: \.element.id) { index, topic in
+                HStack(alignment: .top, spacing: 16) {
+                    Text(String(format: "%02d", index + 1))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.brand)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Theme.background))
+                        .overlay(Circle().strokeBorder(Theme.brand.opacity(0.55), lineWidth: 1.5))
+                        .padding(.top, 16)
+                    card(topic)
+                }
+            }
+        }
+        // The line behind the numbers, from the first to the last.
+        .background(alignment: .topLeading) {
+            Rectangle()
+                .fill(Theme.brand.opacity(0.22))
+                .frame(width: 1.5)
+                .padding(.leading, 16.25)
+                .padding(.vertical, 34)
+        }
     }
 }
 
@@ -262,11 +341,12 @@ private struct TopicCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
+                if let quote = topic.quote { PullQuote(text: quote) }
                 facts(Array(topic.facts.prefix(Self.closedFacts)))
                 if topic.hasMore {
                     Button(action: toggle) {
                         HStack(spacing: 4) {
-                            Text(topic.parts.isEmpty ? "All \(topic.facts.count) Facts" : "Read More")
+                            Text(topic.parts.isEmpty ? "All \(topic.facts.count) Facts" : "Read the Chapter")
                             Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                         }
                         .font(.system(size: 12.5, weight: .semibold))
@@ -332,27 +412,67 @@ private struct TopicCard: View {
     }
 }
 
-/// "Did you know?": the one fact most worth knowing.
-private struct DidYouKnow: View {
+/// Someone's own words from the chapter, set apart.
+private struct PullQuote: View {
     let text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Did you know?", systemImage: "sparkles")
-                .font(.system(size: 13, weight: .semibold))
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "quote.opening")
+                .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(Theme.brand)
+                .padding(.top, 3)
             Text(text)
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: 16, design: .serif))
+                .italic()
                 .lineSpacing(5)
+                .foregroundStyle(Color.white.opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
-        .padding(22)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.brand.opacity(0.18), Theme.panel], startPoint: .topLeading, endPoint: .bottomTrailing))
-        )
+        .padding(.vertical, 6)
+        .padding(.leading, 4)
+    }
+}
+
+/// The three things most worth knowing, side by side; the first one leads.
+private struct ThingsToKnow: View {
+    let facts: [FunFact]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Three Things to Know", systemImage: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.brand)
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(Array(facts.enumerated()), id: \.element.text) { index, fact in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(fact.category.uppercased())
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(index == 0 ? Theme.brand : Color.secondary)
+                        Text(fact.text)
+                            .font(.system(size: index == 0 ? 16 : 14.5, weight: index == 0 ? .medium : .regular))
+                            .lineSpacing(4)
+                            .foregroundStyle(Color.white.opacity(index == 0 ? 0.95 : 0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(index == 0
+                                  ? AnyShapeStyle(LinearGradient(colors: [Theme.brand.opacity(0.22), Theme.panel],
+                                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                                  : AnyShapeStyle(Theme.panel))
+                    )
+                    .layoutPriority(index == 0 ? 1 : 0)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -379,38 +499,49 @@ private struct LockedAfter: View {
     }
 }
 
-/// Based on, filmed in, set in, money, awards, what it follows and what follows it.
-private struct QuickFactsGrid: View {
+/// The film at a glance, in one band: based on, filmed in, set in, the money, the awards (the
+/// best known named under them), what it follows and what follows it.
+private struct AtAGlance: View {
     let film: FilmEntry
 
     var body: some View {
         let rows = self.rows
+        let notable = film.funFacts?.quick?.notableAwards ?? []
         if !rows.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                Theme.sectionTitle("Quick Facts")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
-                    ForEach(rows, id: \.label) { row in
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: row.icon)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Theme.brand)
-                                .frame(width: 20)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(row.label.uppercased())
+                Theme.sectionTitle("At a Glance")
+                VStack(alignment: .leading, spacing: 0) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 0, alignment: .top)], alignment: .leading, spacing: 0) {
+                        ForEach(rows, id: \.label) { row in
+                            VStack(alignment: .leading, spacing: 5) {
+                                Label(row.label.uppercased(), systemImage: row.icon)
                                     .font(.system(size: 10.5, weight: .semibold))
                                     .tracking(0.8)
                                     .foregroundStyle(.tertiary)
                                 Text(row.value)
-                                    .font(.system(size: 13.5))
+                                    .font(.system(size: 14.5, weight: .medium))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            Spacer(minLength: 0)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
+                    }
+                    if !notable.isEmpty {
+                        Divider().overlay(Theme.hairline)
+                        FlowLayout(spacing: 8) {
+                            ForEach(notable.prefix(5), id: \.self) { award in
+                                Label(award, systemImage: "laurel.leading")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 26)
+                                    .background(Capsule().fill(Color.white.opacity(0.07)))
+                            }
+                        }
+                        .padding(16)
                     }
                 }
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
             }
         }
     }
@@ -426,9 +557,7 @@ private struct QuickFactsGrid: View {
         if let money = moneyLine { rows.append(("Budget and box office", money, "dollarsign.circle")) }
         if let q = quick {
             if q.awardsWon > 0 || q.nominations > 0 {
-                var text = "\(q.awardsWon) won, \(q.nominations) nominations"
-                if !q.notableAwards.isEmpty { text += " · " + q.notableAwards.prefix(3).joined(separator: ", ") }
-                rows.append(("Awards", text, "trophy"))
+                rows.append(("Awards", "\(q.awardsWon) won · \(q.nominations) nominations", "trophy"))
             }
             if let follows = q.follows { rows.append(("Follows", follows, "arrow.left.circle")) }
             if let next = q.followedBy { rows.append(("Followed by", next, "arrow.right.circle")) }

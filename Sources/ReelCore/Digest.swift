@@ -126,6 +126,105 @@ public enum Digest {
         return chapters
     }
 
+    /// The stages of a film's life, in the order it lived them: Behind the Film tells its
+    /// article this way, whatever order the article uses.
+    public enum Stage: Int, CaseIterable, Sendable {
+        case idea, making, casting, shoot, design, music, release, reception, awards, legacy, other
+
+        public var title: String {
+            switch self {
+            case .idea: "The Idea"
+            case .making: "Making the Film"
+            case .casting: "Casting"
+            case .shoot: "The Shoot"
+            case .design: "Design and Effects"
+            case .music: "Music and Sound"
+            case .release: "Release"
+            case .reception: "How It Was Received"
+            case .awards: "Awards"
+            case .legacy: "Legacy"
+            case .other: "More"
+            }
+        }
+
+        /// Words in a heading that put a section in this stage (the most specific heading decides).
+        var words: [String] {
+            switch self {
+            case .idea: ["development", "origin", "conception", "writing", "screenplay", "script", "pre-production",
+                         "preproduction", "background", "inspiration", "influences", "premise", "concept", "adaptation", "source material"]
+            case .making: ["production"]
+            case .casting: ["casting"]
+            case .shoot: ["filming", "principal photography", "photography", "shooting", "location", "cinematography", "shoot"]
+            case .design: ["design", "costume", "set ", "sets", "makeup", "make-up", "visual effects", "effects", "animation",
+                           "vfx", "post-production", "postproduction", "editing", "special effects", "creature"]
+            case .music: ["music", "soundtrack", "score", "sound"]
+            case .release: ["release", "premiere", "marketing", "distribution", "festival", "home media", "screening", "promotion"]
+            case .reception: ["reception", "critical", "response", "review", "box office", "audience", "commercial", "ratings"]
+            case .awards: ["accolade", "award", "honour", "honor", "nomination"]
+            case .legacy: ["legacy", "impact", "sequel", "prequel", "remake", "other media", "cultural",
+                           "future", "follow-up", "spin-off", "spinoff", "television series", "stage adaptation"]
+            case .other: []
+            }
+        }
+
+        /// The stage of a section: its own heading first ("Production · Music" is Music), then the
+        /// headings above it. The film's introduction is no stage (nil).
+        static func of(_ title: String) -> Stage? {
+            let names = title.components(separatedBy: " · ").map { $0.lowercased() }
+            if names == ["about the film"] { return nil }
+            for name in names.reversed() {
+                let padded = name + " "
+                // The later stages first ("Stage adaptation" is legacy, not the idea); the general
+                // "production" only when nothing more specific matches.
+                for stage in [Stage.legacy, .awards, .reception, .release, .music, .design, .casting, .shoot, .idea] {
+                    if stage.words.contains(where: { padded.contains($0) }) { return stage }
+                }
+            }
+            return names.contains { $0.contains("production") } ? .making : .other
+        }
+    }
+
+    /// The article's sections as the story of the film, one chapter per stage in the order the
+    /// film lived them (the idea, the casting, the shoot… its legacy); the film's introduction
+    /// is left out (the film page already says it). Each chapter's sections keep their headings.
+    public static func story(_ sections: [FilmArticle.Section]) -> [(stage: Stage, chapter: Chapter)] {
+        var byStage: [Stage: [FilmArticle.Section]] = [:]
+        for section in sections {
+            guard let stage = Stage.of(section.title) else { continue }
+            byStage[stage, default: []].append(section)
+        }
+        return Stage.allCases.compactMap { stage in
+            guard let found = byStage[stage], let first = found.first else { return nil }
+            let parts = found.map { section in
+                let names = section.title.components(separatedBy: " · ")
+                return Chapter.Part(title: found.count > 1 || names.count > 1 ? names.last : nil, paragraphs: section.paragraphs)
+            }
+            // "More" keeps the article's own heading when there's one section.
+            let title = stage == .other && found.count == 1 ? first.title.components(separatedBy: " · ").last ?? stage.title : stage.title
+            return (stage, Chapter(id: first.id, title: title, parts: parts))
+        }
+    }
+
+    /// Someone's words worth setting apart: a sentence quoting a person at some length ("Bong
+    /// said he wanted…"), not the lead. Nil when there's none.
+    public static func pullQuote(in paragraphs: [String], skipping shown: String) -> String? {
+        let skip = normalized(shown)
+        let speaking = try? NSRegularExpression(
+            pattern: #"\b(?:said|says|recalled|explained|described|told|stated|noted|wrote|called|remarked|admitted|joked|added|according to)\b"#,
+            options: [.caseInsensitive])
+        let quote = try? NSRegularExpression(pattern: #"[“"]([^”"]{30,})[”"]"#)
+        for paragraph in paragraphs {
+            for sentence in sentences(in: paragraph) where (60...320).contains(sentence.count) && !skip.contains(normalized(sentence)) {
+                let range = NSRange(sentence.startIndex..., in: sentence)
+                guard let match = quote?.firstMatch(in: sentence, range: range),
+                      let words = Range(match.range(at: 1), in: sentence).map({ sentence[$0].split(separator: " ").count }),
+                      words >= 6 else { continue }
+                if words >= 12 || speaking?.firstMatch(in: sentence, range: range) != nil { return sentence }
+            }
+        }
+        return nil
+    }
+
     static func normalized(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }

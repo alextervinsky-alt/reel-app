@@ -64,4 +64,38 @@ final class DigestTests: XCTestCase {
         let facts = [FunFact(category: "On set", text: "It lasted four months."), FunFact(category: "Awards", text: "It won the Palme d'Or.")]
         XCTAssertEqual(Digest.leftover(facts, sections: sections).map(\.text), ["It won the Palme d'Or."])
     }
+
+    func testTheArticleIsToldInTheOrderTheFilmLivedIt() {
+        let sections = [
+            FilmArticle.Section(id: 1, title: "About the Film", paragraphs: ["Intro."]),
+            FilmArticle.Section(id: 2, title: "Release", paragraphs: ["Release text."]),
+            FilmArticle.Section(id: 3, title: "Production · Filming", paragraphs: ["Filming text."]),
+            FilmArticle.Section(id: 4, title: "Production · Development", paragraphs: ["Development text."]),
+            FilmArticle.Section(id: 5, title: "Production · Music", paragraphs: ["Music text."]),
+            FilmArticle.Section(id: 6, title: "Reception · Box office", paragraphs: ["Box office text."]),
+            FilmArticle.Section(id: 7, title: "Reception · Critical response", paragraphs: ["Critics text."]),
+            FilmArticle.Section(id: 8, title: "Accolades", paragraphs: ["Awards text."]),
+            FilmArticle.Section(id: 9, title: "Casting", paragraphs: ["Casting text."]),
+            FilmArticle.Section(id: 10, title: "Controversy", paragraphs: ["Controversy text."]),
+        ]
+        let story = Digest.story(sections)
+        XCTAssertEqual(story.map(\.stage), [.idea, .casting, .shoot, .music, .release, .reception, .awards, .other])
+        XCTAssertEqual(story.map(\.chapter.title), ["The Idea", "Casting", "The Shoot", "Music and Sound", "Release",
+                                                    "How It Was Received", "Awards", "Controversy"])
+        XCTAssertEqual(story[5].chapter.parts.map(\.title), ["Box office", "Critical response"])
+        XCTAssertNil(story[4].chapter.parts[0].title, "a single section under its own heading needs no heading inside")
+        XCTAssertEqual(Digest.story([FilmArticle.Section(id: 1, title: "Production", paragraphs: ["Text."])]).map(\.chapter.title),
+                       ["Making the Film"])
+    }
+
+    func testAPullQuoteIsSomeonesWords() {
+        let paragraphs = [
+            "Filming began in May. The crew spent 77 days in Seoul.",
+            "Bong said he \"wanted the house to feel like a character of its own, watching the family\" from the start.",
+        ]
+        XCTAssertEqual(Digest.pullQuote(in: paragraphs, skipping: "Filming began in May."),
+                       "Bong said he \"wanted the house to feel like a character of its own, watching the family\" from the start.")
+        XCTAssertNil(Digest.pullQuote(in: ["It was called \"the best film of the year\" by many."], skipping: ""),
+                     "too short to set apart")
+    }
 }
