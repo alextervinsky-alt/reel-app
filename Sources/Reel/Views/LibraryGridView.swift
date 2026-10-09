@@ -19,6 +19,8 @@ final class ScrollState {
 struct LibraryGridView: View {
     @Environment(AppModel.self) private var model
     let shelf: Shelf
+    /// The search field under the title; `query` follows it after a short pause.
+    @Binding var searchText: String
     let query: String
     @Binding var sort: LibrarySort
     @Binding var moods: Set<Mood>
@@ -169,6 +171,7 @@ struct LibraryGridView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Spacer()
+                LibrarySearchField(text: $searchText)
             }
             HStack(spacing: 8) {
                 MoodFilterButton(selected: $moods, base: moodBase, available: model.moods)
@@ -531,6 +534,44 @@ struct RemovableChip: View {
 // MARK: - Banner
 
 /// Large backdrop banner for one film, like the top of the Apple TV app.
+/// Search the library: a slim field beside the title (titles, people, places, moods, years).
+struct LibrarySearchField: View {
+    @Binding var text: String
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("Search films, people, places", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused($focused)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: 260, height: 32)
+        .background(Capsule().fill(Color.white.opacity(focused ? 0.11 : 0.07)))
+        .overlay(Capsule().strokeBorder(focused ? Theme.brand.opacity(0.6) : Theme.hairline))
+        .animation(.easeOut(duration: 0.15), value: focused)
+        // ⌘F, as in any Mac app.
+        .background {
+            Button("") { focused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .hidden()
+        }
+    }
+}
+
 struct FeaturedBanner: View {
     @Environment(AppModel.self) private var model
     let item: LibraryItem
@@ -578,6 +619,9 @@ struct FeaturedBanner: View {
         .padding(.bottom, 28)
         // At least the usual height; a long synopsis makes the banner taller instead of being cut.
         .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .bottomLeading)
+        // Anywhere on the picture opens the film (the buttons do their own thing).
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
         .background {
             Color.black
                 .overlay { FocusedBackdrop(path: film.tmdb?.backdropPath) }

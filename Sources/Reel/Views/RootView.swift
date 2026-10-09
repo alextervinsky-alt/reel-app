@@ -9,7 +9,7 @@ struct RootView: View {
     /// isn't re-filtered on every keystroke.
     @State private var searchText = ""
     @State private var query = ""
-    @State private var sort: LibrarySort = .title
+    @State private var sort: LibrarySort = .random
     @State private var moods: Set<Mood> = []
     @State private var length: LengthBand = .any
     @State private var language: String?
@@ -86,7 +86,7 @@ struct RootView: View {
                         case .wishlist: WishlistView()
                         case .yearInFilm: YearInFilmView()
                         default:
-                            LibraryGridView(shelf: shelf, query: query, sort: $sort,
+                            LibraryGridView(shelf: shelf, searchText: $searchText, query: query, sort: $sort,
                                             moods: $moods, length: $length, language: $language, path: $path)
                         }
                     }
@@ -117,7 +117,6 @@ struct RootView: View {
                 }
             }
         }
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Titles, people, places, moods, years")
         .task(id: searchText) {
             // Clearing the field shows everything again at once; typing waits for a pause.
             if !searchText.isEmpty {
@@ -138,6 +137,8 @@ struct RootView: View {
     private func select(_ newShelf: Shelf) {
         path = NavigationPath()
         if newShelf == .all {
+            // Random shows other films first each time.
+            model.shuffleSeed = UUID().uuidString
             searchText = ""
             query = ""
             moods = []

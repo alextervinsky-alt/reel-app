@@ -91,6 +91,8 @@ final class AppModel {
     /// What Picked for You can draw from this launch, and last launch's picks (left out).
     @ObservationIgnored var exploreCandidates: [ExploreCandidate] = []
     @ObservationIgnored var explorePicksBefore: Set<Int> = []
+    /// The Random sort's order: new at launch and each time All Films is chosen.
+    var shuffleSeed = UUID().uuidString
     /// Explore's three shelves for this launch (a loved film's, a country's, a decade or hidden gems).
     @ObservationIgnored var exploreShelvesChosen: [DiscoverList]?
     /// Explore's rows that rank by quality are reordered once per launch (within a rating band) by this.
@@ -728,6 +730,9 @@ final class AppModel {
         }
 
         switch order {
+        case .random:
+            let seed = shuffleSeed
+            list.sort { EveningOrder.stableHash(seed + $0.id) < EveningOrder.stableHash(seed + $1.id) }
         case .title: list.sort { $0.sortTitle < $1.sortTitle }
         case .year: list.sort { ($0.main.displayYear ?? 0) > ($1.main.displayYear ?? 0) }
         case .rating: list.sort { ($0.score ?? 0) > ($1.score ?? 0) }

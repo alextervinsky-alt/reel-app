@@ -16,12 +16,14 @@ enum Shelf: Hashable {
 }
 
 enum LibrarySort: String, CaseIterable, Identifiable {
-    case title, year, rating, added, runtime
+    /// A different order each launch and each time All Films is chosen (`AppModel.shuffleSeed`).
+    case random, title, year, rating, added, runtime
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .random: "Random"
         case .title: "Title"
         case .year: "Release Year"
         case .rating: "Rating"

@@ -25,10 +25,11 @@ struct CinemaLibrary: View {
         var id: Self { self }
     }
 
-    private static let sorts: [LibrarySort] = [.rating, .added, .year, .title]
+    private static let sorts: [LibrarySort] = [.rating, .random, .added, .year, .title]
 
     private static func title(_ sort: LibrarySort) -> String {
         switch sort {
+        case .random: "Random"
         case .rating: "Best Rated"
         case .added: "Recently Added"
         case .year: "Newest"
@@ -99,14 +100,8 @@ struct CinemaLibrary: View {
                 Text(count == 1 ? "1 film" : "\(count) films")
                     .font(.system(size: Cinema.body))
                     .foregroundStyle(.secondary)
-                if !query.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Label("Clear Search", systemImage: "xmark")
-                    }
-                    .buttonStyle(CinemaButtonStyle(compact: true))
-                }
+                Spacer(minLength: 20)
+                CinemaSearchField(text: $searchText)
             }
             // Filters step aside while searching (a search looks through everything).
             if query.isEmpty { filters }
@@ -196,6 +191,35 @@ struct CinemaLibrary: View {
             pick()
             panel = nil
         }
+    }
+}
+
+/// Search in Cinema mode: a large field, read from the sofa; the clear button is big too.
+private struct CinemaSearchField: View {
+    @Binding var text: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.secondary)
+            TextField("Search", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: Cinema.body))
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 22)
+        .frame(width: 440, height: 64)
+        .background(Capsule().fill(Color.white.opacity(0.1)))
     }
 }
 

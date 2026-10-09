@@ -102,7 +102,7 @@ public enum EveningOrder {
     }
 
     /// FNV-1a: the same for the same text on every launch (Swift's own hashing changes per launch).
-    static func stableHash(_ text: String) -> UInt64 {
+    public static func stableHash(_ text: String) -> UInt64 {
         var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in text.utf8 {
             hash ^= UInt64(byte)
