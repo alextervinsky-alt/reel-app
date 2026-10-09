@@ -46,6 +46,12 @@ enum ScreenRenderer {
                 let mainAnswers = main.wait(timeout: .now() + 5) == .success
                 let poolAnswers = pool.wait(timeout: .now() + 5) == .success
                 log("…still working (main thread \(mainAnswers ? "free" : "stuck"), task pool \(poolAnswers ? "free" : "stuck"))")
+                let images = DispatchSemaphore(value: 0)
+                Task.detached {
+                    log("…images: \(await ImageStore.shared.debugState())")
+                    images.signal()
+                }
+                _ = images.wait(timeout: .now() + 5)
             }
         }
         NSApp.appearance = NSAppearance(named: .darkAqua)
