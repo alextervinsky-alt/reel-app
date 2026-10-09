@@ -93,7 +93,11 @@ struct BestOfRow: View {
             }
             if films.isEmpty {
                 HStack(spacing: 8) {
-                    if found == nil || model.isLoadingBestOf(year: year, source: source) {
+                    if found == nil, model.bestOfFailed(year: year, source: source), !model.isLoadingBestOf(year: year, source: source) {
+                        Text("Couldn't load this list. Check the internet connection.").foregroundStyle(.secondary)
+                        Button("Try Again") { Task { await load() } }
+                            .buttonStyle(SecondaryCapsuleStyle())
+                    } else if found == nil || model.isLoadingBestOf(year: year, source: source) {
                         ProgressView().controlSize(.small)
                         Text(source == .imdb && !model.lists.imdbIsReady ? "Getting IMDb's ratings (the first time takes a minute)…" : "Loading…")
                             .foregroundStyle(.secondary)
@@ -112,13 +116,15 @@ struct BestOfRow: View {
                 }
             }
         }
-        .task(id: "\(year)|\(source.rawValue)") {
+        .task(id: "\(year)|\(source.rawValue)") { await load() }
+    }
+
+    private func load() async {
+        await model.loadBestOf(year: year, source: source)
+        // IMDb's ratings download the first time: look again once they're in (or failed).
+        if source == .imdb, model.bestOf(year: year, source: source) == nil {
+            while !Task.isCancelled, !model.lists.imdbIsReady, !model.lists.imdbFailed { try? await Task.sleep(for: .seconds(2)) }
             await model.loadBestOf(year: year, source: source)
-            // IMDb's ratings download the first time: look again once they're in.
-            if source == .imdb, model.bestOf(year: year, source: source) == nil {
-                while !Task.isCancelled, !model.lists.imdbIsReady { try? await Task.sleep(for: .seconds(2)) }
-                await model.loadBestOf(year: year, source: source)
-            }
         }
     }
 
@@ -148,8 +154,11 @@ struct BestOfRow: View {
     }
 
     private func cards(_ films: [PreviewFilm]) -> some View {
-        ForEach(Array(films.prefix(20).enumerated()), id: \.element.id) { index, film in
-            DiscoverCard(film: film, width: 146, rank: source == .tmdb || source == .imdb ? index + 1 : nil,
+        // Ranked by the whole list, seen films included (only they're left out of the row).
+        let all = model.bestOf(year: year, source: source) ?? []
+        return ForEach(films.prefix(20)) { film in
+            DiscoverCard(film: film, width: 146,
+                         rank: source == .tmdb || source == .imdb ? all.firstIndex { $0.id == film.id }.map { $0 + 1 } : nil,
                          reason: source == .awards ? film.note : nil, onPreview: onPreview)
         }
     }
@@ -292,8 +301,12 @@ struct DiscoverListPage: View {
                     ProgressView().frame(maxWidth: .infinity, minHeight: 200)
                 }
                 LazyVGrid(columns: LibraryGridView.columns, alignment: .leading, spacing: 30) {
-                    ForEach(Array(films.enumerated()), id: \.element.id) { index, movie in
-                        DiscoverCard(film: PreviewFilm(movie), rank: isRanked ? index + 1 : nil) { preview = $0 }
+                    let all = model.discover[list] ?? []
+                    ForEach(films) { movie in
+                        // Ranked by the whole list, seen films included.
+                        DiscoverCard(film: PreviewFilm(movie), rank: isRanked ? all.firstIndex { $0.id == movie.id }.map { $0 + 1 } : nil) {
+                            preview = $0
+                        }
                     }
                 }
             }

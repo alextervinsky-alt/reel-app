@@ -27,14 +27,12 @@ struct CinemaFilmPage: View {
                     }
                 }
             }
-            // What viewers of this film went on to like (More Like This), and its official
-            // trailers in its own language too.
-            .onAppear { model.warmPlayer() }
-            .task(id: film.tmdb?.id) {
-                async let similar: Void = model.loadSimilar(for: film)
-                async let videos: Void = model.loadVideos(for: film)
-                _ = await (similar, videos)
+            // What viewers of this film went on to like (More Like This).
+            .onAppear {
+                model.warmPlayer()
+                TrailerEngine.shared.warm()
             }
+            .task(id: film.tmdb?.id) { await model.loadSimilar(for: film) }
             .onReelKey { key in
                 guard active else { return false }
                 switch key {

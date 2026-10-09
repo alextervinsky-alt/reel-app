@@ -67,11 +67,11 @@ public enum CameraSources {
         ("icgmagazine.com", "ICG Magazine"), ("definitionmagazine.com", "Definition"), ("redsharknews.com", "RedShark News"),
         ("thefilmstage.com", "The Film Stage"),
     ]
-    /// News sites cited for many things: only their pieces about the shooting count.
+    /// News sites cited for many things, free to read: only their pieces about the shooting count.
+    /// (Sites behind a paywall aren't read.)
     static let newsSites: [(host: String, name: String)] = [
-        ("indiewire.com", "IndieWire"), ("variety.com", "Variety"), ("hollywoodreporter.com", "The Hollywood Reporter"),
-        ("deadline.com", "Deadline"), ("vanityfair.com", "Vanity Fair"), ("vulture.com", "Vulture"),
-        ("theguardian.com", "The Guardian"), ("nytimes.com", "The New York Times"), ("collider.com", "Collider"),
+        ("indiewire.com", "IndieWire"), ("variety.com", "Variety"),
+        ("deadline.com", "Deadline"), ("theguardian.com", "The Guardian"), ("collider.com", "Collider"),
         ("slashfilm.com", "/Film"), ("polygon.com", "Polygon"), ("theplaylist.net", "The Playlist"),
         ("thewrap.com", "TheWrap"), ("rogerebert.com", "RogerEbert.com"), ("befilmtv.com", "Be Film"),
     ]
@@ -144,7 +144,7 @@ public enum HTMLText {
     public static func paragraphs(_ html: String) -> [String] {
         // Scripts, styles, menus and footers hold no article text.
         var body = html
-        for tag in ["script", "style", "noscript", "nav", "footer", "header", "aside", "form", "figcaption"] {
+        for tag in ["script", "style", "noscript", "nav", "footer", "aside", "figcaption"] {
             body = body.replacingOccurrences(of: "<\(tag)\\b[\\s\\S]*?</\(tag)>", with: " ", options: [.regularExpression, .caseInsensitive])
         }
         guard let regex = try? NSRegularExpression(pattern: #"<p\b[^>]*>([\s\S]*?)</p>"#, options: [.caseInsensitive]) else { return [] }
@@ -238,9 +238,9 @@ public struct CameraSourcesClient: Sendable {
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
-        let read = pages.compactMap { $0.1 }.filter { $0.paragraphs.count >= 3 }
+        let read = Array(pages.compactMap { $0.1 }.filter { $0.paragraphs.count >= 3 }.prefix(5))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } }.map { $0.1 ?? $0.2 }
-        return CameraReading(sources: Array(read.prefix(5)), more: more, cinematographer: await person)
+        return CameraReading(sources: read, more: more, cinematographer: await person)
     }
 
     /// The external links of the film's Wikipedia article (its references), picked for the craft.
@@ -276,18 +276,16 @@ public struct CameraSourcesClient: Sendable {
             let title: Rendered
             let link: String
         }
-        var found: [(url: URL, site: String, title: String?)] = []
         // Magazine articles only: the site's blog posts are about the society, not the films.
-        for kind in ["article"] {
-            var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/\(kind)")!
-            components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
-                                     URLQueryItem(name: "_fields", value: "title,link")]
-            guard let url = components.url, let data = await fetch(url, accept: "application/json"),
-                  let hits = try? JSONDecoder().decode([Hit].self, from: data) else { continue }
-            for hit in hits where CameraSources.isAbout(title: filmTitle, articleTitle: hit.title.rendered, url: hit.link) {
-                guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
-                found.append((link, "American Cinematographer", HTMLText.plain(hit.title.rendered)))
-            }
+        var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/article")!
+        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
+                                 URLQueryItem(name: "_fields", value: "title,link")]
+        guard let url = components.url, let data = await fetch(url, accept: "application/json"),
+              let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
+        var found: [(url: URL, site: String, title: String?)] = []
+        for hit in hits where CameraSources.isAbout(title: filmTitle, articleTitle: hit.title.rendered, url: hit.link) {
+            guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
+            found.append((link, "American Cinematographer", HTMLText.plain(hit.title.rendered)))
         }
         return Array(found.prefix(3))
     }
@@ -317,9 +315,8 @@ public struct CameraSourcesClient: Sendable {
 
     private func fetch(_ url: URL, accept: String) async -> Data? {
         var request = URLRequest(url: url)
-        // As a browser asks: many magazine sites turn away anything else.
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
-                         forHTTPHeaderField: "User-Agent")
+        // Reel says who it is; a site that turns it away is only linked.
+        request.setValue(Wikimedia.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(accept, forHTTPHeaderField: "Accept")
         request.setValue("en", forHTTPHeaderField: "Accept-Language")
         request.timeoutInterval = 15

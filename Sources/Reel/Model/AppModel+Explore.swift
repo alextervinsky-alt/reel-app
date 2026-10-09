@@ -10,6 +10,8 @@ extension AppModel {
     /// hidden gems. Chosen once, the first time Explore opens.
     var exploreShelves: [DiscoverList] {
         if let chosen = exploreShelvesChosen { return chosen }
+        // Before your notes are read there are no loved films to start from: chosen once they are.
+        guard isLoaded else { return [] }
         var generator = SystemRandomNumberGenerator()
         let chosen = DiscoverList.shelves(loved: lovedFilms(), using: &generator)
         exploreShelvesChosen = chosen
@@ -48,6 +50,11 @@ extension AppModel {
         return bestOfLists[Self.bestOfKey(year, source)]
     }
 
+    /// Tried and not found (offline, or IMDb's ratings failed to download).
+    func bestOfFailed(year: Int, source: BestOfSource) -> Bool {
+        bestOfMissing.contains(Self.bestOfKey(year, source))
+    }
+
     func isLoadingBestOf(year: Int, source: BestOfSource) -> Bool {
         source.isTMDB ? discoverLoading.contains(.bestOf(year: year, source: source))
             : bestOfLoading.contains(Self.bestOfKey(year, source)) || (source == .imdb && lists.isLoading(.imdbYear(year)))
@@ -57,18 +64,33 @@ extension AppModel {
     /// IMDb ratings (downloaded the first time); the award winners from the award lists. Each
     /// film's poster is found on TMDB.
     func loadBestOf(year: Int, source: BestOfSource) async {
-        if source.isTMDB { return await loadDiscover(.bestOf(year: year, source: source)) }
         let key = Self.bestOfKey(year, source)
+        if source.isTMDB {
+            bestOfMissing.remove(key)
+            await loadDiscover(.bestOf(year: year, source: source))
+            if discover[.bestOf(year: year, source: source)] == nil { bestOfMissing.insert(key) }
+            return
+        }
         guard bestOfLists[key] == nil, !bestOfLoading.contains(key), let client = tmdb else { return }
         bestOfLoading.insert(key)
+        bestOfMissing.remove(key)
         defer { bestOfLoading.remove(key) }
         var films: [(film: ListFilm, note: String?)] = []
         switch source {
         case .imdb:
             await lists.load(.imdbYear(year))
+            // Still downloading the first time: the row waits and asks again.
+            guard lists.imdbIsReady else {
+                if lists.imdbFailed { bestOfMissing.insert(key) }
+                return
+            }
             films = lists.films(for: .imdbYear(year)).prefix(40).map { ($0, $0.note.map { "IMDb " + $0 }) }
         case .awards:
             await lists.loadAllAwards()
+            guard AwardList.allCases.contains(where: { !lists.films(for: .award($0)).isEmpty }) else {
+                bestOfMissing.insert(key)
+                return
+            }
             for award in AwardList.allCases where award != .criterion {
                 for film in lists.films(for: .award(award)) where film.year == year && film.isWinner {
                     if let index = films.firstIndex(where: { $0.film.id == film.id }) {
@@ -81,8 +103,11 @@ extension AppModel {
         case .tmdb, .popular, .gems:
             return
         }
-        // Nothing yet (the IMDb ratings still downloading, or offline): asked again next time.
-        guard !films.isEmpty else { return }
+        // The lists are there, with nothing for the year: an empty row says so.
+        guard !films.isEmpty else {
+            bestOfLists[key] = []
+            return
+        }
         await lists.resolve(films.map(\.film), using: client)
         bestOfLists[key] = films.compactMap { entry in
             guard let art = lists.resolved(entry.film) else { return nil }

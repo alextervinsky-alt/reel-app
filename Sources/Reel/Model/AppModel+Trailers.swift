@@ -25,9 +25,7 @@ extension AppModel {
     /// spoiler-safe is on (it shows less), otherwise the trailer.
     func trailerVideos(for film: FilmEntry) -> [TMDBVideo] {
         guard let details = film.tmdb, !unplayableTrailers.contains(details.id) else { return [] }
-        let stored = details.videos?.results ?? []
-        let fetched = fetchedVideos[details.id] ?? []
-        return Trailers.candidates(fetched + stored, title: details.title, preferTeaser: hidesSpoilers(for: film),
+        return Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: hidesSpoilers(for: film),
                                    originalLanguage: details.originalLanguage)
     }
 
@@ -48,15 +46,6 @@ extension AppModel {
         trailer = TrailerRequest(videos: videos.map(\.key), title: film.displayTitle, filmID: film.id, tmdbID: film.tmdb?.id,
                                  backdropPath: film.tmdb?.backdropPath,
                                  origin: origin, offersFilmPage: offersFilmPage)
-    }
-
-    /// When a film page opens: official videos in the film's own language too, once per session.
-    func loadVideos(for film: FilmEntry) async {
-        TrailerEngine.shared.warm()
-        guard hasToken, let details = film.tmdb, fetchedVideos[details.id] == nil else { return }
-        guard let videos = try? await TMDBClient(token: token).videos(id: details.id, originalLanguage: details.originalLanguage)
-        else { return } // offline: tried again next time
-        fetchedVideos[details.id] = videos
     }
 
     /// The player's verdict on a film's trailers.

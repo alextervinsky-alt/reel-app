@@ -98,6 +98,8 @@ final class AppModel {
     /// Best of a year from the Lists' sources (IMDb, award winners), as films to show.
     var bestOfLists: [String: [PreviewFilm]] = [:]
     var bestOfLoading: Set<String> = []
+    /// Couldn't be found (offline, or IMDb's ratings failed to download): the row offers to try again.
+    var bestOfMissing: Set<String> = []
     /// What Picked for You showed last (saved, for the next launch to leave out).
     @ObservationIgnored var explorePicksShown: [Int] = []
     var explorePicksLoading = false
@@ -141,8 +143,6 @@ final class AppModel {
     /// stops offering trailers for the session rather than show broken ones.
     var trailersPlayInReel = true
     @ObservationIgnored var trailerFailuresInARow = 0
-    /// Official videos fetched when a film page opens (English and the original language).
-    var fetchedVideos: [Int: [TMDBVideo]] = [:]
     @ObservationIgnored var enteredFullScreen = false
     @ObservationIgnored var nowPlaying: NowPlaying?
     /// VLC was started ahead of Play this session (see `warmPlayer`).
@@ -216,6 +216,8 @@ final class AppModel {
     @ObservationIgnored var discoverLoadedAt: [DiscoverList: Date] = [:]
     @ObservationIgnored var similarLoadedAt: [Int: Date] = [:]
     @ObservationIgnored var previewCache: [Int: (details: TMDBMovieDetails?, ratings: ExternalRatings?)] = [:]
+    /// Previews being fetched: a second ask for the same film waits for the first.
+    @ObservationIgnored var previewTasks: [Int: Task<(details: TMDBMovieDetails?, ratings: ExternalRatings?), Never>] = [:]
     @ObservationIgnored var lookupRunning = false
     @ObservationIgnored var rerunRequested = false
     /// Moods per film, worked out once per version of its info.

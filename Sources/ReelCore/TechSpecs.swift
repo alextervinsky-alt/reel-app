@@ -229,7 +229,9 @@ public struct TechSpecs: Equatable, Sendable {
             let joined = second.joined(separator: ", ")
             sentences.append(joined.prefix(1).uppercased() + joined.dropFirst() + ".")
         }
-        if !names(.light).isEmpty { sentences.append("Lit with " + list(inline(names(.light))) + ".") }
+        // Light sources read as a sentence; times of day and techniques stay in the table.
+        let sources = names(.light).filter { !["Magic hour", "Blue hour", "Day for night", "Negative fill"].contains($0) }
+        if !sources.isEmpty { sentences.append("Lit with " + list(inline(sources)) + ".") }
         return sentences.isEmpty ? nil : sentences.joined(separator: " ")
     }
 

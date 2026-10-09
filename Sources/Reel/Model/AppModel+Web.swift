@@ -98,13 +98,19 @@ extension AppModel {
     /// Trailer and IMDb / Rotten Tomatoes / Metacritic for a film you don't own.
     func previewInfo(for id: Int) async -> (details: TMDBMovieDetails?, ratings: ExternalRatings?) {
         if let cached = previewCache[id] { return cached }
+        if let running = previewTasks[id] { return await running.value }
         guard hasToken else { return (nil, nil) }
-        let details = try? await TMDBClient(token: token).previewDetails(id: id)
-        var ratings: ExternalRatings?
-        if let imdbID = details?.imdbID, let omdb = omdbClient {
-            ratings = try? await omdb.ratings(imdbID: imdbID)
+        let client = TMDBClient(token: token)
+        let omdb = omdbClient
+        let task = Task { () -> (details: TMDBMovieDetails?, ratings: ExternalRatings?) in
+            let details = try? await client.previewDetails(id: id)
+            var ratings: ExternalRatings?
+            if let imdbID = details?.imdbID, let omdb { ratings = try? await omdb.ratings(imdbID: imdbID) }
+            return (details, ratings)
         }
-        let result = (details, ratings)
+        previewTasks[id] = task
+        let result = await task.value
+        previewTasks[id] = nil
         previewCache[id] = result
         return result
     }

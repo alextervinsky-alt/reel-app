@@ -168,6 +168,12 @@ final class ListsStore {
         return false
     }
 
+    /// IMDb's ratings couldn't be downloaded.
+    var imdbFailed: Bool {
+        if case .failed = imdbState { return true }
+        return false
+    }
+
     func isLoading(_ kind: FilmListKind) -> Bool {
         switch kind {
         case .award(let award): awardsLoading.contains(award)

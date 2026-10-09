@@ -94,7 +94,7 @@ private struct YearSummary: View {
                 months
                 inNumbers
                 highlights
-                if !summary.topGenres.isEmpty || !summary.topDirectors.isEmpty || !summary.languages.isEmpty
+                if !summary.topGenres.isEmpty || !summary.topDirectors.isEmpty || summary.languageCount > 1
                     || !summary.topActors.isEmpty { tastes }
                 everyFilm
             }

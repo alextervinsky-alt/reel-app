@@ -63,11 +63,12 @@ struct FilmPage: View {
             }
             .filmPreviewSheet($preview)
             .onChange(of: filmID) { tab = .overview }
-            // The Lists hub's saved data, for the badges under the title (read once per launch),
-            // and the film's official trailers in its own language too.
+            // The Lists hub's saved data, for the badges under the title (read once per launch).
             .task { await model.lists.prepare() }
-            .task(id: film.tmdb?.id) { await model.loadVideos(for: film) }
-            .onAppear { model.warmPlayer() }
+            .onAppear {
+                model.warmPlayer()
+                TrailerEngine.shared.warm()
+            }
         } else {
             ContentUnavailableView("Film not found", systemImage: "film",
                                    description: Text("It may have been removed by a rescan."))

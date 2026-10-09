@@ -249,6 +249,8 @@ struct ListSearchSection: View {
     @State private var results: ListSearch.Results?
     @State private var searching = false
     @State private var searched = ""
+    /// The words being searched for now (Return while the pause is still running asks once).
+    @State private var inFlight: String?
 
     private let columns = [GridItem(.adaptive(minimum: 250), spacing: 16, alignment: .top)]
 
@@ -299,11 +301,16 @@ struct ListSearchSection: View {
             try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
         }
-        guard words != searched || results == nil else { return }
+        guard words != searched || results == nil, words != inFlight else { return }
+        inFlight = words
         searching = true
         let found = await model.searchLists(words)
-        searching = false
-        guard !Task.isCancelled || now else { return }
+        if inFlight == words {
+            inFlight = nil
+            searching = false
+        }
+        // Typed on since: these results are for words no longer there.
+        guard words == text.trimmingCharacters(in: .whitespaces) else { return }
         searched = words
         results = found ?? ListSearch.Results()
     }

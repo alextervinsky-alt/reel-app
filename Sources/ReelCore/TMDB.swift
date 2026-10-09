@@ -430,14 +430,6 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
         return all
     }
 
-    /// A film's trailers and teasers in English, its original language and without a language
-    /// (asked for when a film page opens, so original-language trailers are found too).
-    public func videos(id: Int, originalLanguage: String?) async throws -> [TMDBVideo] {
-        let languages = ["en", originalLanguage, "null"].compactMap { $0 }.joined(separator: ",")
-        let list: TMDBVideoList = try await get("/movie/\(id)/videos", [URLQueryItem(name: "include_video_language", value: languages)])
-        return list.results.filter(Trailers.isKept)
-    }
-
     /// Details for a film outside the library: trailer only, kept light.
     public func previewDetails(id: Int) async throws -> TMDBMovieDetails {
         let details: TMDBMovieDetails = try await get("/movie/\(id)", [

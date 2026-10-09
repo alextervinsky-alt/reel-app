@@ -93,16 +93,17 @@ private struct CinemaHomeContent: View {
                           selected: selection?.row == row.id ? row.items.firstIndex { $0.id == selection?.item } : nil,
                           followSelection: followSelection,
                           showsReasons: row.id == "recommended" || row.id == "loved",
-                          hover: { index in
-                              guard let index else {
-                                  // The pointer left its poster: a highlight it made goes with it
-                                  // (one moved with the arrow keys stays).
-                                  if !followSelection { selection = nil }
-                                  return
-                              }
+                          hover: { index, inside in
                               guard row.items.indices.contains(index) else { return }
-                              followSelection = false
-                              selection = (row.id, row.items[index].id)
+                              let id = row.items[index].id
+                              if inside {
+                                  followSelection = false
+                                  selection = (row.id, id)
+                              } else if !followSelection, selection?.row == row.id, selection?.item == id {
+                                  // The pointer left its poster: a highlight it made goes with it
+                                  // (one moved with the arrow keys stays, and so does the next poster's).
+                                  selection = nil
+                              }
                           },
                           open: { open($0.main.id) })
                 .id(row.id)
@@ -185,8 +186,8 @@ struct CinemaRowView: View {
     var showsReasons = false
     /// A line under a poster in place of the year ("Director · Yorgos Lanthimos").
     var captions: [String: String] = [:]
-    /// The pointer entered a poster (its index) or left the highlighted one (nil).
-    let hover: (Int?) -> Void
+    /// The pointer entered (true) or left (false) the poster at this index.
+    let hover: (Int, Bool) -> Void
     let open: (LibraryItem) -> Void
 
     var body: some View {
@@ -234,13 +235,7 @@ struct CinemaRowView: View {
                 open(item)
             }
             .equatable()
-            .onHover { inside in
-                if inside {
-                    hover(index)
-                } else if selected == index {
-                    hover(nil)
-                }
-            }
+            .onHover { hover(index, $0) }
         }
     }
 }
@@ -256,7 +251,14 @@ struct CinemaHoverRow: View {
 
     var body: some View {
         CinemaRowView(title: title, items: items, selected: items.firstIndex { $0.id == selected }, captions: captions,
-                      hover: { index in selected = index.flatMap { items.indices.contains($0) ? items[$0].id : nil } },
+                      hover: { index, inside in
+                          guard items.indices.contains(index) else { return }
+                          if inside {
+                              selected = items[index].id
+                          } else if selected == items[index].id {
+                              selected = nil
+                          }
+                      },
                       open: { open($0.main.id) })
     }
 }

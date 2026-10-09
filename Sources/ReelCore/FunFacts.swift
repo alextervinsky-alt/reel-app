@@ -471,6 +471,9 @@ public struct WikipediaClient: Sendable {
 
 /// Requests to Wikipedia and Wikidata: identified as Reel, two at a time, retried when busy.
 enum Wikimedia {
+    /// Who's asking: Wikimedia (and the craft sites the Camera tab reads) ask for a way to reach the maker.
+    static let userAgent = "Reel/1.8 (personal macOS film library; https://github.com/alextervinsky-alt/reel-app)"
+
     /// At most two Wikimedia requests at a time, app-wide, as their API etiquette asks.
     static let gate = RequestGate(limit: 2)
 
@@ -480,7 +483,7 @@ enum Wikimedia {
         components.queryItems = parameters.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
         var request = URLRequest(url: components.url!)
         // Wikimedia asks for an identifying User-Agent with a way to reach the maker.
-        request.setValue("Reel/1.7 (personal macOS film library; https://github.com/alextervinsky-alt/reel-app)", forHTTPHeaderField: "User-Agent")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(accept, forHTTPHeaderField: "Accept")
         request.timeoutInterval = 45
 

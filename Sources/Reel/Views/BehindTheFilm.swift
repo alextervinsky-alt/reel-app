@@ -226,7 +226,17 @@ struct BehindTheFilmTab: View {
             let stamp = "\(film.id)|\(film.funFacts?.fetchedAt.timeIntervalSince1970 ?? 0)|\(article?.title ?? "")|\(hiding)"
             if stamp == key { return content }
             let all = film.funFacts
-            let facts = all.map { BehindTheFilmTab.withoutStory($0, hiding: hiding) }
+            var facts = all.map { BehindTheFilmTab.withoutStory($0, hiding: hiding) }
+            // A sentence can pass on its own and still come from a paragraph that gives the story
+            // away (After You Watch): while hiding, those stay out too, the highlight included.
+            if hiding, let article, var safe = facts {
+                safe.facts = Digest.leftover(safe.facts, sections: article.after)
+                if let highlight = safe.highlight,
+                   Digest.leftover([FunFact(category: "", text: highlight)], sections: article.after).isEmpty {
+                    safe.highlight = safe.facts.first { $0.category != "At a glance" && FunFactExtractor.standsAlone($0.text) }?.text
+                }
+                facts = safe
+            }
             let toKnow = BehindTheFilmTab.thingsToKnow(facts)
             let shown = toKnow.map(\.text)
             // Each fact once: those at the top aren't repeated in the chapters.

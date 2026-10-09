@@ -83,7 +83,7 @@ public enum ListSearch {
     }
 
     /// The themes worth a list, best match first: the words themselves, then themes starting
-    /// with them, then the rest; at most eight.
+    /// with them, then the rest; at most six (each is a list of its own to fetch).
     public static func rank(_ themes: [Theme], for query: String) -> [Theme] {
         let wanted = query.lowercased().trimmingCharacters(in: .whitespaces)
         func score(_ theme: Theme) -> Int {
@@ -98,7 +98,7 @@ public enum ListSearch {
             .filter { seen.insert($0.name.lowercased()).inserted }
             .enumerated()
             .sorted { (score($0.element), $0.offset) < (score($1.element), $1.offset) }
-            .prefix(8)
+            .prefix(6)
             .map(\.element)
     }
 
@@ -131,9 +131,8 @@ public enum ListSearch {
         "japanese": "JP", "korean": "KR", "french": "FR", "italian": "IT", "german": "DE", "spanish": "ES", "mexican": "MX",
         "iranian": "IR", "persian": "IR", "danish": "DK", "swedish": "SE", "indian": "IN", "bollywood": "IN", "brazilian": "BR",
         "argentine": "AR", "argentinian": "AR", "taiwanese": "TW", "polish": "PL", "romanian": "RO", "belgian": "BE",
-        "british": "GB", "english": "GB", "uk": "GB", "irish": "IE", "norwegian": "NO", "finnish": "FI", "estonian": "EE",
+        "british": "GB", "english": "GB", "irish": "IE", "norwegian": "NO", "finnish": "FI", "estonian": "EE",
         "chinese": "CN", "turkish": "TR", "greek": "GR", "hungarian": "HU", "czech": "CZ", "australian": "AU", "canadian": "CA",
-        "hong kong": "HK", "czech republic": "CZ",
     ]
 }
 

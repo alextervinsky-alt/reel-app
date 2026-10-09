@@ -153,7 +153,7 @@ public enum DiscoverList: Hashable, Sendable {
             return ("/discover/movie", [
                 URLQueryItem(name: "with_origin_country", value: code),
                 URLQueryItem(name: "sort_by", value: "vote_average.desc"),
-                URLQueryItem(name: "vote_count.gte", value: code == "US" || code == "GB" ? "2000" : "250"),
+                URLQueryItem(name: "vote_count.gte", value: code == "GB" ? "2000" : "250"),
                 noAdult,
             ], 3)
         case .decade(let start):
