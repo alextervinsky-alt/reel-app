@@ -259,7 +259,7 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertEqual(best.pages, 5)
         XCTAssertTrue(best.query.contains(URLQueryItem(name: "primary_release_year", value: "1994")))
         let gems = DiscoverList.bestOf(year: 2019, source: .gems).request(today: today)
-        XCTAssertTrue(gems.query.contains(URLQueryItem(name: "vote_count.lte", value: "900")))
+        XCTAssertTrue(gems.query.contains(URLQueryItem(name: "vote_count.lte", value: "1000")))
         XCTAssertEqual(DiscoverList.bestOf(year: 2019, source: .popular).request(today: today).query.first { $0.name == "sort_by" }?.value,
                        "popularity.desc")
         XCTAssertEqual(DiscoverList.because(id: 496243, title: "Parasite").request(today: today).path, "/movie/496243/recommendations")

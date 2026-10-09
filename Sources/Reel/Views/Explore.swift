@@ -78,7 +78,7 @@ struct BestOfRow: View {
     var body: some View {
         let found = model.bestOf(year: year, source: source)
         let films = (found ?? []).filter { film in
-            !model.isSeen(film.id) && (mood.map { film.genres.isEmpty || MoodGenres.of($0).fits(film.genres) } ?? true)
+            !model.hasSeen(film.id) && (mood.map { film.genres.isEmpty || MoodGenres.of($0).fits(film.genres) } ?? true)
         }
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 12) {

@@ -137,8 +137,8 @@ public enum DiscoverList: Hashable, Sendable {
             case .gems:
                 return ("/discover/movie", [year, URLQueryItem(name: "sort_by", value: "vote_average.desc"),
                                             URLQueryItem(name: "vote_average.gte", value: "7"),
-                                            URLQueryItem(name: "vote_count.gte", value: old ? "40" : "80"),
-                                            URLQueryItem(name: "vote_count.lte", value: old ? "400" : "900"), noAdult], 3)
+                                            URLQueryItem(name: "vote_count.gte", value: old ? "60" : "150"),
+                                            URLQueryItem(name: "vote_count.lte", value: old ? "400" : "1000"), noAdult], 3)
             case .tmdb, .imdb, .awards:
                 return ("/discover/movie", [year, URLQueryItem(name: "sort_by", value: "vote_average.desc"),
                                             URLQueryItem(name: "vote_count.gte", value: old ? "150" : "400"), noAdult], 5)

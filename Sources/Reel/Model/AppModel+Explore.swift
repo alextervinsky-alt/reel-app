@@ -21,12 +21,20 @@ extension AppModel {
     /// The films of an Explore list as shown: none you've seen, only the mood's when one is
     /// chosen, and in this launch's order when the list ranks by quality.
     func exploreFilms(_ list: DiscoverList, mood: Mood?) -> [TMDBMovieSummary] {
-        var films = (discover[list] ?? []).filter { !isSeen($0.id) }
+        var films = (discover[list] ?? []).filter { !hasSeen($0.id) }
+        // What people went on to love after one of yours: only the well-liked (TMDB's own list
+        // reaches far down).
+        if case .because = list { films = films.filter { ($0.voteAverage ?? 0) >= 6.6 && ($0.voteCount ?? 0) >= 150 } }
         if let mood { films = films.filter { MoodGenres.of(mood).fits($0.genreNames) } }
         if list.reshuffles {
             films = EveningOrder.arrange(films, evening: exploreLaunch, id: { String($0.id) }, score: { $0.voteAverage })
         }
         return films
+    }
+
+    /// Seen elsewhere, or on your drives and watched.
+    func hasSeen(_ tmdbID: Int) -> Bool {
+        isSeen(tmdbID) || itemsByTMDB[tmdbID].map { personal.watchedKeys.contains($0.id) } == true
     }
 
     /// Films you loved (4 or 5 stars, or a heart), with their titles.
