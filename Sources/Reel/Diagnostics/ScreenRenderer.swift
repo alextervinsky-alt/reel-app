@@ -185,7 +185,12 @@ enum ScreenRenderer {
         var explorePosters = (model.discover[.mood(.dark)] ?? []).prefix(8).compactMap(\.posterPath)
         for shelf in model.exploreShelves { explorePosters += model.exploreFilms(shelf, mood: nil).prefix(8).compactMap(\.posterPath) }
         explorePosters += (model.bestOf(year: year, source: .gems) ?? []).prefix(8).compactMap(\.posterPath)
-        for path in explorePosters { _ = await ImageStore.shared.image(path, .poster) }
+        for path in explorePosters {
+            let load = Task { await ImageStore.shared.image(path, .poster) }
+            let timeout = Task { try? await Task.sleep(for: .seconds(15)); load.cancel() }
+            if await load.value == nil { log("Explore: poster \(path) not loaded (\(load.isCancelled ? "timed out" : "failed"))") }
+            timeout.cancel()
+        }
         log("Explore: \(explorePosters.count) posters loaded")
         render(VStack(alignment: .leading, spacing: 38) {
                     DiscoverRow(list: .mood(.dark)) { _ in }
