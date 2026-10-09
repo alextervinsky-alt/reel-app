@@ -97,6 +97,8 @@ struct LibraryGridView: View {
         }
         .environment(scroll)
         .background(Theme.background)
+        // The banner reaches the top of the window, like a film page's backdrop.
+        .ignoresSafeArea(.container, edges: featured == nil ? [] : .top)
         .navigationTitle(title)
         .toolbar(removing: .title)
         .sheet(item: $regrouping) { item in
@@ -115,22 +117,6 @@ struct LibraryGridView: View {
             return true
         }
         .onDisappear { scroll.pointed = nil }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Cinema mode has its own.
-                if !model.cinemaMode { surpriseButton(shown) }
-            }
-        }
-    }
-
-    private func surpriseButton(_ shown: [LibraryItem]) -> some View {
-        Button {
-            surprise(from: shown)
-        } label: {
-            Label("Surprise Me", systemImage: "dice")
-        }
-        .disabled(shown.isEmpty)
-        .help("Open a random unwatched film from this list")
     }
 
     private func card(_ item: LibraryItem) -> some View {
@@ -324,13 +310,6 @@ struct LibraryGridView: View {
             return "Not connected. These are its films from the last scan\(scanned)."
         default:
             return nil
-        }
-    }
-
-    private func surprise(from shown: [LibraryItem]) {
-        let unwatched = shown.filter { !model.isWatched($0.id) }
-        if let pick = (unwatched.isEmpty ? shown : unwatched).randomElement() {
-            path.append(FilmRoute(id: pick.main.id))
         }
     }
 }

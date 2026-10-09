@@ -48,11 +48,9 @@ struct RootView: View {
             .keyboardShortcut("f", modifiers: .command)
             .hidden()
         }
-        // Cinema mode fills the screen: the toolbar (window buttons) slides in over it
-        // when the pointer reaches the top, like any full-screen app, and is see-through there.
-        // A trailer filling the screen does the same.
-        .toolbarBackgroundVisibility(model.cinemaMode || model.trailerFillsScreen ? .hidden : .automatic, for: .windowToolbar)
-        .windowToolbarFullScreenVisibility(model.cinemaMode || model.trailerFillsScreen ? .onHover : .automatic)
+        // No toolbar strip anywhere: the window buttons float over the sidebar (or slide in at the
+        // top in full screen), and a page opened over a list has its own Back button.
+        .toolbarVisibility(.hidden, for: .windowToolbar)
         .onChange(of: model.cinemaMode) { _, on in
             // Cinema mode searches on its own: the desk keeps its search, list and page.
             if on {
@@ -80,6 +78,7 @@ struct RootView: View {
         NavigationSplitView {
             SidebarView(selection: shelf, onSelect: select)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 224, max: 300)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             NavigationStack(path: $path) {
                 Group {
@@ -109,22 +108,22 @@ struct RootView: View {
                 }
                 .background(Theme.background)
                 .navigationDestination(for: FilmRoute.self) { route in
-                    FilmPage(filmID: route.id)
+                    FilmPage(filmID: route.id).pushedPage()
                 }
                 .navigationDestination(for: PersonRoute.self) { route in
-                    PersonPage(route: route)
+                    PersonPage(route: route).pushedPage()
                 }
                 .navigationDestination(for: DiscoverRoute.self) { route in
-                    DiscoverListPage(list: route.list, mood: route.mood)
+                    DiscoverListPage(list: route.list, mood: route.mood).pushedPage()
                 }
                 .navigationDestination(for: ListRoute.self) { route in
-                    ListPage(kind: route.kind)
+                    ListPage(kind: route.kind).pushedPage()
                 }
                 .navigationDestination(for: FranchiseRoute.self) { route in
-                    FranchisePage(route: route)
+                    FranchisePage(route: route).pushedPage()
                 }
                 .navigationDestination(for: SimilarRoute.self) { route in
-                    MoreLikeThisPage(route: route)
+                    MoreLikeThisPage(route: route).pushedPage()
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -132,6 +131,17 @@ struct RootView: View {
                     NoticeBar(text: notice) { model.notice = nil }
                 }
             }
+            // Back, over a page opened from a list (⌘[ too).
+            .overlay(alignment: .topLeading) {
+                if !path.isEmpty {
+                    BackButton { path.removeLast() }
+                        .padding(.leading, 18)
+                        .padding(.top, 12)
+                        .ignoresSafeArea(.container, edges: .top)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: path.isEmpty)
         }
         .task(id: searchText) {
             // Clearing the field shows everything again at once; typing waits for a pause.
@@ -491,6 +501,35 @@ struct SidebarRow: View {
     private func filled(_ symbol: String) -> String {
         ["bookmark", "heart", "checkmark.circle", "questionmark.circle", "externaldrive", "star", "safari", "shippingbox",
          "exclamationmark.triangle", "moon"].contains(symbol) ? symbol + ".fill" : symbol
+    }
+}
+/// Back to the list a page was opened from: a small round button floating at the top left.
+private struct BackButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(hovering ? 1 : 0.85))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(.ultraThinMaterial))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.12)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("[", modifiers: .command)
+        .onHover { hovering = $0 }
+        .help("Back")
+    }
+}
+
+extension View {
+    /// A page opened over a list: room at the top for the Back button (a page whose picture
+    /// reaches the top of the window ignores it).
+    func pushedPage() -> some View {
+        safeAreaPadding(.top, 40)
     }
 }
 #endif

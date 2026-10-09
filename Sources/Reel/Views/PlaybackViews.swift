@@ -257,7 +257,6 @@ struct TrailerOverlay: View {
             madeWindowFullScreen = false
             guard filling else { return }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) { filling = false }
-            model.trailerFillsScreen = false
         }
         .onReelKey { key in
             switch key {
@@ -377,7 +376,6 @@ struct TrailerOverlay: View {
     private func toggleFill() {
         let window = AppModel.libraryWindow
         withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) { filling.toggle() }
-        model.trailerFillsScreen = filling
         if filling {
             revealControls()
             if let window, !window.styleMask.contains(.fullScreen) {
@@ -507,7 +505,6 @@ struct TrailerOverlay: View {
         watchdog?.cancel()
         hideControls?.cancel()
         TrailerEngine.shared.stop(owner: token)
-        if filling { model.trailerFillsScreen = false }
         leaveWindowFullScreen()
     }
 

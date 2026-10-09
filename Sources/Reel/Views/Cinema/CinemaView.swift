@@ -56,10 +56,9 @@ struct CinemaView: View {
                     .transition(.opacity)
             }
         }
-        // Edge to edge: nothing of the window shows above it (in full screen the toolbar slides
-        // over it when the pointer reaches the top of the screen).
+        // Edge to edge: nothing of the window shows above it.
         .ignoresSafeArea()
-        // The bar itself stays clear of a toolbar that's showing.
+        // The bar itself stays clear of the window buttons.
         .overlay(alignment: .top) { topBar }
         .animation(.easeOut(duration: 0.22), value: path)
         .animation(.easeOut(duration: 0.22), value: tab)

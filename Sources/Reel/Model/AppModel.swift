@@ -133,8 +133,6 @@ final class AppModel {
     var cinemaMode = false
     /// A trailer playing over the window.
     var trailer: TrailerRequest?
-    /// The trailer fills the screen (the toolbar steps aside, as in Cinema mode).
-    var trailerFillsScreen = false
     /// A film to open on the page showing (Open Film under a trailer).
     var filmToOpen: String?
     /// A Cinema mode filter panel is open (it takes Esc first).

@@ -17,8 +17,6 @@ struct FilmPage: View {
     @State private var showingFile = false
     @State private var still: StillSelection?
     @State private var preview: PreviewFilm?
-    /// The toolbar gets its background back once the page scrolls past the backdrop.
-    @State private var pastHero = false
 
     var body: some View {
         if let film = model.film(id: filmID) {
@@ -48,14 +46,8 @@ struct FilmPage: View {
                     .frame(maxWidth: 1180, alignment: .leading)
                 }
             }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top > 520
-            } action: { _, isPast in
-                pastHero = isPast
-            }
             .background(Theme.background)
             .ignoresSafeArea(.container, edges: .top)
-            .toolbarBackgroundVisibility(pastHero ? .visible : .hidden, for: .windowToolbar)
             .navigationTitle("")
             .sheet(isPresented: $fixing) { MatchFixer(film: film) }
             .sheet(isPresented: $showingFile) { FileInfoSheet(film: film) }

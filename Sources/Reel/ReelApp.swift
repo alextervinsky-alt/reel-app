@@ -16,9 +16,15 @@ struct ReelApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1240, height: 820)
+        // No title bar or toolbar strip: the pictures reach the top of the window, the window
+        // buttons sit over the sidebar, and the window moves by dragging any empty part of it.
+        .windowStyle(.hiddenTitleBar)
+        .windowBackgroundDragBehavior(.enabled)
         // No hidden "Saved Application State" folder; Reel opens fresh each time.
         .restorationBehavior(.disabled)
         .commands {
+            // View › Show or Hide Sidebar (there's no toolbar button for it).
+            SidebarCommands()
             CommandGroup(replacing: .newItem) {
                 Button("Add Drive…") { model.chooseDrive() }
                     .keyboardShortcut("o")
