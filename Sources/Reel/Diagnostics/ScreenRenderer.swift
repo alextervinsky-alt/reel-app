@@ -128,32 +128,6 @@ enum ScreenRenderer {
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("camera.png"))
         }
-        // For You (from the sample's watched films): its first six, with their frames and details loaded.
-        await model.loadExplorePicks()
-        log("For You picked")
-        let shown = Array((model.explorePicks ?? []).prefix(6))
-        for pick in shown {
-            if let path = pick.film.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) }
-            _ = await model.previewInfo(for: pick.id)
-        }
-        render(ForYouGrid(picks: shown) { _ in }
-                .padding(32)
-                .frame(width: 1300)
-                .background(Theme.background),
-               model: model, scale: 2, to: output.appendingPathComponent("for-you.png"))
-        log("For You drawn")
-        // All Films' banner and a Recommended card, each with the whole synopsis.
-        if let item = model.featured ?? model.items.first {
-            render(VStack(alignment: .leading, spacing: 30) {
-                        FeaturedBanner(item: item, open: {}, showTrailer: {})
-                        RecommendationCard(number: 1, item: item).padding(.horizontal, 32)
-                    }
-                    .padding(.bottom, 32)
-                    .frame(width: 1300)
-                    .background(Theme.background),
-                   model: model, scale: 2, to: output.appendingPathComponent("banner-and-card.png"))
-        }
-        log("banner drawn")
         // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
         // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
@@ -187,6 +161,32 @@ enum ScreenRenderer {
                 .frame(width: 1300)
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("explore-mood.png"))
+        // For You (from the sample's watched films): its first six, with their frames and details loaded.
+        await model.loadExplorePicks()
+        log("For You picked")
+        let shown = Array((model.explorePicks ?? []).prefix(6))
+        for pick in shown {
+            if let path = pick.film.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) }
+            _ = await model.previewInfo(for: pick.id)
+        }
+        render(ForYouGrid(picks: shown) { _ in }
+                .padding(32)
+                .frame(width: 1300)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("for-you.png"))
+        log("For You drawn")
+        // All Films' banner and a Recommended card, each with the whole synopsis.
+        if let item = model.featured ?? model.items.first {
+            render(VStack(alignment: .leading, spacing: 30) {
+                        FeaturedBanner(item: item, open: {}, showTrailer: {})
+                        RecommendationCard(number: 1, item: item).padding(.horizontal, 32)
+                    }
+                    .padding(.bottom, 32)
+                    .frame(width: 1300)
+                    .background(Theme.background),
+                   model: model, scale: 2, to: output.appendingPathComponent("banner-and-card.png"))
+        }
+        log("banner drawn")
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
         finish()
     }
