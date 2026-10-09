@@ -159,12 +159,12 @@ enum ScreenRenderer {
         let year = Calendar.current.component(.year, from: Date()) - 2
         log("Explore: loading")
         // Diagnosis: the same request on the shared session and on a new one, each given 30 s.
-        let token = model.token
+        let probeToken = model.token
         let request = DiscoverList.mood(.dark).request()
         for (name, session) in [("shared session", TMDBClient.sharedSession), ("new session", URLSession(configuration: .ephemeral))] {
             let probe = Task.detached { () -> String in
                 do {
-                    let films = try await TMDBClient(token: token, session: session).movies(request.path, request.query, pages: 1)
+                    let films = try await TMDBClient(token: probeToken, session: session).movies(request.path, request.query, pages: 1)
                     return "\(films.count) films"
                 } catch {
                     return "error \(error)"
