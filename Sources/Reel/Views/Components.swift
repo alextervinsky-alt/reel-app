@@ -542,7 +542,7 @@ struct PictureRangeTag: View {
         func range(_ copy: FilmEntry) -> String {
             let range = copy.parsed.dynamicRange
             guard range.isHDR else { return "SDR" }
-            return "HDR · " + range.rawValue + (copy.parsed.dolbyVisionWithHDR10 ? " + HDR10" : "")
+            return "HDR · " + range.rawValue + (copy.parsed.fallbackRange.map { " + " + $0.rawValue } ?? "")
         }
         let differ = Set(copies.map(range)).count > 1
         var seen = Set<String>()

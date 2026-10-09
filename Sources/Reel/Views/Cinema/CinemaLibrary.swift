@@ -9,6 +9,8 @@ struct CinemaLibrary: View {
     @Environment(AppModel.self) private var model
     @Environment(\.isSnapshot) private var isSnapshot
     @Binding var searchText: String
+    /// Set by ⌘F: the search field takes the focus.
+    @Binding var focusSearch: Bool
     let query: String
     /// False while a film page or a trailer is open over it.
     let active: Bool
@@ -101,7 +103,7 @@ struct CinemaLibrary: View {
                     .font(.system(size: Cinema.body))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 20)
-                CinemaSearchField(text: $searchText)
+                CinemaSearchField(text: $searchText, focusRequested: $focusSearch)
             }
             // Filters step aside while searching (a search looks through everything).
             if query.isEmpty { filters }
@@ -197,6 +199,8 @@ struct CinemaLibrary: View {
 /// Search in Cinema mode: a large field, read from the sofa; the clear button is big too.
 private struct CinemaSearchField: View {
     @Binding var text: String
+    @Binding var focusRequested: Bool
+    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -206,6 +210,10 @@ private struct CinemaSearchField: View {
             TextField("Search", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: Cinema.body))
+                .focused($focused)
+                // Return or Esc hand the keys back to the posters.
+                .onSubmit { focused = false }
+                .onExitCommand { focused = false }
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -219,7 +227,16 @@ private struct CinemaSearchField: View {
         }
         .padding(.horizontal, 22)
         .frame(width: 440, height: 64)
-        .background(Capsule().fill(Color.white.opacity(0.1)))
+        .background(Capsule().fill(Color.white.opacity(focused ? 0.16 : 0.1)))
+        .overlay(Capsule().strokeBorder(focused ? Theme.brand.opacity(0.7) : .clear, lineWidth: 2))
+        .onAppear(perform: takeFocus)
+        .onChange(of: focusRequested) { takeFocus() }
+    }
+
+    private func takeFocus() {
+        guard focusRequested else { return }
+        focusRequested = false
+        Task { @MainActor in focused = true }
     }
 }
 

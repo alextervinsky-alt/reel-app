@@ -16,6 +16,8 @@ struct RootView: View {
     @State private var path = NavigationPath()
     /// The desk's search while Cinema mode has the field (put back when Cinema mode ends).
     @State private var deskSearch = ""
+    /// ⌘F: the search field showing (desk or Cinema mode) takes the focus.
+    @State private var focusSearch = false
 
     /// The desk library, with Cinema mode over it when on, and what can open over either: a
     /// trailer, and the "How was it?" sheet. The desk stays in place (hidden) under Cinema mode,
@@ -27,14 +29,26 @@ struct RootView: View {
                 .allowsHitTesting(!model.cinemaMode)
                 .accessibilityHidden(model.cinemaMode)
             if model.cinemaMode {
-                CinemaView(searchText: $searchText, query: query).transition(.opacity)
+                CinemaView(searchText: $searchText, focusSearch: $focusSearch, query: query).transition(.opacity)
             }
             if let trailer = model.trailer {
                 TrailerOverlay(request: trailer) { if model.trailer == trailer { model.trailer = nil } }
                     .transition(.opacity)
             }
         }
-        // Cinema mode fills the screen: the toolbar (window buttons and search) slides in over it
+        // ⌘F, as in any Mac app: to the search under All Films (Cinema mode's, when it's on).
+        .background {
+            Button("") {
+                if !model.cinemaMode {
+                    path = NavigationPath()
+                    if !shelf.isLibrary { shelf = .all }
+                }
+                focusSearch = true
+            }
+            .keyboardShortcut("f", modifiers: .command)
+            .hidden()
+        }
+        // Cinema mode fills the screen: the toolbar (window buttons) slides in over it
         // when the pointer reaches the top, like any full-screen app, and is see-through there.
         // A trailer filling the screen does the same.
         .toolbarBackgroundVisibility(model.cinemaMode || model.trailerFillsScreen ? .hidden : .automatic, for: .windowToolbar)
@@ -86,7 +100,9 @@ struct RootView: View {
                         case .wishlist: WishlistView()
                         case .yearInFilm: YearInFilmView()
                         default:
-                            LibraryGridView(shelf: shelf, searchText: $searchText, query: query, sort: $sort,
+                            // The desk's field doesn't take ⌘F while Cinema mode is over it.
+                            LibraryGridView(shelf: shelf, searchText: $searchText,
+                                            focusSearch: model.cinemaMode ? .constant(false) : $focusSearch, query: query, sort: $sort,
                                             moods: $moods, length: $length, language: $language, path: $path)
                         }
                     }
@@ -124,11 +140,6 @@ struct RootView: View {
                 guard !Task.isCancelled else { return }
             }
             query = searchText
-        }
-        .onChange(of: searchText) {
-            guard !searchText.isEmpty, !model.cinemaMode else { return }
-            if !path.isEmpty { path = NavigationPath() }
-            if !shelf.isLibrary { shelf = .all }
         }
     }
 

@@ -99,7 +99,7 @@ final class TechSpecsTests: XCTestCase {
             "“We shot on the ARRI Alexa 65 with Panavision Sphero 65 lenses because we wanted the landscapes to feel enormous.” It gave us room in the frame.",
             "Deakins and Villeneuve first met in Montreal for dinner.",
             "AC: How did you light the casino and the dust storm sequences?",
-            "NFS: Bong doesn't seem to be a huge fan of traditional camera coverage.",
+            "AC: You don't seem to be a huge fan of traditional camera coverage.",
             "I lit the casino with a single big source, bounced off the ceiling, so the faces fell into shadow.",
             "The production was based in Budapest, where the crew built several stages.",
             "We graded with a show LUT designed with our colorist to keep the orange of the dust.",
@@ -152,7 +152,9 @@ final class TechSpecsTests: XCTestCase {
         XCTAssertFalse(CameraSources.isOtherCraft(title: "How the Cinematographer and Editor of 'Parasite' Built Its Rhythm",
                                                   cinematographers: ["Hong Kyung-pyo"]))
         XCTAssertFalse(CameraSources.isOtherCraft(title: "Universal Translator: Arrival", cinematographers: ["Bradford Young"]))
-        XCTAssertTrue(TechSpecs.isQuestion("NFS: Bong doesn't seem to be a huge fan of coverage."))
-        XCTAssertFalse(TechSpecs.isQuestion("We lit it with one big source."))
+        XCTAssertTrue(TechSpecs.isQuestion("NFS: Bong doesn't seem to be a huge fan of coverage.", source: "No Film School"))
+        XCTAssertTrue(TechSpecs.isQuestion("Q: Tell us about the lighting.", source: nil))
+        XCTAssertFalse(TechSpecs.isQuestion("DP: We lit it with one big source.", source: "No Film School"))
+        XCTAssertFalse(TechSpecs.isQuestion("We lit it with one big source.", source: "No Film School"))
     }
 }

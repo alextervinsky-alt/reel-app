@@ -121,7 +121,7 @@ public struct TechSpecs: Equatable, Sendable {
                             continue
                         }
                         // The interviewer's questions ("NFS: How does…?") are not the filmmakers' words.
-                        if text.isInterview, isQuestion(sentence) {
+                        if text.isInterview, isQuestion(sentence, source: text.source) {
                             aboutThem = false
                             continue
                         }
@@ -256,10 +256,16 @@ public struct TechSpecs: Equatable, Sendable {
         return smaller == 0 ? 0 : Double(a.intersection(b).count) / Double(smaller)
     }
 
-    /// A question, or a line the interviewer speaks ("Q:", "NFS:", "AC:").
-    static func isQuestion(_ sentence: String) -> Bool {
+    /// A question, or a line the interviewer speaks: "Q:", or the publication's initials ("NFS:" in
+    /// No Film School, "AC:" in American Cinematographer). The filmmaker's own tag ("DP:") is theirs.
+    static func isQuestion(_ sentence: String, source: String?) -> Bool {
         let trimmed = sentence.trimmingCharacters(in: CharacterSet(charactersIn: " \"”’'"))
-        return trimmed.hasSuffix("?") || sentence.range(of: #"^(?:Q|[A-Z]{2,5}):\s"#, options: .regularExpression) != nil
+        if trimmed.hasSuffix("?") { return true }
+        guard let colon = sentence.firstIndex(of: ":") else { return false }
+        let tag = String(sentence[..<colon])
+        guard (1...5).contains(tag.count), tag.allSatisfy({ $0.isUppercase }) else { return false }
+        let initials = String((source ?? "").split(separator: " ").compactMap(\.first).filter(\.isUppercase))
+        return tag == "Q" || tag == "INT" || (initials.count >= 2 && tag == initials)
     }
 
     static func quoted(_ sentence: String) -> Bool {

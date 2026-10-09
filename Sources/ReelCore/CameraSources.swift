@@ -111,9 +111,11 @@ public enum CameraSources {
         let heading = title.lowercased()
         let others = ["editor", "editing", "composer", "score", "costume", "production design", "sound design",
                       "makeup", "make-up", "casting", "screenwriter", "visual effects", "vfx"]
-        guard others.contains(where: { heading.contains($0) }) else { return false }
+        // Whole words ("score", not "underscore"; "casting", not "broadcasting").
+        let padded = " " + String(heading.map { $0.isLetter || $0 == "-" ? $0 : " " }) + " "
+        guard others.contains(where: { padded.contains(" " + $0 + " ") || padded.contains(" " + $0 + "s ") }) else { return false }
         let camera = ["cinematograph", "director of photography", " dp ", "camera", "lens", "lighting", "shot on"]
-        if camera.contains(where: { (" " + heading + " ").contains($0) }) { return false }
+        if camera.contains(where: { padded.contains($0) }) { return false }
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map { $0.lowercased() } }.filter { $0.count >= 3 }
         return !surnames.contains { heading.contains($0) }
     }

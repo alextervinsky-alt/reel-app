@@ -141,7 +141,13 @@ final class FilenameParserTests: XCTestCase {
 
     func testDynamicRangeForTheTV() {
         XCTAssertEqual(FilenameParser.parse("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").dynamicRange, .dolbyVision)
-        XCTAssertTrue(FilenameParser.parse("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").dolbyVisionWithHDR10)
+        XCTAssertEqual(FilenameParser.parse("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").fallbackRange, .hdr10)
+        XCTAssertEqual(FilenameParser.parse("Dune.Part.Two.2024.2160p.WEB-DL.DV.HDR10+.HEVC-GRP.mkv").fallbackRange, .hdr10Plus)
+        // Radarr's names keep the tags in brackets; some write Dolby Vision in full.
+        XCTAssertEqual(FilenameParser.parse("Dune (2021) [Bluray-2160p][DV HDR10][x265].mkv").dynamicRange, .dolbyVision)
+        XCTAssertEqual(FilenameParser.parse("Dune (2021) [Bluray-2160p][HDR10][x265].mkv").dynamicRange, .hdr10)
+        XCTAssertEqual(FilenameParser.parse("Dune.2021.2160p.WEB-DL.Dolby.Vision.HEVC-GRP.mkv").dynamicRange, .dolbyVision)
+        XCTAssertNil(FilenameParser.parse("Dune.2021.2160p.WEB-DL.Dolby.Vision.HEVC-GRP.mkv").fallbackRange)
         XCTAssertEqual(FilenameParser.parse("Arrival.2016.2160p.UHD.BluRay.HDR10+.HEVC-GRP.mkv").dynamicRange, .hdr10Plus)
         XCTAssertEqual(FilenameParser.parse("Heat 1995 2160p UHD BluRay HDR x265.mkv").dynamicRange, .hdr10)
         XCTAssertEqual(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange, .sdr)

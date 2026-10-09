@@ -8,19 +8,23 @@ enum CinemaTab: Hashable {
 }
 
 /// Cinema mode: Reel as a 10-foot view for the TV. Separate from the desk views, so turning it on
-/// or off never changes them; the desk keeps its place, search and filters. The search field
-/// (in the toolbar that appears at the top of the screen) searches All Films here.
+/// or off never changes them; the desk keeps its place, search and filters. All Films has its
+/// own search field (⌘F goes to it from anywhere).
 struct CinemaView: View {
     @Environment(AppModel.self) private var model
-    /// The desk's search, shared: typing in Cinema mode shows the matches in All Films.
+    /// Cinema mode's search (RootView keeps the desk's aside meanwhile).
     @Binding var searchText: String
+    /// Set by ⌘F: All Films comes up with its search field focused.
+    @Binding var focusSearch: Bool
     let query: String
     @State private var tab: CinemaTab
     /// Film pages opened on top of the tab (film IDs), most recent last.
     @State private var path: [String]
 
-    init(searchText: Binding<String>, query: String, tab: CinemaTab = .home, path: [String] = []) {
+    init(searchText: Binding<String>, focusSearch: Binding<Bool> = .constant(false), query: String,
+         tab: CinemaTab = .home, path: [String] = []) {
         _searchText = searchText
+        _focusSearch = focusSearch
         self.query = query
         _tab = State(initialValue: tab)
         _path = State(initialValue: path)
@@ -39,7 +43,7 @@ struct CinemaView: View {
                 case .home: EmptyView()
                 case .tonight: CinemaTonight(open: open)
                 case .library:
-                    CinemaLibrary(searchText: $searchText, query: query,
+                    CinemaLibrary(searchText: $searchText, focusSearch: $focusSearch, query: query,
                                   active: path.isEmpty && model.trailer == nil, open: open)
                 }
             }
@@ -65,12 +69,11 @@ struct CinemaView: View {
             model.filmToOpen = nil
             open(id)
         }
-        .onChange(of: query) { _, new in
-            // Typing a search shows the matches.
-            if !new.isEmpty {
-                path = []
-                tab = .library
-            }
+        .onChange(of: focusSearch) { _, wanted in
+            // ⌘F: to All Films, where the field takes the focus.
+            guard wanted else { return }
+            path = []
+            tab = .library
         }
         .onReelKey { key in
             // A trailer or a filter panel on top takes Esc first.

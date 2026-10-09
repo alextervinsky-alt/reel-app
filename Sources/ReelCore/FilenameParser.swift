@@ -31,8 +31,8 @@ public struct ParsedFilename: Equatable, Sendable {
     public var hdr: String?
     /// SDR unless the name says otherwise (an HDR file is always labelled so).
     public var dynamicRange: DynamicRange = .sdr
-    /// Dolby Vision with an HDR10 layer too (plays as HDR10 where Dolby Vision doesn't).
-    public var dolbyVisionWithHDR10 = false
+    /// For Dolby Vision, the HDR10 or HDR10+ layer it also carries (played where Dolby Vision isn't).
+    public var fallbackRange: DynamicRange?
     public var videoCodec: String?
     public var audioTracks: [AudioTrack]
     public var isVideo: Bool
@@ -163,23 +163,33 @@ public enum FilenameParser {
             source = "REMUX"
         }
 
-        // HDR
+        // HDR, also from [bracketed] tags ("Dune (2021) [Bluray-2160p][DV HDR10][x265]") and
+        // "Dolby Vision" written as two words.
+        let tags = ex.squareGroups.flatMap { $0.lowercased().split { !($0.isLetter || $0.isNumber || $0 == "+") }.map(String.init) }
+        let words = lower + tags
+        let dolbyVision = zip(words, words.dropFirst()).contains { $0 == "dolby" && $1 == "vision" }
+        func shows(_ names: [String]) -> Bool { has(names) || tags.contains(where: { names.contains($0) }) }
+        let isDV = dolbyVision || shows(["dv", "dovi", "dolbyvision"])
+        let isHDR10Plus = shows(["hdr10+", "hdr10plus"])
+        let isHDR10 = shows(["hdr", "hdr10"])
         var hdrParts: [String] = []
-        if has(["dv", "dovi"]) { hdrParts.append("DV") }
-        if has(["hdr", "hdr10", "hdr10+"]) { hdrParts.append("HDR") }
+        if isDV { hdrParts.append("DV") }
+        if isHDR10Plus || isHDR10 { hdrParts.append("HDR") }
         let hdr: String? = hdrParts.isEmpty ? nil : hdrParts.joined(separator: " ")
         let range: DynamicRange
-        if has(["dv", "dovi", "dolbyvision"]) {
+        if isDV {
             range = .dolbyVision
-        } else if has(["hdr10+", "hdr10plus"]) {
+        } else if isHDR10Plus {
             range = .hdr10Plus
-        } else if has(["hdr", "hdr10"]) {
+        } else if isHDR10 {
             range = .hdr10
-        } else if has(["hlg"]) {
+        } else if shows(["hlg"]) {
             range = .hlg
         } else {
             range = .sdr
         }
+        // The HDR layer a Dolby Vision file also carries, for TVs without Dolby Vision.
+        let fallbackRange: DynamicRange? = !isDV ? nil : isHDR10Plus ? .hdr10Plus : isHDR10 ? .hdr10 : nil
 
         // Video codec
         var codec: String? = nil
@@ -221,7 +231,7 @@ public enum FilenameParser {
             source: source,
             hdr: hdr,
             dynamicRange: range,
-            dolbyVisionWithHDR10: range == .dolbyVision && has(["hdr", "hdr10", "hdr10+"]),
+            fallbackRange: fallbackRange,
             videoCodec: codec,
             audioTracks: tracks,
             isVideo: isVideo,

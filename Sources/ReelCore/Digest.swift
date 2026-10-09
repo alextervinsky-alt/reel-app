@@ -228,12 +228,20 @@ public enum Digest {
     /// The article's sentences about where the film was shot: locations, studios and stages
     /// (from the sections before the story), at most `limit`.
     public static func locationSentences(_ sections: [FilmArticle.Section], limit: Int = 5) -> [String] {
-        // A place named after the shooting words (capitalised), or a location, studio or stage.
+        // A place named after the shooting words ("in Budapest", "in the deserts of Jordan"; not a
+        // month or a camera), on location, the locations, a stage or backlot, or a named studio
+        // where something was built or shot (not "the studio" that made it).
+        let notPlaces = "January|February|March|April|May|June|July|August|September|October|November|December|"
+            + "IMAX|Technicolor|CinemaScope|Panavision|VistaVision|Kodak|Eastman|Fujifilm|ARRI|Arri|Alexa|Super|Ultra|Dolby|Sony|RED"
         let parts = [
-            #"(?i:\b(?:filmed|shot|filming|shooting|photographed|principal photography)\b)[^.]{0,90}(?i:\b(?:in|at|on|around|across|near|of)\s+)\p{Lu}"#,
+            #"(?i:\b(?:filmed|shot|filming|shooting|photographed|principal photography)\b)[^.]{0,90}"#
+                + #"(?i:\b(?:in|at|on|around|across|near)\s+(?:the\s+(?:[\w-]+\s+){1,2}of\s+|the\s+)?)"#
+                + "(?!(?:" + notPlaces + #")\b)\p{Lu}"#,
             #"(?i:\bon location\b)"#,
             #"(?i:\blocations?\b[^.]{0,60}\b(?:included|in|such as)\b)"#,
-            #"(?i:\b(?:studios?|soundstages?|sound stages?|backlot)\b)"#,
+            #"(?i:\b(?:sound ?stages?|soundstages?|backlots?)\b)"#,
+            #"(?i:\b(?:built|constructed|filmed|shot|interiors|sets?)\b)[^.]{0,80}(?i:\b(?:at|in)\s+(?:the\s+)?)"#
+                + #"\p{Lu}[\w'’-]*(?:\s+\p{Lu}[\w'’-]*){0,3}\s+Studios?\b"#,
         ]
         let regex = try? NSRegularExpression(pattern: parts.joined(separator: "|"))
         // Not what became of the places later (tourism, money, plans).

@@ -21,6 +21,7 @@ struct ExploreView: View {
     @State private var searchText = ""
     @State private var found: [TMDBMovieSummary]?
     @State private var searching = false
+    @State private var searchFailed = false
 
     private var lists: [DiscoverList] {
         (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .trending, .newAtHome] + model.exploreShelves
@@ -44,7 +45,7 @@ struct ExploreView: View {
                         ExploreSearchField(text: $searchText, searching: searching)
                             .padding(.top, 4)
                     }
-                    if searchText.isEmpty {
+                    if words.isEmpty {
                         MoodChips(choices: Self.moodChoices, selected: mood.map { .mood($0) } ?? .any, counted: false) { choice in
                             withAnimation(.easeOut(duration: 0.25)) {
                                 if case .mood(let chosen) = choice { mood = chosen } else { mood = nil }
@@ -52,7 +53,7 @@ struct ExploreView: View {
                         }
                     }
                 }
-                if !searchText.isEmpty {
+                if !words.isEmpty {
                     searchResults
                 } else {
                     ForEach(lists, id: \.self) { list in
@@ -70,7 +71,7 @@ struct ExploreView: View {
         .toolbar(removing: .title)
         .filmPreviewSheet($preview)
         .task { await model.lists.prepare() }
-        .task(id: searchText) { await search() }
+        .task(id: words) { await search() }
         .task(id: lists) {
             await withTaskGroup(of: Void.self) { group in
                 for list in lists {
@@ -82,6 +83,9 @@ struct ExploreView: View {
 }
 
 extension ExploreView {
+    /// What's being looked up (spaces alone look up nothing).
+    var words: String { searchText.trimmingCharacters(in: .whitespaces) }
+
     /// The films TMDB finds for the words, in its order (owned ones open their page).
     @ViewBuilder
     var searchResults: some View {
@@ -91,8 +95,12 @@ extension ExploreView {
                     DiscoverCard(film: PreviewFilm(movie)) { preview = $0 }
                 }
             }
+        } else if searchFailed, !searching {
+            Text("TMDB couldn't be reached. Check the connection and try again.")
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 120, alignment: .leading)
         } else if found != nil, !searching {
-            Text("No film found for “\(searchText)”.")
+            Text("No film found for “\(words)”.")
                 .foregroundStyle(.secondary)
                 .frame(minHeight: 120, alignment: .leading)
         }
@@ -100,20 +108,30 @@ extension ExploreView {
 
     /// After a short pause in typing.
     func search() async {
-        let words = searchText.trimmingCharacters(in: .whitespaces)
-        guard words.count >= 2 else {
+        let query = words
+        guard !query.isEmpty else {
             found = nil
+            searchFailed = false
             return
         }
         try? await Task.sleep(for: .milliseconds(350))
         guard !Task.isCancelled, let client = model.tmdb else { return }
         searching = true
         defer { searching = false }
-        let results = try? await client.searchMovies(query: words, year: nil)
+        let results: [TMDBMovieSummary]
+        do {
+            results = try await client.searchMovies(query: query, year: nil)
+        } catch {
+            guard !Task.isCancelled else { return }
+            found = nil
+            searchFailed = true
+            return
+        }
         guard !Task.isCancelled else { return }
+        searchFailed = false
         // Little-known entries (no poster, no votes) after the rest, each part in TMDB's order.
         func known(_ movie: TMDBMovieSummary) -> Bool { movie.posterPath != nil && (movie.voteCount ?? 0) > 0 }
-        found = (results ?? []).filter(known) + (results ?? []).filter { !known($0) }
+        found = results.filter(known) + results.filter { !known($0) }
     }
 }
 
@@ -417,10 +435,15 @@ struct DiscoverListPage: View {
 struct YearMenu: View {
     @Binding var year: Int
     @State private var open = false
+    /// The row the list opens at: the chosen year, in the middle.
+    @State private var shown: Int?
     private let years = Array((1920...Calendar.current.component(.year, from: Date())).reversed())
 
     var body: some View {
-        Button { open.toggle() } label: {
+        Button {
+            shown = year
+            open.toggle()
+        } label: {
             FilterPill(icon: "calendar", text: String(year), active: false)
         }
         .buttonStyle(.plain)
@@ -429,9 +452,8 @@ struct YearMenu: View {
     }
 
     private var list: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 2) {
+        ScrollView {
+                VStack(spacing: 2) {
                     ForEach(years, id: \.self) { option in
                         Button {
                             year = option
@@ -453,11 +475,11 @@ struct YearMenu: View {
                         .id(option)
                     }
                 }
+                .scrollTargetLayout()
                 .padding(6)
-            }
-            .frame(width: 130, height: 10 * 30 + 12)
-            .onAppear { proxy.scrollTo(year, anchor: .center) }
         }
+        .scrollPosition(id: $shown, anchor: .center)
+        .frame(width: 130, height: 10 * 30 + 12)
     }
 }
 

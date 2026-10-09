@@ -21,6 +21,8 @@ struct LibraryGridView: View {
     let shelf: Shelf
     /// The search field under the title; `query` follows it after a short pause.
     @Binding var searchText: String
+    /// Set by ⌘F (from anywhere on the desk): the field takes the focus.
+    @Binding var focusSearch: Bool
     let query: String
     @Binding var sort: LibrarySort
     @Binding var moods: Set<Mood>
@@ -115,7 +117,7 @@ struct LibraryGridView: View {
         .onDisappear { scroll.pointed = nil }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                // Cinema mode has its own; only the search field stays in the toolbar there.
+                // Cinema mode has its own.
                 if !model.cinemaMode { surpriseButton(shown) }
             }
         }
@@ -171,7 +173,7 @@ struct LibraryGridView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Spacer()
-                LibrarySearchField(text: $searchText)
+                LibrarySearchField(text: $searchText, focusRequested: $focusSearch)
             }
             HStack(spacing: 8) {
                 MoodFilterButton(selected: $moods, base: moodBase, available: model.moods)
@@ -531,12 +533,10 @@ struct RemovableChip: View {
     }
 }
 
-// MARK: - Banner
-
-/// Large backdrop banner for one film, like the top of the Apple TV app.
 /// Search the library: a slim field beside the title (titles, people, places, moods, years).
 struct LibrarySearchField: View {
     @Binding var text: String
+    @Binding var focusRequested: Bool
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -548,6 +548,7 @@ struct LibrarySearchField: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($focused)
+                .onExitCommand { focused = false }
             if !text.isEmpty {
                 Button {
                     text = ""
@@ -563,15 +564,21 @@ struct LibrarySearchField: View {
         .background(Capsule().fill(Color.white.opacity(focused ? 0.11 : 0.07)))
         .overlay(Capsule().strokeBorder(focused ? Theme.brand.opacity(0.6) : Theme.hairline))
         .animation(.easeOut(duration: 0.15), value: focused)
-        // ⌘F, as in any Mac app.
-        .background {
-            Button("") { focused = true }
-                .keyboardShortcut("f", modifiers: .command)
-                .hidden()
-        }
+        // ⌘F (RootView), also when it brought All Films up for it.
+        .onAppear(perform: takeFocus)
+        .onChange(of: focusRequested) { takeFocus() }
+    }
+
+    private func takeFocus() {
+        guard focusRequested else { return }
+        focusRequested = false
+        Task { @MainActor in focused = true }
     }
 }
 
+// MARK: - Banner
+
+/// Large backdrop banner for one film, like the top of the Apple TV app.
 struct FeaturedBanner: View {
     @Environment(AppModel.self) private var model
     let item: LibraryItem

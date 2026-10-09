@@ -139,10 +139,10 @@ final class TrailerEngine: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     function loadVideo(k){
       cancelled=false;
       if(!window.YT||!YT.Player||(player&&!ready)){queued=k;return}
-      if(player){player.loadVideoById({videoId:k,suggestedQuality:'hd1080'});return}
+      if(player){player.loadVideoById(k);return}
       player=new YT.Player('p',{host:'https://www.youtube-nocookie.com',videoId:k,
-        playerVars:{autoplay:0,rel:0,playsinline:1,iv_load_policy:3,fs:0,controls:0,disablekb:1,vq:'hd1080'},
-        events:{onReady:function(e){ready=true;if(queued){var q=queued;queued=null;loadVideo(q)}else if(!cancelled){e.target.setPlaybackQuality('hd1080');e.target.playVideo()}},
+        playerVars:{autoplay:0,rel:0,playsinline:1,iv_load_policy:3,fs:0,controls:0,disablekb:1},
+        events:{onReady:function(e){ready=true;if(queued){var q=queued;queued=null;loadVideo(q)}else if(!cancelled)e.target.playVideo()},
           onStateChange:function(e){if(cancelled)return;if(e.data==1)post('playing');if(e.data==0)post('ended')},
           onError:function(){if(!cancelled)post('error')}}});
     }

@@ -104,6 +104,10 @@ final class DigestTests: XCTestCase {
             "Principal photography began on 12 July 2016 in Budapest, Hungary. The crew was large. Interiors were built at Origo Studios.",
             "The protein farm scenes were filmed in the greenhouses of Almería. Critics later praised the look.",
             "The city announced it will invest $150 million in a film complex with new indoor studios.",
+        ]), FilmArticle.Section(id: 2, title: "Production · Development", paragraphs: [
+            "Filming began in January 2016 after long delays. The film was shot on IMAX cameras throughout.",
+            "Warner Bros. said the studio hired Hans Zimmer to write the score. It was released by Universal Studios worldwide.",
+            "Shooting of Dune began after the casting was done, with the crew ready.",
         ])]
         XCTAssertEqual(Digest.locationSentences(sections), [
             "Principal photography began on 12 July 2016 in Budapest, Hungary.",
