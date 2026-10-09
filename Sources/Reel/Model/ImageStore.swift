@@ -71,6 +71,8 @@ final class ImageStore: @unchecked Sendable {
         config.httpShouldSetCookies = false
         config.httpMaximumConnectionsPerHost = 6
         config.timeoutIntervalForRequest = 30
+        // A download that stalls without ending would hold one of the gate's places for good.
+        config.timeoutIntervalForResource = 60
         return URLSession(configuration: config)
     }()
 
@@ -87,12 +89,6 @@ final class ImageStore: @unchecked Sendable {
         case .poster, .thumbnail, .profile, .logo: small
         case .backdrop, .still: large
         }
-    }
-
-    /// For the CI screens' watchdog (diagnosis).
-    func debugState() async -> String {
-        let loads = lock.withLock { running.map { "\($0.key)\($0.value.ahead ? " (ahead)" : "")" } }
-        return "gate: \(await gate.state()); loading: \(loads.count) \(loads.prefix(8).joined(separator: ", "))"
     }
 
     func configure(folder: URL) {
@@ -297,12 +293,6 @@ actor DownloadGate {
             return
         }
         await withCheckedContinuation { waiting.append((key, background, $0)) }
-    }
-
-    /// For the CI screens' watchdog (diagnosis).
-    func state() -> String {
-        "\(active) in use, \(waiting.count) waiting (\(waiting.filter(\.background).count) reading ahead, "
-            + "\(waiting.filter { !$0.background && wanted($0.key) }.count) wanted)"
     }
 
     /// Hands the place to the next one waiting, or frees it: images views on screen are waiting
