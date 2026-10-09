@@ -39,9 +39,13 @@ enum ScreenRenderer {
         Thread.detachNewThread {
             while true {
                 Thread.sleep(forTimeInterval: 20)
-                let answered = DispatchSemaphore(value: 0)
-                DispatchQueue.main.async { answered.signal() }
-                log(answered.wait(timeout: .now() + 5) == .success ? "…still working" : "…the main thread is stuck")
+                let main = DispatchSemaphore(value: 0)
+                DispatchQueue.main.async { main.signal() }
+                let pool = DispatchSemaphore(value: 0)
+                Task.detached { pool.signal() }
+                let mainAnswers = main.wait(timeout: .now() + 5) == .success
+                let poolAnswers = pool.wait(timeout: .now() + 5) == .success
+                log("…still working (main thread \(mainAnswers ? "free" : "stuck"), task pool \(poolAnswers ? "free" : "stuck"))")
             }
         }
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -153,6 +157,7 @@ enum ScreenRenderer {
         // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
         // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
+        log("Explore: loading")
         await model.loadDiscover(.mood(.dark))
         log("Explore: mood loaded")
         for shelf in model.exploreShelves {
