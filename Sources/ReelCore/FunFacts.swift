@@ -190,7 +190,8 @@ public enum FunFactExtractor {
     static let logistics = ["screened", "screening", "scheduled", "festival", "premiere", "released", "distribut", "rights to",
                             "acquired the rights", "box office", "grossed", "opening weekend", "filmgoers", "admissions",
                             "home media", "blu-ray", "dvd", "streaming", "cancelled", "postponed", "trailer", "teaser",
-                            "poster", "rated r", "rating of", "theaters", "theatres", "ticket"]
+                            "poster", "rated r", "rating of", "theaters", "theatres", "ticket", "revenue", "showings",
+                            "earned", "million in"]
 
     static let weakStarts = ["he ", "she ", "they ", "it ", "this ", "these ", "his ", "her ", "their ", "its ", "however", "also", "in addition", "for example", "for instance", "in particular"]
 

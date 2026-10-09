@@ -204,18 +204,23 @@ struct BehindTheFilmTab: View {
     }
 
     /// The five things most worth knowing, the most surprising first (see
-    /// `FunFactExtractor.score`): each making sense on its own, at most two of a kind, none
-    /// from the introduction (the film page already says it).
+    /// `FunFactExtractor.score`): the making of the film before its takings and prizes (one of
+    /// those at most), each making sense on its own, at most two of a kind, none from the
+    /// introduction (the film page already says it).
     static func didYouKnow(_ facts: FunFacts?) -> [FunFact] {
         guard let facts else { return [] }
-        let ranked = facts.facts.enumerated()
-            .filter { $0.element.category != "At a glance" && FunFactExtractor.standsAlone($0.element.text) && $0.element.text.count <= 260 }
-            .sorted { (FunFactExtractor.score($0.element.text), -$0.offset) > (FunFactExtractor.score($1.element.text), -$1.offset) }
-            .map(\.element)
+        let business: Set<String> = ["Release", "Awards"]
+        let worths: [(FunFact, Double)] = facts.facts.filter { fact in
+            fact.category != "At a glance" && FunFactExtractor.standsAlone(fact.text) && fact.text.count <= 260
+        }.map { fact in
+            (fact, FunFactExtractor.score(fact.text) + (business.contains(fact.category) ? -2.5 : 0))
+        }
+        // Stable: equal worth keeps the article's order.
+        let ranked = worths.enumerated().sorted { ($0.element.1, -$0.offset) > ($1.element.1, -$1.offset) }.map(\.element)
         var chosen: [FunFact] = []
-        for fact in ranked where chosen.count < 5 {
+        for (fact, worth) in ranked where chosen.count < 5 && worth > 0 {
             guard chosen.filter({ $0.category == fact.category }).count < 2,
-                  FunFactExtractor.score(fact.text) > 0 else { continue }
+                  !business.contains(fact.category) || !chosen.contains(where: { business.contains($0.category) }) else { continue }
             chosen.append(fact)
         }
         return chosen
