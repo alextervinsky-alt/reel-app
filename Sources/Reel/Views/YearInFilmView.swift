@@ -578,8 +578,18 @@ private struct CountriesFigure: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
         }
-        // About ten countries tall, then it scrolls.
-        .frame(width: 320, height: min(520, CGFloat(countries.count) * 58 + 12))
+        .frame(width: 320, height: height)
+    }
+
+    /// As tall as the list (each country's titles take one to three lines of about 46
+    /// characters), at most 520 points, then it scrolls.
+    private var height: CGFloat {
+        let rows = countries.reduce(CGFloat(12)) { total, country in
+            let characters = country.films.map(\.title).joined(separator: "  ·  ").count
+            let lines = min(3, max(1, (characters + 45) / 46))
+            return total + 42 + CGFloat(lines) * 15
+        }
+        return min(520, rows)
     }
 }
 #endif

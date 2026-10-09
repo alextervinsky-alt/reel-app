@@ -33,12 +33,10 @@ struct CinematographyTab: View {
         let bold = specs.specs.filter { !$0.isFixedName }.map(\.name)
         let sheet = SpecSheet(specs: specs, quick: film.funFacts?.quick)
         let loading = model.cameraReadingsLoading.contains(id) || model.articlesLoading.contains(id)
-        // A particular scene can tell of the story: kept out while spoiler-safe.
-        let safe: ([TechSpecs.Note]) -> [TechSpecs.Note] = { notes in hiding ? notes.filter { !Spoilers.mentionsPlot($0.text) } : notes }
 
         VStack(alignment: .leading, spacing: 34) {
             if !lead.isEmpty {
-                shotBy(lead, about: reading?.cinematographer, with: safe(specs.collaboration),
+                shotBy(lead, about: reading?.cinematographer, with: specs.collaboration,
                        honours: film.funFacts?.quick?.cinematographyHonours ?? [])
             }
             // The pictures first: what the words below are about. Hidden once checked and none
@@ -75,18 +73,18 @@ struct CinematographyTab: View {
                 }
             }
             passage("The Visual Idea", note: "What the images were meant to do, and the choices made for it.",
-                    notes: safe(specs.intent), bold: bold)
+                    notes: specs.intent, bold: bold)
             passage("In Their Own Words", note: "The filmmakers on how they shot it.",
-                    notes: safe(specs.approach), bold: bold, quoted: true)
-            passage("References and Influences", note: "What the look drew on.", notes: safe(specs.references), bold: bold)
+                    notes: specs.approach, bold: bold, quoted: true)
+            passage("References and Influences", note: "What the look drew on.", notes: specs.references, bold: bold)
             passage("Frame and Movement", note: "Composition, lenses and how the camera moves.",
-                    notes: safe(specs.cameraLanguage), bold: bold)
-            passage("Light", note: "Sources, shadows and contrast.", notes: safe(specs.lighting), bold: bold)
-            passage("Colour and Texture", note: "Palette, grade, stock and grain.", notes: safe(specs.colour), bold: bold)
-            passage("Scene by Scene", note: "How particular scenes and shots were done.", notes: safe(specs.scenes), bold: bold)
+                    notes: specs.cameraLanguage, bold: bold)
+            passage("Light", note: "Sources, shadows and contrast.", notes: specs.lighting, bold: bold)
+            passage("Colour and Texture", note: "Palette, grade, stock and grain.", notes: specs.colour, bold: bold)
+            passage("Scene by Scene", note: "How particular scenes and shots were done.", notes: specs.scenes, bold: bold)
             passage("Challenges and Innovations", note: "What was hard, tested, built or done for the first time.",
-                    notes: safe(specs.challenges), bold: bold)
-            passage(specs.saysNothing ? "In the Article" : "More on the Gear", note: nil, notes: safe(specs.sentences), bold: bold)
+                    notes: specs.challenges, bold: bold)
+            passage(specs.saysNothing ? "In the Article" : "More on the Gear", note: nil, notes: specs.sentences, bold: bold)
             let others = model.filmsShot(by: lead, besides: film)
             if !others.isEmpty {
                 PosterRow(title: lead.count == 1 ? "Also Shot by \(lead[0])" : "Also Shot by Them", items: others)
@@ -461,9 +459,34 @@ private final class ReadSpecs {
                 texts.insert(TechSpecs.Text(source: nil, sections: sections, isInterview: false), at: min(texts.count, reading?.sources.count ?? 0))
             }
             specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors)
+            if hiding { specs = Self.withoutStory(specs) }
         }
         return specs
     }
+
+    /// While spoiler-safe: nothing that tells of the story, or of how it ends ("the closing
+    /// sequence was lit…").
+    private static func withoutStory(_ read: TechSpecs) -> TechSpecs {
+        func keep(_ notes: [TechSpecs.Note]) -> [TechSpecs.Note] {
+            notes.filter { note in
+                !Spoilers.mentionsPlot(note.text) && note.text.range(of: ending, options: [.regularExpression, .caseInsensitive]) == nil
+            }
+        }
+        var specs = read
+        specs.sentences = keep(specs.sentences)
+        specs.approach = keep(specs.approach)
+        specs.intent = keep(specs.intent)
+        specs.references = keep(specs.references)
+        specs.lighting = keep(specs.lighting)
+        specs.cameraLanguage = keep(specs.cameraLanguage)
+        specs.colour = keep(specs.colour)
+        specs.scenes = keep(specs.scenes)
+        specs.challenges = keep(specs.challenges)
+        specs.collaboration = keep(specs.collaboration)
+        return specs
+    }
+
+    private static let ending = #"\b(?:final|closing|last|ending)\s+(?:\w+\s+)?(?:scenes?|shots?|sequences?|images?|moments?|frames?)\b"#
 }
 
 /// The film's camera, lighting and colour people from TMDB, grouped by what they did.

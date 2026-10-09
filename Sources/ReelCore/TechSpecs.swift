@@ -3,12 +3,14 @@ import Foundation
 /// How a film was shot, from what's written about it: the film's Wikipedia article, the
 /// interviews and craft articles it cites (American Cinematographer, British Cinematographer…)
 /// and the cinematographer's own article. It picks out the cameras, lenses, lights, grip, filters,
-/// film stock, format and finish they name, and sorts what they say into the reasons behind the
-/// look, the cinematographer's own words, the camera language, the lighting and the colour —
-/// each with where it was read. Only names of real gear are picked out (an "Alexa" is a camera
-/// when it's an ARRI Alexa, not an actor), formats only where the sentence is about the shooting,
-/// not the release ("released in IMAX" is not "shot in IMAX"), and never from what critics or
-/// awards said, or from sections about the music, release or reception.
+/// film stock, format and finish they name, and sorts what they say the way a cinematography
+/// piece tells it: the filmmakers' own words, the visual idea, what it drew on, the frame, the
+/// light, the colour, particular scenes, what was hard or new, and the cinematographer's history
+/// with the director — each with where it was read, the most telling first. Only names of real
+/// gear are picked out (an "Alexa" is a camera when it's an ARRI Alexa, not an actor), formats
+/// only where the sentence is about the shooting, not the release ("released in IMAX" is not
+/// "shot in IMAX"), and never from what critics or awards said, or from sections about the
+/// music, release or reception. A sentence that only says who shot it says nothing.
 public struct TechSpecs: Equatable, Sendable {
     public enum Kind: String, CaseIterable, Sendable {
         case camera, lens, format, light, support, filter, finish
@@ -55,7 +57,7 @@ public struct TechSpecs: Equatable, Sendable {
 
     public let specs: [Spec]
     /// Sentences naming gear that aren't in the parts below (at most six).
-    public let sentences: [Note]
+    public var sentences: [Note]
     /// The filmmakers' own words: interviews, and the cinematographer quoted in the article.
     public var approach: [Note] = []
     /// The visual idea: what the images were meant to do, and the choices made for it.
@@ -97,8 +99,9 @@ public struct TechSpecs: Equatable, Sendable {
         read(texts: [Text(source: nil, sections: sections, isInterview: false)], cinematographers: cinematographers, directors: directors)
     }
 
-    /// Reads everything written about the film, in the order given; `cinematographers` are the
-    /// film's directors of photography (their sentences are the approach).
+    /// Reads everything written about the film, in the order given. `cinematographers` are the
+    /// film's directors of photography (what they say in interviews is their own words), and
+    /// `directors` the film's directors (for how they came to work together).
     public static func read(texts: [Text], cinematographers: [String], directors: [String] = []) -> TechSpecs {
         var found: [Spec] = []
         var gear: [Note] = []
@@ -124,6 +127,8 @@ public struct TechSpecs: Equatable, Sendable {
         }
         let names = spellings(cinematographers)
         let directorNames = spellings(directors)
+        // A cinematographer who directed it too has no director to come together with.
+        let withDirector = !directors.isEmpty && Set(directors).isDisjoint(with: cinematographers)
         for text in texts {
             for section in text.sections {
                 let heading = section.title.lowercased()
@@ -188,10 +193,15 @@ public struct TechSpecs: Equatable, Sendable {
                         // Where it belongs, in the order a cinematography piece tells it: the
                         // filmmakers' own words, what it drew on, a particular scene, what was hard
                         // or new, the visual idea, then the light, the colour and the frame, gear
-                        // alone, and how the cinematographer and the director came together. A
-                        // sentence that only says who shot it (no craft, no reason) says nothing.
+                        // alone. How the cinematographer and the director came together goes before
+                        // the craft (it often names a film they shot). A sentence that only says who
+                        // shot it (no craft, no reason) says nothing.
                         if fits, theirs, text.isInterview || quoted(sentence) {
                             add(note, to: &approach)
+                        } else if fits, withDirector, !text.isInterview, !named, !matches(detail, sentence),
+                                  mentions(names, in: sentence, generic: false), mentions(directorNames, in: sentence, generic: false),
+                                  matches(collabTerms, sentence) {
+                            add(note, to: &collaboration)
                         } else if fits, aboutLook, matches(referenceTerms, sentence) {
                             add(note, to: &references)
                         } else if fits, craft, matches(sceneTerms, sentence) {
@@ -208,9 +218,6 @@ public struct TechSpecs: Equatable, Sendable {
                             add(note, to: &cameraLanguage)
                         } else if named, !text.isInterview || fits {
                             add(note, to: &gear)
-                        } else if fits, !text.isInterview, !directorNames.isEmpty, mentions(names, in: sentence, generic: false),
-                                  mentions(directorNames, in: sentence, generic: false), matches(collabTerms, sentence) {
-                            add(note, to: &collaboration)
                         } else {
                             placed = false
                         }
@@ -324,8 +331,9 @@ public struct TechSpecs: Equatable, Sendable {
     /// About the picture itself: the look words, leaving out the job's name ("the film's
     /// cinematographer was…" alone says nothing about the image).
     static func aboutTheImage(_ sentence: String) -> Bool {
-        let rest = sentence.replacingOccurrences(of: #"(?i)\bcinematograph\w*|\bdirector of photography\b"#, with: "",
-                                                 options: .regularExpression)
+        let rest = sentence.replacingOccurrences(
+            of: #"(?i)\bcinematograph\w*|\bdirector of photography\b|\b(?:was|were|been|be|is|are|had|has|have|previously|also|who|and)\s+shot\b|\bshot\s+(?:by|on|in|for|with)\b"#,
+            with: "", options: .regularExpression)
         return matches(lookWords, rest)
     }
 
@@ -361,24 +369,24 @@ public struct TechSpecs: Equatable, Sendable {
     static let visualHeadings = ["cinematograph", "visual", "look", "lighting", "camera", "style"]
 
     static let reception = try! NSRegularExpression(
-        pattern: #"\b(?:praised|praising|nominated|nominations?|won|wins|awards?|acclaim\w*|critics?|critical|reviewers?|reviews?|box office|grossed|ranked|Oscars?|BAFTAs?|Academy Awards?|premiere[sd]?|debut\w*|screened|re-screened|screenings?|limited release|festivals?|distribut\w*|audiences?|international community)\b"#,
+        pattern: #"\b(?:praised|praising|praise|nominated|nominations?|won|wins|awards?|acclaim\w*|critics?|critical|reviewers?|reviews?|box office|grossed|ranked|Oscars?|BAFTAs?|Academy Awards?|premiere[sd]?|debut\w*|screened|re-screened|screenings?|limited release|festivals?|distribut\w*|audiences?|international community)\b"#,
         options: [.caseInsensitive])
     /// What the images were meant to do ("to feel claustrophobic", "a naturalistic look").
     static let intentTerms = try! NSRegularExpression(
-        pattern: #"\b(?:visual (?:style|language|approach|concept|idea|grammar|scheme|strategy|motifs?)|aesthetic\w*|the look (?:of|was|is|they|he|she)|look and feel|tone|mood|atmosphere|to feel|to look|feel (?:like|more|less|as)|to make (?:the|it|them|audiences?|viewers?|us|everything)|to convey|to reflect|to evoke|to emphasi[sz]e|to underline|to capture|to suggest|to isolate|to separate|to contrast|to mirror|to express|realis\w*|naturalis\w*|claustrophob\w*|intima\w*|subjectiv\w*|documentary|dreamlike|dream-like|painterly|immersive|voyeur\w*|point of view|restrain\w*|minimalis\w*|stylis\w*|stylized|stylised)\b"#,
+        pattern: #"\b(?:visual (?:style|language|approach|concept|idea|grammar|scheme|strategy|motifs?)|aesthetic\w*|the look (?:of|was|is|they|he|she)|look and feel|atmosphere|to feel|feel (?:like|more|less|as)|to make (?:the|it|them|audiences?|viewers?|us|everything)|to convey|to reflect|to evoke|to emphasi[sz]e|to underline|to suggest|to mirror|to express|realis(?:m|t|tic|tically)|naturalis(?:m|t|tic|tically)|claustrophob\w*|intima(?:te|cy)|subjectiv\w*|documentary(?:[- ]like| style| feel| look| aesthetic| approach)|dreamlike|dream-like|painterly|immersive|voyeur\w*|restrain(?:ed|t)|minimalis(?:m|t)|styli[sz](?:ed|ation))\b"#,
         options: [.caseInsensitive])
     /// What the look drew on.
     static let referenceTerms = try! NSRegularExpression(
-        pattern: #"\b(?:inspired by|inspiration|influenced by|influences?|referenc\w*|homage|nod to|modell?ed (?:on|after)|in the style of|reminiscent of|paintings?|painters?|photographs? by|photographers?|photography of|comic books?|graphic novels?|artworks?)\b"#,
+        pattern: #"\b(?:inspired by|inspiration|influenced by|influences?|referenc\w*|homage|nod to|modell?ed (?:on|after)|in the style of|reminiscent of|paintings?|painters?|photographs? by|photographers? (?:such as|like|(?-i:\p{Lu}))|comic books?|graphic novels?|artworks?)\b"#,
         options: [.caseInsensitive])
     /// One particular scene or shot ("the heist sequence", "one scene was lit…"), not scenes in
     /// general, and not "the night scenes were shot…" (shot the verb).
     static let sceneTerms = try! NSRegularExpression(
-        pattern: #"\b(?:the|a|one|its|this|that)\s+(?:(?!(?:were|was|is|are|been|be|being|had|has|have|scenes|sequences|shots)\b)[\w'’-]+\s+){0,3}(?:scene|sequence|shot|set piece|set-piece|montage)\b(?!s)|\b(?:opening|final|closing|last|first) (?:shot|scene|sequence|image)\b"#,
+        pattern: #"\b(?:the|a|one|its|this|that)\s+(?:(?!(?:were|was|is|are|been|be|being|had|has|have|scenes|sequences|shots)\b)[\w'’-]+\s+){0,3}(?:scene|sequence|set piece|set-piece|montage)\b(?!s)|\b(?:opening|final|closing|last|first|tracking|single|long|wide|aerial|overhead|establishing|crane|Steadicam|dolly) (?:shot|scene|sequence|image)\b(?!s)"#,
         options: [.caseInsensitive])
     /// What was hard, tested, built or done for the first time.
     static let challengeTerms = try! NSRegularExpression(
-        pattern: #"\b(?:challeng\w*|difficult\w*|problems?|obstacles?|had to|forced to|for the first time|first (?:time|film|feature|production|movie) (?:to|that|in|ever)|pioneer\w*|invent\w*|custom[- ](?:built|made|designed)|specially (?:built|made|designed|adapted)|purpose-built|built (?:a|an|their own|its own|his own|her own)|developed (?:a|an|new|special)|modified|innovat\w*|unprecedented|ground-?breaking|breakthrough|experiment\w*|(?:camera|lens|film|screen|light(?:ing)?) tests?|tested|testing)\b"#,
+        pattern: #"\b(?:challeng\w*|difficult(?:y|ies)?|problems?|obstacles?|(?:had|have|has) to (?:build|devise|invent|rig|modify|adapt|find a way|work around|overcome|solve|figure out)|forced to|for the first time|first (?:time|film|feature|production|movie) (?:to|that|in|ever)|pioneer(?:ed|ing)|invent(?:ed|ion|ing)|custom[- ](?:built|made|designed)|specially (?:built|made|designed|adapted)|purpose-built|built (?:a|an|their own|its own|his own|her own)|developed (?:a|an|new|special)|innovat(?:ed|ion|ions|ing)|unprecedented|ground-?breaking|breakthrough|experiment(?:ed|s|ing|ation)|(?:camera|lens|film|screen|light(?:ing)?) tests?|tested|testing)\b"#,
         options: [.caseInsensitive])
     /// How the cinematographer and the director came to work together.
     static let collabTerms = try! NSRegularExpression(
@@ -410,7 +418,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// A sentence that carries on from the one before ("It gave us…", "That meant…").
     static let continuation = try! NSRegularExpression(pattern: #"^(?:It|That|This|These|Those|So|Which|And|But|Then|The result|The effect|The idea)\b"#)
     static let cameraTerms = try! NSRegularExpression(
-        pattern: #"\b(?:handheld|hand-held|Steadicam|long takes?|single takes?|one take|oners?|one-shot|continuous (?:shots?|takes?)|tracking shots?|dolly|dollies|crane shots?|drones?|static (?:shots?|camera)|locked-off|wide shots?|wide-angle|close-ups?|point-of-view|POV|shot compositions?|symmetr\w*|depth of field|shallow focus|deep focus|split diopter|split-screen|zoom(?:s|ed|ing)? (?:in|out|lens\w*|shots?)|crash zooms?|whip pans?|panning|slow[- ]motion|camera movements?|camera moves?|the camera (?:moves?|follows?|stays?|tracks?|pushes|pulls|glides|lingers|never|always|rarely|is)|camerawork|camera work|visual style|visual language|visual approach|lensing|focal lengths?|storyboard\w*|shot lists?|traditional coverage|blocking|aspect ratio|anamorphic|negative space|low[- ]angle|high[- ]angle|Dutch angle|overhead shots?|aerial shots?|360-degree|Snorricam|underwater (?:camera|photography))\b"#,
+        pattern: #"\b(?:handheld|hand-held|Steadicam|long takes?|single takes?|one take|oners?|one-shot|continuous (?:shots?|takes?)|tracking shots?|dolly|dollies|crane shots?|drones?|static (?:shots?|camera)|locked-off|wide shots?|wide-angle|close-ups?|point[- ]of[- ]view|POV|shot compositions?|symmetr\w*|depth of field|shallow focus|deep focus|split diopter|split-screen|zoom(?:s|ed|ing)? (?:in|out|lens\w*|shots?)|crash zooms?|whip pans?|panning|slow[- ]motion|camera movements?|camera moves?|the camera (?:moves?|follows?|stays?|tracks?|pushes|pulls|glides|lingers|never|always|rarely|is)|camerawork|camera work|visual style|visual language|visual approach|lensing|focal lengths?|storyboard\w*|shot lists?|traditional coverage|blocking|aspect ratio|anamorphic|negative space|low[- ]angle|high[- ]angle|Dutch angle|overhead shots?|aerial shots?|360-degree|Snorricam|underwater (?:camera|photography))\b"#,
         options: [.caseInsensitive])
 
     /// Each name once (the first spelling), and a name left out when a longer one of the same

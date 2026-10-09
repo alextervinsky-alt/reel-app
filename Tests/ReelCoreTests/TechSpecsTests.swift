@@ -195,4 +195,20 @@ final class TechSpecsTests: XCTestCase {
             Honour(name: "Academy Award for Best Cinematography", won: false),
         ])
     }
+
+    func testWhoShotItAndHowTheyMet() {
+        let sections = [FilmArticle.Section(id: 1, title: "Production · Cinematography", paragraphs: [
+            "The film was shot by cinematographer Roger Deakins.",
+            "Principal photography of the film began in March 2019 in Budapest, where it was shot over 60 days.",
+            "Deakins, who had previously shot Prisoners and Sicario for Villeneuve, returned as cinematographer.",
+        ])]
+        let specs = TechSpecs.read(sections: sections, cinematographers: ["Roger Deakins"], directors: ["Denis Villeneuve"])
+        XCTAssertEqual(specs.collaboration.map(\.text), ["Deakins, who had previously shot Prisoners and Sicario for Villeneuve, returned as cinematographer."])
+        XCTAssertTrue(specs.references.isEmpty, "principal photography is not a reference: \(specs.references)")
+        let shown = specs.intent + specs.cameraLanguage + specs.lighting + specs.sentences + specs.scenes
+        XCTAssertFalse(shown.contains { $0.text == "The film was shot by cinematographer Roger Deakins." }, "who shot it says nothing on its own")
+        // Who directed it shot it too: no "with the director".
+        let roma = TechSpecs.read(sections: sections, cinematographers: ["Alfonso Cuarón"], directors: ["Alfonso Cuarón"])
+        XCTAssertTrue(roma.collaboration.isEmpty)
+    }
 }

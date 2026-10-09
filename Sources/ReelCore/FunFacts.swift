@@ -416,20 +416,27 @@ public struct WikipediaClient: Sendable {
         // The rest of the awards and the nominations (up to 100 more names), for the ones given
         // for the cinematography.
         let nominations = entity.items("P1411")
+        // Best-effort: when it fails the rest stands, and the honours are asked for again next time.
         let more = Array((awards + nominations).filter { labels[$0] == nil && seen.insert($0).inserted }.prefix(100))
+        var allNamed = true
         for start in stride(from: 0, to: more.count, by: 50) {
             let batch = more[start..<min(start + 50, more.count)]
-            let result: Entities = try await get("https://www.wikidata.org/w/api.php", [
+            guard let result: Entities = try? await get("https://www.wikidata.org/w/api.php", [
                 "action": "wbgetentities", "ids": batch.joined(separator: "|"), "props": "labels", "languages": "en", "format": "json",
-            ])
+            ]) else {
+                allNamed = false
+                continue
+            }
             for (id, item) in result.entities ?? [:] {
                 if let label = item.labels?["en"]?.value { labels[id] = label }
             }
         }
 
         var quick = QuickFacts()
-        quick.cinematographyHonours = Self.cinematographyHonours(won: awards.compactMap { labels[$0] },
-                                                                 nominated: nominations.compactMap { labels[$0] })
+        if allNamed {
+            quick.cinematographyHonours = Self.cinematographyHonours(won: awards.compactMap { labels[$0] },
+                                                                     nominated: nominations.compactMap { labels[$0] })
+        }
         quick.basedOn = basedOn.compactMap { labels[$0] }
         quick.filmedIn = filmedIn.compactMap { labels[$0] }
         quick.filmingPlaces = filmedIn.compactMap { id in labels[id].map { FilmingPlace(name: $0, about: descriptions[id]) } }
@@ -448,7 +455,9 @@ public struct WikipediaClient: Sendable {
     static func cinematographyHonours(won: [String], nominated: [String]) -> [Honour] {
         func forTheCamera(_ name: String) -> Bool {
             let lowered = name.lowercased()
+            // Not "Virtual Cinematography" (the effects team's).
             return ["cinematograph", "photography", "camerimage", "golden frog"].contains { lowered.contains($0) }
+                && !lowered.contains("virtual")
         }
         var seen = Set<String>()
         let wins = won.filter(forTheCamera).filter { seen.insert($0).inserted }.map { Honour(name: $0, won: true) }

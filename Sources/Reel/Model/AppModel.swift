@@ -206,7 +206,7 @@ final class AppModel {
     /// From the Same People and More Like This per film page (see `relatedFilms`), until the library changes.
     @ObservationIgnored var relatedCache: [String: (stamp: String, films: RelatedFilms)] = [:]
     /// The other films in the library each cinematographer shot (see `filmsShot`), per library version.
-    @ObservationIgnored var shotByCache: [String: (version: Int, items: [LibraryItem])] = [:]
+    @ObservationIgnored var shotByCache: [String: [LibraryItem]] = [:]
     /// Cinema mode's home rows, kept until something they show changes.
     @ObservationIgnored var cinemaRowsCache: (stamp: CinemaRowsStamp, rows: [CinemaRow])?
     /// Goes up each time the library's films are built again (a cache key).
@@ -571,6 +571,7 @@ final class AppModel {
         // Films' info may have changed: fits to your ratings are worked out again.
         tasteMatches = [:]
         relatedCache = [:]
+        shotByCache = [:]
         libraryVersion += 1
         keywordCounts = Likeness.keywordCounts(items.map { $0.likeness })
         var languageCounts: [String: Int] = [:]

@@ -393,8 +393,8 @@ extension AppModel {
         guard let details = film.tmdb, !funFactsLoading.contains(details.id) else { return }
         if let existing = film.funFacts {
             let maxAge: TimeInterval = existing.isEmpty ? 7 * 86_400 : FilmEntry.infoMaxAge
-            // Facts from before Reel 1.7 lack the aspect ratio and colour the Cinematography tab shows,
-            // before 1.8.1 what the filming places are (fetched again when the tab opens),
+            // Facts from before Reel 1.7 lack the aspect ratio and colour the Cinematography tab
+            // shows, and before 1.8.1 what the filming places are (fetched again when the tab opens).
             let lacksCamera = existing.quick != nil && existing.quick?.aspectRatios == nil
             let lacksPlaces = existing.quick?.filmedIn.isEmpty == false && existing.quick?.filmingPlaces == nil
             // And before 1.8.2 the awards for the cinematography.
@@ -403,9 +403,11 @@ extension AppModel {
         }
         funFactsLoading.insert(details.id)
         defer { funFactsLoading.remove(details.id) }
-        guard let facts = try? await WikipediaClient().findings(imdbID: details.imdbID, title: details.title, year: details.year).funFacts else {
+        guard var facts = try? await WikipediaClient().findings(imdbID: details.imdbID, title: details.title, year: details.year).funFacts else {
             return
         }
+        // Wikidata's part failing this time doesn't lose what it gave before.
+        if facts.quick == nil { facts.quick = film.funFacts?.quick }
         mutateFilms { list in
             for i in list.indices where list[i].tmdb?.id == details.id { list[i].funFacts = facts }
         }

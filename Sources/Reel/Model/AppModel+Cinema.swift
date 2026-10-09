@@ -193,17 +193,17 @@ extension AppModel {
     }
 
     /// The other films in the library shot by them, in the order they were made (the Cinematography
-    /// tab); worked out once per library version.
+    /// tab); worked out once until the library changes.
     func filmsShot(by cinematographers: [String], besides film: FilmEntry) -> [LibraryItem] {
         // Read here, so the page redraws when the library changes.
         guard !items.isEmpty else { return [] }
         let key = cinematographers.joined(separator: "|") + "|" + film.personalKey
-        if let cached = shotByCache[key], cached.version == libraryVersion { return cached.items }
+        if let cached = shotByCache[key] { return cached }
         let wanted = Set(cinematographers)
         let found = items
             .filter { $0.id != film.personalKey && !wanted.isDisjoint(with: $0.main.tmdb?.cinematographers ?? []) }
             .sorted { ($0.main.displayYear ?? 0) < ($1.main.displayYear ?? 0) }
-        shotByCache[key] = (libraryVersion, found)
+        shotByCache[key] = found
         return found
     }
 
