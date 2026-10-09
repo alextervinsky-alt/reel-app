@@ -35,6 +35,15 @@ enum ScreenRenderer {
     static func run(_ model: AppModel) async {
         guard let output = outputFolder else { return }
         log("started")
+        // Every 20 seconds, from off the main thread: says whether the main thread still answers.
+        Thread.detachNewThread {
+            while true {
+                Thread.sleep(forTimeInterval: 20)
+                let answered = DispatchSemaphore(value: 0)
+                DispatchQueue.main.async { answered.signal() }
+                log(answered.wait(timeout: .now() + 5) == .success ? "…still working" : "…the main thread is stuck")
+            }
+        }
         NSApp.appearance = NSAppearance(named: .darkAqua)
         guard let token = ProcessInfo.processInfo.environment["TMDB_TOKEN"], !token.isEmpty else {
             log("TMDB_TOKEN is not set, nothing rendered.")
@@ -128,6 +137,7 @@ enum ScreenRenderer {
                 .frame(width: 1300)
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("for-you.png"))
+        log("For You drawn")
         // All Films' banner and a Recommended card, each with the whole synopsis.
         if let item = model.featured ?? model.items.first {
             render(VStack(alignment: .leading, spacing: 30) {
@@ -139,6 +149,7 @@ enum ScreenRenderer {
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("banner-and-card.png"))
         }
+        log("banner drawn")
         // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
         // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
@@ -216,13 +227,15 @@ enum ScreenRenderer {
     /// Progress as a GitHub notice, written at once (the CI step stops Reel if it hangs), and
     /// into progress.txt beside the screens (GitHub shows only a step's first ten notices; the
     /// file is published with the screens even when the step is stopped).
-    private static let started = ContinuousClock.now
+    private nonisolated static let started = ContinuousClock.now
 
-    private static func log(_ message: String) {
+    /// Callable from any thread: the watchdog writes while the main thread may be stuck.
+    private nonisolated static func log(_ message: String) {
         let seconds = (ContinuousClock.now - started).components.seconds
         let line = "Screens: \(message) (\(seconds) s)\n"
         FileHandle.standardOutput.write(Data(("::notice::" + line).utf8))
-        guard let file = outputFolder?.appendingPathComponent("progress.txt") else { return }
+        guard let folder = ProcessInfo.processInfo.environment["REEL_RENDER_SCREENS"] else { return }
+        let file = URL(fileURLWithPath: folder, isDirectory: true).appendingPathComponent("progress.txt")
         if let handle = try? FileHandle(forWritingTo: file) {
             handle.seekToEndOfFile()
             handle.write(Data(line.utf8))
