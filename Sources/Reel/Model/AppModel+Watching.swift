@@ -312,7 +312,7 @@ extension AppModel {
     }
 
     /// The interviews and craft articles about how the film was shot, and the cinematographer's
-    /// own article, for the Camera tab: once per session. Nothing found at all (offline) is tried
+    /// own article, for the Cinematography tab: once per session. Nothing found at all (offline) is tried
     /// again next time the tab opens.
     func loadCameraReading(for film: FilmEntry) async {
         guard let details = film.tmdb, cameraReadings[details.id] == nil, !cameraReadingsLoading.contains(details.id) else { return }
@@ -349,7 +349,7 @@ extension AppModel {
     }
 
     /// Where a film's full technical specifications and its cinematographer's interviews are
-    /// (the Camera tab): IMDb's, interviews, ShotOnWhat's and American Cinematographer's articles.
+    /// (the Cinematography tab): IMDb's, interviews, ShotOnWhat's and American Cinematographer's articles.
     func cameraLinks(for film: FilmEntry) -> [(title: String, url: URL)] {
         let words = [film.displayTitle, film.displayYear.map(String.init) ?? ""].joined(separator: " ")
         func search(_ site: String) -> URL? {

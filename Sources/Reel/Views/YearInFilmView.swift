@@ -155,18 +155,11 @@ private struct YearSummary: View {
                 Theme.sectionTitle("In Numbers")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 0, alignment: .topLeading)], alignment: .leading, spacing: 0) {
                     ForEach(figures, id: \.label) { figure in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(figure.value)
-                                .font(.system(size: 19, weight: .semibold, design: .rounded))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                            Text(figure.label)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                        if figure.label == Self.countriesLabel {
+                            CountriesFigure(value: figure.value, label: figure.label, countries: summary.countries)
+                        } else {
+                            FigureCell(value: figure.value, label: figure.label)
                         }
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 18)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
@@ -188,10 +181,13 @@ private struct YearSummary: View {
         if let day = summary.favouriteWeekday {
             figures.append((Calendar.current.weekdaySymbols[day - 1] + "s", "your film night"))
         }
-        if summary.countryCount > 1 { figures.append(("\(summary.countryCount) countries", "where your films were made")) }
-        if summary.languageCount > 1 { figures.append(("\(summary.languageCount) languages", "spoken in your films")) }
+        if summary.countries.count > 1 { figures.append(("\(summary.countries.count)", Self.countriesLabel)) }
+        if summary.languageCount > 1 { figures.append(("\(summary.languageCount)", "Languages")) }
         return figures
     }
+
+    /// The figure that opens to show its countries.
+    private static let countriesLabel = "Countries"
 
     // MARK: Months
 
@@ -508,6 +504,82 @@ private struct DateByReleaseButton: View {
             .disabled(working)
             .help("These were all dated this month. Date each one the month after it came out in cinemas instead (you can still change any of them).")
         }
+    }
+}
+/// One figure of In Numbers: the number, and what it counts.
+private struct FigureCell: View {
+    let value: String
+    let label: String
+    var opens = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            HStack(spacing: 4) {
+                Text(label)
+                if opens { Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)) }
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Countries: a click shows each country with the year's films made there, the most first.
+private struct CountriesFigure: View {
+    let value: String
+    let label: String
+    let countries: [CountryFilms]
+    @State private var open = false
+    @State private var hovering = false
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            FigureCell(value: value, label: label, opens: true)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(hovering || open ? 0.05 : 0)).padding(4))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Where your films were made")
+        .popover(isPresented: $open, arrowEdge: .bottom) { list }
+    }
+
+    private var list: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(countries.enumerated()), id: \.element.id) { index, country in
+                    if index > 0 { Divider() }
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(country.name).font(.system(size: 13.5, weight: .semibold))
+                            Spacer(minLength: 12)
+                            Text(country.films.count == 1 ? "1 film" : "\(country.films.count) films")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Text(country.films.map(\.title).joined(separator: "  ·  "))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 10)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+        }
+        // About ten countries tall, then it scrolls.
+        .frame(width: 320, height: min(520, CGFloat(countries.count) * 58 + 12))
     }
 }
 #endif

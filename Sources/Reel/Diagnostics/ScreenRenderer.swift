@@ -122,11 +122,11 @@ enum ScreenRenderer {
             // With the interviews it cites and the cinematographer's article.
             await model.loadCameraReading(for: film)
             log("interviews read")
-            render(CameraTab(film: film) { _, _ in }
+            render(CinematographyTab(film: film) { _, _ in }
                     .padding(32)
                     .frame(width: 900)
                     .background(Theme.background),
-                   model: model, scale: 2, to: output.appendingPathComponent("camera.png"))
+                   model: model, scale: 2, to: output.appendingPathComponent("cinematography.png"))
         }
         // For You (from the sample's watched films): its first six, with their frames and details loaded.
         await model.loadExplorePicks()

@@ -377,7 +377,7 @@ struct FilmInfo: Sendable {
 }
 
 enum FilmTab: String, CaseIterable, Identifiable {
-    case overview, reviews, behindTheFilm, camera, extras
+    case overview, reviews, behindTheFilm, cinematography, extras
 
     var id: String { rawValue }
 
@@ -386,7 +386,7 @@ enum FilmTab: String, CaseIterable, Identifiable {
         case .overview: "Overview"
         case .reviews: "Reviews"
         case .behindTheFilm: "Behind the Film"
-        case .camera: "Camera"
+        case .cinematography: "Cinematography"
         case .extras: "Extras"
         }
     }

@@ -115,6 +115,13 @@ public enum SeenDate {
     }
 }
 
+/// A country the year's films were made in, and those films (in the order they were watched).
+public struct CountryFilms: Equatable, Sendable, Identifiable {
+    public let name: String
+    public let films: [YearFilm]
+    public var id: String { name }
+}
+
 public struct Tally: Equatable, Sendable, Identifiable {
     public let name: String
     public let count: Int
@@ -150,7 +157,8 @@ public struct YearInFilm: Equatable, Sendable {
     public let favouriteWeekday: Int?
     public let languages: [Tally]
     public let languageCount: Int
-    public let countryCount: Int
+    /// Where the films were made: the countries with the most films first.
+    public let countries: [CountryFilms]
     /// Actors in at least two of the year's films.
     public let topActors: [Tally]
 
@@ -189,8 +197,24 @@ public struct YearInFilm: Equatable, Sendable {
         let spoken = films.compactMap { $0.language.flatMap { $0.isEmpty ? nil : FilmLanguage.name($0) } }
         languages = Self.tally(spoken, minimum: 1, limit: 4)
         languageCount = Set(spoken).count
-        countryCount = Set(films.flatMap(\.countries)).count
+        countries = Self.byCountry(films)
         topActors = Self.tally(films.flatMap(\.cast), minimum: 2, limit: 4)
+    }
+
+    /// Each country with its films (a co-production counts for each country), the most first.
+    static func byCountry(_ films: [YearFilm]) -> [CountryFilms] {
+        var found: [String: [YearFilm]] = [:]
+        for film in films {
+            for country in Set(film.countries.map(shortCountry)) { found[country, default: []].append(film) }
+        }
+        return found.map { CountryFilms(name: $0.key, films: $0.value) }
+            .sorted { $0.films.count != $1.films.count ? $0.films.count > $1.films.count : $0.name < $1.name }
+    }
+
+    /// TMDB's official names, as people say them.
+    static func shortCountry(_ name: String) -> String {
+        ["United States of America": "United States", "Russian Federation": "Russia", "Korea, Republic of": "South Korea",
+         "Iran, Islamic Republic of": "Iran", "Czechia": "Czech Republic", "Viet Nam": "Vietnam"][name] ?? name
     }
 
     /// Years with at least one dated viewing, newest first.

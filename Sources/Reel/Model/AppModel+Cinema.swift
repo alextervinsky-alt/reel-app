@@ -192,6 +192,21 @@ extension AppModel {
         }.prefix(12))
     }
 
+    /// The other films in the library shot by them, in the order they were made (the Cinematography
+    /// tab); worked out once per library version.
+    func filmsShot(by cinematographers: [String], besides film: FilmEntry) -> [LibraryItem] {
+        // Read here, so the page redraws when the library changes.
+        guard !items.isEmpty else { return [] }
+        let key = cinematographers.joined(separator: "|") + "|" + film.personalKey
+        if let cached = shotByCache[key], cached.version == libraryVersion { return cached.items }
+        let wanted = Set(cinematographers)
+        let found = items
+            .filter { $0.id != film.personalKey && !wanted.isDisjoint(with: $0.main.tmdb?.cinematographers ?? []) }
+            .sorted { ($0.main.displayYear ?? 0) < ($1.main.displayYear ?? 0) }
+        shotByCache[key] = (libraryVersion, found)
+        return found
+    }
+
     /// The films for Cinema mode's All Films: search, sort, mood, length, and unwatched only.
     func cinemaLibrary(matching query: String, sort: LibrarySort, mood: Mood?, length: LengthBand, language: String?,
                        unwatchedOnly: Bool) -> [LibraryItem] {

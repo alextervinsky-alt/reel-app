@@ -27,6 +27,9 @@ public struct TechSpecs: Equatable, Sendable {
         public let text: String
         /// "American Cinematographer"; nil for the film's own Wikipedia article.
         public let source: String?
+        /// How much it says: gear named, precise detail, a reason, the filmmakers' own account.
+        /// The most telling notes come first.
+        public var weight = 0
         public var id: String { text }
     }
 
@@ -51,24 +54,33 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     public let specs: [Spec]
-    /// Sentences naming gear that aren't in the parts below, in reading order (at most six).
+    /// Sentences naming gear that aren't in the parts below (at most six).
     public let sentences: [Note]
-    /// What the cinematographer said or chose (their words, or sentences about their choices).
+    /// The filmmakers' own words: interviews, and the cinematographer quoted in the article.
     public var approach: [Note] = []
-    /// Why it looks the way it does: choices with their reasons and references.
-    public var reasons: [Note] = []
+    /// The visual idea: what the images were meant to do, and the choices made for it.
+    public var intent: [Note] = []
+    /// What it drew on: paintings, photographers, other films.
+    public var references: [Note] = []
     /// How the film was lit: light sources, shadows, contrast.
     public var lighting: [Note] = []
-    /// How the camera tells the story: movement, framing, takes, lenses chosen for a look.
+    /// How the camera tells the story: framing, lenses chosen for a look, movement, takes.
     public var cameraLanguage: [Note] = []
-    /// The palette, the grade and the finish.
+    /// The palette, the grade and the texture (stock, grain, finish).
     public var colour: [Note] = []
+    /// How one particular scene or shot was done.
+    public var scenes: [Note] = []
+    /// What was hard, tested, built or done for the first time.
+    public var challenges: [Note] = []
+    /// The cinematographer and the director: how they came to work together, and before.
+    public var collaboration: [Note] = []
 
     public var isEmpty: Bool { specs.isEmpty }
 
     /// Nothing about the approach either.
     public var saysNothing: Bool {
-        specs.isEmpty && approach.isEmpty && reasons.isEmpty && lighting.isEmpty && cameraLanguage.isEmpty && colour.isEmpty
+        specs.isEmpty && approach.isEmpty && intent.isEmpty && references.isEmpty && lighting.isEmpty
+            && cameraLanguage.isEmpty && colour.isEmpty && scenes.isEmpty && challenges.isEmpty
     }
 
     public func names(_ kind: Kind) -> [String] {
@@ -81,29 +93,37 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     /// Reads the film's article alone.
-    public static func read(sections: [FilmArticle.Section], cinematographers: [String]) -> TechSpecs {
-        read(texts: [Text(source: nil, sections: sections, isInterview: false)], cinematographers: cinematographers)
+    public static func read(sections: [FilmArticle.Section], cinematographers: [String], directors: [String] = []) -> TechSpecs {
+        read(texts: [Text(source: nil, sections: sections, isInterview: false)], cinematographers: cinematographers, directors: directors)
     }
 
     /// Reads everything written about the film, in the order given; `cinematographers` are the
     /// film's directors of photography (their sentences are the approach).
-    public static func read(texts: [Text], cinematographers: [String]) -> TechSpecs {
+    public static func read(texts: [Text], cinematographers: [String], directors: [String] = []) -> TechSpecs {
         var found: [Spec] = []
         var gear: [Note] = []
         var approach: [Note] = []
-        var reasons: [Note] = []
+        var intent: [Note] = []
+        var references: [Note] = []
         var lighting: [Note] = []
         var cameraLanguage: [Note] = []
         var colour: [Note] = []
+        var scenes: [Note] = []
+        var challenges: [Note] = []
+        var collaboration: [Note] = []
         // The full name, and the first and last names alone ("Hong" for Hong Kyung-pyo, "Deakins"
         // for Roger Deakins), as articles write them.
         let particles: Set<String> = ["van", "von", "der", "den", "del", "della", "les", "dos", "das"]
-        let names = cinematographers.flatMap { name -> [String] in
-            let parts = name.split(separator: " ").map(String.init)
-            let single = [parts.first, parts.last].compactMap { $0 }
-                .filter { $0.count >= 3 && !particles.contains($0.lowercased()) && $0 != name }
-            return [name] + Set(single)
+        func spellings(_ people: [String]) -> [String] {
+            people.flatMap { name -> [String] in
+                let parts = name.split(separator: " ").map(String.init)
+                let single = [parts.first, parts.last].compactMap { $0 }
+                    .filter { $0.count >= 3 && !particles.contains($0.lowercased()) && $0 != name }
+                return [name] + Set(single)
+            }
         }
+        let names = spellings(cinematographers)
+        let directorNames = spellings(directors)
         for text in texts {
             for section in text.sections {
                 let heading = section.title.lowercased()
@@ -126,18 +146,19 @@ public struct TechSpecs: Equatable, Sendable {
                             continue
                         }
                         let lowered = sentence.lowercased()
-                        var named = false
+                        var gearNamed = 0
                         if triggers.contains(where: { lowered.contains($0) }) {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
                             for rule in rules {
                                 if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
                                 for name in rule.matches(in: sentence) {
-                                    named = true
+                                    gearNamed += 1
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil))
                                 }
                             }
                         }
+                        let named = gearNamed > 0
                         // An interview talks about much else: only what's about the look is read.
                         let onTopic = !text.isInterview || named || matches(lookWords, sentence)
                         let fits = commentary && onTopic && (25...450).contains(sentence.count) && !matches(reception, sentence)
@@ -145,7 +166,10 @@ public struct TechSpecs: Equatable, Sendable {
                             || (text.isInterview && (quoted(sentence) || matches(firstPerson, sentence)))
                         aboutThem = fits && theirs
                         let light = matches(lightTerms, sentence)
-                        let camera = visual || matches(cameraTerms, sentence)
+                        // In a section about the look, any sentence about the image (not one that
+                        // only names the cinematographer) is about the frame.
+                        let image = aboutTheImage(sentence)
+                        let camera = matches(cameraTerms, sentence) || (visual && image)
                         let colourful = matches(colourTerms, sentence)
                         // In an interview the sentence after often finishes the thought ("…on film.
                         // It gave us…"): read together.
@@ -154,14 +178,28 @@ public struct TechSpecs: Equatable, Sendable {
                            sentence.count + sentences[index + 1].count < 520 {
                             shown += " " + sentences[index + 1]
                         }
-                        let note = Note(text: shown, source: text.source)
+                        let craft = light || camera || colourful || named
+                        let aboutLook = craft || image
+                        let because = matches(reason, sentence)
+                        var note = Note(text: shown, source: text.source)
+                        note.weight = 2 * min(gearNamed, 3) + (matches(detail, shown) ? 2 : 0) + (because ? 1 : 0)
+                            + (text.isInterview ? 1 : 0) - (shown.count < 70 ? 1 : 0)
                         var placed = true
-                        // Where it belongs: the filmmakers' own words first, then the reasons,
-                        // the lighting, the colour, the camera, then gear only.
-                        if fits, theirs, matches(said, sentence) || quoted(sentence) || text.isInterview {
+                        // Where it belongs, in the order a cinematography piece tells it: the
+                        // filmmakers' own words, what it drew on, a particular scene, what was hard
+                        // or new, the visual idea, then the light, the colour and the frame, gear
+                        // alone, and how the cinematographer and the director came together. A
+                        // sentence that only says who shot it (no craft, no reason) says nothing.
+                        if fits, theirs, text.isInterview || quoted(sentence) {
                             add(note, to: &approach)
-                        } else if fits, light || camera || colourful || named, matches(reason, sentence) {
-                            add(note, to: &reasons)
+                        } else if fits, aboutLook, matches(referenceTerms, sentence) {
+                            add(note, to: &references)
+                        } else if fits, craft, matches(sceneTerms, sentence) {
+                            add(note, to: &scenes)
+                        } else if fits, aboutLook, matches(challengeTerms, sentence) {
+                            add(note, to: &challenges)
+                        } else if fits, aboutLook, because || matches(intentTerms, sentence) {
+                            add(note, to: &intent)
                         } else if fits, light {
                             add(note, to: &lighting)
                         } else if fits, colourful {
@@ -170,6 +208,9 @@ public struct TechSpecs: Equatable, Sendable {
                             add(note, to: &cameraLanguage)
                         } else if named, !text.isInterview || fits {
                             add(note, to: &gear)
+                        } else if fits, !text.isInterview, !directorNames.isEmpty, mentions(names, in: sentence, generic: false),
+                                  mentions(directorNames, in: sentence, generic: false), matches(collabTerms, sentence) {
+                            add(note, to: &collaboration)
                         } else {
                             placed = false
                         }
@@ -178,13 +219,25 @@ public struct TechSpecs: Equatable, Sendable {
                 }
             }
         }
-        var specs = TechSpecs(specs: tidy(found), sentences: Array(gear.prefix(6)))
-        specs.approach = Array(approach.prefix(8))
-        specs.reasons = Array(reasons.prefix(6))
-        specs.lighting = Array(lighting.prefix(6))
-        specs.cameraLanguage = Array(cameraLanguage.prefix(6))
-        specs.colour = Array(colour.prefix(5))
+        var specs = TechSpecs(specs: tidy(found), sentences: ranked(gear, 6))
+        specs.approach = ranked(approach, 10)
+        specs.intent = ranked(intent, 8)
+        specs.references = ranked(references, 6)
+        specs.lighting = ranked(lighting, 6)
+        specs.cameraLanguage = ranked(cameraLanguage, 6)
+        specs.colour = ranked(colour, 5)
+        specs.scenes = ranked(scenes, 6)
+        specs.challenges = ranked(challenges, 6)
+        specs.collaboration = ranked(collaboration, 3)
         return specs
+    }
+
+    /// The most telling first (reading order among equals), at most `limit`.
+    static func ranked(_ notes: [Note], _ limit: Int) -> [Note] {
+        Array(notes.enumerated()
+            .sorted { ($0.element.weight, -$0.offset) > ($1.element.weight, -$1.offset) }
+            .prefix(limit)
+            .map(\.element))
     }
 
     /// The look in a few plain sentences, from what was found: who shot it, on what, with which
@@ -268,6 +321,14 @@ public struct TechSpecs: Equatable, Sendable {
         return tag == "Q" || tag == "INT" || (initials.count >= 2 && tag == initials)
     }
 
+    /// About the picture itself: the look words, leaving out the job's name ("the film's
+    /// cinematographer was…" alone says nothing about the image).
+    static func aboutTheImage(_ sentence: String) -> Bool {
+        let rest = sentence.replacingOccurrences(of: #"(?i)\bcinematograph\w*|\bdirector of photography\b"#, with: "",
+                                                 options: .regularExpression)
+        return matches(lookWords, rest)
+    }
+
     static func quoted(_ sentence: String) -> Bool {
         sentence.contains(where: { "\"“”".contains($0) })
     }
@@ -276,12 +337,15 @@ public struct TechSpecs: Equatable, Sendable {
         regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
-    /// Whether the sentence names one of them (whole words, as written).
-    static func mentions(_ names: [String], in sentence: String) -> Bool {
-        let generic = ["cinematographer", "director of photography", "cinematographers"]
-        let lowered = sentence.lowercased()
-        if generic.contains(where: { lowered.contains($0) }) { return true }
-        if sentence.range(of: #"\b(?:DP|DoP|D\.P\.)(?=\W|$)"#, options: .regularExpression) != nil { return true }
+    /// Whether the sentence names one of them (whole words, as written), or, with `generic`, the
+    /// cinematographer by their job.
+    static func mentions(_ names: [String], in sentence: String, generic: Bool = true) -> Bool {
+        if generic {
+            let jobs = ["cinematographer", "director of photography", "cinematographers"]
+            let lowered = sentence.lowercased()
+            if jobs.contains(where: { lowered.contains($0) }) { return true }
+            if sentence.range(of: #"\b(?:DP|DoP|D\.P\.)(?=\W|$)"#, options: .regularExpression) != nil { return true }
+        }
         // A first or last name alone, not as part of someone else's name ("Robert De Niro").
         return names.contains { name in
             let alone = name.contains(" ") ? "" : #"(?!\s+\p{Lu})"#
@@ -299,8 +363,29 @@ public struct TechSpecs: Equatable, Sendable {
     static let reception = try! NSRegularExpression(
         pattern: #"\b(?:praised|praising|nominated|nominations?|won|wins|awards?|acclaim\w*|critics?|critical|reviewers?|reviews?|box office|grossed|ranked|Oscars?|BAFTAs?|Academy Awards?|premiere[sd]?|debut\w*|screened|re-screened|screenings?|limited release|festivals?|distribut\w*|audiences?|international community)\b"#,
         options: [.caseInsensitive])
-    static let said = try! NSRegularExpression(
-        pattern: #"\b(?:said|says|explained|recalled|described|told|wanted|noted|stated|felt|aimed|chose|decided|opted|insisted|preferred|used|shot|lit|lensed|designed|inspired|influenced|referenced|wanted|approach|tried|avoided|had|requested|requests|asked|worked|collaborated|planned|tested|took|gave|kept|filmed|framed)\b"#,
+    /// What the images were meant to do ("to feel claustrophobic", "a naturalistic look").
+    static let intentTerms = try! NSRegularExpression(
+        pattern: #"\b(?:visual (?:style|language|approach|concept|idea|grammar|scheme|strategy|motifs?)|aesthetic\w*|the look (?:of|was|is|they|he|she)|look and feel|tone|mood|atmosphere|to feel|to look|feel (?:like|more|less|as)|to make (?:the|it|them|audiences?|viewers?|us|everything)|to convey|to reflect|to evoke|to emphasi[sz]e|to underline|to capture|to suggest|to isolate|to separate|to contrast|to mirror|to express|realis\w*|naturalis\w*|claustrophob\w*|intima\w*|subjectiv\w*|documentary|dreamlike|dream-like|painterly|immersive|voyeur\w*|point of view|restrain\w*|minimalis\w*|stylis\w*|stylized|stylised)\b"#,
+        options: [.caseInsensitive])
+    /// What the look drew on.
+    static let referenceTerms = try! NSRegularExpression(
+        pattern: #"\b(?:inspired by|inspiration|influenced by|influences?|referenc\w*|homage|nod to|modell?ed (?:on|after)|in the style of|reminiscent of|paintings?|painters?|photographs? by|photographers?|photography of|comic books?|graphic novels?|artworks?)\b"#,
+        options: [.caseInsensitive])
+    /// One particular scene or shot ("the heist sequence", "one scene was lit…"), not scenes in general.
+    static let sceneTerms = try! NSRegularExpression(
+        pattern: #"\b(?:the|a|one|its|this|that)\s+(?:[\w'’-]+\s+){0,3}(?:scene|sequence|shot|set piece|set-piece|montage)\b(?!s)|\b(?:opening|final|closing|last|first) (?:shot|scene|sequence|image)\b"#,
+        options: [.caseInsensitive])
+    /// What was hard, tested, built or done for the first time.
+    static let challengeTerms = try! NSRegularExpression(
+        pattern: #"\b(?:challeng\w*|difficult\w*|problems?|obstacles?|had to|forced to|for the first time|first (?:time|film|feature|production|movie) (?:to|that|in|ever)|pioneer\w*|invent\w*|custom[- ](?:built|made|designed)|specially (?:built|made|designed|adapted)|purpose-built|built (?:a|an|their own|its own|his own|her own)|developed (?:a|an|new|special)|modified|innovat\w*|unprecedented|ground-?breaking|breakthrough|experiment\w*|(?:camera|lens|film|screen|light(?:ing)?) tests?|tested|testing)\b"#,
+        options: [.caseInsensitive])
+    /// How the cinematographer and the director came to work together.
+    static let collabTerms = try! NSRegularExpression(
+        pattern: #"\b(?:worked (?:with|together)|collaborat\w*|reunit\w*|again with|previously|long-?time|frequent|regular|partnership|recommended|hired|brought (?:in|on)|first (?:time|film|feature) (?:with|together))\b"#,
+        options: [.caseInsensitive])
+    /// Precise detail: focal lengths, stops, resolutions, ratios, colour temperatures.
+    static let detail = try! NSRegularExpression(
+        pattern: #"\b\d{1,3}\s?mm\b|\bT\s?\d(?:\.\d)?\b|\bf/\d|\b\d{1,2}K\b|\bISO\s?\d+|\b[1-2]\.\d{2}\s?:\s?1\b|\bstops?\b|\bfoot-?candles?\b|\b\d{4}\s?K(?:elvin)?\b|\bframes per second\b|\bfps\b"#,
         options: [.caseInsensitive])
     /// A sentence that starts by referring back to someone ("He wanted…", "Her approach…").
     static let pronoun = try! NSRegularExpression(pattern: #"^(?:He|She|They|His|Her|Their)\b"#)

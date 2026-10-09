@@ -25,7 +25,8 @@ final class YearInFilmStatsTests: XCTestCase {
         XCTAssertEqual(year.favouriteWeekday, 6, "Fridays (a film seen elsewhere doesn't count: its date is a guess)")
         XCTAssertEqual(year.languages.first, Tally(name: "Korean", count: 2))
         XCTAssertEqual(year.languageCount, 3)
-        XCTAssertEqual(year.countryCount, 3)
+        XCTAssertEqual(year.countries.map(\.name), ["South Korea", "France", "United States"], "the most films first, then A–Z")
+        XCTAssertEqual(year.countries.first?.films.map(\.title), ["A", "B"])
         XCTAssertEqual(year.topActors, [Tally(name: "Song Kang-ho", count: 2)])
     }
 }

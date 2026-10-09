@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// Where the Camera tab reads beyond the film's Wikipedia article: the interviews and craft
+/// Where the Cinematography tab reads beyond the film's Wikipedia article: the interviews and craft
 /// articles the article cites (American Cinematographer, British Cinematographer, IndieWire's
 /// craft pieces, Kodak, ARRI…), American Cinematographer's own articles about the film, and the
 /// cinematographer's Wikipedia article. All free to read; only paragraphs are kept, in memory.
@@ -220,7 +220,7 @@ public enum HTMLText {
     }
 }
 
-/// Fetches what the Camera tab reads. Each part may fail on its own (a site down, a paywall):
+/// Fetches what the Cinematography tab reads. Each part may fail on its own (a site down, a paywall):
 /// whatever was read is kept.
 public struct CameraSourcesClient: Sendable {
     let session: URLSession

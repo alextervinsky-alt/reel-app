@@ -10,7 +10,7 @@ import ReelCore
 /// was received, awards, legacy). Each chapter opens on its best lines, someone's own words set
 /// apart and a fact or two, and opens in place to read the whole of it. What gives the story
 /// away waits under After You Watch until the film is watched. Then where it was filmed, and
-/// where to read more. (Frames from the film are in the Camera tab.)
+/// where to read more. (Frames from the film are in the Cinematography tab.)
 struct BehindTheFilmTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry

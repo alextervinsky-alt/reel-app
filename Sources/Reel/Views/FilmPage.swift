@@ -34,8 +34,8 @@ struct FilmPage: View {
                             case .reviews: ReceptionTab(film: film)
                             case .behindTheFilm:
                                 BehindTheFilmTab(film: film)
-                            case .camera:
-                                CameraTab(film: film) { paths, index in
+                            case .cinematography:
+                                CinematographyTab(film: film) { paths, index in
                                     still = StillSelection(paths: paths, index: index)
                                 }
                             case .extras: ExtrasTab(film: film)
@@ -85,7 +85,7 @@ struct FilmPage: View {
         FilmTab.allCases.filter { tab in
             switch tab {
             case .overview: true
-            case .reviews, .behindTheFilm, .camera: film.tmdb != nil
+            case .reviews, .behindTheFilm, .cinematography: film.tmdb != nil
             case .extras: model.extrasSource(for: film) != nil
             }
         }

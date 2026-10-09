@@ -393,11 +393,13 @@ extension AppModel {
         guard let details = film.tmdb, !funFactsLoading.contains(details.id) else { return }
         if let existing = film.funFacts {
             let maxAge: TimeInterval = existing.isEmpty ? 7 * 86_400 : FilmEntry.infoMaxAge
-            // Facts from before Reel 1.7 lack the aspect ratio and colour the Camera tab shows,
-            // and before 1.8.1 what the filming places are (fetched again when the tab opens).
+            // Facts from before Reel 1.7 lack the aspect ratio and colour the Cinematography tab shows,
+            // before 1.8.1 what the filming places are (fetched again when the tab opens),
             let lacksCamera = existing.quick != nil && existing.quick?.aspectRatios == nil
             let lacksPlaces = existing.quick?.filmedIn.isEmpty == false && existing.quick?.filmingPlaces == nil
-            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces { return }
+            // And before 1.8.2 the awards for the cinematography.
+            let lacksHonours = existing.quick != nil && existing.quick?.cinematographyHonours == nil
+            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces, !lacksHonours { return }
         }
         funFactsLoading.insert(details.id)
         defer { funFactsLoading.remove(details.id) }

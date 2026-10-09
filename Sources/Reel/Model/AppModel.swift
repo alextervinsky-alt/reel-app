@@ -123,7 +123,7 @@ final class AppModel {
     var articles: [Int: FilmArticle] = [:]
     var articlesLoading: Set<Int> = []
     var articlesMissing: Set<Int> = []
-    /// What the Camera tab read beyond the article (interviews, the cinematographer's article), per session.
+    /// What the Cinematography tab read beyond the article (interviews, the cinematographer's article), per session.
     var cameraReadings: [Int: CameraReading] = [:]
     var cameraReadingsLoading: Set<Int> = []
 
@@ -205,6 +205,8 @@ final class AppModel {
     @ObservationIgnored var badgeCache: [Int: (version: Int, badges: [ListBadge])] = [:]
     /// From the Same People and More Like This per film page (see `relatedFilms`), until the library changes.
     @ObservationIgnored var relatedCache: [String: (stamp: String, films: RelatedFilms)] = [:]
+    /// The other films in the library each cinematographer shot (see `filmsShot`), per library version.
+    @ObservationIgnored var shotByCache: [String: (version: Int, items: [LibraryItem])] = [:]
     /// Cinema mode's home rows, kept until something they show changes.
     @ObservationIgnored var cinemaRowsCache: (stamp: CinemaRowsStamp, rows: [CinemaRow])?
     /// Goes up each time the library's films are built again (a cache key).

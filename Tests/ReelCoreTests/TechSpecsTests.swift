@@ -10,8 +10,11 @@ final class TechSpecsTests: XCTestCase {
         XCTAssertEqual(specs.names(.camera), ["ARRI Alexa Mini LF"])
         XCTAssertEqual(specs.names(.lens), ["Signature Primes", "Vintage Cooke Panchro"])
         XCTAssertEqual(specs.names(.format), ["1.90:1"])
-        XCTAssertEqual(specs.approach.count, 1, "the cinematographer's choice")
-        XCTAssertEqual(specs.sentences.map(\.text), ["Some scenes used vintage Cooke Panchro lenses."], "gear only, nothing else")
+        XCTAssertEqual(specs.sentences.map(\.text), [
+            "Cinematographer Roger Deakins shot the film with the ARRI Alexa Mini LF and Signature Primes, framing it at 1.90:1.",
+            "Some scenes used vintage Cooke Panchro lenses.",
+        ], "gear, the sentence that says most first")
+        XCTAssertTrue(specs.approach.isEmpty, "the article telling of a choice is not their own words")
         XCTAssertEqual(specs.lighting.map(\.text), ["The night exteriors were lit with a single source."])
     }
 
@@ -78,7 +81,9 @@ final class TechSpecsTests: XCTestCase {
         ]
         let specs = TechSpecs.read(sections: sections, cinematographers: ["Hong Kyung-pyo"])
         XCTAssertEqual(Set(specs.names(.light)), ["Natural light", "ARRI SkyPanels", "12K HMI", "Sodium vapour", "Practicals"])
-        XCTAssertEqual(specs.approach.count, 1, "Hong's choice: \(specs.approach)")
+        XCTAssertEqual(specs.intent.map(\.text), [
+            "Hong wanted the rich family's house to feel open, and lit it mostly with natural light through its large windows, adding ARRI SkyPanels and a 12K HMI outside.",
+        ], "the visual idea, with what it was lit with")
         XCTAssertEqual(specs.lighting.count, 1, "\(specs.lighting)")
         XCTAssertEqual(specs.cameraLanguage.map(\.text), ["The basement scenes were shot handheld with long takes, so the camera stays close to the family."])
         XCTAssertTrue(specs.sentences.isEmpty)
@@ -89,7 +94,7 @@ final class TechSpecsTests: XCTestCase {
             "In terms of practical lighting, the DP had specific requests regarding the color. He wanted sophisticated indirect lighting and the warmth from tungsten light sources.",
             "Bong chose to shoot the film without traditional coverage.",
         ])], cinematographers: ["Hong Kyung-pyo"])
-        XCTAssertEqual(specs.approach.count, 2, "\(specs.approach)")
+        XCTAssertEqual(specs.lighting.count, 2, "\(specs.lighting)")
         XCTAssertEqual(specs.cameraLanguage.map(\.text), ["Bong chose to shoot the film without traditional coverage."])
         XCTAssertEqual(Set(specs.names(.light)), ["Practicals", "Tungsten"])
     }
@@ -106,12 +111,13 @@ final class TechSpecsTests: XCTestCase {
             "The camera was mostly on a dolly or a Technocrane, and we used a Black Pro-Mist 1/8 on every lens.",
         ])
         let specs = TechSpecs.read(texts: [interview], cinematographers: ["Roger Deakins"])
-        XCTAssertEqual(specs.approach.map(\.text), [
+        XCTAssertEqual(Set(specs.approach.map(\.text)), [
             "“We shot on the ARRI Alexa 65 with Panavision Sphero 65 lenses because we wanted the landscapes to feel enormous.” It gave us room in the frame.",
             "I lit the casino with a single big source, bounced off the ceiling, so the faces fell into shadow.",
             "We graded with a show LUT designed with our colorist to keep the orange of the dust.",
             "The camera was mostly on a dolly or a Technocrane, and we used a Black Pro-Mist 1/8 on every lens.",
         ], "only what's about the look, the next sentence kept with the one it finishes, never the interviewer's lines")
+        XCTAssertTrue(specs.approach.first?.text.contains("Technocrane") == true, "the most telling first")
         XCTAssertTrue(specs.approach.allSatisfy { $0.source == "American Cinematographer" })
         XCTAssertEqual(specs.names(.camera), ["ARRI Alexa 65"])
         XCTAssertEqual(specs.names(.lens), ["Panavision Sphero 65"])
@@ -129,7 +135,7 @@ final class TechSpecsTests: XCTestCase {
             "The colour palette was drained of greens, leaving the city in browns and greys.",
             "The camera rarely moves, framing the characters in wide shots.",
         ])
-        XCTAssertEqual(specs.reasons.map(\.text), ["Anamorphic lenses were chosen because the director wanted the background to fall apart into soft ovals."])
+        XCTAssertEqual(specs.intent.map(\.text), ["Anamorphic lenses were chosen because the director wanted the background to fall apart into soft ovals."])
         XCTAssertEqual(specs.colour.map(\.text), ["The colour palette was drained of greens, leaving the city in browns and greys."])
         XCTAssertEqual(specs.cameraLanguage.map(\.text), ["The camera rarely moves, framing the characters in wide shots."])
         XCTAssertEqual(specs.brief(by: ["Bradford Young"]),
@@ -156,5 +162,35 @@ final class TechSpecsTests: XCTestCase {
         XCTAssertTrue(TechSpecs.isQuestion("Q: Tell us about the lighting.", source: nil))
         XCTAssertFalse(TechSpecs.isQuestion("DP: We lit it with one big source.", source: "No Film School"))
         XCTAssertFalse(TechSpecs.isQuestion("We lit it with one big source.", source: "No Film School"))
+    }
+
+    func testAPieceAboutTheCinematographyIsToldInItsParts() {
+        let sections = [FilmArticle.Section(id: 1, title: "Production · Cinematography", paragraphs: [
+            "The director of photography was Bradford Young, a well-known cinematographer.",
+            "Young had previously worked with Villeneuve's producers, and Villeneuve hired him after seeing Selma.",
+            "The look was inspired by the photographs of Martina Hoogland Ivanow, whose pictures feel haunted yet hopeful.",
+            "Villeneuve wanted the alien ship to feel ordinary, so the interiors were lit by a single screen of light.",
+            "The helicopter scene at night was lit with searchlights and strobes from a crane.",
+            "Lighting the mist inside the ship was the hardest problem, and the crew built a custom LED sled for it.",
+        ])]
+        let specs = TechSpecs.read(sections: sections, cinematographers: ["Bradford Young"], directors: ["Denis Villeneuve"])
+        XCTAssertEqual(specs.references.count, 1, "\(specs.references)")
+        XCTAssertEqual(specs.intent.count, 1, "\(specs.intent)")
+        XCTAssertEqual(specs.scenes.map(\.text), ["The helicopter scene at night was lit with searchlights and strobes from a crane."])
+        XCTAssertEqual(specs.challenges.count, 1, "\(specs.challenges)")
+        XCTAssertEqual(specs.collaboration.map(\.text), ["Young had previously worked with Villeneuve's producers, and Villeneuve hired him after seeing Selma."])
+        let all = specs.intent + specs.references + specs.lighting + specs.cameraLanguage + specs.sentences + specs.approach
+        XCTAssertFalse(all.contains { $0.text.hasPrefix("The director of photography was") }, "who shot it says nothing on its own")
+    }
+
+    func testTheCinematographysOwnAwards() {
+        let honours = WikipediaClient.cinematographyHonours(
+            won: ["Academy Award for Best Picture", "BAFTA Award for Best Cinematography", "Camerimage Golden Frog"],
+            nominated: ["Academy Award for Best Cinematography", "BAFTA Award for Best Cinematography", "Academy Award for Best Director"])
+        XCTAssertEqual(honours, [
+            Honour(name: "BAFTA Award for Best Cinematography", won: true),
+            Honour(name: "Camerimage Golden Frog", won: true),
+            Honour(name: "Academy Award for Best Cinematography", won: false),
+        ])
     }
 }

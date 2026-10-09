@@ -24,19 +24,33 @@ public struct QuickFacts: Codable, Equatable, Sendable {
     public var nominations = 0
     public var follows: String?
     public var followedBy: String?
-    /// How the picture is framed ("2.39:1") and whether it's in colour, for the Camera tab
+    /// How the picture is framed ("2.39:1") and whether it's in colour, for the Cinematography tab
     /// (missing in facts fetched before Reel 1.7).
     public var aspectRatios: [String]?
     public var colour: [String]?
     /// Where it was filmed, each with Wikidata's short description ("greenhouse area in Almería,
     /// Spain"); missing in facts fetched before Reel 1.8.1 (`filmedIn` has the names).
     public var filmingPlaces: [FilmingPlace]?
+    /// Awards and nominations for the cinematography (missing in facts fetched before Reel 1.8.2).
+    public var cinematographyHonours: [Honour]?
 
     public init() {}
 
     public var isEmpty: Bool {
         basedOn.isEmpty && filmedIn.isEmpty && setIn.isEmpty && awardsWon == 0 && nominations == 0
             && follows == nil && followedBy == nil
+    }
+}
+
+/// An award for the film, won or a nomination.
+public struct Honour: Codable, Equatable, Sendable, Identifiable {
+    public var name: String
+    public var won: Bool
+    public var id: String { name }
+
+    public init(name: String, won: Bool) {
+        self.name = name
+        self.won = won
     }
 }
 
@@ -399,7 +413,23 @@ public struct WikipediaClient: Sendable {
             }
         }
 
+        // The rest of the awards and the nominations (up to 100 more names), for the ones given
+        // for the cinematography.
+        let nominations = entity.items("P1411")
+        let more = Array((awards + nominations).filter { labels[$0] == nil && seen.insert($0).inserted }.prefix(100))
+        for start in stride(from: 0, to: more.count, by: 50) {
+            let batch = more[start..<min(start + 50, more.count)]
+            let result: Entities = try await get("https://www.wikidata.org/w/api.php", [
+                "action": "wbgetentities", "ids": batch.joined(separator: "|"), "props": "labels", "languages": "en", "format": "json",
+            ])
+            for (id, item) in result.entities ?? [:] {
+                if let label = item.labels?["en"]?.value { labels[id] = label }
+            }
+        }
+
         var quick = QuickFacts()
+        quick.cinematographyHonours = Self.cinematographyHonours(won: awards.compactMap { labels[$0] },
+                                                                 nominated: nominations.compactMap { labels[$0] })
         quick.basedOn = basedOn.compactMap { labels[$0] }
         quick.filmedIn = filmedIn.compactMap { labels[$0] }
         quick.filmingPlaces = filmedIn.compactMap { id in labels[id].map { FilmingPlace(name: $0, about: descriptions[id]) } }
@@ -412,6 +442,18 @@ public struct WikipediaClient: Sendable {
         quick.colour = colour.compactMap { labels[$0] }
         quick.notableAwards = Self.notable(awards.compactMap { labels[$0] })
         return quick
+    }
+
+    /// The awards for the cinematography, won first, each once (a nomination that was won is a win).
+    static func cinematographyHonours(won: [String], nominated: [String]) -> [Honour] {
+        func forTheCamera(_ name: String) -> Bool {
+            let lowered = name.lowercased()
+            return ["cinematograph", "photography", "camerimage", "golden frog"].contains { lowered.contains($0) }
+        }
+        var seen = Set<String>()
+        let wins = won.filter(forTheCamera).filter { seen.insert($0).inserted }.map { Honour(name: $0, won: true) }
+        let nods = nominated.filter(forTheCamera).filter { seen.insert($0).inserted }.map { Honour(name: $0, won: false) }
+        return wins + nods
     }
 
     static let prestige = ["Academy Award", "Palme d'Or", "Golden Lion", "Golden Bear", "Golden Globe", "BAFTA", "British Academy", "Grand Prix", "Saturn Award"]
@@ -490,7 +532,7 @@ public struct WikipediaClient: Sendable {
 
 /// Requests to Wikipedia and Wikidata: identified as Reel, two at a time, retried when busy.
 enum Wikimedia {
-    /// Who's asking: Wikimedia (and the craft sites the Camera tab reads) ask for a way to reach the maker.
+    /// Who's asking: Wikimedia (and the craft sites the Cinematography tab reads) ask for a way to reach the maker.
     static let userAgent = "Reel/1.8 (personal macOS film library; https://github.com/alextervinsky-alt/reel-app)"
 
     /// At most two Wikimedia requests at a time, app-wide, as their API etiquette asks.
