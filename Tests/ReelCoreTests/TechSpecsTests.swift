@@ -177,6 +177,8 @@ final class TechSpecsTests: XCTestCase {
         XCTAssertEqual(specs.references.count, 1, "\(specs.references)")
         XCTAssertEqual(specs.intent.count, 1, "\(specs.intent)")
         XCTAssertEqual(specs.scenes.map(\.text), ["The helicopter scene at night was lit with searchlights and strobes from a crane."])
+        XCTAssertFalse(TechSpecs.sceneTerms.firstMatch(in: "The basement scenes were shot handheld.", range: NSRange(location: 0, length: 39)) != nil,
+                       "scenes in general, shot the verb")
         XCTAssertEqual(specs.challenges.count, 1, "\(specs.challenges)")
         XCTAssertEqual(specs.collaboration.map(\.text), ["Young had previously worked with Villeneuve's producers, and Villeneuve hired him after seeing Selma."])
         let all = specs.intent + specs.references + specs.lighting + specs.cameraLanguage + specs.sentences + specs.approach

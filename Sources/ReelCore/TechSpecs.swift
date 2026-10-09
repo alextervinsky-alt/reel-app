@@ -371,9 +371,10 @@ public struct TechSpecs: Equatable, Sendable {
     static let referenceTerms = try! NSRegularExpression(
         pattern: #"\b(?:inspired by|inspiration|influenced by|influences?|referenc\w*|homage|nod to|modell?ed (?:on|after)|in the style of|reminiscent of|paintings?|painters?|photographs? by|photographers?|photography of|comic books?|graphic novels?|artworks?)\b"#,
         options: [.caseInsensitive])
-    /// One particular scene or shot ("the heist sequence", "one scene was lit…"), not scenes in general.
+    /// One particular scene or shot ("the heist sequence", "one scene was lit…"), not scenes in
+    /// general, and not "the night scenes were shot…" (shot the verb).
     static let sceneTerms = try! NSRegularExpression(
-        pattern: #"\b(?:the|a|one|its|this|that)\s+(?:[\w'’-]+\s+){0,3}(?:scene|sequence|shot|set piece|set-piece|montage)\b(?!s)|\b(?:opening|final|closing|last|first) (?:shot|scene|sequence|image)\b"#,
+        pattern: #"\b(?:the|a|one|its|this|that)\s+(?:(?!(?:were|was|is|are|been|be|being|had|has|have|scenes|sequences|shots)\b)[\w'’-]+\s+){0,3}(?:scene|sequence|shot|set piece|set-piece|montage)\b(?!s)|\b(?:opening|final|closing|last|first) (?:shot|scene|sequence|image)\b"#,
         options: [.caseInsensitive])
     /// What was hard, tested, built or done for the first time.
     static let challengeTerms = try! NSRegularExpression(
