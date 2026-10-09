@@ -79,15 +79,17 @@ public struct TMDBVideo: Codable, Equatable, Sendable {
     public var language: String?
     /// "2019-05-28T09:00:00.000Z"; sorts by date as text.
     public var publishedAt: String?
+    /// The video's height as uploaded (360, 480, 720, 1080, 2160).
+    public var size: Int?
 
     enum CodingKeys: String, CodingKey {
-        case key, site, type, name, official
+        case key, site, type, name, official, size
         case language = "iso_639_1"
         case publishedAt = "published_at"
     }
 
     public init(key: String, site: String, type: String, name: String? = nil, official: Bool? = nil,
-                language: String? = nil, publishedAt: String? = nil) {
+                language: String? = nil, publishedAt: String? = nil, size: Int? = nil) {
         self.key = key
         self.site = site
         self.type = type
@@ -95,6 +97,7 @@ public struct TMDBVideo: Codable, Equatable, Sendable {
         self.official = official
         self.language = language
         self.publishedAt = publishedAt
+        self.size = size
     }
 }
 

@@ -129,4 +129,13 @@ final class ChoosingTests: XCTestCase {
         XCTAssertEqual(Trailers.candidates(onlyOthers, title: "Rashomon", preferTeaser: false, originalLanguage: nil).map(\.key), ["old"],
                        "an older film still has its trailer")
     }
+
+    func testHDTrailersFirst() {
+        let videos = [
+            TMDBVideo(key: "sd", site: "YouTube", type: "Trailer", name: "Official Trailer", official: true, language: "en", publishedAt: "2019-01-01", size: 480),
+            TMDBVideo(key: "hd", site: "YouTube", type: "Trailer", name: "Official Trailer", official: true, language: "en", publishedAt: "2019-02-01", size: 1080),
+            TMDBVideo(key: "uhd", site: "YouTube", type: "Trailer", name: "Official Trailer 2", official: true, language: "en", publishedAt: "2019-03-01", size: 2160),
+        ]
+        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: false, originalLanguage: nil).map(\.key), ["hd", "uhd", "sd"])
+    }
 }

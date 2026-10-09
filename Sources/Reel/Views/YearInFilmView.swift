@@ -188,8 +188,8 @@ private struct YearSummary: View {
         if let day = summary.favouriteWeekday {
             figures.append((Calendar.current.weekdaySymbols[day - 1] + "s", "your film night"))
         }
-        if summary.countryCount > 1 { figures.append(("\(summary.countryCount)", "countries")) }
-        if summary.languageCount > 1 { figures.append(("\(summary.languageCount)", "languages")) }
+        if summary.countryCount > 1 { figures.append(("\(summary.countryCount) countries", "where your films were made")) }
+        if summary.languageCount > 1 { figures.append(("\(summary.languageCount) languages", "spoken in your films")) }
         return figures
     }
 

@@ -53,7 +53,8 @@ public enum Trailers {
 
     /// Up to five to try, best first: the studio's own uploads before anyone else's; English,
     /// then no language, then the film's own language; the trailer before the teaser, or with
-    /// `preferTeaser` (spoiler-safe, unwatched) a real teaser first; the earliest first (the first
+    /// `preferTeaser` (spoiler-safe, unwatched) a real teaser first; HD before lower resolutions
+    /// (1080p and 4K, then 720p); the earliest first (the first
     /// release usually gives away least). Five, because studios block some of theirs from
     /// playing outside YouTube.
     public static func candidates(_ videos: [TMDBVideo], title: String?, preferTeaser: Bool, originalLanguage: String?) -> [TMDBVideo] {
@@ -68,12 +69,20 @@ public enum Trailers {
         func typeRank(_ video: TMDBVideo) -> Int {
             isTeaser(video) == preferTeaser ? 0 : 1
         }
-        func rank(_ video: TMDBVideo) -> (Int, Int, Int, String) {
+        /// HD first: 1080p or 4K, then 720p, then anything smaller (or not known).
+        func sharpness(_ video: TMDBVideo) -> Int {
+            switch video.size ?? 0 {
+            case 1080...: 0
+            case 720...: 1
+            default: 2
+            }
+        }
+        func rank(_ video: TMDBVideo) -> (Int, Int, Int, Int, String) {
             let official = video.official == true ? 0 : 1
             // Spoiler-safe: a real teaser in any of the languages beats a full trailer in English.
             return preferTeaser
-                ? (official, typeRank(video), languageRank(video), video.publishedAt ?? "~")
-                : (official, languageRank(video), typeRank(video), video.publishedAt ?? "~")
+                ? (official, typeRank(video), languageRank(video), sharpness(video), video.publishedAt ?? "~")
+                : (official, languageRank(video), typeRank(video), sharpness(video), video.publishedAt ?? "~")
         }
         var seen = Set<String>()
         return videos
