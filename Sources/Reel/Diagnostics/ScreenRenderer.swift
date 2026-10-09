@@ -143,13 +143,18 @@ enum ScreenRenderer {
         // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
         await model.loadDiscover(.mood(.dark))
-        for shelf in model.exploreShelves { await model.loadDiscover(shelf) }
+        log("Explore: mood loaded")
+        for shelf in model.exploreShelves {
+            await model.loadDiscover(shelf)
+            log("Explore: \(shelf.title) loaded")
+        }
         await model.loadBestOf(year: year, source: .gems)
-        log("Explore loaded")
+        log("Explore: best of loaded")
         var explorePosters = (model.discover[.mood(.dark)] ?? []).prefix(8).compactMap(\.posterPath)
         for shelf in model.exploreShelves { explorePosters += model.exploreFilms(shelf, mood: nil).prefix(8).compactMap(\.posterPath) }
         explorePosters += (model.bestOf(year: year, source: .gems) ?? []).prefix(8).compactMap(\.posterPath)
         for path in explorePosters { _ = await ImageStore.shared.image(path, .poster) }
+        log("Explore: \(explorePosters.count) posters loaded")
         render(VStack(alignment: .leading, spacing: 38) {
                     DiscoverRow(list: .mood(.dark)) { _ in }
                     ForEach(model.exploreShelves, id: \.self) { shelf in DiscoverRow(list: shelf) { _ in } }
@@ -208,12 +213,23 @@ enum ScreenRenderer {
         if !CGImageDestinationFinalize(destination) { log("couldn't write \(url.lastPathComponent)") }
     }
 
-    /// Progress as a GitHub notice, written at once (the CI step stops Reel if it hangs).
+    /// Progress as a GitHub notice, written at once (the CI step stops Reel if it hangs), and
+    /// into progress.txt beside the screens (GitHub shows only a step's first ten notices; the
+    /// file is published with the screens even when the step is stopped).
     private static let started = ContinuousClock.now
 
     private static func log(_ message: String) {
         let seconds = (ContinuousClock.now - started).components.seconds
-        FileHandle.standardOutput.write(Data("::notice::Screens: \(message) (\(seconds) s)\n".utf8))
+        let line = "Screens: \(message) (\(seconds) s)\n"
+        FileHandle.standardOutput.write(Data(("::notice::" + line).utf8))
+        guard let file = outputFolder?.appendingPathComponent("progress.txt") else { return }
+        if let handle = try? FileHandle(forWritingTo: file) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: file)
+        }
     }
 
     private static func finish() {
