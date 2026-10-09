@@ -261,6 +261,23 @@ public enum Digest {
         return found
     }
 
+    /// The sentence after `sentence` in the paragraph it's from, to tell more of it: one that
+    /// reads well beside it (40–240 characters) and isn't among `excluding`; nil when there's none.
+    public static func followUp(to sentence: String, in sections: [FilmArticle.Section], excluding: Set<String> = []) -> String? {
+        let target = normalized(sentence)
+        for section in sections {
+            for paragraph in section.paragraphs {
+                let all = sentences(in: paragraph)
+                guard let index = all.firstIndex(where: { normalized($0) == target }) else { continue }
+                guard index + 1 < all.count else { return nil }
+                let next = all[index + 1]
+                guard (40...240).contains(next.count), !excluding.contains(next), !next.contains("[") else { return nil }
+                return next
+            }
+        }
+        return nil
+    }
+
     static func normalized(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }

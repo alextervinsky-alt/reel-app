@@ -4,7 +4,8 @@ import ReelCore
 
 // MARK: - Behind the Film
 
-/// The film's life off screen, told as a story: three things to know, the film at a glance, then
+/// The film's life off screen, told as a story: five things worth knowing (each with what the
+/// article says next), the film at a glance, then
 /// its life from the idea to its legacy as numbered chapters, in the order it lived them (the
 /// article's sections regrouped: the idea, the casting, the shoot, design, music, release, how it
 /// was received, awards, legacy). Each chapter opens on its best lines, someone's own words set
@@ -28,7 +29,7 @@ struct BehindTheFilmTab: View {
         let content = built.content(film: film, article: article, hiding: hiding)
 
         VStack(alignment: .leading, spacing: 38) {
-            if !content.toKnow.isEmpty { ThingsToKnow(facts: content.toKnow) }
+            if !content.toKnow.isEmpty { DidYouKnow(items: content.toKnow) }
             AtAGlance(film: film)
             if content.hiddenFacts > 0, article?.after.isEmpty != false {
                 // Nothing else to open: say what's held back, with a way to see it.
@@ -162,8 +163,13 @@ struct BehindTheFilmTab: View {
         // A lead a little longer than before: two or three sentences that tell, not one that labels.
         let lead = Digest.lead(of: paragraphs, limit: 330, skipping: shown.first)
         let quote = Digest.pullQuote(in: paragraphs, skipping: ([lead] + shown).joined(separator: " "))
+        // The most surprising first; the business around the film (dates, takings) left out.
         let picked = Digest.facts(facts, in: paragraphs, lead: lead + " " + (quote ?? ""))
             .filter { !shown.contains($0.text) }
+            .map { ($0, FunFactExtractor.score($0.text)) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .map(\.0)
         return Topic(id: id, title: chapter.title, symbol: symbol, lead: lead, quote: quote,
                      parts: chapter.parts, facts: picked, minutes: Digest.minutes(paragraphs),
                      hasMore: Digest.hasMore(paragraphs, lead: lead))
@@ -190,17 +196,26 @@ struct BehindTheFilmTab: View {
         return shown
     }
 
-    /// The three things most worth knowing: the highlight, then the best facts from two other
-    /// kinds (one about the making, one about its life), each making sense on its own.
-    static func thingsToKnow(_ facts: FunFacts?) -> [FunFact] {
+    /// A fact worth knowing, and what the article says next about it.
+    struct Known: Identifiable {
+        let fact: FunFact
+        let more: String?
+        var id: String { fact.text }
+    }
+
+    /// The five things most worth knowing, the most surprising first (see
+    /// `FunFactExtractor.score`): each making sense on its own, at most two of a kind, none
+    /// from the introduction (the film page already says it).
+    static func didYouKnow(_ facts: FunFacts?) -> [FunFact] {
         guard let facts else { return [] }
+        let ranked = facts.facts.enumerated()
+            .filter { $0.element.category != "At a glance" && FunFactExtractor.standsAlone($0.element.text) && $0.element.text.count <= 260 }
+            .sorted { (FunFactExtractor.score($0.element.text), -$0.offset) > (FunFactExtractor.score($1.element.text), -$1.offset) }
+            .map(\.element)
         var chosen: [FunFact] = []
-        if let highlight = facts.highlight {
-            chosen.append(facts.facts.first { $0.text == highlight } ?? FunFact(category: "Did you know?", text: highlight))
-        }
-        for fact in facts.facts where chosen.count < 3 {
-            guard fact.category != "At a glance", FunFactExtractor.standsAlone(fact.text), fact.text.count <= 260,
-                  !chosen.contains(where: { $0.text == fact.text || $0.category == fact.category }) else { continue }
+        for fact in ranked where chosen.count < 5 {
+            guard chosen.filter({ $0.category == fact.category }).count < 2,
+                  FunFactExtractor.score(fact.text) > 0 else { continue }
             chosen.append(fact)
         }
         return chosen
@@ -210,7 +225,7 @@ struct BehindTheFilmTab: View {
     @MainActor
     final class Built {
         struct Content {
-            var toKnow: [FunFact] = []
+            var toKnow: [Known] = []
             /// The article's sentences about where it was shot (before-watching sections only).
             var locations: [String] = []
             var hiddenFacts = 0
@@ -237,8 +252,17 @@ struct BehindTheFilmTab: View {
                 }
                 facts = safe
             }
-            let toKnow = BehindTheFilmTab.thingsToKnow(facts)
-            let shown = toKnow.map(\.text)
+            let top = BehindTheFilmTab.didYouKnow(facts)
+            // What the article says next, from what may be read now (not After You Watch while hiding).
+            let readable = (article?.before ?? []) + (hiding ? [] : article?.after ?? [])
+            var taken = Set(top.map(\.text))
+            let toKnow = top.map { fact -> Known in
+                let more = Digest.followUp(to: fact.text, in: readable, excluding: taken)
+                    .flatMap { hiding && Spoilers.mentionsPlot($0) ? nil : $0 }
+                if let more { taken.insert(more) }
+                return Known(fact: fact, more: more)
+            }
+            let shown = toKnow.flatMap { [$0.fact.text] + ($0.more.map { [$0] } ?? []) }
             // Each fact once: those at the top aren't repeated in the chapters.
             let picked = (facts?.facts ?? []).filter { !shown.contains($0.text) }
             content = Content(
@@ -446,48 +470,53 @@ private struct PullQuote: View {
     }
 }
 
-/// The three things most worth knowing: the first across the top, the other two side by side.
-private struct ThingsToKnow: View {
-    let facts: [FunFact]
+/// Five things worth knowing, numbered, the most surprising first: each a fact that stands on
+/// its own, with what the article says next, and what part of the film's life it's about.
+private struct DidYouKnow: View {
+    let items: [BehindTheFilmTab.Known]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Three Things to Know", systemImage: "sparkles")
+            Label("Did You Know?", systemImage: "sparkles")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.brand)
-            if let first = facts.first { tile(first, leads: true) }
-            if facts.count > 1 {
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(facts.dropFirst(), id: \.text) { tile($0, leads: false) }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().overlay(Theme.hairline) }
+                    HStack(alignment: .firstTextBaseline, spacing: 16) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.brand)
+                            .frame(width: 22, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(item.fact.text)
+                                .font(.system(size: 16.5, weight: .medium))
+                                .lineSpacing(4)
+                                .foregroundStyle(Color.white.opacity(0.95))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                            if let more = item.more {
+                                Text(more)
+                                    .font(.system(size: 13.5))
+                                    .lineSpacing(3)
+                                    .foregroundStyle(Theme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                            }
+                            Text(item.fact.category.uppercased())
+                                .font(.system(size: 10, weight: .semibold))
+                                .tracking(0.8)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 2)
+                        }
+                    }
+                    .padding(.vertical, 16)
                 }
-                // Both as tall as the taller one.
-                .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.horizontal, 20)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline))
         }
-    }
-
-    private func tile(_ fact: FunFact, leads: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(fact.category.uppercased())
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(leads ? Theme.brand : Color.secondary)
-            Text(fact.text)
-                .font(.system(size: leads ? 18 : 14.5, weight: leads ? .medium : .regular))
-                .lineSpacing(leads ? 5 : 4)
-                .foregroundStyle(Color.white.opacity(leads ? 0.95 : 0.85))
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-        }
-        .padding(leads ? 22 : 18)
-        .frame(maxWidth: .infinity, maxHeight: leads ? nil : .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: leads ? 18 : 16, style: .continuous)
-                .fill(leads
-                      ? AnyShapeStyle(LinearGradient(colors: [Theme.brand.opacity(0.18), Theme.panel],
-                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                      : AnyShapeStyle(Theme.panel))
-        )
     }
 }
 

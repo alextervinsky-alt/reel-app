@@ -4,11 +4,11 @@ import ReelCore
 
 // MARK: - Cinematography
 
-/// How the film was shot, told the way a cinematography piece tells it (American Cinematographer's
-/// order): who shot it and how they came to, the look in brief and its specification sheet, the
-/// visual idea, the filmmakers' own words, what it drew on, the frame, the light and the colour,
-/// particular scenes, what was hard or new, then the gear, their other films in the library, the
-/// crew and the interviews to read in full. From the film's Wikipedia article, the interviews and
+/// How the film was shot, curated like a good cinematography piece: who shot it and how they
+/// came to, frames, the look in brief and its specification sheet, then What to Look For (the five
+/// most telling notes: the visual idea, their own words, what it drew on, a scene, a challenge,
+/// the frame, the light, the colour) with the rest by topic a click away, then their other films
+/// in the library, the crew and the interviews to read in full. From the film's Wikipedia article, the interviews and
 /// craft articles it cites, American Cinematographer, the cinematographer's own article and
 /// Wikidata's awards (see `CameraReading`, `TechSpecs`). What gives the story away stays out until
 /// the film is watched.
@@ -18,8 +18,8 @@ struct CinematographyTab: View {
     let openStill: ([String], Int) -> Void
     /// Everything read once for what it's made from (not on each redraw).
     @State private var read = ReadSpecs()
-    /// Sections opened past their first three.
-    @State private var expanded: Set<String> = []
+    /// Everything else read, opened.
+    @State private var showAll = false
 
     var body: some View {
         let id = film.tmdb?.id ?? 0
@@ -72,19 +72,9 @@ struct CinematographyTab: View {
                     specTable(sheet.rows)
                 }
             }
-            passage("The Visual Idea", note: "What the images were meant to do, and the choices made for it.",
-                    notes: specs.intent, bold: bold)
-            passage("In Their Own Words", note: "The filmmakers on how they shot it.",
-                    notes: specs.approach, bold: bold, quoted: true)
-            passage("References and Influences", note: "What the look drew on.", notes: specs.references, bold: bold)
-            passage("Frame and Movement", note: "Composition, lenses and how the camera moves.",
-                    notes: specs.cameraLanguage, bold: bold)
-            passage("Light", note: "Sources, shadows and contrast.", notes: specs.lighting, bold: bold)
-            passage("Colour and Texture", note: "Palette, grade, stock and grain.", notes: specs.colour, bold: bold)
-            passage("Scene by Scene", note: "How particular scenes and shots were done.", notes: specs.scenes, bold: bold)
-            passage("Challenges and Innovations", note: "What was hard, tested, built or done for the first time.",
-                    notes: specs.challenges, bold: bold)
-            passage(specs.saysNothing ? "In the Article" : "More on the Gear", note: nil, notes: specs.sentences, bold: bold)
+            let notes = CraftNotes(specs)
+            if !notes.top.isEmpty { whatToLookFor(notes.top, bold: bold) }
+            if !notes.rest.isEmpty { moreNotes(notes.rest, total: notes.restCount, bold: bold) }
             let others = model.filmsShot(by: lead, besides: film)
             if !others.isEmpty {
                 PosterRow(title: lead.count == 1 ? "Also Shot by \(lead[0])" : "Also Shot by Them", items: others)
@@ -229,68 +219,96 @@ struct CinematographyTab: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
     }
 
-    /// Notes under a heading, the gear in bold, each with where it was read; the filmmakers' own
-    /// words with a bar beside them. Nothing when there are none.
-    @ViewBuilder
-    private func passage(_ title: String, note: String?, notes: [TechSpecs.Note], bold: [String], quoted: Bool = false) -> some View {
-        if !notes.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Theme.sectionTitle(title)
-                    if let note { Text(note).font(.system(size: 13)).foregroundStyle(.secondary) }
-                }
-                let open = expanded.contains(title)
-                let shown = open ? notes : Array(notes.prefix(3))
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(shown.enumerated()), id: \.offset) { index, item in
-                        if index > 0 { Divider().overlay(Theme.hairline) }
-                        HStack(alignment: .top, spacing: 12) {
-                            if quoted {
-                                Image(systemName: "quote.opening")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(Theme.brand)
-                                    .padding(.top, 3)
-                            }
-                            VStack(alignment: .leading, spacing: 6) {
-                                // Their own words read as quotes (as in Behind the Film).
-                                Text(Self.emphasised(item.text, names: bold))
-                                    .font(quoted ? .system(size: 16, design: .serif).italic() : .system(size: 14))
-                                    .lineSpacing(quoted ? 5 : 3)
-                                    .foregroundStyle(quoted ? Color.white.opacity(0.92) : Theme.secondaryText)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .textSelection(.enabled)
-                                Text((item.source ?? "Wikipedia").uppercased())
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .tracking(0.8)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .padding(.vertical, 14)
-                    }
-                    if notes.count > 3 {
-                        Divider().overlay(Theme.hairline)
-                        Button {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                if open { expanded.remove(title) } else { expanded.insert(title) }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(open ? "Show Less" : "Show All \(notes.count)")
-                                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                                    .rotationEffect(.degrees(open ? 180 : 0))
-                            }
-                            .font(.system(size: 12.5, weight: .semibold))
+    /// The five most telling notes, numbered: what the topic is, the note (their own words as a
+    /// quote), and where an interview said it.
+    private func whatToLookFor(_ top: [CraftNotes.Item], bold: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Theme.sectionTitle("What to Look For")
+                Text("The choices that shape how it looks, the most telling first.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(top.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().overlay(Theme.hairline) }
+                    HStack(alignment: .firstTextBaseline, spacing: 16) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundStyle(Theme.brand)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
+                            .frame(width: 22, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(item.topic.title.uppercased())
+                                .font(.system(size: 10, weight: .semibold))
+                                .tracking(0.8)
+                                .foregroundStyle(Theme.brand.opacity(0.85))
+                            Text(Self.emphasised(item.note.text, names: bold))
+                                .font(item.topic == .words ? .system(size: 17, design: .serif).italic() : .system(size: 16, weight: .medium))
+                                .lineSpacing(4)
+                                .foregroundStyle(Color.white.opacity(0.94))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                            if let source = item.note.source, !source.hasPrefix("Wikipedia") {
+                                Text("— " + source)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 16)
+                }
+            }
+            .padding(.horizontal, 20)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline))
+        }
+    }
+
+    /// The rest of what was read, by topic, closed until asked for.
+    private func moreNotes(_ groups: [(topic: CraftNotes.Topic, notes: [TechSpecs.Note])], total: Int, bold: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(showAll ? "Less on How It Was Shot" : "More on How It Was Shot")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("\(total)").font(.system(size: 13)).foregroundStyle(.secondary).monospacedDigit()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .rotationEffect(.degrees(showAll ? 180 : 0))
+                }
+                .foregroundStyle(Color.white.opacity(0.9))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if showAll {
+                VStack(alignment: .leading, spacing: 22) {
+                    ForEach(groups, id: \.topic) { group in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(group.topic.title.uppercased())
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .tracking(0.8)
+                                .foregroundStyle(.tertiary)
+                            ForEach(group.notes) { note in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(Self.emphasised(note.text, names: bold))
+                                        .font(.system(size: 14))
+                                        .lineSpacing(3)
+                                        .foregroundStyle(Theme.secondaryText)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled)
+                                    if let source = note.source, !source.hasPrefix("Wikipedia") {
+                                        Text("— " + source).font(.system(size: 11.5)).foregroundStyle(.tertiary)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                .padding(.horizontal, 18)
+                .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
             }
         }
     }
@@ -395,6 +413,74 @@ struct CinematographyTab: View {
             }
         }
         return text
+    }
+}
+
+/// What was read about the shooting, curated: the five most telling notes across the topics
+/// (at most two of a topic, each worth reading on its own), then the rest by topic. A note is
+/// worth as much as the gear and detail it names, its reason, its source (their own words count
+/// most) and how much it surprises (see `FunFactExtractor.score`).
+struct CraftNotes {
+    enum Topic: Hashable {
+        case idea, words, reference, scene, challenge, frame, light, colour, gear
+
+        var title: String {
+            switch self {
+            case .idea: "The Visual Idea"
+            case .words: "In Their Own Words"
+            case .reference: "What It Drew On"
+            case .scene: "A Scene"
+            case .challenge: "A Challenge"
+            case .frame: "Frame and Movement"
+            case .light: "Light"
+            case .colour: "Colour and Texture"
+            case .gear: "The Gear"
+            }
+        }
+
+        /// The kinds of note that say most about why it looks as it does.
+        var bonus: Double {
+            switch self {
+            case .words, .idea, .reference: 2
+            case .scene, .challenge: 1.5
+            case .frame, .light, .colour: 0.5
+            case .gear: 0
+            }
+        }
+    }
+
+    struct Item: Identifiable {
+        let topic: Topic
+        let note: TechSpecs.Note
+        var id: String { note.id }
+    }
+
+    let top: [Item]
+    let rest: [(topic: Topic, notes: [TechSpecs.Note])]
+    var restCount: Int { rest.reduce(0) { $0 + $1.notes.count } }
+
+    init(_ specs: TechSpecs) {
+        let all: [(Topic, [TechSpecs.Note])] = [
+            (.idea, specs.intent), (.words, specs.approach), (.reference, specs.references), (.scene, specs.scenes),
+            (.challenge, specs.challenges), (.frame, specs.cameraLanguage), (.light, specs.lighting),
+            (.colour, specs.colour), (.gear, specs.sentences),
+        ]
+        // Each note's worth worked out once.
+        let ranked = all.flatMap { topic, notes in notes.map { Item(topic: topic, note: $0) } }
+            .filter { $0.note.text.count <= 420 }
+            .map { ($0, Double($0.note.weight) + $0.topic.bonus + FunFactExtractor.score($0.note.text)) }
+            .sorted { $0.1 > $1.1 }
+        var top: [Item] = []
+        for (item, worth) in ranked where top.count < 5 && worth >= 2 {
+            guard top.filter({ $0.topic == item.topic }).count < 2 else { continue }
+            top.append(item)
+        }
+        self.top = top
+        let shown = Set(top.map(\.id))
+        rest = all.compactMap { topic, notes in
+            let left = notes.filter { !shown.contains($0.id) }
+            return left.isEmpty ? nil : (topic, left)
+        }
     }
 }
 

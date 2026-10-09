@@ -178,7 +178,7 @@ public enum FunFactExtractor {
         ("trained", 1), ("learned", 1), ("built", 1), ("constructed", 1), ("oscar", 1), ("academy award", 1),
         ("first", 1), ("only", 0.5), ("real ", 0.5), ("actual", 0.5), ("hours", 0.5), ("days", 0.5),
         ("weeks", 0.5), ("months", 0.5), ("years", 0.5), ("replaced", 1), ("wanted", 0.5), ("idea", 0.5),
-        ("grossed", 1), ("nominated", 0.5), ("won", 0.5), ("working title", 2), ("originally titled", 2),
+        ("nominated", 0.5), ("won", 0.5), ("working title", 2), ("originally titled", 2),
         ("reshoot", 1.5), ("recast", 2), ("body double", 1.5), ("own stunts", 2), ("stunt", 1),
         ("true story", 1), ("real-life", 1), ("in-camera", 1.5), ("anamorphic", 1), ("imax", 1),
         ("65 mm", 1.5), ("70 mm", 1.5), ("35 mm", 1), ("film stock", 1.5), ("tribute", 1), ("reportedly", 0.5),
@@ -186,6 +186,11 @@ public enum FunFactExtractor {
     ]
 
     static let dullCues = ["was released on", "premiered at", "was released in", "is a ", "distributed by", "produced by"]
+    /// The business around a film (dates, screenings, rights, takings): rarely what's worth knowing.
+    static let logistics = ["screened", "screening", "scheduled", "festival", "premiere", "released", "distribut", "rights to",
+                            "acquired the rights", "box office", "grossed", "opening weekend", "filmgoers", "admissions",
+                            "home media", "blu-ray", "dvd", "streaming", "cancelled", "postponed", "trailer", "teaser",
+                            "poster", "rated r", "rating of", "theaters", "theatres", "ticket"]
 
     static let weakStarts = ["he ", "she ", "they ", "it ", "this ", "these ", "his ", "her ", "their ", "its ", "however", "also", "in addition", "for example", "for instance", "in particular"]
 
@@ -195,12 +200,16 @@ public enum FunFactExtractor {
         return !weakStarts.contains { lower.hasPrefix($0) }
     }
 
-    static func score(_ sentence: String) -> Double {
+    /// How worth knowing a sentence is: what surprises (originally, turned down, improvised,
+    /// the first…), specifics (numbers, someone's own words), less for the business around it.
+    public static func score(_ sentence: String) -> Double {
         let lower = sentence.lowercased()
         var score = cues.reduce(0.0) { lower.contains($1.0) ? $0 + $1.1 : $0 }
         if sentence.contains(where: { $0.isNumber }) { score += 0.5 }
+        if sentence.contains(where: { "\"“”".contains($0) }) { score += 0.75 }
         if weakStarts.contains(where: { lower.hasPrefix($0) }) { score -= 1.5 }
         if dullCues.contains(where: { lower.contains($0) }) { score -= 0.75 }
+        score -= 1.25 * Double(min(2, logistics.filter { lower.contains($0) }.count))
         return score
     }
 
