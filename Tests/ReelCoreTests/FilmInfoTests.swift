@@ -194,7 +194,7 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertEqual(FunFactExtractor.cinemaScore(fromExtract: extract), "A−")
         XCTAssertEqual(FunFactExtractor.criticSentences(fromExtract: extract).first?.hasPrefix("Critics praised"), true)
         let categories = facts.map { $0.category }
-        XCTAssertEqual(categories, ["Story & script", "Casting", "On set", "Effects", "Release"])
+        XCTAssertEqual(categories, ["Story & script", "Casting", "On set", "Effects"], "takings aren't a fun fact")
         XCTAssertFalse(facts.contains { $0.text.contains("replicant") }, "no plot")
         XCTAssertFalse(facts.contains { $0.text.contains("Critics praised") })
         XCTAssertFalse(facts.contains { $0.text.hasPrefix("It was") })

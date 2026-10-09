@@ -466,10 +466,12 @@ struct CraftNotes {
             (.colour, specs.colour), (.gear, specs.sentences),
         ]
         // Each note's worth worked out once.
-        let ranked = all.flatMap { topic, notes in notes.map { Item(topic: topic, note: $0) } }
-            .filter { $0.note.text.count <= 420 }
-            .map { ($0, Double($0.note.weight) + $0.topic.bonus + FunFactExtractor.score($0.note.text)) }
-            .sorted { $0.1 > $1.1 }
+        let items: [Item] = all.flatMap { entry in entry.1.map { Item(topic: entry.0, note: $0) } }
+        let worths: [(Item, Double)] = items.filter { $0.note.text.count <= 420 }.map { item in
+            let worth: Double = Double(item.note.weight) + item.topic.bonus + FunFactExtractor.score(item.note.text)
+            return (item, worth)
+        }
+        let ranked = worths.sorted { $0.1 > $1.1 }
         var top: [Item] = []
         for (item, worth) in ranked where top.count < 5 && worth >= 2 {
             guard top.filter({ $0.topic == item.topic }).count < 2 else { continue }
