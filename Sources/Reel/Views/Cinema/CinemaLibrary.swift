@@ -298,6 +298,7 @@ private struct CinemaLibraryGrid: View {
     @State private var selected: String?
     /// The highlight was moved with the arrow keys, so the pointer leaving a poster keeps it.
     @State private var byKeys = false
+    @State private var pointer = PointerWatch()
     @State private var width: CGFloat = 0
 
     private static let spacing: CGFloat = 26
@@ -340,6 +341,8 @@ private struct CinemaLibraryGrid: View {
         .equatable()
         .onHover { inside in
             if inside {
+                // Not a poster the grid scrolled under a resting pointer.
+                guard pointer.moved() else { return }
                 selected = item.id
                 byKeys = false
             } else if selected == item.id, !byKeys {
@@ -369,6 +372,7 @@ private struct CinemaLibraryGrid: View {
         let id = films[min(max(index, 0), films.count - 1)].id
         selected = id
         byKeys = true
+        pointer.keysMoved()
         scrollTo(id)
         return true
     }

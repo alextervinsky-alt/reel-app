@@ -220,4 +220,26 @@ extension View {
             .clipped()
     }
 }
+/// Tells the pointer moving from posters moving under a pointer that stayed put. When the arrow
+/// keys move the highlight, the rows scroll to it and slide posters under the resting pointer;
+/// those mustn't take the highlight back (it jumped to the row above). The pointer highlights
+/// again once it really moves.
+@MainActor
+final class PointerWatch {
+    private var restingAt: NSPoint?
+
+    /// The keys moved the highlight: where the pointer rests now.
+    func keysMoved() {
+        restingAt = NSEvent.mouseLocation
+    }
+
+    /// Whether the pointer moved since the keys did (then it highlights again).
+    func moved() -> Bool {
+        guard let restingAt else { return true }
+        let now = NSEvent.mouseLocation
+        guard abs(now.x - restingAt.x) + abs(now.y - restingAt.y) > 3 else { return false }
+        self.restingAt = nil
+        return true
+    }
+}
 #endif

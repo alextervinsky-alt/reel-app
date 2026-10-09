@@ -53,6 +53,7 @@ private struct CinemaHomeContent: View {
     /// True when the arrow keys moved the highlight: only then do the rows scroll to it. The
     /// pointer only highlights, so nothing moves away from under it.
     @State private var followSelection = false
+    @State private var pointer = PointerWatch()
 
     var body: some View {
         Group {
@@ -97,6 +98,8 @@ private struct CinemaHomeContent: View {
                               guard row.items.indices.contains(index) else { return }
                               let id = row.items[index].id
                               if inside {
+                                  // Not a poster the rows scrolled under a resting pointer.
+                                  guard pointer.moved() else { return }
                                   followSelection = false
                                   selection = (row.id, id)
                               } else if !followSelection, selection?.row == row.id, selection?.item == id {
@@ -145,6 +148,7 @@ private struct CinemaHomeContent: View {
         let r = min(max(row ?? 0, 0), rows.count - 1)
         let i = min(max(index, 0), rows[r].items.count - 1)
         followSelection = true
+        pointer.keysMoved()
         selection = (rows[r].id, rows[r].items[i].id)
         return true
     }
