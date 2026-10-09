@@ -100,7 +100,6 @@ struct LibraryGridView: View {
         // The banner reaches the top of the window, like a film page's backdrop.
         .ignoresSafeArea(.container, edges: featured == nil ? [] : .top)
         .navigationTitle(title)
-        .toolbar(removing: .title)
         .sheet(item: $regrouping) { item in
             RegroupSheet(item: item)
         }

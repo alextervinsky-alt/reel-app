@@ -186,9 +186,7 @@ final class FilmInfoTests: XCTestCase {
         Critics praised it as one of the best sequels ever made, with a 88% approval rating on review aggregators.
         The website's critical consensus reads, "Visually stunning and narratively satisfying, Blade Runner 2049 deepens and expands its predecessor's story." Audiences polled by CinemaScore gave the film an average grade of "A−" on an A+ to F scale.
         """
-        let picked = FunFactExtractor.facts(fromExtract: extract)
-        let facts = picked.facts
-        XCTAssertNotNil(picked.highlight)
+        let facts = FunFactExtractor.facts(fromExtract: extract)
         XCTAssertEqual(FunFactExtractor.consensus(fromExtract: extract),
                        "Visually stunning and narratively satisfying, Blade Runner 2049 deepens and expands its predecessor's story.")
         XCTAssertEqual(FunFactExtractor.cinemaScore(fromExtract: extract), "A−")

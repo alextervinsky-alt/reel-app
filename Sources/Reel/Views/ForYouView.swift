@@ -48,7 +48,6 @@ struct ForYouView: View {
         }
         .background(Theme.background)
         .navigationTitle("For You")
-        .toolbar(removing: .title)
         .filmPreviewSheet($preview)
         .task {
             await model.lists.prepare()
@@ -87,14 +86,23 @@ struct ForYouView: View {
 
 /// The picks, one under the other, laid out like Recommended's.
 struct ForYouGrid: View {
+    @Environment(\.isSnapshot) private var isSnapshot
     let picks: [ExplorePick]
     let onPreview: (PreviewFilm) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            ForEach(Array(picks.enumerated()), id: \.element.id) { index, pick in
-                ForYouCard(number: index + 1, pick: pick, onPreview: onPreview)
-            }
+        // Lazy on screen (each card loads its details as it comes into view); all at once when
+        // drawn to an image.
+        if isSnapshot {
+            VStack(alignment: .leading, spacing: 22) { cards }
+        } else {
+            LazyVStack(alignment: .leading, spacing: 22) { cards }
+        }
+    }
+
+    private var cards: some View {
+        ForEach(Array(picks.enumerated()), id: \.element.id) { index, pick in
+            ForYouCard(number: index + 1, pick: pick, onPreview: onPreview)
         }
     }
 }

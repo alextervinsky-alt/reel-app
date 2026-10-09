@@ -39,7 +39,6 @@ struct YearInFilmView: View {
         }
         .background(Theme.background)
         .navigationTitle("Year in Film")
-        .toolbar(removing: .title)
         .filmPreviewSheet($preview)
         // Titles, running times and genres of films seen elsewhere, the first time they're needed.
         .task {

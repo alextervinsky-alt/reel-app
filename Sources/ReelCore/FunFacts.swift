@@ -34,7 +34,7 @@ public struct QuickFacts: Codable, Equatable, Sendable {
     /// Awards and nominations for the cinematography (missing in facts fetched before Reel 1.8.2).
     public var cinematographyHonours: [Honour]?
     /// The countries of the filming places, as Wikidata names them ("United States of America");
-    /// empty when it knows no places, missing when not asked yet (before Reel 1.8.3) or it failed.
+    /// empty when it knows no places or the question failed, missing in facts from before Reel 1.8.3.
     public var filmingCountries: [String]?
 
     public init() {}
@@ -73,8 +73,6 @@ public struct FilmingPlace: Codable, Equatable, Sendable, Identifiable {
 /// Stored with the film, so they are available offline.
 public struct FunFacts: Codable, Equatable, Sendable {
     public var facts: [FunFact]
-    /// The single most interesting fact, shown as "Did you know?".
-    public var highlight: String?
     public var quick: QuickFacts?
     /// Rotten Tomatoes' critics consensus, as quoted on Wikipedia.
     public var consensus: String?
@@ -83,10 +81,9 @@ public struct FunFacts: Codable, Equatable, Sendable {
     public var articleTitle: String?
     public var fetchedAt: Date
 
-    public init(facts: [FunFact], highlight: String? = nil, quick: QuickFacts? = nil, consensus: String? = nil,
+    public init(facts: [FunFact], quick: QuickFacts? = nil, consensus: String? = nil,
                 cinemaScore: String? = nil, articleTitle: String?, fetchedAt: Date) {
         self.facts = facts
-        self.highlight = highlight
         self.quick = quick
         self.consensus = consensus
         self.cinemaScore = cinemaScore
@@ -216,7 +213,7 @@ public enum FunFactExtractor {
 
     /// Picks the most interesting sentences: up to `limit`, at most four per group (two from the
     /// introduction), in reading order within a group. Also returns the best one.
-    public static func facts(fromExtract extract: String, limit: Int = 16) -> (facts: [FunFact], highlight: String?) {
+    public static func facts(fromExtract extract: String, limit: Int = 16) -> [FunFact] {
         struct Candidate {
             let category: String
             let text: String
@@ -244,14 +241,11 @@ public enum FunFactExtractor {
             perCategory[candidate.category, default: 0] += 1
             chosen.append(candidate)
         }
-        // The "Did you know?" pick comes from the making-of side, not box office or awards lists.
-        let plain: Set<String> = ["Release", "Awards", "At a glance"]
-        let highlight = (chosen.first { !plain.contains($0.category) } ?? chosen.first)?.text
         func rank(_ category: String) -> Int { categoryOrder.firstIndex(of: category) ?? categoryOrder.count }
         let ordered = chosen
             .sorted { rank($0.category) != rank($1.category) ? rank($0.category) < rank($1.category) : $0.position < $1.position }
             .map { FunFact(category: $0.category, text: $0.text) }
-        return (ordered, highlight)
+        return ordered
     }
 
     /// Sentences critics wrote about the film (for likes and dislikes), at most 40.
@@ -332,9 +326,8 @@ public struct WikipediaClient: Sendable {
                 funFacts: FunFacts(facts: [], quick: quick, articleTitle: nil, fetchedAt: now),
                 criticSentences: [])
         }
-        let picked = FunFactExtractor.facts(fromExtract: text)
         let facts = FunFacts(
-            facts: picked.facts, highlight: picked.highlight, quick: quick,
+            facts: FunFactExtractor.facts(fromExtract: text), quick: quick,
             consensus: FunFactExtractor.consensus(fromExtract: text),
             cinemaScore: FunFactExtractor.cinemaScore(fromExtract: text),
             articleTitle: article, fetchedAt: now)
@@ -453,7 +446,8 @@ public struct WikipediaClient: Sendable {
         quick.basedOn = basedOn.compactMap { labels[$0] }
         quick.filmedIn = filmedIn.compactMap { labels[$0] }
         quick.filmingPlaces = filmedIn.compactMap { id in labels[id].map { FilmingPlace(name: $0, about: descriptions[id]) } }
-        quick.filmingCountries = filmedIn.isEmpty ? [] : try? await filmingCountries(of: item)
+        // Best-effort: none known when it fails (see `loadFunFacts`, which keeps what was known).
+        quick.filmingCountries = filmedIn.isEmpty ? [] : ((try? await filmingCountries(of: item)) ?? [])
         quick.setIn = setIn.compactMap { labels[$0] }
         quick.awardsWon = awards.count
         quick.nominations = entity.items("P1411").count
@@ -465,8 +459,8 @@ public struct WikipediaClient: Sendable {
         return quick
     }
 
-    /// The countries the film's filming places are in (a place that is a country counts as
-    /// itself), in one query.
+    /// The countries the film's filming places are in (today's: not a state that no longer
+    /// exists, and not England for the United Kingdom), in one query.
     func filmingCountries(of item: String) async throws -> [String] {
         struct Response: Decodable {
             struct Value: Decodable { let value: String }
@@ -477,7 +471,8 @@ public struct WikipediaClient: Sendable {
         let query = """
         SELECT DISTINCT ?countryLabel WHERE {
           wd:\(item) wdt:P915 ?place .
-          { ?place wdt:P17 ?country } UNION { ?place wdt:P31 wd:Q6256 . BIND(?place AS ?country) }
+          ?place wdt:P17 ?country .
+          FILTER NOT EXISTS { ?country wdt:P576 [] }
           SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
         }
         """

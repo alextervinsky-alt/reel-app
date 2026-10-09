@@ -57,8 +57,7 @@ extension AppModel {
         let isFullScreen = window.styleMask.contains(.fullScreen)
         if on, !isFullScreen {
             enteredFullScreen = true
-            // A moment later, once Cinema mode is on screen: the window then goes full screen
-            // with Cinema mode's toolbar (hidden until the pointer reaches the top).
+            // A moment later, once Cinema mode is on screen: the window then goes full screen.
             Task {
                 try? await Task.sleep(for: .milliseconds(80))
                 if cinemaMode, !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }

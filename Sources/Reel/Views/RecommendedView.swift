@@ -51,7 +51,6 @@ struct RecommendedView: View {
         }
         .background(Theme.background)
         .navigationTitle("Recommended")
-        .toolbar(removing: .title)
         // Play is right here: VLC gets a head start.
         .onAppear { model.warmPlayer() }
     }

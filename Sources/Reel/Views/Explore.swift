@@ -68,7 +68,6 @@ struct ExploreView: View {
         }
         .background(Theme.background)
         .navigationTitle("Explore")
-        .toolbar(removing: .title)
         .filmPreviewSheet($preview)
         .task { await model.lists.prepare() }
         .task(id: words) { await search() }
@@ -667,7 +666,6 @@ struct WishlistView: View {
         }
         .background(Theme.background)
         .navigationTitle("Wishlist")
-        .toolbar(removing: .title)
         .filmPreviewSheet($preview)
     }
 }

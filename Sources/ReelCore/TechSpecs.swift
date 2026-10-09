@@ -79,12 +79,6 @@ public struct TechSpecs: Equatable, Sendable {
 
     public var isEmpty: Bool { specs.isEmpty }
 
-    /// Nothing about the approach either.
-    public var saysNothing: Bool {
-        specs.isEmpty && approach.isEmpty && intent.isEmpty && references.isEmpty && lighting.isEmpty
-            && cameraLanguage.isEmpty && colour.isEmpty && scenes.isEmpty && challenges.isEmpty
-    }
-
     public func names(_ kind: Kind) -> [String] {
         specs.filter { $0.kind == kind }.map(\.name)
     }

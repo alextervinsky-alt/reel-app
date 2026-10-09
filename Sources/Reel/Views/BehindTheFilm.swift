@@ -161,7 +161,7 @@ struct BehindTheFilmTab: View {
     private static func topic(_ chapter: Chapter, id: String, symbol: String, facts: [FunFact], shown: [String]) -> Topic {
         let paragraphs = chapter.paragraphs
         // A lead a little longer than before: two or three sentences that tell, not one that labels.
-        let lead = Digest.lead(of: paragraphs, limit: 330, skipping: shown.first)
+        let lead = Digest.lead(of: paragraphs, limit: 330, skipping: shown)
         let quote = Digest.pullQuote(in: paragraphs, skipping: ([lead] + shown).joined(separator: " "))
         // The most surprising first; the business around the film (dates, takings) left out.
         let picked = Digest.facts(facts, in: paragraphs, lead: lead + " " + (quote ?? ""))
@@ -185,14 +185,10 @@ struct BehindTheFilmTab: View {
                      parts: [], facts: rest, minutes: 1, hasMore: rest.count > TopicCard.closedFacts)
     }
 
-    /// The facts without any that may mention the story, and a "Did you know?" that makes sense
-    /// on its own and gives nothing away.
+    /// The facts without any that may mention the story.
     static func withoutStory(_ facts: FunFacts, hiding: Bool) -> FunFacts {
         var shown = facts
         if hiding { shown.facts = facts.facts.filter { !Spoilers.mentionsPlot($0.text) } }
-        if let highlight = facts.highlight, !FunFactExtractor.standsAlone(highlight) || (hiding && Spoilers.mentionsPlot(highlight)) {
-            shown.highlight = shown.facts.first { $0.category != "At a glance" && FunFactExtractor.standsAlone($0.text) }?.text
-        }
         return shown
     }
 
@@ -248,13 +244,9 @@ struct BehindTheFilmTab: View {
             let all = film.funFacts
             var facts = all.map { BehindTheFilmTab.withoutStory($0, hiding: hiding) }
             // A sentence can pass on its own and still come from a paragraph that gives the story
-            // away (After You Watch): while hiding, those stay out too, the highlight included.
+            // away (After You Watch): while hiding, those stay out too.
             if hiding, let article, var safe = facts {
                 safe.facts = Digest.leftover(safe.facts, sections: article.after)
-                if let highlight = safe.highlight,
-                   Digest.leftover([FunFact(category: "", text: highlight)], sections: article.after).isEmpty {
-                    safe.highlight = safe.facts.first { $0.category != "At a glance" && FunFactExtractor.standsAlone($0.text) }?.text
-                }
                 facts = safe
             }
             let top = BehindTheFilmTab.didYouKnow(facts)
@@ -272,7 +264,7 @@ struct BehindTheFilmTab: View {
             let picked = (facts?.facts ?? []).filter { !shown.contains($0.text) }
             content = Content(
                 toKnow: toKnow,
-                locations: article.map { Digest.locationSentences($0.before) } ?? [],
+                locations: article.map { Digest.locationSentences($0.before).filter { !shown.contains($0) } } ?? [],
                 hiddenFacts: (all?.facts.count ?? 0) - (facts?.facts.count ?? 0),
                 before: article.map { BehindTheFilmTab.story($0.before, facts: picked, shown: shown) } ?? [],
                 after: article.map { BehindTheFilmTab.topics($0.after, facts: picked, shown: shown) } ?? [],

@@ -18,6 +18,8 @@ struct RootView: View {
     @State private var deskSearch = ""
     /// ⌘F: the search field showing (desk or Cinema mode) takes the focus.
     @State private var focusSearch = false
+    /// Whether the sidebar shows (the Back button steps clear of the window buttons when it doesn't).
+    @State private var columns = NavigationSplitViewVisibility.all
 
     /// The desk library, with Cinema mode over it when on, and what can open over either: a
     /// trailer, and the "How was it?" sheet. The desk stays in place (hidden) under Cinema mode,
@@ -75,10 +77,9 @@ struct RootView: View {
     }
 
     private var desk: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SidebarView(selection: shelf, onSelect: select)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 224, max: 300)
-                .toolbar(removing: .sidebarToggle)
         } detail: {
             NavigationStack(path: $path) {
                 Group {
@@ -133,9 +134,10 @@ struct RootView: View {
             }
             // Back, over a page opened from a list (⌘[ too).
             .overlay(alignment: .topLeading) {
-                if !path.isEmpty {
-                    BackButton { path.removeLast() }
-                        .padding(.leading, 18)
+                // Not while Cinema mode or a trailer covers the desk: ⌘[ mustn't move the page under it.
+                if !path.isEmpty, !model.cinemaMode, model.trailer == nil {
+                    BackButton { if !path.isEmpty { path.removeLast() } }
+                        .padding(.leading, columns == .detailOnly ? 84 : 18)
                         .padding(.top, 12)
                         .ignoresSafeArea(.container, edges: .top)
                         .transition(.opacity)

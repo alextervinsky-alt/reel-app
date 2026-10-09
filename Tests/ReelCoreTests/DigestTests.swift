@@ -55,7 +55,7 @@ final class DigestTests: XCTestCase {
             "Dr. Kim was played by J. Lee.",
             "Short one.",
         ])
-        let lead = Digest.lead(of: [text], limit: 80, skipping: "The film was directed by Bong Joon Ho.")
+        let lead = Digest.lead(of: [text], limit: 80, skipping: ["The film was directed by Bong Joon Ho."])
         XCTAssertEqual(lead, "Its U.S. release came later, through Neon. Dr. Kim was played by J. Lee.")
     }
 

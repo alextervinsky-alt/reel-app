@@ -216,7 +216,10 @@ public struct YearInFilm: Equatable, Sendable {
         ["United States of America": "United States", "Russian Federation": "Russia", "Korea, Republic of": "South Korea",
          "Iran, Islamic Republic of": "Iran", "Czechia": "Czech Republic", "Viet Nam": "Vietnam",
          "People's Republic of China": "China", "Kingdom of the Netherlands": "Netherlands", "Kingdom of Denmark": "Denmark",
-         "Republic of Ireland": "Ireland", "State of Palestine": "Palestine"][name] ?? name
+         "Republic of Ireland": "Ireland", "State of Palestine": "Palestine", "Türkiye": "Turkey",
+         "Hong Kong SAR China": "Hong Kong", "Palestinian Territories": "Palestine", "Bosnia & Herzegovina": "Bosnia and Herzegovina",
+         "Myanmar (Burma)": "Myanmar", "Congo - Kinshasa": "DR Congo", "Congo - Brazzaville": "Republic of the Congo",
+         "Macao SAR China": "Macau", "Trinidad & Tobago": "Trinidad and Tobago"][name] ?? name
     }
 
     /// Years with at least one dated viewing, newest first.

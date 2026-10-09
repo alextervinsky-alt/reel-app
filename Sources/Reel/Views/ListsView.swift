@@ -37,7 +37,6 @@ struct ListsView: View {
         }
         .background(Theme.background)
         .navigationTitle("Lists")
-        .toolbar(removing: .title)
         .filmPreviewSheet($preview)
         .task {
             let lists = model.lists

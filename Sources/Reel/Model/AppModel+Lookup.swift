@@ -411,6 +411,9 @@ extension AppModel {
         }
         // Wikidata's part failing this time doesn't lose what it gave before.
         if facts.quick == nil { facts.quick = film.funFacts?.quick }
+        if facts.quick?.filmingCountries?.isEmpty != false, let known = film.funFacts?.quick?.filmingCountries, !known.isEmpty {
+            facts.quick?.filmingCountries = known
+        }
         mutateFilms { list in
             for i in list.indices where list[i].tmdb?.id == details.id { list[i].funFacts = facts }
         }

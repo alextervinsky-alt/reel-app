@@ -72,7 +72,7 @@ struct CinematographyTab: View {
                     specTable(sheet.rows)
                 }
             }
-            let notes = CraftNotes(specs)
+            let notes = read.notes
             if !notes.top.isEmpty { whatToLookFor(notes.top, bold: bold) }
             if !notes.rest.isEmpty { moreNotes(notes.rest, total: notes.restCount, bold: bold) }
             let others = model.filmsShot(by: lead, besides: film)
@@ -532,10 +532,17 @@ struct SpecSheet {
 private final class ReadSpecs {
     private var stamp = ""
     private var specs = TechSpecs.read([])
+    /// What's shown of it, curated (read with `specs`).
+    private(set) var notes = CraftNotes(TechSpecs.read([]))
 
     func specs(article: FilmArticle?, reading: CameraReading?, hiding: Bool, cinematographers: [String],
                directors: [String]) -> TechSpecs {
-        guard article != nil || reading != nil else { return TechSpecs.read([]) }
+        guard article != nil || reading != nil else {
+            // Nothing read yet (another film opened): nothing from the last one shows.
+            stamp = ""
+            notes = CraftNotes(TechSpecs.read([]))
+            return TechSpecs.read([])
+        }
         let now = "\(article?.title ?? "")|\(article?.before.count ?? 0)|\(article?.after.count ?? 0)|"
             + "\(reading?.sources.count ?? -1)|\(hiding)|\(cinematographers)|\(directors)"
         if now != stamp {
@@ -548,6 +555,7 @@ private final class ReadSpecs {
             }
             specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors)
             if hiding { specs = Self.withoutStory(specs) }
+            notes = CraftNotes(specs)
         }
         return specs
     }

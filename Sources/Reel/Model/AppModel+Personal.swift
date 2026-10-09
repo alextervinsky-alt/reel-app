@@ -245,6 +245,8 @@ extension AppModel {
     /// fetched (one at a time), and Year in Film updates as they arrive.
     func loadFilmingCountries(for films: [YearFilm]) async {
         for film in films where !film.elsewhere {
+            // Left Year in Film: the rest waits for the next visit.
+            if Task.isCancelled { return }
             guard let entry = itemCache[film.id]?.main, entry.funFacts?.quick != nil,
                   entry.funFacts?.quick?.filmingCountries == nil else { continue }
             await loadFunFacts(for: entry)

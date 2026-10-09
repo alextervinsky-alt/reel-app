@@ -152,7 +152,6 @@ struct TonightView: View {
         }
         .background(Theme.background)
         .navigationTitle("Tonight")
-        .toolbar(removing: .title)
         .onAppear { model.startNewEveningIfNeeded() }
     }
 }

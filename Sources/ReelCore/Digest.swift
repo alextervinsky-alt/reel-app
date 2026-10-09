@@ -22,11 +22,11 @@ public enum Digest {
     /// The opening sentences of a section, in order, up to about `limit` characters: at least
     /// one whole sentence, and a very long one cut at a word. A sentence shown elsewhere (the
     /// "Did you know?") is skipped.
-    public static func lead(of paragraphs: [String], limit: Int = 240, skipping shown: String? = nil) -> String {
-        let skip = shown.map(normalized)
+    public static func lead(of paragraphs: [String], limit: Int = 240, skipping shown: [String] = []) -> String {
+        let skip = Set(shown.map(normalized))
         var text = ""
         for paragraph in paragraphs.prefix(2) {
-            for sentence in sentences(in: paragraph) where normalized(sentence) != skip {
+            for sentence in sentences(in: paragraph) where !skip.contains(normalized(sentence)) {
                 let longer = text.isEmpty ? sentence : text + " " + sentence
                 if !text.isEmpty, longer.count > limit {
                     return text
