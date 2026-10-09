@@ -210,9 +210,20 @@ public enum HTMLText {
 public struct CameraSourcesClient: Sendable {
     let session: URLSession
 
-    public init(session: URLSession = TMDBClient.sharedSession) {
+    public init(session: URLSession = CameraSourcesClient.session) {
         self.session = session
     }
+
+    /// Its own connections: a slow magazine site never holds up TMDB or Wikipedia.
+    public static let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.urlCache = nil
+        config.httpCookieStorage = nil
+        config.httpShouldSetCookies = false
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        return URLSession(configuration: config)
+    }()
 
     /// At most three pages at a time, so a film page never floods anyone.
     static let gate = RequestGate(limit: 3)
@@ -319,7 +330,6 @@ public struct CameraSourcesClient: Sendable {
         request.setValue(Wikimedia.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(accept, forHTTPHeaderField: "Accept")
         request.setValue("en", forHTTPHeaderField: "Accept-Language")
-        request.timeoutInterval = 15
         await Self.gate.acquire()
         let result: (Data, Int)? = await withCheckedContinuation { continuation in
             session.dataTask(with: request) { data, response, error in

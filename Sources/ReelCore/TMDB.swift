@@ -384,6 +384,8 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false
         config.timeoutIntervalForRequest = 20
+        // However slowly it answers, a request ends within a minute (the default is a week).
+        config.timeoutIntervalForResource = 60
         config.httpMaximumConnectionsPerHost = 6
         return URLSession(configuration: config)
     }()
