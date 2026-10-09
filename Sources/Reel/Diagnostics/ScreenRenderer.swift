@@ -136,7 +136,7 @@ enum ScreenRenderer {
             if let path = pick.film.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) }
             _ = await model.previewInfo(for: pick.id)
         }
-        render(ForYouGrid(picks: shown) { _ in }
+        render(ForYouGrid(picks: Array(shown.prefix(3))) { _ in }
                 .padding(32)
                 .frame(width: 1300)
                 .background(Theme.background),

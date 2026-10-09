@@ -16,7 +16,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Reel" "$APP/Contents/MacOS/Reel"
 strip -x "$APP/Contents/MacOS/Reel" 2>/dev/null || true
 
-VERSION="1.8.2"
+VERSION="1.8.3"
 # The public repo counts runs from 1; the private one reached 91, so builds keep rising across the move.
 BUILD_NUMBER="$(( ${GITHUB_RUN_NUMBER:-1} + 100 ))"
 

@@ -44,7 +44,7 @@ struct ForYouView: View {
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
-            .frame(maxWidth: 1240, alignment: .leading)
+            .frame(maxWidth: 1120, alignment: .leading)
         }
         .background(Theme.background)
         .navigationTitle("For You")
@@ -85,14 +85,13 @@ struct ForYouView: View {
     }
 }
 
-/// The picks, two or three to a row.
+/// The picks, one under the other, laid out like Recommended's.
 struct ForYouGrid: View {
     let picks: [ExplorePick]
     let onPreview: (PreviewFilm) -> Void
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 340, maximum: 460), spacing: 22, alignment: .top)],
-                  alignment: .leading, spacing: 26) {
+        VStack(alignment: .leading, spacing: 22) {
             ForEach(Array(picks.enumerated()), id: \.element.id) { index, pick in
                 ForYouCard(number: index + 1, pick: pick, onPreview: onPreview)
             }
@@ -100,8 +99,8 @@ struct ForYouGrid: View {
     }
 }
 
-/// One pick: its frame, why it's here, what it is, how it's rated and what it's about, with the
-/// trailer, the wishlist and "Seen it?" at hand.
+/// One pick, as a Recommended card: its frame with its number, then why it's here, what it is,
+/// how it's rated, the whole synopsis, and the trailer, the wishlist and "Seen it?" at hand.
 struct ForYouCard: View {
     @Environment(AppModel.self) private var model
     let number: Int
@@ -116,74 +115,76 @@ struct ForYouCard: View {
         let cached = model.previewCache[film.id]
         let details = self.details ?? cached.flatMap { $0.details }
         let ratings = self.ratings ?? cached.flatMap { $0.ratings }
-        VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .top, spacing: 24) {
             Button { onPreview(film) } label: {
                 FocusedBackdrop(path: film.backdropPath ?? details?.backdropPath)
-                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .frame(width: 360, height: 203)
                     .overlay(alignment: .bottomLeading) {
                         Text("\(number)")
-                            .font(.system(size: 40, weight: .heavy, design: .rounded))
+                            .font(.system(size: 54, weight: .heavy, design: .rounded))
                             .foregroundStyle(Color.white.opacity(0.92))
                             .shadow(color: Color.black.opacity(0.6), radius: 8)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 2)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline))
-                    .scaleEffect(hovering ? 1.015 : 1)
+                    .scaleEffect(hovering ? 1.02 : 1)
                     .animation(.spring(response: 0.28, dampingFraction: 0.82), value: hovering)
             }
             .buttonStyle(.plain)
             .onHover { hovering = $0 }
-            Text(pick.reason.uppercased())
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.9)
-                .foregroundStyle(Theme.brand)
-                .lineLimit(2)
-            Text(film.title)
-                .font(.system(size: 19, weight: .bold))
-                .lineLimit(2)
-            Text(metaLine(details))
-                .font(.system(size: 12.5))
-                .foregroundStyle(Theme.secondaryText)
-                .lineLimit(1)
-            RatingStrip(ratings: ratings, tmdbVote: film.voteAverage ?? details?.voteAverage)
-                .font(.system(size: 12))
-            if let overview = film.overview ?? details?.overview, !overview.isEmpty {
-                Text(overview)
+
+            VStack(alignment: .leading, spacing: 9) {
+                Text(pick.reason.uppercased())
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .tracking(0.9)
+                    .foregroundStyle(Theme.brand)
+                    .lineLimit(2)
+                Text(film.title)
+                    .font(.system(size: 22, weight: .bold))
+                    .lineLimit(2)
+                Text(metaLine(details))
                     .font(.system(size: 13))
-                    .lineSpacing(2)
                     .foregroundStyle(Theme.secondaryText)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
+                RatingStrip(ratings: ratings, tmdbVote: film.voteAverage ?? details?.voteAverage)
+                    .font(.system(size: 12.5))
+                if let overview = film.overview ?? details?.overview, !overview.isEmpty {
+                    Text(overview)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 10) {
+                    let videos = trailerVideos(details)
+                    Button {
+                        model.trailer = TrailerRequest(videos: videos.map(\.key), title: film.title, filmID: nil, tmdbID: film.id,
+                                                       backdropPath: film.backdropPath ?? details?.backdropPath,
+                                                       origin: nil, offersFilmPage: false)
+                    } label: {
+                        Label(videos.first.map { Trailers.isTeaser($0) } == true ? "Teaser" : "Trailer", systemImage: "play.rectangle")
+                    }
+                    .buttonStyle(PrimaryCapsuleStyle())
+                    .disabled(videos.isEmpty)
+                    .opacity(videos.isEmpty ? 0.45 : 1)
+                    Button { onPreview(film) } label: {
+                        Label("Details", systemImage: "info.circle")
+                    }
+                    .buttonStyle(SecondaryCapsuleStyle())
+                    RoundToggle(symbol: "star", onSymbol: "star.fill", isOn: model.isWishlisted(film.id),
+                                help: model.isWishlisted(film.id) ? "On your wishlist" : "Add to Wishlist") {
+                        model.toggleWishlist(film)
+                    }
+                    SeenButton(tmdbID: film.id) { seen in
+                        Label(seen ? "Seen" : "Seen It?", systemImage: seen ? "eye.fill" : "eye")
+                    }
+                    .buttonStyle(SecondaryCapsuleStyle())
+                }
+                .padding(.top, 4)
             }
-            HStack(spacing: 8) {
-                let videos = trailerVideos(details)
-                Button {
-                    model.trailer = TrailerRequest(videos: videos.map(\.key), title: film.title, filmID: nil, tmdbID: film.id,
-                                                   backdropPath: film.backdropPath ?? details?.backdropPath,
-                                                   origin: nil, offersFilmPage: false)
-                } label: {
-                    Label(videos.first.map { Trailers.isTeaser($0) } == true ? "Teaser" : "Trailer", systemImage: "play.rectangle")
-                }
-                .buttonStyle(PrimaryCapsuleStyle())
-                .disabled(videos.isEmpty)
-                .opacity(videos.isEmpty ? 0.45 : 1)
-                Button {
-                    model.toggleWishlist(film)
-                } label: {
-                    Label(model.isWishlisted(film.id) ? "On Wishlist" : "Wishlist",
-                          systemImage: model.isWishlisted(film.id) ? "star.fill" : "star")
-                }
-                .buttonStyle(SecondaryCapsuleStyle())
-                SeenButton(tmdbID: film.id) { seen in
-                    Label(seen ? "Seen" : "Seen It?", systemImage: seen ? "eye.fill" : "eye")
-                }
-                .buttonStyle(SecondaryCapsuleStyle())
-            }
-            .padding(.top, 2)
+            Spacer(minLength: 0)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(18)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.panel))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline))
         .task(id: film.id) {
