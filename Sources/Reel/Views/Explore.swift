@@ -157,11 +157,20 @@ struct BestOfRow: View {
 
 /// Where the best of a year comes from.
 struct SourceMenu: View {
+    @Environment(\.isSnapshot) private var isSnapshot
     @Binding var source: BestOfSource
     /// Only TMDB's sources (a list page of TMDB films).
     var tmdbOnly = false
 
     var body: some View {
+        if isSnapshot {
+            FilterPill(icon: "line.3.horizontal.decrease", text: source.title, active: false)
+        } else {
+            menu
+        }
+    }
+
+    private var menu: some View {
         Menu {
             Picker("Source", selection: $source) {
                 ForEach(BestOfSource.allCases.filter { !tmdbOnly || $0.isTMDB }) { Text($0.title).tag($0) }
@@ -307,10 +316,20 @@ struct DiscoverListPage: View {
 }
 
 struct YearMenu: View {
+    @Environment(\.isSnapshot) private var isSnapshot
     @Binding var year: Int
     private let years = Array((1920...Calendar.current.component(.year, from: Date())).reversed())
 
     var body: some View {
+        // A menu can't be drawn into an image (the CI screens): its pill stands in.
+        if isSnapshot {
+            FilterPill(icon: "calendar", text: String(year), active: false)
+        } else {
+            menu
+        }
+    }
+
+    private var menu: some View {
         Menu {
             Picker("Year", selection: $year) {
                 ForEach(years, id: \.self) { Text(String($0)).tag($0) }
