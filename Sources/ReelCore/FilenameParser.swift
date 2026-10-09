@@ -166,8 +166,8 @@ public enum FilenameParser {
         // HDR, also from [bracketed] tags ("Dune (2021) [Bluray-2160p][DV HDR10][x265]") and
         // "Dolby Vision" written as two words.
         let tags = ex.squareGroups.flatMap { $0.lowercased().split { !($0.isLetter || $0.isNumber || $0 == "+") }.map(String.init) }
-        let words = lower + tags
-        let dolbyVision = zip(words, words.dropFirst()).contains { $0 == "dolby" && $1 == "vision" }
+        let named = lower + tags
+        let dolbyVision = zip(named, named.dropFirst()).contains { $0 == "dolby" && $1 == "vision" }
         func shows(_ names: [String]) -> Bool { has(names) || tags.contains(where: { names.contains($0) }) }
         let isDV = dolbyVision || shows(["dv", "dovi", "dolbyvision"])
         let isHDR10Plus = shows(["hdr10+", "hdr10plus"])
