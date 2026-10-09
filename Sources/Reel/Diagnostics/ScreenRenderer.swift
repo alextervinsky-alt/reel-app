@@ -169,8 +169,15 @@ enum ScreenRenderer {
         var explorePosters = (model.discover[.mood(.dark)] ?? []).prefix(8).compactMap(\.posterPath)
         for shelf in model.exploreShelves { explorePosters += model.exploreFilms(shelf, mood: nil).prefix(8).compactMap(\.posterPath) }
         explorePosters += (model.bestOf(year: year, source: .gems) ?? []).prefix(8).compactMap(\.posterPath)
-        for path in explorePosters { _ = await ImageStore.shared.image(path, .poster) }
-        log("Explore: \(explorePosters.count) posters loaded")
+        // At most half a minute: CI's network has stalled a download here past every timeout,
+        // and a poster that isn't in is drawn as its placeholder.
+        let posters = Task.detached { for path in explorePosters { _ = await ImageStore.shared.image(path, .poster) } }
+        let deadline = ContinuousClock.now + .seconds(30)
+        while ContinuousClock.now < deadline, explorePosters.contains(where: { ImageStore.shared.cached($0, .poster) == nil }) {
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        posters.cancel()
+        log("Explore: \(explorePosters.filter { ImageStore.shared.cached($0, .poster) != nil }.count) of \(explorePosters.count) posters loaded")
         render(VStack(alignment: .leading, spacing: 38) {
                     DiscoverRow(list: .mood(.dark)) { _ in }
                     ForEach(model.exploreShelves, id: \.self) { shelf in DiscoverRow(list: shelf) { _ in } }
