@@ -167,7 +167,7 @@ enum ScreenRenderer {
         let shown = Array((model.explorePicks ?? []).prefix(6))
         for pick in shown {
             if let path = pick.film.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) }
-            _ = await model.previewInfo(for: pick.id)
+            // (experiment) _ = await model.previewInfo(for: pick.id)
         }
         render(ForYouGrid(picks: shown) { _ in }
                 .padding(32)
