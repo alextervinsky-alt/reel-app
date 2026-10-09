@@ -17,6 +17,10 @@ struct ExploreView: View {
     @State private var year = Calendar.current.component(.year, from: Date()) - 1
     @State private var source = BestOfSource.tmdb
     @State private var mood: Mood?
+    /// A film looked up by name: its matches take the place of the rows while there's text.
+    @State private var searchText = ""
+    @State private var found: [TMDBMovieSummary]?
+    @State private var searching = false
 
     private var lists: [DiscoverList] {
         (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .trending, .newAtHome] + model.exploreShelves
@@ -29,22 +33,33 @@ struct ExploreView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 38) {
                 VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Explore").font(.system(size: 30, weight: .bold))
-                        Text("Find your next film. New shelves each time Reel opens; films you've seen are left out.")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Explore").font(.system(size: 30, weight: .bold))
+                            Text("Find your next film. New shelves each time Reel opens; films you've seen are left out.")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 16)
+                        ExploreSearchField(text: $searchText, searching: searching)
+                            .padding(.top, 4)
                     }
-                    MoodChips(choices: Self.moodChoices, selected: mood.map { .mood($0) } ?? .any, counted: false) { choice in
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            if case .mood(let chosen) = choice { mood = chosen } else { mood = nil }
+                    if searchText.isEmpty {
+                        MoodChips(choices: Self.moodChoices, selected: mood.map { .mood($0) } ?? .any, counted: false) { choice in
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                if case .mood(let chosen) = choice { mood = chosen } else { mood = nil }
+                            }
                         }
                     }
                 }
-                ForEach(lists, id: \.self) { list in
-                    DiscoverRow(list: list, mood: list.mood == nil ? mood : nil) { preview = $0 }
+                if !searchText.isEmpty {
+                    searchResults
+                } else {
+                    ForEach(lists, id: \.self) { list in
+                        DiscoverRow(list: list, mood: list.mood == nil ? mood : nil) { preview = $0 }
+                    }
+                    BestOfRow(year: $year, source: $source, mood: mood) { preview = $0 }
                 }
-                BestOfRow(year: $year, source: $source, mood: mood) { preview = $0 }
             }
             .padding(.horizontal, 32)
             .padding(.top, 18)
@@ -55,6 +70,7 @@ struct ExploreView: View {
         .toolbar(removing: .title)
         .filmPreviewSheet($preview)
         .task { await model.lists.prepare() }
+        .task(id: searchText) { await search() }
         .task(id: lists) {
             await withTaskGroup(of: Void.self) { group in
                 for list in lists {
@@ -62,6 +78,71 @@ struct ExploreView: View {
                 }
             }
         }
+    }
+}
+
+extension ExploreView {
+    /// The films TMDB finds for the words, in its order (owned ones open their page).
+    @ViewBuilder
+    var searchResults: some View {
+        if let found, !found.isEmpty {
+            LazyVGrid(columns: LibraryGridView.columns, alignment: .leading, spacing: 30) {
+                ForEach(found) { movie in
+                    DiscoverCard(film: PreviewFilm(movie)) { preview = $0 }
+                }
+            }
+        } else if found != nil, !searching {
+            Text("No film found for “\(searchText)”.")
+                .foregroundStyle(.secondary)
+                .frame(minHeight: 120, alignment: .leading)
+        }
+    }
+
+    /// After a short pause in typing.
+    func search() async {
+        let words = searchText.trimmingCharacters(in: .whitespaces)
+        guard words.count >= 2 else {
+            found = nil
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(350))
+        guard !Task.isCancelled, let client = model.tmdb else { return }
+        searching = true
+        defer { searching = false }
+        let results = try? await client.searchMovies(query: words, year: nil)
+        guard !Task.isCancelled else { return }
+        // Little-known entries (no poster, no votes) after the rest, each part in TMDB's order.
+        func known(_ movie: TMDBMovieSummary) -> Bool { movie.posterPath != nil && (movie.voteCount ?? 0) > 0 }
+        found = (results ?? []).filter(known) + (results ?? []).filter { !known($0) }
+    }
+}
+
+/// Look up any film: a slim field beside Explore's title.
+private struct ExploreSearchField: View {
+    @Binding var text: String
+    let searching: Bool
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if searching {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+            }
+            TextField("Search any film", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(width: 280, height: 32)
+        .background(Capsule().fill(Color.white.opacity(0.08)))
+        .overlay(Capsule().strokeBorder(Theme.hairline))
     }
 }
 
@@ -181,9 +262,12 @@ struct SourceMenu: View {
 
     private var menu: some View {
         Menu {
+            // Inline: the choices themselves, not a "Source" item opening them.
             Picker("Source", selection: $source) {
                 ForEach(BestOfSource.allCases.filter { !tmdbOnly || $0.isTMDB }) { Text($0.title).tag($0) }
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
         } label: {
             FilterPill(icon: "line.3.horizontal.decrease", text: source.title, active: false)
         }
@@ -328,32 +412,52 @@ struct DiscoverListPage: View {
     }
 }
 
+/// A year to choose: the pill opens a short list (about ten years at a time) that scrolls,
+/// opened at the year shown.
 struct YearMenu: View {
-    @Environment(\.isSnapshot) private var isSnapshot
     @Binding var year: Int
+    @State private var open = false
     private let years = Array((1920...Calendar.current.component(.year, from: Date())).reversed())
 
     var body: some View {
-        // A menu can't be drawn into an image (the CI screens): its pill stands in.
-        if isSnapshot {
+        Button { open.toggle() } label: {
             FilterPill(icon: "calendar", text: String(year), active: false)
-        } else {
-            menu
         }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .popover(isPresented: $open, arrowEdge: .bottom) { list }
     }
 
-    private var menu: some View {
-        Menu {
-            Picker("Year", selection: $year) {
-                ForEach(years, id: \.self) { Text(String($0)).tag($0) }
+    private var list: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(years, id: \.self) { option in
+                        Button {
+                            year = option
+                            open = false
+                        } label: {
+                            HStack {
+                                Text(String(option)).monospacedDigit()
+                                Spacer()
+                                if option == year { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)) }
+                            }
+                            .font(.system(size: 13.5, weight: option == year ? .semibold : .regular))
+                            .padding(.horizontal, 12)
+                            .frame(height: 28)
+                            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(option == year ? Theme.brand.opacity(0.25) : Color.clear))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .id(option)
+                    }
+                }
+                .padding(6)
             }
-        } label: {
-            FilterPill(icon: "calendar", text: String(year), active: false)
+            .frame(width: 130, height: 10 * 30 + 12)
+            .onAppear { proxy.scrollTo(year, anchor: .center) }
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
     }
 }
 
