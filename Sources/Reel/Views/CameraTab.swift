@@ -13,8 +13,11 @@ import ReelCore
 struct CameraTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
+    let openStill: ([String], Int) -> Void
     /// Everything read once for what it's made from (not on each redraw).
     @State private var read = ReadSpecs()
+    /// Sections opened past their first three.
+    @State private var expanded: Set<String> = []
 
     var body: some View {
         let id = film.tmdb?.id ?? 0
@@ -30,6 +33,14 @@ struct CameraTab: View {
 
         VStack(alignment: .leading, spacing: 34) {
             if !lead.isEmpty { shotBy(lead, about: reading?.cinematographer) }
+            // The pictures first: what the words below are about. Hidden once checked and none
+            // turned out to be frames from the film.
+            if !(film.tmdb?.stillPaths.isEmpty ?? true), film.checkedStills?.isEmpty != true {
+                VStack(alignment: .leading, spacing: 14) {
+                    Theme.sectionTitle("Frames from the Film")
+                    FilmStills(film: film, open: openStill)
+                }
+            }
             if let brief = specs.brief(by: lead, ratio: sheet.wikidataRatio, blackAndWhite: sheet.blackAndWhite) {
                 VStack(alignment: .leading, spacing: 10) {
                     Theme.sectionTitle("The Look")
@@ -56,12 +67,12 @@ struct CameraTab: View {
                     specTable(sheet.rows)
                 }
             }
-            passage("Why It Looks This Way", note: "The choices behind the look, and what inspired them.",
-                    notes: specs.reasons, bold: bold)
             // Interviews are their words; Wikipedia tells of their choices.
             let fromWikipedia = specs.approach.filter { $0.source == nil || $0.source?.hasPrefix("Wikipedia") == true }
             passage("In Their Own Words", note: "From interviews with the filmmakers.",
                     notes: specs.approach.filter { !fromWikipedia.contains($0) }, bold: bold, quoted: true)
+            passage("Why It Looks This Way", note: "The choices behind the look, and what inspired them.",
+                    notes: specs.reasons, bold: bold)
             passage("The Cinematographer's Approach", note: "What they chose, as Wikipedia tells it.",
                     notes: fromWikipedia, bold: bold)
             passage("Camera and Movement", note: nil, notes: specs.cameraLanguage, bold: bold)
@@ -172,26 +183,52 @@ struct CameraTab: View {
                     Theme.sectionTitle(title)
                     if let note { Text(note).font(.system(size: 13)).foregroundStyle(.secondary) }
                 }
+                let open = expanded.contains(title)
+                let shown = open ? notes : Array(notes.prefix(3))
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(notes.enumerated()), id: \.offset) { index, item in
+                    ForEach(Array(shown.enumerated()), id: \.offset) { index, item in
                         if index > 0 { Divider().overlay(Theme.hairline) }
-                        HStack(alignment: .top, spacing: 14) {
+                        HStack(alignment: .top, spacing: 12) {
                             if quoted {
-                                Capsule().fill(Theme.brand.opacity(0.7)).frame(width: 3)
+                                Image(systemName: "quote.opening")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(Theme.brand)
+                                    .padding(.top, 3)
                             }
                             VStack(alignment: .leading, spacing: 6) {
+                                // Their own words read as quotes (as in Behind the Film).
                                 Text(Self.emphasised(item.text, names: bold))
-                                    .font(.system(size: quoted ? 15 : 14))
-                                    .lineSpacing(3)
-                                    .foregroundStyle(quoted ? Color.white.opacity(0.9) : Theme.secondaryText)
+                                    .font(quoted ? .system(size: 16, design: .serif).italic() : .system(size: 14))
+                                    .lineSpacing(quoted ? 5 : 3)
+                                    .foregroundStyle(quoted ? Color.white.opacity(0.92) : Theme.secondaryText)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .textSelection(.enabled)
-                                Text(item.source ?? "Wikipedia")
-                                    .font(.system(size: 11, weight: .medium))
+                                Text((item.source ?? "Wikipedia").uppercased())
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .tracking(0.8)
                                     .foregroundStyle(.tertiary)
                             }
                         }
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 14)
+                    }
+                    if notes.count > 3 {
+                        Divider().overlay(Theme.hairline)
+                        Button {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                if open { expanded.remove(title) } else { expanded.insert(title) }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(open ? "Show Less" : "Show All \(notes.count)")
+                                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                                    .rotationEffect(.degrees(open ? 180 : 0))
+                            }
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(Theme.brand)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 18)

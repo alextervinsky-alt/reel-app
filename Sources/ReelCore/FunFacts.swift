@@ -28,12 +28,27 @@ public struct QuickFacts: Codable, Equatable, Sendable {
     /// (missing in facts fetched before Reel 1.7).
     public var aspectRatios: [String]?
     public var colour: [String]?
+    /// Where it was filmed, each with Wikidata's short description ("greenhouse area in Almería,
+    /// Spain"); missing in facts fetched before Reel 1.8.1 (`filmedIn` has the names).
+    public var filmingPlaces: [FilmingPlace]?
 
     public init() {}
 
     public var isEmpty: Bool {
         basedOn.isEmpty && filmedIn.isEmpty && setIn.isEmpty && awardsWon == 0 && nominations == 0
             && follows == nil && followedBy == nil
+    }
+}
+
+/// A place a film was shot, and what it is.
+public struct FilmingPlace: Codable, Equatable, Sendable, Identifiable {
+    public var name: String
+    public var about: String?
+    public var id: String { name }
+
+    public init(name: String, about: String?) {
+        self.name = name
+        self.about = about
     }
 }
 
@@ -330,6 +345,7 @@ public struct WikipediaClient: Sendable {
         let sitelinks: [String: Link]?
         let claims: [String: [Claim]]?
         let labels: [String: Label]?
+        let descriptions: [String: Label]?
 
         func items(_ property: String) -> [String] {
             (claims?[property] ?? []).compactMap { $0.mainsnak.datavalue?.itemID }
@@ -358,7 +374,7 @@ public struct WikipediaClient: Sendable {
     /// Based on, filming locations, setting, awards, sequels — names looked up in one request.
     func quickFacts(from entity: Entity) async throws -> QuickFacts {
         let basedOn = Array(entity.items("P144").prefix(3))
-        let filmedIn = Array(entity.items("P915").prefix(6))
+        let filmedIn = Array(entity.items("P915").prefix(12))
         let setIn = Array(entity.items("P840").prefix(4))
         let awards = entity.items("P166")
         let follows = entity.items("P155").first
@@ -369,21 +385,24 @@ public struct WikipediaClient: Sendable {
         var ids: [String] = basedOn + filmedIn + setIn + ratios + colour + [follows, followedBy].compactMap { $0 }
         ids += awards.prefix(max(0, 50 - ids.count))
         var labels: [String: String] = [:]
+        var descriptions: [String: String] = [:]
         var seen = Set<String>()
         let unique = ids.filter { seen.insert($0).inserted }
         if !unique.isEmpty {
             let result: Entities = try await get("https://www.wikidata.org/w/api.php", [
-                "action": "wbgetentities", "ids": unique.joined(separator: "|"), "props": "labels",
+                "action": "wbgetentities", "ids": unique.joined(separator: "|"), "props": "labels|descriptions",
                 "languages": "en", "format": "json",
             ])
             for (id, item) in result.entities ?? [:] {
                 if let label = item.labels?["en"]?.value { labels[id] = label }
+                if let about = item.descriptions?["en"]?.value { descriptions[id] = about }
             }
         }
 
         var quick = QuickFacts()
         quick.basedOn = basedOn.compactMap { labels[$0] }
         quick.filmedIn = filmedIn.compactMap { labels[$0] }
+        quick.filmingPlaces = filmedIn.compactMap { id in labels[id].map { FilmingPlace(name: $0, about: descriptions[id]) } }
         quick.setIn = setIn.compactMap { labels[$0] }
         quick.awardsWon = awards.count
         quick.nominations = entity.items("P1411").count

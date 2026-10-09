@@ -98,4 +98,16 @@ final class DigestTests: XCTestCase {
         XCTAssertNil(Digest.pullQuote(in: ["It was called \"the best film of the year\" by many."], skipping: ""),
                      "too short to set apart")
     }
+
+    func testWhereItWasShot() {
+        let sections = [FilmArticle.Section(id: 1, title: "Production · Filming", paragraphs: [
+            "Principal photography began on 12 July 2016 in Budapest, Hungary. The crew was large. Interiors were built at Origo Studios.",
+            "The protein farm scenes were filmed in the greenhouses of Almería. Critics later praised the look.",
+        ])]
+        XCTAssertEqual(Digest.locationSentences(sections), [
+            "Principal photography began on 12 July 2016 in Budapest, Hungary.",
+            "Interiors were built at Origo Studios.",
+            "The protein farm scenes were filmed in the greenhouses of Almería.",
+        ])
+    }
 }

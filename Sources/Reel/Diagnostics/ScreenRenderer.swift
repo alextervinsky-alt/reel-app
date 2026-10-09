@@ -114,7 +114,7 @@ enum ScreenRenderer {
         await model.loadArticle(for: first)
         log("article read")
         if let film = model.film(id: first.id) {
-            render(BehindTheFilmTab(film: film) { _, _ in }
+            render(BehindTheFilmTab(film: film)
                     .padding(32)
                     .frame(width: 900)
                     .background(Theme.background),
@@ -122,7 +122,7 @@ enum ScreenRenderer {
             // With the interviews it cites and the cinematographer's article.
             await model.loadCameraReading(for: film)
             log("interviews read")
-            render(CameraTab(film: film)
+            render(CameraTab(film: film) { _, _ in }
                     .padding(32)
                     .frame(width: 900)
                     .background(Theme.background),

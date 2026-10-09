@@ -9,12 +9,11 @@ import ReelCore
 /// article's sections regrouped: the idea, the casting, the shoot, design, music, release, how it
 /// was received, awards, legacy). Each chapter opens on its best lines, someone's own words set
 /// apart and a fact or two, and opens in place to read the whole of it. What gives the story
-/// away waits under After You Watch until the film is watched. Then frames from the film, and
-/// where to read more.
+/// away waits under After You Watch until the film is watched. Then where it was filmed, and
+/// where to read more. (Frames from the film are in the Camera tab.)
 struct BehindTheFilmTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
-    let openStill: ([String], Int) -> Void
     /// Chapters opened to their full text.
     @State private var opened: Set<String> = []
     /// After You Watch (and facts that give the story away) shown anyway, for this visit.
@@ -63,13 +62,7 @@ struct BehindTheFilmTab: View {
                 }
             }
             if article == nil { status(id) }
-            // Hidden once checked and none turned out to be frames from the film.
-            if !(film.tmdb?.stillPaths.isEmpty ?? true), film.checkedStills?.isEmpty != true {
-                VStack(alignment: .leading, spacing: 14) {
-                    Theme.sectionTitle("Frames from the Film")
-                    FilmStills(film: film, open: openStill)
-                }
-            }
+            WhereItWasFilmed(places: Self.places(film.funFacts?.quick), sentences: content.locations)
             ReadMore(film: film, article: article)
         }
         .frame(maxWidth: 820, alignment: .leading)
@@ -82,6 +75,11 @@ struct BehindTheFilmTab: View {
             opened = []
             showAfter = false
         }
+    }
+
+    /// Wikidata's filming places with what they are; names only for facts kept before 1.8.1.
+    static func places(_ quick: QuickFacts?) -> [FilmingPlace] {
+        quick?.filmingPlaces ?? (quick?.filmedIn ?? []).map { FilmingPlace(name: $0, about: nil) }
     }
 
     /// "About 14 minutes to read in full"
@@ -213,6 +211,8 @@ struct BehindTheFilmTab: View {
     final class Built {
         struct Content {
             var toKnow: [FunFact] = []
+            /// The article's sentences about where it was shot (before-watching sections only).
+            var locations: [String] = []
             var hiddenFacts = 0
             var before: [Topic] = []
             var after: [Topic] = []
@@ -243,6 +243,7 @@ struct BehindTheFilmTab: View {
             let picked = (facts?.facts ?? []).filter { !shown.contains($0.text) }
             content = Content(
                 toKnow: toKnow,
+                locations: article.map { Digest.locationSentences($0.before) } ?? [],
                 hiddenFacts: (all?.facts.count ?? 0) - (facts?.facts.count ?? 0),
                 before: article.map { BehindTheFilmTab.story($0.before, facts: picked, shown: shown) } ?? [],
                 after: article.map { BehindTheFilmTab.topics($0.after, facts: picked, shown: shown) } ?? [],
@@ -490,6 +491,67 @@ private struct ThingsToKnow: View {
     }
 }
 
+/// Where the film was shot: every place Wikidata knows, each with what it is ("greenhouse area in
+/// Almería, Spain"), and the article's own sentences about its locations, studios and stages.
+private struct WhereItWasFilmed: View {
+    let places: [FilmingPlace]
+    let sentences: [String]
+
+    var body: some View {
+        if !places.isEmpty || !sentences.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("WHERE IT WAS FILMED")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.brand)
+                    Text("The locations, studios and stages behind the film.").font(.system(size: 13)).foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    if !places.isEmpty {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 0, alignment: .topLeading)], alignment: .leading, spacing: 0) {
+                            ForEach(places) { place in
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Image(systemName: "mappin.and.ellipse")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Theme.brand)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(place.name).font(.system(size: 14, weight: .semibold))
+                                        if let about = place.about {
+                                            Text(about.prefix(1).uppercased() + about.dropFirst())
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(.secondary)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                    }
+                                }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                        }
+                    }
+                    if !sentences.isEmpty {
+                        if !places.isEmpty { Divider().overlay(Theme.hairline) }
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(sentences, id: \.self) { sentence in
+                                Text(sentence)
+                                    .font(.system(size: 15, design: .serif))
+                                    .lineSpacing(4)
+                                    .foregroundStyle(Color.white.opacity(0.88))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .padding(18)
+                    }
+                }
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+            }
+        }
+    }
+}
+
 /// After You Watch, closed until the film is watched.
 private struct LockedAfter: View {
     let count: Int
@@ -565,7 +627,6 @@ private struct AtAGlance: View {
         let quick = film.funFacts?.quick
         if let q = quick {
             if !q.basedOn.isEmpty { rows.append(("Based on", q.basedOn.joined(separator: ", "), "book.closed")) }
-            if !q.filmedIn.isEmpty { rows.append(("Filmed in", q.filmedIn.joined(separator: ", "), "mappin.and.ellipse")) }
             if !q.setIn.isEmpty { rows.append(("Set in", q.setIn.joined(separator: ", "), "globe.europe.africa")) }
         }
         if let money = moneyLine { rows.append(("Budget and box office", money, "dollarsign.circle")) }

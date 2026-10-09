@@ -33,10 +33,11 @@ struct FilmPage: View {
                             case .overview: OverviewTab(film: film) { preview = $0 }
                             case .reviews: ReceptionTab(film: film)
                             case .behindTheFilm:
-                                BehindTheFilmTab(film: film) { paths, index in
+                                BehindTheFilmTab(film: film)
+                            case .camera:
+                                CameraTab(film: film) { paths, index in
                                     still = StillSelection(paths: paths, index: index)
                                 }
-                            case .camera: CameraTab(film: film)
                             case .extras: ExtrasTab(film: film)
                             }
                         }

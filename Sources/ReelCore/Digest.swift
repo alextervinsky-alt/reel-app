@@ -225,6 +225,31 @@ public enum Digest {
         return nil
     }
 
+    /// The article's sentences about where the film was shot: locations, studios and stages
+    /// (from the sections before the story), at most `limit`.
+    public static func locationSentences(_ sections: [FilmArticle.Section], limit: Int = 5) -> [String] {
+        // A place named after the shooting words (capitalised), or a location, studio or stage.
+        let parts = [
+            #"(?i:\b(?:filmed|shot|filming|shooting|photographed|principal photography)\b)[^.]{0,90}(?i:\b(?:in|at|on|around|across|near|of)\s+)\p{Lu}"#,
+            #"(?i:\bon location\b)"#,
+            #"(?i:\blocations?\b[^.]{0,60}\b(?:included|in|such as)\b)"#,
+            #"(?i:\b(?:studios?|soundstages?|sound stages?|backlot)\b)"#,
+        ]
+        let regex = try? NSRegularExpression(pattern: parts.joined(separator: "|"))
+        var found: [String] = []
+        for section in sections {
+            for paragraph in section.paragraphs {
+                for sentence in sentences(in: paragraph) where (30...360).contains(sentence.count) {
+                    let range = NSRange(sentence.startIndex..., in: sentence)
+                    guard regex?.firstMatch(in: sentence, range: range) != nil, !found.contains(sentence) else { continue }
+                    found.append(sentence)
+                    if found.count == limit { return found }
+                }
+            }
+        }
+        return found
+    }
+
     static func normalized(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
