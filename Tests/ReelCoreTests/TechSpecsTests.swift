@@ -98,6 +98,8 @@ final class TechSpecsTests: XCTestCase {
         let interview = TechSpecs.Text(source: "American Cinematographer", paragraphs: [
             "“We shot on the ARRI Alexa 65 with Panavision Sphero 65 lenses because we wanted the landscapes to feel enormous.” It gave us room in the frame.",
             "Deakins and Villeneuve first met in Montreal for dinner.",
+            "AC: How did you light the casino and the dust storm sequences?",
+            "NFS: Bong doesn't seem to be a huge fan of traditional camera coverage.",
             "I lit the casino with a single big source, bounced off the ceiling, so the faces fell into shadow.",
             "The production was based in Budapest, where the crew built several stages.",
             "We graded with a show LUT designed with our colorist to keep the orange of the dust.",
@@ -109,7 +111,7 @@ final class TechSpecsTests: XCTestCase {
             "I lit the casino with a single big source, bounced off the ceiling, so the faces fell into shadow.",
             "We graded with a show LUT designed with our colorist to keep the orange of the dust.",
             "The camera was mostly on a dolly or a Technocrane, and we used a Black Pro-Mist 1/8 on every lens.",
-        ], "only what's about the look, the next sentence kept with the one it finishes")
+        ], "only what's about the look, the next sentence kept with the one it finishes, never the interviewer's lines")
         XCTAssertTrue(specs.approach.allSatisfy { $0.source == "American Cinematographer" })
         XCTAssertEqual(specs.names(.camera), ["ARRI Alexa 65"])
         XCTAssertEqual(specs.names(.lens), ["Panavision Sphero 65"])
@@ -142,5 +144,15 @@ final class TechSpecsTests: XCTestCase {
         ])
         let specs = TechSpecs.read(texts: [interview], cinematographers: ["Hong Kyung-pyo"])
         XCTAssertEqual(specs.approach.count, 1, "\(specs.approach.map(\.text))")
+    }
+
+    func testAnEditorsInterviewIsNotReadForTheCamera() {
+        XCTAssertTrue(CameraSources.isOtherCraft(title: "'Parasite' Editor Jinmo Yang Teaches Us How to Edit Without Coverage",
+                                                 cinematographers: ["Hong Kyung-pyo"]))
+        XCTAssertFalse(CameraSources.isOtherCraft(title: "How the Cinematographer and Editor of 'Parasite' Built Its Rhythm",
+                                                  cinematographers: ["Hong Kyung-pyo"]))
+        XCTAssertFalse(CameraSources.isOtherCraft(title: "Universal Translator: Arrival", cinematographers: ["Bradford Young"]))
+        XCTAssertTrue(TechSpecs.isQuestion("NFS: Bong doesn't seem to be a huge fan of coverage."))
+        XCTAssertFalse(TechSpecs.isQuestion("We lit it with one big source."))
     }
 }

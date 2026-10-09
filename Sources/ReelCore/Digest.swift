@@ -236,12 +236,15 @@ public enum Digest {
             #"(?i:\b(?:studios?|soundstages?|sound stages?|backlot)\b)"#,
         ]
         let regex = try? NSRegularExpression(pattern: parts.joined(separator: "|"))
+        // Not what became of the places later (tourism, money, plans).
+        let later = try? NSRegularExpression(pattern: #"(?i:\b(?:touris[mt]\w*|invest\w*|announced|plans? to|grossed|box office)\b)"#)
         var found: [String] = []
         for section in sections {
             for paragraph in section.paragraphs {
                 for sentence in sentences(in: paragraph) where (30...360).contains(sentence.count) {
                     let range = NSRange(sentence.startIndex..., in: sentence)
-                    guard regex?.firstMatch(in: sentence, range: range) != nil, !found.contains(sentence) else { continue }
+                    guard regex?.firstMatch(in: sentence, range: range) != nil, later?.firstMatch(in: sentence, range: range) == nil,
+                          !found.contains(sentence) else { continue }
                     found.append(sentence)
                     if found.count == limit { return found }
                 }

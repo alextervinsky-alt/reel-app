@@ -105,6 +105,19 @@ public enum CameraSources {
         return picked.sorted { $0.rank < $1.rank }.prefix(limit).map { ($0.url, $0.site) }
     }
 
+    /// Whether a page is about another craft (the editor, composer, costumes, sound…) and not the
+    /// camera: its title names that craft and neither the cinematographer nor the cinematography.
+    public static func isOtherCraft(title: String, cinematographers: [String]) -> Bool {
+        let heading = title.lowercased()
+        let others = ["editor", "editing", "composer", "score", "costume", "production design", "sound design",
+                      "makeup", "make-up", "casting", "screenwriter", "visual effects", "vfx"]
+        guard others.contains(where: { heading.contains($0) }) else { return false }
+        let camera = ["cinematograph", "director of photography", " dp ", "camera", "lens", "lighting", "shot on"]
+        if camera.contains(where: { (" " + heading + " ").contains($0) }) { return false }
+        let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map { $0.lowercased() } }.filter { $0.count >= 3 }
+        return !surnames.contains { heading.contains($0) }
+    }
+
     /// Whether an American Cinematographer search result is about this film: its title names the
     /// film ("Universal Translator: Arrival"), or its address does ("arrival-cinematography-…").
     public static func isAbout(title: String, articleTitle: String, url: String) -> Bool {
@@ -249,7 +262,10 @@ public struct CameraSourcesClient: Sendable {
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
-        let read = Array(pages.compactMap { $0.1 }.filter { $0.paragraphs.count >= 3 }.prefix(5))
+        // An interview with the editor or the composer isn't read for the camera (still listed).
+        let read = Array(pages.compactMap { $0.1 }
+            .filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
+            .prefix(5))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } }.map { $0.1 ?? $0.2 }
         return CameraReading(sources: read, more: more, cinematographer: await person)
     }

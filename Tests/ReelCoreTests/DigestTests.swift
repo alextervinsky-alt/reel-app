@@ -103,6 +103,7 @@ final class DigestTests: XCTestCase {
         let sections = [FilmArticle.Section(id: 1, title: "Production · Filming", paragraphs: [
             "Principal photography began on 12 July 2016 in Budapest, Hungary. The crew was large. Interiors were built at Origo Studios.",
             "The protein farm scenes were filmed in the greenhouses of Almería. Critics later praised the look.",
+            "The city announced it will invest $150 million in a film complex with new indoor studios.",
         ])]
         XCTAssertEqual(Digest.locationSentences(sections), [
             "Principal photography began on 12 July 2016 in Budapest, Hungary.",

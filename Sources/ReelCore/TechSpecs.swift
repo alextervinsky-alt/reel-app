@@ -120,6 +120,11 @@ public struct TechSpecs: Equatable, Sendable {
                             skipNext = false
                             continue
                         }
+                        // The interviewer's questions ("NFS: How does…?") are not the filmmakers' words.
+                        if text.isInterview, isQuestion(sentence) {
+                            aboutThem = false
+                            continue
+                        }
                         let lowered = sentence.lowercased()
                         var named = false
                         if triggers.contains(where: { lowered.contains($0) }) {
@@ -249,6 +254,12 @@ public struct TechSpecs: Equatable, Sendable {
     static func overlap(_ a: Set<String>, _ b: Set<String>) -> Double {
         let smaller = min(a.count, b.count)
         return smaller == 0 ? 0 : Double(a.intersection(b).count) / Double(smaller)
+    }
+
+    /// A question, or a line the interviewer speaks ("Q:", "NFS:", "AC:").
+    static func isQuestion(_ sentence: String) -> Bool {
+        let trimmed = sentence.trimmingCharacters(in: CharacterSet(charactersIn: " \"”’'"))
+        return trimmed.hasSuffix("?") || sentence.range(of: #"^(?:Q|[A-Z]{2,5}):\s"#, options: .regularExpression) != nil
     }
 
     static func quoted(_ sentence: String) -> Bool {
