@@ -132,9 +132,13 @@ struct FilmHero: View {
 
             VStack(alignment: .leading, spacing: 11) {
                 TitleArt(film: film)
-                Text(Format.metaLine(film))
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.secondaryText)
+                HStack(spacing: 14) {
+                    Text(Format.metaLine(film))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.secondaryText)
+                    // HDR or SDR, to set the TV before pressing Play.
+                    PictureRangeTag(copies: model.copies(of: film))
+                }
                 HStack(spacing: 16) {
                     RatingStrip(film: film)
                     if !badges.isEmpty { BadgeRow(badges: badges) }
@@ -574,7 +578,7 @@ struct ReceptionTab: View {
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.secondaryText)
             }
-            if let reception = film.reception, !reception.liked.isEmpty || !reception.disliked.isEmpty {
+            if let reception = film.reception?.withoutRepeats, !reception.liked.isEmpty || !reception.disliked.isEmpty {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
                         column("What people like", symbol: "hand.thumbsup.fill", tint: .green, points: reception.liked)

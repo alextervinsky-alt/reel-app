@@ -60,6 +60,7 @@ struct CinemaFilmPage: View {
     private func content(_ film: FilmEntry, heroHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 44) {
             hero(film, height: heroHeight)
+            CinemaReviews(film: film)
             CinemaFilmRows(film: film, open: open)
         }
         .padding(.bottom, 80)
@@ -88,9 +89,13 @@ struct CinemaFilmPage: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 TitleArt(film: film, maxWidth: 760, maxHeight: 160, fontSize: 64)
-                Text(Format.metaLine(film))
-                    .font(.system(size: Cinema.body))
-                    .foregroundStyle(Theme.secondaryText)
+                HStack(spacing: 18) {
+                    Text(Format.metaLine(film))
+                        .font(.system(size: Cinema.body))
+                        .foregroundStyle(Theme.secondaryText)
+                    // HDR or SDR, to set the TV before pressing Play.
+                    PictureRangeTag(copies: model.copies(of: film), large: true)
+                }
                 HStack(spacing: 16) {
                     RatingStrip(film: film).environment(\.ratingScale, 1.6)
                     ForEach(badges.prefix(2)) { badge in
@@ -187,6 +192,83 @@ struct CinemaFilmPage: View {
             }
             .buttonStyle(CinemaButtonStyle())
         }
+    }
+}
+
+/// Reviews, read from the sofa: the critics' consensus, then what people like and don't like,
+/// each with someone's words. Spoiler-safe like the desk's Reviews tab.
+private struct CinemaReviews: View {
+    @Environment(AppModel.self) private var model
+    let film: FilmEntry
+
+    var body: some View {
+        let hiding = model.hidesSpoilers(for: film)
+        let consensus = film.funFacts?.consensus.flatMap { hiding && Spoilers.mentionsPlot($0) ? nil : $0 }
+        let reception = film.reception?.withoutRepeats
+        let liked = reception?.liked ?? []
+        let disliked = reception?.disliked ?? []
+        if consensus != nil || !liked.isEmpty || !disliked.isEmpty {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("Reviews")
+                    .font(.system(size: Cinema.rowTitle, weight: .bold))
+                if let consensus {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("CRITICS' CONSENSUS")
+                            .font(.system(size: 17, weight: .semibold))
+                            .tracking(1.2)
+                            .foregroundStyle(Theme.brand)
+                        Text("“\(consensus)”")
+                            .font(.system(size: Cinema.body + 2, design: .serif))
+                            .italic()
+                            .lineSpacing(5)
+                            .foregroundStyle(Color.white.opacity(0.92))
+                            .frame(maxWidth: 1300, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                if !liked.isEmpty || !disliked.isEmpty {
+                    HStack(alignment: .top, spacing: 24) {
+                        column("What people like", symbol: "hand.thumbsup.fill", tint: .green, points: liked, hiding: hiding)
+                        column("What people don't like", symbol: "hand.thumbsdown.fill", tint: .orange, points: disliked, hiding: hiding)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                if let awards = film.ratings?.awards {
+                    Label(awards, systemImage: "trophy")
+                        .font(.system(size: Cinema.body))
+                        .foregroundStyle(Theme.secondaryText)
+                }
+            }
+            .padding(.horizontal, Cinema.gutter)
+        }
+    }
+
+    private func column(_ title: String, symbol: String, tint: Color, points: [ReceptionPoint], hiding: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: Cinema.body, weight: .semibold))
+                .foregroundStyle(tint)
+            if points.isEmpty {
+                Text("Nothing stands out.").font(.system(size: Cinema.body)).foregroundStyle(.secondary)
+            }
+            ForEach(points.prefix(3), id: \.aspect) { point in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(point.aspect).font(.system(size: Cinema.body, weight: .semibold))
+                    if let quote = point.quote, !(hiding && Spoilers.mentionsPlot(quote)) {
+                        Text("“\(quote)”")
+                            .font(.system(size: Cinema.body - 2))
+                            .italic()
+                            .lineSpacing(4)
+                            .foregroundStyle(Theme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.panel))
     }
 }
 

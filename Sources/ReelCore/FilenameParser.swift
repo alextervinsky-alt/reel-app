@@ -11,6 +11,17 @@ public struct AudioTrack: Equatable, Sendable {
     }
 }
 
+/// How the picture is mastered, as the file name says: what the TV has to be set for.
+public enum DynamicRange: String, Equatable, Sendable {
+    case dolbyVision = "Dolby Vision"
+    case hdr10Plus = "HDR10+"
+    case hdr10 = "HDR10"
+    case hlg = "HLG"
+    case sdr = "SDR"
+
+    public var isHDR: Bool { self != .sdr }
+}
+
 /// Everything Reel can learn from a file name alone. The file itself is never opened.
 public struct ParsedFilename: Equatable, Sendable {
     public var title: String
@@ -18,6 +29,10 @@ public struct ParsedFilename: Equatable, Sendable {
     public var resolution: String?
     public var source: String?
     public var hdr: String?
+    /// SDR unless the name says otherwise (an HDR file is always labelled so).
+    public var dynamicRange: DynamicRange = .sdr
+    /// Dolby Vision with an HDR10 layer too (plays as HDR10 where Dolby Vision doesn't).
+    public var dolbyVisionWithHDR10 = false
     public var videoCodec: String?
     public var audioTracks: [AudioTrack]
     public var isVideo: Bool
@@ -153,6 +168,18 @@ public enum FilenameParser {
         if has(["dv", "dovi"]) { hdrParts.append("DV") }
         if has(["hdr", "hdr10", "hdr10+"]) { hdrParts.append("HDR") }
         let hdr: String? = hdrParts.isEmpty ? nil : hdrParts.joined(separator: " ")
+        let range: DynamicRange
+        if has(["dv", "dovi", "dolbyvision"]) {
+            range = .dolbyVision
+        } else if has(["hdr10+", "hdr10plus"]) {
+            range = .hdr10Plus
+        } else if has(["hdr", "hdr10"]) {
+            range = .hdr10
+        } else if has(["hlg"]) {
+            range = .hlg
+        } else {
+            range = .sdr
+        }
 
         // Video codec
         var codec: String? = nil
@@ -193,6 +220,8 @@ public enum FilenameParser {
             resolution: resolution,
             source: source,
             hdr: hdr,
+            dynamicRange: range,
+            dolbyVisionWithHDR10: range == .dolbyVision && has(["hdr", "hdr10", "hdr10+"]),
             videoCodec: codec,
             audioTracks: tracks,
             isVideo: isVideo,

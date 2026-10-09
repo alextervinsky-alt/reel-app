@@ -86,6 +86,18 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertNil(ReceptionAnalyzer.summarize([], sentiment: sentiment))
     }
 
+    func testOneSentenceIsQuotedOnce() {
+        let reviews = [
+            ReviewText(text: "The filmmaker tries to incorporate too many ideas, resulting in a somewhat confusing, messy narrative, particularly in the transitions between different characters, locations, and story arcs.", rating: 5),
+            ReviewText(text: "The performances are superb and the cast is great throughout.", rating: 8),
+        ]
+        let sentiment: (String) -> Double = { $0.contains("messy") ? -0.8 : ($0.contains("superb") ? 0.8 : 0) }
+        let summary = try! XCTUnwrap(ReceptionAnalyzer.summarize(reviews, sentiment: sentiment))
+        let quotes = summary.disliked.compactMap(\.quote)
+        XCTAssertEqual(quotes.count, 1, "Story, Themes and Characters all named in one sentence: shown once, \(summary.disliked.map(\.aspect))")
+        XCTAssertEqual(Set(quotes).count, quotes.count)
+    }
+
     func testCleaningAndSentences() {
         XCTAssertEqual(ReceptionAnalyzer.clean("**Wow** <b>this</b> is _great_"), "Wow this is great")
         let parts = ReceptionAnalyzer.sentences(in: "Short. This sentence is long enough to count as a sentence! And so is this one, with Mr. Smith in it?\nA line break also ends a sentence here.")

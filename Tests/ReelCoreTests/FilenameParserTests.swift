@@ -138,4 +138,13 @@ final class FilenameParserTests: XCTestCase {
         XCTAssertTrue(FilenameParser.parse("movie-sample.mkv").looksLikeSample)
         XCTAssertFalse(FilenameParser.parse("Dredd 2012 1080p.mkv").looksLikeSample)
     }
+
+    func testDynamicRangeForTheTV() {
+        XCTAssertEqual(FilenameParser.parse("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").dynamicRange, .dolbyVision)
+        XCTAssertTrue(FilenameParser.parse("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").dolbyVisionWithHDR10)
+        XCTAssertEqual(FilenameParser.parse("Arrival.2016.2160p.UHD.BluRay.HDR10+.HEVC-GRP.mkv").dynamicRange, .hdr10Plus)
+        XCTAssertEqual(FilenameParser.parse("Heat 1995 2160p UHD BluRay HDR x265.mkv").dynamicRange, .hdr10)
+        XCTAssertEqual(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange, .sdr)
+        XCTAssertFalse(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange.isHDR)
+    }
 }

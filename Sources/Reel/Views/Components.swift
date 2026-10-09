@@ -509,6 +509,52 @@ struct NoticeBar: View {
         .padding(14)
     }
 }
+/// HDR or SDR at a glance, to set the TV before playing: read from the file names of the
+/// film's copies (a copy whose name says nothing is SDR). Two copies that differ are both named.
+struct PictureRangeTag: View {
+    let copies: [FilmEntry]
+    var large = false
+
+    private static let gold = Color(red: 1, green: 0.8, blue: 0.32)
+
+    var body: some View {
+        let entries = Self.entries(copies)
+        if !entries.isEmpty {
+            let hdr = entries.contains { $0.hdr }
+            HStack(spacing: large ? 10 : 6) {
+                Image(systemName: hdr ? "sun.max.fill" : "sun.min")
+                Text(entries.map(\.text).joined(separator: "   ·   "))
+                    .lineLimit(1)
+            }
+            .font(.system(size: large ? 22 : 12.5, weight: .semibold))
+            .padding(.horizontal, large ? 18 : 11)
+            .frame(height: large ? 46 : 26)
+            .foregroundStyle(hdr ? Self.gold : Color.white.opacity(0.85))
+            .background(Capsule().fill(hdr ? Self.gold.opacity(0.14) : Color.white.opacity(0.09)))
+            .overlay(Capsule().strokeBorder(hdr ? Self.gold.opacity(0.45) : Theme.hairline))
+            .fixedSize()
+            .help(hdr ? "High dynamic range: set the TV to HDR" : "Standard dynamic range: set the TV to SDR")
+        }
+    }
+
+    /// "HDR · Dolby Vision + HDR10", "SDR"; with copies that differ, each with its resolution.
+    static func entries(_ copies: [FilmEntry]) -> [(text: String, hdr: Bool)] {
+        func range(_ copy: FilmEntry) -> String {
+            let range = copy.parsed.dynamicRange
+            guard range.isHDR else { return "SDR" }
+            return "HDR · " + range.rawValue + (copy.parsed.dolbyVisionWithHDR10 ? " + HDR10" : "")
+        }
+        let differ = Set(copies.map(range)).count > 1
+        var seen = Set<String>()
+        return copies.compactMap { copy in
+            var text = range(copy)
+            if differ, let resolution = copy.parsed.resolution { text = (resolution == "2160p" ? "4K" : resolution) + " " + text }
+            guard seen.insert(text).inserted else { return nil }
+            return (text, copy.parsed.dynamicRange.isHDR)
+        }
+    }
+}
+
 /// A link in running text, in Reel's colour. (A plain button: SwiftUI's own `Link` can't be
 /// drawn into the CI screens, where it shows as a placeholder.)
 struct TextLink: View {

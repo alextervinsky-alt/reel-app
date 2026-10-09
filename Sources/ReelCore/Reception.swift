@@ -18,6 +18,19 @@ public struct ReceptionSummary: Codable, Equatable, Sendable {
         self.averageRating = averageRating
         self.criticCount = criticCount
     }
+
+    /// Each quote once: a summary kept before Reel 1.8.1 could give one sentence to several
+    /// points (it named the story, the themes and the characters); the later ones are left out.
+    public var withoutRepeats: ReceptionSummary {
+        var seen = Set<String>()
+        func once(_ points: [ReceptionPoint]) -> [ReceptionPoint] {
+            points.filter { point in point.quote.map { seen.insert($0).inserted } ?? true }
+        }
+        var copy = self
+        copy.liked = once(liked)
+        copy.disliked = once(disliked)
+        return copy
+    }
 }
 
 public struct ReceptionPoint: Codable, Equatable, Sendable {
@@ -108,8 +121,16 @@ public enum ReceptionAnalyzer {
         struct Tally {
             var like = 0
             var dislike = 0
-            var likeQuote: (text: String, quality: Double)?
-            var dislikeQuote: (text: String, quality: Double)?
+            /// The best sentences for it, best first (one sentence often names several aspects:
+            /// each point gets one no other point shows).
+            var likeQuotes: [(text: String, quality: Double)] = []
+            var dislikeQuotes: [(text: String, quality: Double)] = []
+        }
+        func keep(_ quote: (text: String, quality: Double), in quotes: inout [(text: String, quality: Double)]) {
+            guard !quotes.contains(where: { $0.text == quote.text }) else { return }
+            quotes.append(quote)
+            quotes.sort { $0.quality > $1.quality }
+            if quotes.count > 6 { quotes.removeLast() }
         }
         var tallies: [String: Tally] = [:]
 
@@ -136,10 +157,10 @@ public enum ReceptionAnalyzer {
                     var t = tallies[aspect.name] ?? Tally()
                     if score > 0 {
                         t.like += 1
-                        if quality > (t.likeQuote?.quality ?? -.infinity) { t.likeQuote = (sentence, quality) }
+                        keep((sentence, quality), in: &t.likeQuotes)
                     } else {
                         t.dislike += 1
-                        if quality > (t.dislikeQuote?.quality ?? -.infinity) { t.dislikeQuote = (sentence, quality) }
+                        keep((sentence, quality), in: &t.dislikeQuotes)
                     }
                     tallies[aspect.name] = t
                 }
@@ -162,12 +183,18 @@ public enum ReceptionAnalyzer {
             disliked.append(entry.key)
         }
 
-        let likedPoints = liked.prefix(4).map { key in
-            ReceptionPoint(aspect: key, mentions: tallies[key]?.like ?? 0, quote: tallies[key]?.likeQuote.map { shorten($0.text) })
+        // Each sentence quoted once: a point whose sentences are all shown already says nothing new.
+        var used = Set<String>()
+        func points(_ keys: [String], quotes: (Tally) -> [(text: String, quality: Double)], mentions: (Tally) -> Int) -> [ReceptionPoint] {
+            keys.compactMap { key in
+                guard let tally = tallies[key] else { return nil }
+                guard let quote = quotes(tally).first(where: { !used.contains($0.text) }) else { return nil }
+                used.insert(quote.text)
+                return ReceptionPoint(aspect: key, mentions: mentions(tally), quote: shorten(quote.text))
+            }
         }
-        let dislikedPoints = disliked.prefix(4).map { key in
-            ReceptionPoint(aspect: key, mentions: tallies[key]?.dislike ?? 0, quote: tallies[key]?.dislikeQuote.map { shorten($0.text) })
-        }
+        let likedPoints = points(liked, quotes: \.likeQuotes, mentions: \.like).prefix(4)
+        let dislikedPoints = points(disliked, quotes: \.dislikeQuotes, mentions: \.dislike).prefix(4)
         let scores = audience.compactMap { $0.rating }
         let average = scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count)
         let critics = reviews.count - audience.count
