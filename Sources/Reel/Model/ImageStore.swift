@@ -345,6 +345,7 @@ final class Interest: @unchecked Sendable {
 /// Shows a TMDB image through the ImageStore. Images already in memory appear instantly;
 /// others fade in when they arrive.
 struct CachedImage<Placeholder: View>: View {
+    @Environment(\.isSnapshot) private var isSnapshot
     let path: String?
     let kind: ImageKind
     var fit = false
@@ -371,7 +372,8 @@ struct CachedImage<Placeholder: View>: View {
             }
         }
         .task(id: wanted) {
-            guard let path, !(loadedKey == wanted && loaded != nil) else { return }
+            // Drawn into an image, it shows what's in memory: a load would only be abandoned.
+            guard !isSnapshot, let path, !(loadedKey == wanted && loaded != nil) else { return }
             // Already in memory (read ahead, or loaded for another view while this one waited
             // to start): kept here too, so the view redraws with it and keeps it if memory is
             // trimmed. (Returning without keeping it left the placeholder showing.)

@@ -8,6 +8,7 @@ import ReelCore
 /// image) and shows the band from just above the highest head. Without people it keeps more of
 /// the top than the bottom, where titles and horizons usually sit.
 struct FocusedBackdrop: View {
+    @Environment(\.isSnapshot) private var isSnapshot
     let path: String?
     @State private var shown: (path: String, image: DecodedImage, peopleTop: CGFloat?)?
 
@@ -32,7 +33,8 @@ struct FocusedBackdrop: View {
         }
         .clipped()
         .task(id: path) {
-            guard let path, shown?.path != path else { return }
+            // Drawn into an image, it shows what's in memory: a load would only be abandoned.
+            guard !isSnapshot, let path, shown?.path != path else { return }
             // What `current` drew before any waiting: in memory, framing known.
             let drawnFromMemory = ImageStore.shared.cached(path, .backdrop)
             let knownTop = BackdropFocus.known(path)
