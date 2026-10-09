@@ -29,4 +29,14 @@ final class YearInFilmStatsTests: XCTestCase {
         XCTAssertEqual(year.countries.first?.films.map(\.title), ["A", "B"])
         XCTAssertEqual(year.topActors, [Tally(name: "Song Kang-ho", count: 2)])
     }
+
+    func testWhereAFilmComesFromIsItsOriginNotEveryCoProducer() throws {
+        let json = #"{"id": 1, "title": "Bugonia", "origin_country": ["IE", "US"],"#
+            + #""production_countries": [{"iso_3166_1": "IE", "name": "Ireland"}, {"iso_3166_1": "KR", "name": "South Korea"}]}"#
+        let details = try JSONDecoder().decode(TMDBMovieDetails.self, from: Data(json.utf8))
+        XCTAssertEqual(details.countriesOfOrigin, ["Ireland", "United States"])
+        let older = try JSONDecoder().decode(TMDBMovieDetails.self, from: Data(#"{"id": 2, "title": "Old", "production_countries": [{"iso_3166_1": "KR", "name": "South Korea"}]}"#.utf8))
+        XCTAssertEqual(older.countriesOfOrigin, ["South Korea"], "info from before 1.8.3: the production countries")
+        XCTAssertEqual(YearInFilm.shortCountry("United States of America"), "United States")
+    }
 }

@@ -78,7 +78,7 @@ public struct FilmBrief: Codable, Equatable, Sendable {
         self.init(title: details.title, year: details.year, runtime: details.runtime.flatMap { $0 > 0 ? $0 : nil },
                   genres: details.genreNames, directors: details.directors, posterPath: details.posterPath,
                   backdropPath: details.backdropPath, voteAverage: details.voteAverage, released: details.releaseDate,
-                  language: details.originalLanguage ?? "", countries: (details.productionCountries ?? []).map(\.name),
+                  language: details.originalLanguage ?? "", countries: details.countriesOfOrigin,
                   cast: YearFilm.leads(details))
     }
 
@@ -211,10 +211,12 @@ public struct YearInFilm: Equatable, Sendable {
             .sorted { $0.films.count != $1.films.count ? $0.films.count > $1.films.count : $0.name < $1.name }
     }
 
-    /// TMDB's official names, as people say them.
+    /// TMDB's and Wikidata's official names, as people say them.
     static func shortCountry(_ name: String) -> String {
         ["United States of America": "United States", "Russian Federation": "Russia", "Korea, Republic of": "South Korea",
-         "Iran, Islamic Republic of": "Iran", "Czechia": "Czech Republic", "Viet Nam": "Vietnam"][name] ?? name
+         "Iran, Islamic Republic of": "Iran", "Czechia": "Czech Republic", "Viet Nam": "Vietnam",
+         "People's Republic of China": "China", "Kingdom of the Netherlands": "Netherlands", "Kingdom of Denmark": "Denmark",
+         "Republic of Ireland": "Ireland", "State of Palestine": "Palestine"][name] ?? name
     }
 
     /// Years with at least one dated viewing, newest first.

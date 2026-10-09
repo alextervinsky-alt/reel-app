@@ -22,8 +22,11 @@ struct YearInFilmView: View {
             VStack(alignment: .leading, spacing: 30) {
                 header(years: years, year: year, hasElsewhere: !elsewhere.isEmpty)
                 if let year {
-                    YearSummary(summary: YearInFilm(year: year, from: all), elsewhere: model.seenElsewhere(in: year),
+                    let summary = YearInFilm(year: year, from: all)
+                    YearSummary(summary: summary, elsewhere: model.seenElsewhere(in: year),
                                 counted: model.yearCountsElsewhere) { preview = $0 }
+                        // Where the year's films were shot, for Countries.
+                        .task(id: year) { await model.loadFilmingCountries(for: summary.films) }
                 } else {
                     ContentUnavailableView("Your year starts with a film", systemImage: "calendar",
                                            description: Text("Mark films as watched and they'll be counted here, month by month."))
@@ -555,6 +558,12 @@ private struct CountriesFigure: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                Text("Where each film was shot, or where it comes from when that isn't known.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
                 ForEach(Array(countries.enumerated()), id: \.element.id) { index, country in
                     if index > 0 { Divider() }
                     VStack(alignment: .leading, spacing: 3) {
@@ -584,7 +593,7 @@ private struct CountriesFigure: View {
     /// As tall as the list (each country's titles take one to three lines of about 46
     /// characters), at most 520 points, then it scrolls.
     private var height: CGFloat {
-        let rows = countries.reduce(CGFloat(12)) { total, country in
+        let rows = countries.reduce(CGFloat(48)) { total, country in
             let characters = country.films.map(\.title).joined(separator: "  ·  ").count
             let lines = min(3, max(1, (characters + 45) / 46))
             return total + 42 + CGFloat(lines) * 15

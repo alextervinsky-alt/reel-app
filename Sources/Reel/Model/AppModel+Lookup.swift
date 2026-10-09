@@ -397,9 +397,12 @@ extension AppModel {
             // shows, and before 1.8.1 what the filming places are (fetched again when the tab opens).
             let lacksCamera = existing.quick != nil && existing.quick?.aspectRatios == nil
             let lacksPlaces = existing.quick?.filmedIn.isEmpty == false && existing.quick?.filmingPlaces == nil
-            // And before 1.8.2 the awards for the cinematography.
+            // And before 1.8.2 the awards for the cinematography, before 1.8.3 the countries it was shot in.
             let lacksHonours = existing.quick != nil && existing.quick?.cinematographyHonours == nil
-            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces, !lacksHonours { return }
+            let lacksCountries = existing.quick != nil && existing.quick?.filmingCountries == nil
+            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces, !lacksHonours, !lacksCountries {
+                return
+            }
         }
         funFactsLoading.insert(details.id)
         defer { funFactsLoading.remove(details.id) }

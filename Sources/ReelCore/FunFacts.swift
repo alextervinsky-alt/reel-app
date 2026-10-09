@@ -33,6 +33,9 @@ public struct QuickFacts: Codable, Equatable, Sendable {
     public var filmingPlaces: [FilmingPlace]?
     /// Awards and nominations for the cinematography (missing in facts fetched before Reel 1.8.2).
     public var cinematographyHonours: [Honour]?
+    /// The countries of the filming places, as Wikidata names them ("United States of America");
+    /// empty when it knows no places, missing when not asked yet (before Reel 1.8.3) or it failed.
+    public var filmingCountries: [String]?
 
     public init() {}
 
@@ -297,7 +300,7 @@ public struct WikipediaClient: Sendable {
             let entity = try await entity(item)
             article = entity.sitelinks?["enwiki"]?.title
             knownWithoutEnglishArticle = article == nil
-            quick = try? await quickFacts(from: entity)
+            quick = try? await quickFacts(from: entity, item: item)
         }
         // A search is only a fallback for films Wikidata doesn't know; a film it knows without an
         // English article would otherwise risk another work's article.
@@ -386,7 +389,7 @@ public struct WikipediaClient: Sendable {
     }
 
     /// Based on, filming locations, setting, awards, sequels — names looked up in one request.
-    func quickFacts(from entity: Entity) async throws -> QuickFacts {
+    func quickFacts(from entity: Entity, item: String) async throws -> QuickFacts {
         let basedOn = Array(entity.items("P144").prefix(3))
         let filmedIn = Array(entity.items("P915").prefix(12))
         let setIn = Array(entity.items("P840").prefix(4))
@@ -440,6 +443,7 @@ public struct WikipediaClient: Sendable {
         quick.basedOn = basedOn.compactMap { labels[$0] }
         quick.filmedIn = filmedIn.compactMap { labels[$0] }
         quick.filmingPlaces = filmedIn.compactMap { id in labels[id].map { FilmingPlace(name: $0, about: descriptions[id]) } }
+        quick.filmingCountries = filmedIn.isEmpty ? [] : try? await filmingCountries(of: item)
         quick.setIn = setIn.compactMap { labels[$0] }
         quick.awardsWon = awards.count
         quick.nominations = entity.items("P1411").count
@@ -449,6 +453,29 @@ public struct WikipediaClient: Sendable {
         quick.colour = colour.compactMap { labels[$0] }
         quick.notableAwards = Self.notable(awards.compactMap { labels[$0] })
         return quick
+    }
+
+    /// The countries the film's filming places are in (a place that is a country counts as
+    /// itself), in one query.
+    func filmingCountries(of item: String) async throws -> [String] {
+        struct Response: Decodable {
+            struct Value: Decodable { let value: String }
+            struct Results: Decodable { let bindings: [[String: Value]] }
+            let results: Results
+        }
+        guard item.range(of: #"^Q\d+$"#, options: .regularExpression) != nil else { return [] }
+        let query = """
+        SELECT DISTINCT ?countryLabel WHERE {
+          wd:\(item) wdt:P915 ?place .
+          { ?place wdt:P17 ?country } UNION { ?place wdt:P31 wd:Q6256 . BIND(?place AS ?country) }
+          SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+        }
+        """
+        let response: Response = try await Wikimedia.get("https://query.wikidata.org/sparql", ["query": query, "format": "json"],
+                                                         session: session, accept: "application/sparql-results+json")
+        // A country without an English name comes back as its id ("Q123"): left out.
+        return response.results.bindings.compactMap { $0["countryLabel"]?.value }
+            .filter { $0.range(of: #"^Q\d+$"#, options: .regularExpression) == nil }
     }
 
     /// The awards for the cinematography, won first, each once (a nomination that was won is a win).
