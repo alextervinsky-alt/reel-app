@@ -18,8 +18,6 @@ struct RootView: View {
     @State private var deskSearch = ""
     /// ⌘F: the search field showing (desk or Cinema mode) takes the focus.
     @State private var focusSearch = false
-    /// Whether the sidebar shows (the Back button steps clear of the window buttons when it doesn't).
-    @State private var columns = NavigationSplitViewVisibility.all
 
     /// The desk library, with Cinema mode over it when on, and what can open over either: a
     /// trailer, and the "How was it?" sheet. The desk stays in place (hidden) under Cinema mode,
@@ -50,9 +48,10 @@ struct RootView: View {
             .keyboardShortcut("f", modifiers: .command)
             .hidden()
         }
-        // No toolbar strip anywhere: the window buttons float over the sidebar (or slide in at the
-        // top in full screen), and a page opened over a list has its own Back button.
-        .toolbarVisibility(.hidden, for: .windowToolbar)
+        // No gray strip: the toolbar stays (it holds the window buttons and Back) but is see-through,
+        // so pictures reach the top of the window; in full screen it slides in at the top.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .windowToolbarFullScreenVisibility(.onHover)
         .onChange(of: model.cinemaMode) { _, on in
             // Cinema mode searches on its own: the desk keeps its search, list and page.
             if on {
@@ -77,9 +76,10 @@ struct RootView: View {
     }
 
     private var desk: some View {
-        NavigationSplitView(columnVisibility: $columns) {
+        NavigationSplitView {
             SidebarView(selection: shelf, onSelect: select)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 224, max: 300)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             NavigationStack(path: $path) {
                 Group {
@@ -109,22 +109,22 @@ struct RootView: View {
                 }
                 .background(Theme.background)
                 .navigationDestination(for: FilmRoute.self) { route in
-                    FilmPage(filmID: route.id).pushedPage()
+                    FilmPage(filmID: route.id)
                 }
                 .navigationDestination(for: PersonRoute.self) { route in
-                    PersonPage(route: route).pushedPage()
+                    PersonPage(route: route)
                 }
                 .navigationDestination(for: DiscoverRoute.self) { route in
-                    DiscoverListPage(list: route.list, mood: route.mood).pushedPage()
+                    DiscoverListPage(list: route.list, mood: route.mood)
                 }
                 .navigationDestination(for: ListRoute.self) { route in
-                    ListPage(kind: route.kind).pushedPage()
+                    ListPage(kind: route.kind)
                 }
                 .navigationDestination(for: FranchiseRoute.self) { route in
-                    FranchisePage(route: route).pushedPage()
+                    FranchisePage(route: route)
                 }
                 .navigationDestination(for: SimilarRoute.self) { route in
-                    MoreLikeThisPage(route: route).pushedPage()
+                    MoreLikeThisPage(route: route)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -132,18 +132,13 @@ struct RootView: View {
                     NoticeBar(text: notice) { model.notice = nil }
                 }
             }
-            // Back, over a page opened from a list (⌘[ too).
-            .overlay(alignment: .topLeading) {
-                // Not while Cinema mode or a trailer covers the desk: ⌘[ mustn't move the page under it.
-                if !path.isEmpty, !model.cinemaMode, model.trailer == nil {
-                    BackButton { if !path.isEmpty { path.removeLast() } }
-                        .padding(.leading, columns == .detailOnly ? 84 : 18)
-                        .padding(.top, 12)
-                        .ignoresSafeArea(.container, edges: .top)
-                        .transition(.opacity)
-                }
+            // ⌘[ goes back too (not while Cinema mode or a trailer covers the desk).
+            .background {
+                Button("") { if !path.isEmpty { path.removeLast() } }
+                    .keyboardShortcut("[", modifiers: .command)
+                    .disabled(path.isEmpty || model.cinemaMode || model.trailer != nil)
+                    .hidden()
             }
-            .animation(.easeOut(duration: 0.15), value: path.isEmpty)
         }
         .task(id: searchText) {
             // Clearing the field shows everything again at once; typing waits for a pause.
@@ -503,35 +498,6 @@ struct SidebarRow: View {
     private func filled(_ symbol: String) -> String {
         ["bookmark", "heart", "checkmark.circle", "questionmark.circle", "externaldrive", "star", "safari", "shippingbox",
          "exclamationmark.triangle", "moon"].contains(symbol) ? symbol + ".fill" : symbol
-    }
-}
-/// Back to the list a page was opened from: a small round button floating at the top left.
-private struct BackButton: View {
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(hovering ? 1 : 0.85))
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(.ultraThinMaterial))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.12)))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .keyboardShortcut("[", modifiers: .command)
-        .onHover { hovering = $0 }
-        .help("Back")
-    }
-}
-
-extension View {
-    /// A page opened over a list: room at the top for the Back button (a page whose picture
-    /// reaches the top of the window ignores it).
-    func pushedPage() -> some View {
-        safeAreaPadding(.top, 40)
     }
 }
 #endif
