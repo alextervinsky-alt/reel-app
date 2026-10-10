@@ -22,11 +22,8 @@ struct YearInFilmView: View {
             VStack(alignment: .leading, spacing: 30) {
                 header(years: years, year: year, hasElsewhere: !elsewhere.isEmpty)
                 if let year {
-                    let summary = YearInFilm(year: year, from: all)
-                    YearSummary(summary: summary, elsewhere: model.seenElsewhere(in: year),
+                    YearSummary(summary: YearInFilm(year: year, from: all), elsewhere: model.seenElsewhere(in: year),
                                 counted: model.yearCountsElsewhere) { preview = $0 }
-                        // Where the year's films were shot, for Countries.
-                        .task(id: year) { await model.loadFilmingCountries(for: summary.films) }
                 } else {
                     ContentUnavailableView("Your year starts with a film", systemImage: "calendar",
                                            description: Text("Mark films as watched and they'll be counted here, month by month."))
@@ -157,11 +154,7 @@ private struct YearSummary: View {
                 Theme.sectionTitle("In Numbers")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 0, alignment: .topLeading)], alignment: .leading, spacing: 0) {
                     ForEach(figures, id: \.label) { figure in
-                        if figure.label == Self.countriesLabel {
-                            CountriesFigure(value: figure.value, label: figure.label, countries: summary.countries)
-                        } else {
-                            FigureCell(value: figure.value, label: figure.label)
-                        }
+                        FigureCell(value: figure.value, label: figure.label)
                     }
                 }
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
@@ -183,13 +176,10 @@ private struct YearSummary: View {
         if let day = summary.favouriteWeekday {
             figures.append((Calendar.current.weekdaySymbols[day - 1] + "s", "your film night"))
         }
-        if summary.countries.count > 1 { figures.append(("\(summary.countries.count)", Self.countriesLabel)) }
         if summary.languageCount > 1 { figures.append(("\(summary.languageCount)", "Languages")) }
         return figures
     }
 
-    /// The figure that opens to show its countries.
-    private static let countriesLabel = "Countries"
 
     // MARK: Months
 
@@ -266,17 +256,17 @@ private struct YearSummary: View {
     private var tastes: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
             if !summary.topGenres.isEmpty {
-                TallyPanel(title: "Genres", tallies: summary.topGenres, total: summary.films.count)
+                TallyPanel(title: "Genres", tallies: summary.topGenres)
             }
             if !summary.topDirectors.isEmpty {
-                TallyPanel(title: "Directors you came back to", tallies: summary.topDirectors, total: summary.films.count)
+                TallyPanel(title: "Directors you came back to", tallies: summary.topDirectors)
             }
             // Only when the year goes beyond one language.
             if summary.languageCount > 1 {
-                TallyPanel(title: "Languages", tallies: summary.languages, total: summary.films.count)
+                TallyPanel(title: "Languages", tallies: summary.languages)
             }
             if !summary.topActors.isEmpty {
-                TallyPanel(title: "Faces you saw most", tallies: summary.topActors, total: summary.films.count)
+                TallyPanel(title: "Faces you saw most", tallies: summary.topActors)
             }
         }
     }
@@ -452,26 +442,31 @@ private struct HighlightCard: View {
     }
 }
 
+/// A short ranking (genres, directors, languages, faces): each with how many films, and a bar
+/// measured against the first, so the longest bar is the one that leads.
 private struct TallyPanel: View {
     let title: String
     let tallies: [Tally]
-    let total: Int
 
     var body: some View {
+        let most = max(tallies.map(\.count).max() ?? 1, 1)
         VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.system(size: 15, weight: .semibold))
             ForEach(tallies) { tally in
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack {
+                    HStack(alignment: .firstTextBaseline) {
                         Text(tally.name).font(.system(size: 13))
                         Spacer()
-                        Text("\(tally.count)").font(.system(size: 12.5)).monospacedDigit().foregroundStyle(.secondary)
+                        Text(tally.count == 1 ? "1 film" : "\(tally.count) films")
+                            .font(.system(size: 12))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
                     }
                     GeometryReader { geometry in
                         Capsule().fill(Color.white.opacity(0.07))
                             .overlay(alignment: .leading) {
                                 Capsule().fill(Theme.brandGradient)
-                                    .frame(width: geometry.size.width * CGFloat(tally.count) / CGFloat(max(total, 1)))
+                                    .frame(width: max(6, geometry.size.width * CGFloat(tally.count) / CGFloat(most)))
                             }
                     }
                     .frame(height: 5)
@@ -484,6 +479,7 @@ private struct TallyPanel: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
     }
 }
+
 /// Films seen elsewhere that were all dated the month they were marked (before Reel dated them
 /// by release): one click dates each the month after it came out.
 private struct DateByReleaseButton: View {
@@ -512,7 +508,6 @@ private struct DateByReleaseButton: View {
 private struct FigureCell: View {
     let value: String
     let label: String
-    var opens = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -520,84 +515,13 @@ private struct FigureCell: View {
                 .font(.system(size: 19, weight: .semibold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            HStack(spacing: 4) {
-                Text(label)
-                if opens { Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)) }
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// Countries: a click shows each country with the year's films made there, the most first.
-private struct CountriesFigure: View {
-    let value: String
-    let label: String
-    let countries: [CountryFilms]
-    @State private var open = false
-    @State private var hovering = false
-
-    var body: some View {
-        Button { open.toggle() } label: {
-            FigureCell(value: value, label: label, opens: true)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(hovering || open ? 0.05 : 0)).padding(4))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help("Where your films were made")
-        .popover(isPresented: $open, arrowEdge: .bottom) { list }
-    }
-
-    private var list: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Where each film was shot, or where it comes from when that isn't known.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                ForEach(Array(countries.enumerated()), id: \.element.id) { index, country in
-                    if index > 0 { Divider() }
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(country.name).font(.system(size: 13.5, weight: .semibold))
-                            Spacer(minLength: 12)
-                            Text(country.films.count == 1 ? "1 film" : "\(country.films.count) films")
-                                .font(.system(size: 11.5))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        Text(country.films.map(\.title).joined(separator: "  ·  "))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, 10)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-        }
-        .frame(width: 320, height: height)
-    }
-
-    /// As tall as the list (each country's titles take one to three lines of about 46
-    /// characters), at most 520 points, then it scrolls.
-    private var height: CGFloat {
-        let rows = countries.reduce(CGFloat(48)) { total, country in
-            let characters = country.films.map(\.title).joined(separator: "  ·  ").count
-            let lines = min(3, max(1, (characters + 45) / 46))
-            return total + 42 + CGFloat(lines) * 15
-        }
-        return min(520, rows)
     }
 }
 #endif

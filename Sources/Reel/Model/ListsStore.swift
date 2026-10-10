@@ -96,7 +96,7 @@ final class ListsStore {
 
     /// Fetches the briefs not fetched yet, eight at a time. One that fails (offline) is tried
     /// again next time.
-    /// `refreshingOld`: briefs kept before Reel 1.8 (no language, countries or cast) are fetched
+    /// `refreshingOld`: briefs kept before Reel 1.8 (no language or cast) are fetched
     /// again too, for Year in Film.
     func fetchBriefs(_ ids: [Int], using client: TMDBClient, refreshingOld: Bool = false) async {
         await prepare()

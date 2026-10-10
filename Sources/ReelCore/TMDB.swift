@@ -239,15 +239,12 @@ public struct TMDBMovieDetails: Codable, Equatable, Sendable {
     public var revenue: Int?
     public var originalLanguage: String?
     public var productionCountries: [TMDBCountry]?
-    /// Where the film comes from, as country codes ("KR"): one or two, not every co-producer.
-    public var originCountry: [String]?
 
     enum CodingKeys: String, CodingKey {
         case id, title, tagline, overview, runtime, genres, videos, credits, keywords, images, reviews, budget, revenue
         case collection = "belongs_to_collection"
         case originalLanguage = "original_language"
         case productionCountries = "production_countries"
-        case originCountry = "origin_country"
         case originalTitle = "original_title"
         case releaseDate = "release_date"
         case posterPath = "poster_path"
@@ -266,14 +263,6 @@ public struct TMDBMovieDetails: Codable, Equatable, Sendable {
     public var year: Int? { yearFromDate(releaseDate) }
 
     public var genreNames: [String] { (genres ?? []).map { $0.name } }
-
-    /// Where the film comes from, by name: its origin countries ("South Korea"), else (info from
-    /// before Reel 1.8.3) every production country.
-    public var countriesOfOrigin: [String] {
-        let english = Locale(identifier: "en_US")
-        let named = (originCountry ?? []).compactMap { english.localizedString(forRegionCode: $0) }
-        return named.isEmpty ? (productionCountries ?? []).map(\.name) : named
-    }
 
     public var directors: [String] {
         (credits?.crew ?? []).filter { $0.job == "Director" }.map { $0.name }

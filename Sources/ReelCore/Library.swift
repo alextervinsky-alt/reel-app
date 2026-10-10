@@ -182,8 +182,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// 5: trailers are kept even when a film has many other videos.
     /// 6: trailers without a language and in the film's own language, others' uploads as a fallback.
     /// 7: trailer sizes, so HD uploads are played first.
-    /// 8: the origin country, for Year in Film.
-    public static let currentInfoVersion = 8
+    public static let currentInfoVersion = 7
 
     public init(
         driveID: String, relativePath: String, fileName: String, size: Int64, modified: Date?,

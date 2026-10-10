@@ -57,7 +57,7 @@ final class LiveTMDBTests: XCTestCase {
         XCTAssertEqual(facts.articleTitle, "Blade Runner 2049")
         XCTAssertFalse(facts.facts.isEmpty)
         let quick = try XCTUnwrap(facts.quick)
-        print("::notice::Fun facts OK: \(facts.facts.count) facts; shot in \(quick.filmingCountries ?? ["?"])")
+        print("::notice::Fun facts OK: \(facts.facts.count) facts")
         print("::notice::Quick facts: based on \(quick.basedOn), filmed in \(quick.filmedIn), set in \(quick.setIn), awards \(quick.awardsWon) won / \(quick.nominations) nominated, notable \(quick.notableAwards.prefix(2)), follows \(quick.follows ?? "-")")
         print("::notice::Critics: consensus \(facts.consensus?.prefix(80) ?? "-"), CinemaScore \(facts.cinemaScore ?? "-"), \(findings.criticSentences.count) critic sentences")
         XCTAssertFalse(findings.criticSentences.isEmpty)

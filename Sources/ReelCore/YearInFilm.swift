@@ -14,14 +14,13 @@ public struct YearFilm: Equatable, Sendable, Identifiable {
     public let score: Double?
     /// The original language ("ko").
     public let language: String?
-    public let countries: [String]
     /// The leads, billing order.
     public let cast: [String]
     /// Seen somewhere else (its date is a guess or a month, not a night).
     public let elsewhere: Bool
 
     public init(id: String, title: String, releaseYear: Int?, watchedOn: Date, runtime: Int?, genres: [String],
-                directors: [String], yourRating: Int?, score: Double?, language: String? = nil, countries: [String] = [],
+                directors: [String], yourRating: Int?, score: Double?, language: String? = nil,
                 cast: [String] = [], elsewhere: Bool = false) {
         self.id = id
         self.title = title
@@ -33,7 +32,6 @@ public struct YearFilm: Equatable, Sendable, Identifiable {
         self.yourRating = yourRating
         self.score = score
         self.language = language
-        self.countries = countries
         self.cast = cast
         self.elsewhere = elsewhere
     }
@@ -52,14 +50,13 @@ public struct FilmBrief: Codable, Equatable, Sendable {
     public var voteAverage: Double?
     /// When it came out ("2004-11-20"); missing in briefs kept before Reel 1.7.
     public var released: String?
-    /// The original language, countries and leads, for Year in Film (missing before Reel 1.8).
+    /// The original language and leads, for Year in Film (missing before Reel 1.8).
     public var language: String?
-    public var countries: [String]?
     public var cast: [String]?
 
     public init(title: String, year: Int?, runtime: Int?, genres: [String], directors: [String], posterPath: String?,
                 backdropPath: String?, voteAverage: Double?, released: String? = nil, language: String? = nil,
-                countries: [String]? = nil, cast: [String]? = nil) {
+                cast: [String]? = nil) {
         self.title = title
         self.year = year
         self.runtime = runtime
@@ -70,7 +67,6 @@ public struct FilmBrief: Codable, Equatable, Sendable {
         self.voteAverage = voteAverage
         self.released = released
         self.language = language
-        self.countries = countries
         self.cast = cast
     }
 
@@ -78,7 +74,7 @@ public struct FilmBrief: Codable, Equatable, Sendable {
         self.init(title: details.title, year: details.year, runtime: details.runtime.flatMap { $0 > 0 ? $0 : nil },
                   genres: details.genreNames, directors: details.directors, posterPath: details.posterPath,
                   backdropPath: details.backdropPath, voteAverage: details.voteAverage, released: details.releaseDate,
-                  language: details.originalLanguage ?? "", countries: details.countriesOfOrigin,
+                  language: details.originalLanguage ?? "",
                   cast: YearFilm.leads(details))
     }
 
@@ -86,7 +82,7 @@ public struct FilmBrief: Codable, Equatable, Sendable {
     public func yearFilm(id: String, watchedOn: Date, yourRating: Int?) -> YearFilm {
         YearFilm(id: id, title: title, releaseYear: year, watchedOn: watchedOn, runtime: runtime, genres: genres,
                  directors: directors, yourRating: yourRating, score: voteAverage, language: language,
-                 countries: countries ?? [], cast: cast ?? [], elsewhere: true)
+                 cast: cast ?? [], elsewhere: true)
     }
 }
 
@@ -113,13 +109,6 @@ public enum SeenDate {
         if (year, month) >= (today.year ?? 0, today.month ?? 0) { return now }
         return date
     }
-}
-
-/// A country the year's films were made in, and those films (in the order they were watched).
-public struct CountryFilms: Equatable, Sendable, Identifiable {
-    public let name: String
-    public let films: [YearFilm]
-    public var id: String { name }
 }
 
 public struct Tally: Equatable, Sendable, Identifiable {
@@ -157,8 +146,6 @@ public struct YearInFilm: Equatable, Sendable {
     public let favouriteWeekday: Int?
     public let languages: [Tally]
     public let languageCount: Int
-    /// Where the films were made: the countries with the most films first.
-    public let countries: [CountryFilms]
     /// Actors in at least two of the year's films.
     public let topActors: [Tally]
 
@@ -197,29 +184,7 @@ public struct YearInFilm: Equatable, Sendable {
         let spoken = films.compactMap { $0.language.flatMap { $0.isEmpty ? nil : FilmLanguage.name($0) } }
         languages = Self.tally(spoken, minimum: 1, limit: 4)
         languageCount = Set(spoken).count
-        countries = Self.byCountry(films)
         topActors = Self.tally(films.flatMap(\.cast), minimum: 2, limit: 4)
-    }
-
-    /// Each country with its films (a co-production counts for each country), the most first.
-    static func byCountry(_ films: [YearFilm]) -> [CountryFilms] {
-        var found: [String: [YearFilm]] = [:]
-        for film in films {
-            for country in Set(film.countries.map(shortCountry)) { found[country, default: []].append(film) }
-        }
-        return found.map { CountryFilms(name: $0.key, films: $0.value) }
-            .sorted { $0.films.count != $1.films.count ? $0.films.count > $1.films.count : $0.name < $1.name }
-    }
-
-    /// TMDB's and Wikidata's official names, as people say them.
-    static func shortCountry(_ name: String) -> String {
-        ["United States of America": "United States", "Russian Federation": "Russia", "Korea, Republic of": "South Korea",
-         "Iran, Islamic Republic of": "Iran", "Czechia": "Czech Republic", "Viet Nam": "Vietnam",
-         "People's Republic of China": "China", "Kingdom of the Netherlands": "Netherlands", "Kingdom of Denmark": "Denmark",
-         "Republic of Ireland": "Ireland", "State of Palestine": "Palestine", "Türkiye": "Turkey",
-         "Hong Kong SAR China": "Hong Kong", "Palestinian Territories": "Palestine", "Bosnia & Herzegovina": "Bosnia and Herzegovina",
-         "Myanmar (Burma)": "Myanmar", "Congo - Kinshasa": "DR Congo", "Congo - Brazzaville": "Republic of the Congo",
-         "Macao SAR China": "Macau", "Trinidad & Tobago": "Trinidad and Tobago"][name] ?? name
     }
 
     /// Years with at least one dated viewing, newest first.

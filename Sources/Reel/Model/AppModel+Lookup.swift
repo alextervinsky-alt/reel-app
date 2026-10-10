@@ -397,12 +397,9 @@ extension AppModel {
             // shows, and before 1.8.1 what the filming places are (fetched again when the tab opens).
             let lacksCamera = existing.quick != nil && existing.quick?.aspectRatios == nil
             let lacksPlaces = existing.quick?.filmedIn.isEmpty == false && existing.quick?.filmingPlaces == nil
-            // And before 1.8.2 the awards for the cinematography, before 1.8.3 the countries it was shot in.
+            // And before 1.8.2 the awards for the cinematography.
             let lacksHonours = existing.quick != nil && existing.quick?.cinematographyHonours == nil
-            let lacksCountries = existing.quick != nil && existing.quick?.filmingCountries == nil
-            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces, !lacksHonours, !lacksCountries {
-                return
-            }
+            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces, !lacksHonours { return }
         }
         funFactsLoading.insert(details.id)
         defer { funFactsLoading.remove(details.id) }
@@ -411,9 +408,6 @@ extension AppModel {
         }
         // Wikidata's part failing this time doesn't lose what it gave before.
         if facts.quick == nil { facts.quick = film.funFacts?.quick }
-        if facts.quick?.filmingCountries?.isEmpty != false, let known = film.funFacts?.quick?.filmingCountries, !known.isEmpty {
-            facts.quick?.filmingCountries = known
-        }
         mutateFilms { list in
             for i in list.indices where list[i].tmdb?.id == details.id { list[i].funFacts = facts }
         }

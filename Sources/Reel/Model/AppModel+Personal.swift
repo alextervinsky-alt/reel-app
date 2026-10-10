@@ -234,25 +234,6 @@ extension AppModel {
 
     // MARK: - Year in Film
 
-    /// Where a film was made, for Year in Film: the countries it was shot in (Wikidata's filming
-    /// places), else where it comes from (TMDB's origin country, not every co-producer).
-    static func countries(of film: FilmEntry) -> [String] {
-        if let shot = film.funFacts?.quick?.filmingCountries, !shot.isEmpty { return shot }
-        return film.tmdb?.countriesOfOrigin ?? []
-    }
-
-    /// The year's films on your drives that don't know yet where they were shot: their facts are
-    /// fetched (one at a time), and Year in Film updates as they arrive.
-    func loadFilmingCountries(for films: [YearFilm]) async {
-        for film in films where !film.elsewhere {
-            // Left Year in Film: the rest waits for the next visit.
-            if Task.isCancelled { return }
-            guard let entry = itemCache[film.id]?.main, entry.funFacts?.quick != nil,
-                  entry.funFacts?.quick?.filmingCountries == nil else { continue }
-            await loadFunFacts(for: entry)
-        }
-    }
-
     /// Every film watched on a known date: the library's, and those seen elsewhere when Year in
     /// Film counts them (read by Year in Film, which then follows your ratings and dates).
     func yearFilms() -> [YearFilm] {
@@ -262,7 +243,7 @@ extension AppModel {
             return YearFilm(id: key, title: item.main.displayTitle, releaseYear: item.main.displayYear, watchedOn: date,
                             runtime: d?.runtime, genres: d?.genreNames ?? [], directors: d?.directors ?? [],
                             yourRating: personal.record(forKey: key).rating, score: item.score, language: d?.originalLanguage,
-                            countries: Self.countries(of: item.main), cast: YearFilm.leads(d))
+                            cast: YearFilm.leads(d))
         }
         guard yearCountsElsewhere else { return library }
         return library + seenElsewhereFilms.compactMap { entry in
