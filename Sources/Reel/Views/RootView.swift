@@ -19,6 +19,10 @@ struct RootView: View {
     /// ⌘F: the search field showing (desk or Cinema mode) takes the focus.
     @State private var focusSearch = false
 
+    /// Cinema mode or a trailer is over the desk: its Back (drawn above everything, in the
+    /// toolbar) steps aside, so it can't move the page underneath.
+    private var coveredDesk: Bool { model.cinemaMode || model.trailer != nil }
+
     /// The desk library, with Cinema mode over it when on, and what can open over either: a
     /// trailer, and the "How was it?" sheet. The desk stays in place (hidden) under Cinema mode,
     /// so its page, scroll position, search and sidebar are exactly as they were afterwards.
@@ -110,21 +114,27 @@ struct RootView: View {
                 .background(Theme.background)
                 .navigationDestination(for: FilmRoute.self) { route in
                     FilmPage(filmID: route.id)
+                        .navigationBarBackButtonHidden(coveredDesk)
                 }
                 .navigationDestination(for: PersonRoute.self) { route in
                     PersonPage(route: route)
+                        .navigationBarBackButtonHidden(coveredDesk)
                 }
                 .navigationDestination(for: DiscoverRoute.self) { route in
                     DiscoverListPage(list: route.list, mood: route.mood)
+                        .navigationBarBackButtonHidden(coveredDesk)
                 }
                 .navigationDestination(for: ListRoute.self) { route in
                     ListPage(kind: route.kind)
+                        .navigationBarBackButtonHidden(coveredDesk)
                 }
                 .navigationDestination(for: FranchiseRoute.self) { route in
                     FranchisePage(route: route)
+                        .navigationBarBackButtonHidden(coveredDesk)
                 }
                 .navigationDestination(for: SimilarRoute.self) { route in
                     MoreLikeThisPage(route: route)
+                        .navigationBarBackButtonHidden(coveredDesk)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -136,7 +146,7 @@ struct RootView: View {
             .background {
                 Button("") { if !path.isEmpty { path.removeLast() } }
                     .keyboardShortcut("[", modifiers: .command)
-                    .disabled(path.isEmpty || model.cinemaMode || model.trailer != nil)
+                    .disabled(path.isEmpty || coveredDesk)
                     .hidden()
             }
         }

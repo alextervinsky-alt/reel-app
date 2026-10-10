@@ -12,6 +12,12 @@ final class CraftGlossaryTests: XCTestCase {
         XCTAssertTrue(CraftGlossary.explain("2.39:1")?.contains("scope") == true)
         XCTAssertTrue(CraftGlossary.explain("Film")?.contains("celluloid") == true)
         XCTAssertTrue(CraftGlossary.explain("RED Epic Dragon")?.contains("RED") == true)
+        XCTAssertTrue(CraftGlossary.explain("Fujifilm Eterna 500T")?.contains("Fujifilm") == true)
+        XCTAssertTrue(CraftGlossary.explain("Ultra Panavision 70")?.contains("65 mm") == true)
+        XCTAssertTrue(CraftGlossary.explain("Technicolor lab")?.contains("lab") == true)
+        XCTAssertTrue(CraftGlossary.explain("Hawk V-Lite anamorphic")?.contains("Hawk") == true)
+        XCTAssertTrue(CraftGlossary.explain("ProRes 4444")?.contains("compressed") == true)
+        XCTAssertTrue(CraftGlossary.explain("Arriflex D-21")?.contains("digital") == true)
     }
 
     func testNothingMadeUp() {

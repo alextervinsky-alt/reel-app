@@ -384,10 +384,12 @@ struct CinematographyTab: View {
     static func emphasised(_ sentence: String, names: [String]) -> AttributedString {
         var text = AttributedString(sentence)
         for name in names {
-            var start = text.startIndex
-            while let range = text[start...].range(of: name, options: .caseInsensitive) {
-                text[range].inlinePresentationIntent = .stronglyEmphasized
-                start = range.upperBound
+            // Whole words: "Red" (the cameras) not in "inspired".
+            let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: name) + #"\b"#
+            var start = sentence.startIndex
+            while let found = sentence.range(of: pattern, options: [.regularExpression, .caseInsensitive], range: start..<sentence.endIndex) {
+                if let range = Range(found, in: text) { text[range].inlinePresentationIntent = .stronglyEmphasized }
+                start = found.upperBound
             }
         }
         return text
@@ -400,15 +402,19 @@ private struct NoteRow: View {
     let number: Int?
     let topic: String?
     let note: TechSpecs.Note
-    /// The gear found in what was read (in bold, and explained when opened).
+    /// The gear found in what was read (in bold).
     let names: [String]
     let quoted: Bool
     let open: Bool
     let toggle: () -> Void
 
     var body: some View {
-        let terms = names.filter { note.text.localizedCaseInsensitiveContains($0) }
-            .compactMap { name in CraftGlossary.explain(name).map { Term(name: name, explanation: $0) } }
+        // What it names, each explained once (Cooke S4/i and Cooke Panchro share an explanation).
+        var explained = Set<String>()
+        let terms = note.names.compactMap { name -> Term? in
+            guard let text = CraftGlossary.explain(name), explained.insert(text).inserted else { return nil }
+            return Term(name: name, explanation: text)
+        }
         let more = note.context != nil || !terms.isEmpty
         VStack(alignment: .leading, spacing: 12) {
             // Only a note with more to read is a button (a disabled one would look dimmed).
@@ -496,9 +502,15 @@ private struct NoteRow: View {
 
     /// The paragraph, quiet, with the note itself in full white.
     static func inContext(_ note: String, _ paragraph: String) -> Text {
-        // The note may be two sentences joined: the first stands for it.
-        let first = note.components(separatedBy: ". ").first ?? note
-        guard let range = paragraph.range(of: first) else { return Text(paragraph).foregroundStyle(Theme.secondaryText) }
+        // The note as it stands, or (two sentences read together, spaced differently) from its
+        // first sentence to the end of its last.
+        let sentences = note.components(separatedBy: ". ")
+        let whole = paragraph.range(of: note)
+        let from = paragraph.range(of: sentences.first ?? note)
+        let to = sentences.last.flatMap { paragraph.range(of: $0) }
+        guard let range = whole ?? from.map({ start in start.lowerBound..<max(start.upperBound, to?.upperBound ?? start.upperBound) }) else {
+            return Text(paragraph).foregroundStyle(Theme.secondaryText)
+        }
         return Text(paragraph[..<range.lowerBound]).foregroundStyle(Theme.secondaryText)
             + Text(paragraph[range]).foregroundStyle(Color.white.opacity(0.95))
             + Text(paragraph[range.upperBound...]).foregroundStyle(Theme.secondaryText)
@@ -697,11 +709,16 @@ private final class ReadSpecs {
     }
 
     /// While spoiler-safe: nothing that tells of the story, or of how it ends ("the closing
-    /// sequence was lit…").
+    /// sequence was lit…"), and no paragraph to read more that does.
     private static func withoutStory(_ read: TechSpecs) -> TechSpecs {
+        func safe(_ text: String) -> Bool {
+            !Spoilers.mentionsPlot(text) && text.range(of: ending, options: [.regularExpression, .caseInsensitive]) == nil
+        }
         func keep(_ notes: [TechSpecs.Note]) -> [TechSpecs.Note] {
-            notes.filter { note in
-                !Spoilers.mentionsPlot(note.text) && note.text.range(of: ending, options: [.regularExpression, .caseInsensitive]) == nil
+            notes.filter { safe($0.text) }.map { note in
+                var kept = note
+                if let context = kept.context, !safe(context) { kept.context = nil }
+                return kept
             }
         }
         var specs = read

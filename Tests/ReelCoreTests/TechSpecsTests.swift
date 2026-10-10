@@ -211,4 +211,12 @@ final class TechSpecsTests: XCTestCase {
         let roma = TechSpecs.read(sections: sections, cinematographers: ["Alfonso Cuarón"], directors: ["Alfonso Cuarón"])
         XCTAssertTrue(roma.collaboration.isEmpty)
     }
+
+    func testAFocalLengthIsNotAGauge() {
+        let specs = TechSpecs.read(["The film was shot digitally, mostly on a 35mm lens close to the actors."])
+        XCTAssertFalse(specs.names(.format).contains("35 mm"), "\(specs.names(.format))")
+        let notes = TechSpecs.read(["Deakins shot the film on the ARRI Alexa 65 with a Steadicam, to stay close to the actors as they walk."])
+        XCTAssertEqual(Set(notes.intent.first?.names ?? notes.cameraLanguage.first?.names ?? notes.sentences.first?.names ?? []),
+                       ["ARRI Alexa 65", "Steadicam"], "each note knows what it names")
+    }
 }

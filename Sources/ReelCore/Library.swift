@@ -182,6 +182,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// 5: trailers are kept even when a film has many other videos.
     /// 6: trailers without a language and in the film's own language, others' uploads as a fallback.
     /// 7: trailer sizes, so HD uploads are played first.
+    /// (Reel 1.8.3 saved 8 for a while: the next bump is to 9.)
     public static let currentInfoVersion = 7
 
     public init(

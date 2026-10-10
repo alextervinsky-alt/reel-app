@@ -34,6 +34,8 @@ public struct TechSpecs: Equatable, Sendable {
         public var weight = 0
         /// The whole paragraph it's from, to read more (nil when the note is most of it).
         public var context: String?
+        /// The gear and techniques it names ("ARRI Alexa 65", "Steadicam"), as the sheet lists them.
+        public var names: [String] = []
         public var id: String { text }
     }
 
@@ -148,6 +150,7 @@ public struct TechSpecs: Equatable, Sendable {
                         }
                         let lowered = sentence.lowercased()
                         var gearNamed = 0
+                        var namedHere: [String] = []
                         if triggers.contains(where: { lowered.contains($0) }) {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
@@ -155,6 +158,7 @@ public struct TechSpecs: Equatable, Sendable {
                                 if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
                                 for name in rule.matches(in: sentence) {
                                     gearNamed += 1
+                                    if !namedHere.contains(name) { namedHere.append(name) }
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil))
                                 }
                             }
@@ -184,6 +188,7 @@ public struct TechSpecs: Equatable, Sendable {
                         let because = matches(reason, sentence)
                         var note = Note(text: shown, source: text.source)
                         if paragraph.count > shown.count + 60 { note.context = paragraph }
+                        note.names = namedHere
                         note.weight = 2 * min(gearNamed, 3) + (matches(detail, shown) ? 2 : 0) + (because ? 1 : 0)
                             + (text.isInterview ? 1 : 0) - (shown.count < 70 ? 1 : 0)
                         var placed = true
@@ -603,7 +608,8 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.format, #"\bEastman\s+(?:Double-X|Color\s+Negative|EXR|5\d{3})(?:\s+\d{4})?"#),
         Rule(.format, #"\bFuji(?:film)?\s+(?:Eterna(?:\s+(?:Vivid\s+)?\d{3}[TD]?)?|Reala(?:\s+500D)?|F-\d{2,3}\w*|Vivid\s+\d{3}\w?)"#),
         Rule(.format, #"\b(?<!Eastman )(?<!Kodak )(?:Double-X|Tri-X|Ektachrome)\b"#),
-        Rule(.format, #"\b(?:Super\s?(?:8|16|35)(?:\s?-?\s?mm)?|(?:8|16|35|65|70)\s?-?\s?(?:mm|millimetre|millimeter))(?=\W|$)"#, needsShooting: true),
+        // A gauge, not a focal length ("a 35mm lens").
+        Rule(.format, #"\b(?:Super\s?(?:8|16|35)(?:\s?-?\s?mm)?|(?:8|16|35|65|70)\s?-?\s?(?:mm|millimetre|millimeter))(?=\W|$)(?!\s+(?:lens|lenses|prime|primes|focal|spherical|anamorphic|wide-angle))"#, needsShooting: true),
         Rule(.format, #"\bVistaVision\b"#, name: "VistaVision", needsShooting: true),
         Rule(.format, #"\bTechniscope\b"#, name: "Techniscope", needsShooting: true),
         Rule(.format, #"\bCinemaScope\b"#, name: "CinemaScope", needsShooting: true),
