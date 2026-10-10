@@ -411,45 +411,14 @@ private struct NoteRow: View {
             .compactMap { name in CraftGlossary.explain(name).map { Term(name: name, explanation: $0) } }
         let more = note.context != nil || !terms.isEmpty
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: toggle) {
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
-                    if let number {
-                        Text("\(number)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(Theme.brand)
-                            .frame(width: 22, alignment: .leading)
-                    }
-                    VStack(alignment: .leading, spacing: 7) {
-                        if let topic {
-                            Text(topic.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
-                                .tracking(0.8)
-                                .foregroundStyle(Theme.brand.opacity(0.85))
-                        }
-                        Text(CinematographyTab.emphasised(note.text, names: names))
-                            .font(quoted ? .system(size: number == nil ? 15 : 17, design: .serif).italic()
-                                         : .system(size: number == nil ? 14.5 : 16, weight: number == nil ? .regular : .medium))
-                            .lineSpacing(4)
-                            .foregroundStyle(Color.white.opacity(number == nil ? 0.86 : 0.94))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.leading)
-                        if let source = note.source, !source.hasPrefix("Wikipedia") {
-                            Text("— " + source).font(.system(size: 12)).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer(minLength: 8)
-                    if more {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(open ? Theme.brand : Color.secondary)
-                            .rotationEffect(.degrees(open ? 180 : 0))
-                    }
-                }
-                .contentShape(Rectangle())
+            // Only a note with more to read is a button (a disabled one would look dimmed).
+            if more {
+                Button(action: toggle) { header(more: more) }
+                    .buttonStyle(.plain)
+                    .help(open ? "Show less" : "Read more")
+            } else {
+                header(more: more)
             }
-            .buttonStyle(.plain)
-            .disabled(!more)
-            .help(more ? (open ? "Show less" : "Read more") : "")
             if open, more {
                 VStack(alignment: .leading, spacing: 14) {
                     if let context = note.context {
@@ -481,6 +450,43 @@ private struct NoteRow: View {
         .padding(.vertical, number == nil ? 10 : 16)
     }
 
+    private func header(more: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            if let number {
+                Text("\(number)")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.brand)
+                    .frame(width: 22, alignment: .leading)
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                if let topic {
+                    Text(topic.uppercased())
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(Theme.brand.opacity(0.85))
+                }
+                Text(CinematographyTab.emphasised(note.text, names: names))
+                    .font(quoted ? .system(size: number == nil ? 15 : 17, design: .serif).italic()
+                                 : .system(size: number == nil ? 14.5 : 16, weight: number == nil ? .regular : .medium))
+                    .lineSpacing(4)
+                    .foregroundStyle(Color.white.opacity(number == nil ? 0.86 : 0.94))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                if let source = note.source, !source.hasPrefix("Wikipedia") {
+                    Text("— " + source).font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            if more {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(open ? Theme.brand : Color.secondary)
+                    .rotationEffect(.degrees(open ? 180 : 0))
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
     /// A name the note mentions, and what it is.
     struct Term: Identifiable {
         let name: String
@@ -507,37 +513,42 @@ private struct SpecValue: View {
     @State private var hovering = false
 
     var body: some View {
-        let explanation = CraftGlossary.explain(value)
-        VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) { open.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(value)
-                        .font(.system(size: 14.5, weight: .medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.leading)
-                    if explanation != nil {
+        if let explanation = CraftGlossary.explain(value) {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) { open.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        name
                         Image(systemName: open ? "info.circle.fill" : "info.circle")
                             .font(.system(size: 12))
                             .foregroundStyle(open || hovering ? Theme.brand : Color.secondary)
                     }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .onHover { hovering = $0 }
+                .help("What is it?")
+                if open {
+                    Text(explanation)
+                        .font(.system(size: 13))
+                        .lineSpacing(3)
+                        .foregroundStyle(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
             }
-            .buttonStyle(.plain)
-            .disabled(explanation == nil)
-            .onHover { hovering = $0 }
-            .help(explanation == nil ? "" : "What is it?")
-            if open, let explanation {
-                Text(explanation)
-                    .font(.system(size: 13))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
-            }
+        } else {
+            // Nothing to explain: plain text (a disabled button would look dimmed).
+            name.textSelection(.enabled)
         }
+    }
+
+    private var name: some View {
+        Text(value)
+            .font(.system(size: 14.5, weight: .medium))
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.leading)
     }
 }
 
