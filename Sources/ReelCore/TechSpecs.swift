@@ -32,6 +32,8 @@ public struct TechSpecs: Equatable, Sendable {
         /// How much it says: gear named, precise detail, a reason, the filmmakers' own account.
         /// The most telling notes come first.
         public var weight = 0
+        /// The whole paragraph it's from, to read more (nil when the note is most of it).
+        public var context: String?
         public var id: String { text }
     }
 
@@ -181,6 +183,7 @@ public struct TechSpecs: Equatable, Sendable {
                         let aboutLook = craft || image
                         let because = matches(reason, sentence)
                         var note = Note(text: shown, source: text.source)
+                        if paragraph.count > shown.count + 60 { note.context = paragraph }
                         note.weight = 2 * min(gearNamed, 3) + (matches(detail, shown) ? 2 : 0) + (because ? 1 : 0)
                             + (text.isInterview ? 1 : 0) - (shown.count < 70 ? 1 : 0)
                         var placed = true
