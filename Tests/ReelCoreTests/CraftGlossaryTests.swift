@@ -25,4 +25,17 @@ final class CraftGlossaryTests: XCTestCase {
         XCTAssertNil(CraftGlossary.explain("Infrared"))
         XCTAssertNil(CraftGlossary.explain("Colored gels"))
     }
+
+    func testNamesInASentence() {
+        let sentence = "They shot the dinner in one long take at magic hour, with a dolly zoom at the end and a Steadicam following her."
+        let terms = CraftGlossary.terms(in: sentence)
+        XCTAssertEqual(terms.map(\.name), ["long take", "magic hour", "dolly zoom", "Steadicam"])
+        XCTAssertTrue(terms[2].explanation.contains("background stretches"), "the dolly zoom, not the dolly or the zoom")
+    }
+
+    func testOrdinaryWordsStayOrdinary() {
+        let sentence = "For practical reasons the Venice premiere was moved, and the crane operator's daughter Alexa attended."
+        XCTAssertTrue(CraftGlossary.terms(in: sentence).isEmpty)
+        XCTAssertTrue(CraftGlossary.terms(in: "The film was graded and upgraded.").isEmpty, "whole words only")
+    }
 }

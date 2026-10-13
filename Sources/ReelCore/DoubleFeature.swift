@@ -50,18 +50,18 @@ public enum DoubleFeature {
         for other in others where other.id != film.id {
             // A sequel is next in its series, not a double feature's surprise.
             if let series = film.collectionID, series == other.collectionID { continue }
-            guard let (bonus, reason) = connection(film, other, keywordCounts: keywordCounts, libraryCount: libraryCount) else { continue }
+            guard let shared = connection(film, other, keywordCounts: keywordCounts, libraryCount: libraryCount) else { continue }
             let alike = Likeness.score(film.features, other.features, keywordCounts: keywordCounts, libraryCount: libraryCount)
             // Tone and audience must sit together (Likeness halves or worse a mismatch).
             guard alike >= 1.5 else { continue }
-            let score = alike + bonus + (other.watched ? 0 : 1)
-            if score > (best?.score ?? 0) { best = (other, score, reason) }
+            let score = alike + shared.weight + (other.watched ? 0 : 1)
+            if score > (best?.score ?? 0) { best = (other, score, shared.reason) }
         }
         return best.map { Pick(id: $0.film.id, reason: $0.reason) }
     }
 
     /// What the two share that makes them a pair, the strongest first, and how much it counts.
-    static func connection(_ a: Film, _ b: Film, keywordCounts: [String: Int], libraryCount: Int) -> (Double, String)? {
+    static func connection(_ a: Film, _ b: Film, keywordCounts: [String: Int], libraryCount: Int) -> (weight: Double, reason: String)? {
         let x = a.features, y = b.features
         if let name = first(x.directors, y.directors) {
             var reason = "Two by \(name)"
@@ -85,7 +85,7 @@ public enum DoubleFeature {
             .map { ($0, keywordCounts[$0] ?? 1) }
             .filter { $0.1 <= max(3, total / 12) }
             .sorted { ($0.1, $0.0) < ($1.1, $1.0) }
-        if let (theme, _) = themes.first { return (2, "A shared theme: \(theme)") }
+        if let theme = themes.first { return (2, "A shared theme: \(theme.0)") }
         return nil
     }
 

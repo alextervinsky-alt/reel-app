@@ -59,4 +59,11 @@ final class CameraSourcesTests: XCTestCase {
         XCTAssertEqual(reading.texts(hiding: true).first?.sections.first?.paragraphs, ["We shot the whole film on Kodak Vision3 500T."])
         XCTAssertEqual(reading.texts(hiding: false).first?.sections.first?.paragraphs.count, 2)
     }
+
+    func testAddressesAsSitesWriteThem() {
+        XCTAssertEqual(CameraSources.slug("The Brutalist"), "the-brutalist")
+        XCTAssertEqual(CameraSources.slug("Amélie"), "amelie")
+        XCTAssertEqual(CameraSources.slug("Mission: Impossible – Dead Reckoning"), "mission-impossible-dead-reckoning")
+        XCTAssertEqual(CameraSources.slug("Schindler's List"), "schindlers-list")
+    }
 }

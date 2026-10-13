@@ -168,11 +168,16 @@ struct SeenSweep: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     /// The films to ask about, in order (worked out once, when the sweep opens).
-    @State private var queue: [String] = []
+    @State private var queue: [String]
     @State private var position = 0
     /// Each answer, to take back: the film and how its notes were before.
     @State private var answers: [(key: String, before: PersonalRecord)] = []
     @State private var seenCount = 0
+
+    /// `queue`: the films to ask about (worked out when it opens when not given).
+    init(queue: [String] = []) {
+        _queue = State(initialValue: queue)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -276,13 +281,8 @@ struct SeenSweep: View {
             .compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// The unwatched films, the ones most people have seen first (the likeliest you have too).
     private func start() {
-        guard queue.isEmpty else { return }
-        queue = model.items
-            .filter { $0.main.tmdb != nil && !model.isWatched($0.id) }
-            .sorted { ($0.main.tmdb?.voteCount ?? 0) > ($1.main.tmdb?.voteCount ?? 0) }
-            .map(\.id)
+        if queue.isEmpty { queue = model.seenSweepQueue() }
     }
 
     private func answer(_ item: LibraryItem, seen: Bool, stars: Int?) {

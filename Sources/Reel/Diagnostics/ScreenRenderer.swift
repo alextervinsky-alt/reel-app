@@ -64,6 +64,12 @@ enum ScreenRenderer {
         await preloadImages(for: model.films)
         log("backdrops framed")
 
+        // How the first few films were shot (as the background reading does it), for the Shot on
+        // filters and a craft search; and the first film's article, for Did You Know on the TV.
+        await readCraft(of: Array(model.films.prefix(4)), into: model)
+        await model.loadArticle(for: first)
+        log("article read")
+
         try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let tonight = model.tonightItems.first?.main ?? first
         for size in sizes {
@@ -110,9 +116,19 @@ enum ScreenRenderer {
         render(HowWasItSheet(prompt: RatingPrompt(id: tonight.personalKey, filmID: tonight.id, askFinished: true))
                 .background(Theme.panel).background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("did-you-finish.png"))
-        // Behind the Film for the first film, once its facts and article are fetched.
-        await model.loadArticle(for: first)
-        log("article read")
+        // The same on the TV, at 1080p: the stars, picked with the arrow keys.
+        render(CinemaHowWasIt(prompt: RatingPrompt(id: tonight.personalKey, filmID: tonight.id))
+                .frame(width: 1920, height: 1080).background(Theme.background),
+               model: model, scale: 1, to: output.appendingPathComponent("cinema-how-was-it.png"))
+        // Seen It? from Unwatched, and Pair It With on a film page.
+        render(SeenSweep(queue: model.seenSweepQueue()).background(Theme.panel).background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("seen-it.png"))
+        if let film = model.film(id: first.id), let pair = model.pairing(for: film) {
+            render(PairItWith(film: film, partner: pair.item, reason: pair.reason).padding(32).frame(width: 900).background(Theme.background),
+                   model: model, scale: 2, to: output.appendingPathComponent("pair-it-with.png"))
+            log("pair for \(film.displayTitle): \(pair.item.main.displayTitle), \(pair.reason)")
+        }
+        // Behind the Film for the first film (its facts and article were fetched above).
         if let film = model.film(id: first.id) {
             render(BehindTheFilmTab(film: film)
                     .padding(32)
@@ -190,6 +206,37 @@ enum ScreenRenderer {
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
         speedCheck(model.films)
         finish()
+    }
+
+    /// Reads how these films were shot, as `AppModel.readCraft` does in the background, and logs
+    /// what was found and what a craft search finds.
+    private static func readCraft(of sample: [FilmEntry], into model: AppModel) async {
+        // Their Wikipedia facts first: they say which article is the film's.
+        for film in sample { await model.loadFunFacts(for: film) }
+        let films = sample.map { model.film(id: $0.id) ?? $0 }
+        let read = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
+            for film in films {
+                guard let details = film.tmdb else { continue }
+                group.addTask {
+                    (details.id, await AppModel.readCraft(of: details, articleTitle: film.funFacts?.articleTitle,
+                                                          colour: film.funFacts?.quick?.colour))
+                }
+            }
+            var found: [Int: CraftIndex] = [:]
+            for await (id, index) in group { found[id] = index }
+            return found
+        }
+        model.mutateFilms(urgent: true) { list in
+            for i in list.indices { if let id = list[i].tmdb?.id, let index = read[id] { list[i].craft = index } }
+        }
+        for film in films {
+            guard let index = film.tmdb.flatMap({ read[$0.id] }) else { continue }
+            log("craft of \(film.displayTitle): \(index.shotOn.map(\.title).joined(separator: ", ")); \(index.names.prefix(8).joined(separator: ", "))")
+        }
+        for query in ["anamorphic", "imax", "steadicam"] {
+            let found = model.shelfItems(.all, matching: query, sortedBy: .title).prefix(4).map(\.main.displayTitle)
+            log("search “\(query)”: \(found.joined(separator: ", "))")
+        }
     }
 
     /// How long the library's everyday work takes with 500 films (the sample, copied under other

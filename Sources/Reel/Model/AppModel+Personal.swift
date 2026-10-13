@@ -32,6 +32,14 @@ extension AppModel {
         }
     }
 
+    /// The films Seen It? asks about: the unwatched ones, those most people have seen first (the
+    /// likeliest you have too).
+    func seenSweepQueue() -> [String] {
+        items.filter { $0.main.tmdb != nil && !isWatched($0.id) }
+            .sorted { ($0.main.tmdb?.voteCount ?? 0) > ($1.main.tmdb?.voteCount ?? 0) }
+            .map(\.id)
+    }
+
     /// Seen before it came to Reel (the Seen It? sweep): watched with no date, off the
     /// watchlist, with your stars when given.
     func markSeenBefore(_ key: String, stars: Int?) {

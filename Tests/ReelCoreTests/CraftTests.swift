@@ -43,4 +43,16 @@ final class CraftTests: XCTestCase {
         let data = try JSONEncoder().encode(film)
         XCTAssertEqual(try JSONDecoder().decode(FilmEntry.self, from: data).craft?.names, ["Steadicam"])
     }
+
+    func testACinematographersHabitsAreWhatRecurs() {
+        let films = [
+            CraftIndex(shotOn: [.digital], names: ["ARRI Alexa", "Natural light", "Handheld"]),
+            CraftIndex(shotOn: [.digital, .anamorphic], names: ["ARRI Alexa", "Natural light"]),
+            CraftIndex(shotOn: [.film], names: ["Steadicam"]),
+        ]
+        let habits = CraftHabits.recurring(films)
+        XCTAssertEqual(habits.map(\.name), ["Digital", "ARRI Alexa", "Natural light"])
+        XCTAssertEqual(habits.map(\.films), [2, 2, 2])
+        XCTAssertEqual(CraftHabits.recurring([films[2]]).map(\.name), ["Film", "Steadicam"], "one film: its own")
+    }
 }

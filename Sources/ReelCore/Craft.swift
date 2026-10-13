@@ -123,3 +123,28 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         return (names + joined + shotOn.flatMap(\.searchWords)).joined(separator: " , ")
     }
 }
+
+/// A cinematographer's recurring gear and looks, across their films in the library.
+public enum CraftHabits {
+    /// What they shot on and the gear and techniques read about their films, each with how many
+    /// films name it, the most films first. With several films only what recurs is kept; with
+    /// one, that film's own (at most `limit`).
+    public static func recurring(_ indexes: [CraftIndex], limit: Int = 12) -> [(name: String, films: Int)] {
+        var counts: [String: Int] = [:]
+        var order: [String] = []
+        for index in indexes {
+            let names = index.shotOn.map(\.title) + index.names
+            var seen = Set<String>()
+            for name in names where seen.insert(name.lowercased()).inserted {
+                if counts[name] == nil { order.append(name) }
+                counts[name, default: 0] += 1
+            }
+        }
+        let minimum = indexes.count > 1 ? 2 : 1
+        return order.enumerated()
+            .compactMap { offset, name -> (String, Int, Int)? in (counts[name] ?? 0) >= minimum ? (name, counts[name] ?? 0, offset) : nil }
+            .sorted { ($0.1, -$0.2) > ($1.1, -$1.2) }
+            .prefix(limit)
+            .map { (name: $0.0, films: $0.1) }
+    }
+}

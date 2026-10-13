@@ -5,8 +5,9 @@ import FoundationNetworking
 
 /// Where the Cinematography tab reads beyond the film's Wikipedia article: the interviews and craft
 /// articles the article cites (American Cinematographer, British Cinematographer, IndieWire's
-/// craft pieces, Kodak, ARRI…), American Cinematographer's own articles about the film, and the
-/// cinematographer's Wikipedia article. All free to read; only paragraphs are kept, in memory.
+/// craft pieces, Kodak, ARRI…), American Cinematographer's and British Cinematographer's own
+/// articles about the film, Kodak's and No Film School's stories of it, and the cinematographer's
+/// Wikipedia article. All free to read; only paragraphs are kept, in memory.
 public struct CameraReading: Equatable, Sendable {
     public struct Source: Equatable, Sendable, Identifiable {
         /// The article's title ("Universal Translator: Arrival").
@@ -103,6 +104,14 @@ public enum CameraSources {
             }
         }
         return picked.sorted { $0.rank < $1.rank }.prefix(limit).map { ($0.url, $0.site) }
+    }
+
+    /// A title as sites write it in their addresses: "The Brutalist" → "the-brutalist",
+    /// "Amélie" → "amelie".
+    public static func slug(_ title: String) -> String {
+        let folded = title.lowercased().folding(options: [.diacriticInsensitive], locale: Locale(identifier: "en_US"))
+            .replacingOccurrences(of: "&", with: " and ").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "’", with: "")
+        return folded.split { !$0.isLetter && !$0.isNumber }.joined(separator: "-")
     }
 
     /// Whether a page is about another craft (the editor, composer, costumes, sound…) and not the
@@ -246,11 +255,15 @@ public struct CameraSourcesClient: Sendable {
     public func read(articleTitle: String?, filmTitle: String, cinematographers: [String]) async -> CameraReading {
         async let cited = citedLinks(articleTitle: articleTitle, cinematographers: cinematographers)
         async let asc = ascArticles(filmTitle: filmTitle)
+        async let british = britishCinematographer(filmTitle: filmTitle)
+        async let stories = storyPages(filmTitle: filmTitle, cinematographers: cinematographers)
         async let person = cinematographer(cinematographers.first, filmTitle: filmTitle)
-        // American Cinematographer's own search first (its articles are the deepest), then what
-        // Wikipedia cites; each page once.
+        // The magazines' own searches first (American Cinematographer's articles are the deepest),
+        // then what Wikipedia cites; each page once.
         var links = await asc
-        for link in await cited where !links.contains(where: { $0.url.path == link.url.path && $0.url.host == link.url.host }) {
+        let fromSites = await british
+        let fromArticle = await cited
+        for link in fromSites + fromArticle where !links.contains(where: { $0.url.path == link.url.path && $0.url.host == link.url.host }) {
             links.append(link)
         }
         let pages = await withTaskGroup(of: (Int, CameraReading.Source?, CameraReading.Source).self) { group in
@@ -265,9 +278,13 @@ public struct CameraSourcesClient: Sendable {
             return results.sorted { $0.0 < $1.0 }
         }
         // An interview with the editor or the composer isn't read for the camera (still listed).
-        let read = Array(pages.compactMap { $0.1 }
+        // Kodak's and No Film School's stories come after the magazines.
+        let storiesRead = await stories
+        let found = pages.compactMap { $0.1 }
+            + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }
+        let read = Array(found
             .filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
-            .prefix(5))
+            .prefix(6))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } }.map { $0.1 ?? $0.2 }
         return CameraReading(sources: read, more: more, cinematographer: await person)
     }
@@ -317,6 +334,53 @@ public struct CameraSourcesClient: Sendable {
             found.append((link, "American Cinematographer", HTMLText.plain(hit.title.rendered)))
         }
         return Array(found.prefix(3))
+    }
+
+    /// British Cinematographer's articles about the film (its site has a free WordPress API).
+    func britishCinematographer(filmTitle: String) async -> [(url: URL, site: String, title: String?)] {
+        struct Hit: Decodable {
+            struct Rendered: Decodable { let rendered: String }
+            let title: Rendered
+            let link: String
+        }
+        var components = URLComponents(string: "https://britishcinematographer.co.uk/wp-json/wp/v2/posts")!
+        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
+                                 URLQueryItem(name: "_fields", value: "title,link")]
+        guard let url = components.url, let data = await fetch(url, accept: "application/json"),
+              let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
+        var found: [(url: URL, site: String, title: String?)] = []
+        for hit in hits where CameraSources.isAbout(title: filmTitle, articleTitle: hit.title.rendered, url: hit.link) {
+            guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
+            found.append((link, "British Cinematographer", HTMLText.plain(hit.title.rendered)))
+        }
+        return Array(found.prefix(2))
+    }
+
+    /// Kodak's stories of films shot on its stock and No Film School's pieces on a film's
+    /// cinematography, at the addresses those sites give them ("kodak.com/en/motion/blog-post/
+    /// the-brutalist", "nofilmschool.com/dune-cinematography"). A page is kept only when it names
+    /// the cinematographer (the same title may be another film).
+    func storyPages(filmTitle: String, cinematographers: [String]) async -> [CameraReading.Source] {
+        let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
+        let slug = CameraSources.slug(filmTitle)
+        guard !slug.isEmpty, !surnames.isEmpty else { return [] }
+        let guesses: [(String, String)] = [
+            ("https://www.kodak.com/en/motion/blog-post/\(slug)/", "Kodak"),
+            ("https://www.kodak.com/en/motion/page/\(slug)/", "Kodak"),
+            ("https://nofilmschool.com/\(slug)-cinematography", "No Film School"),
+        ]
+        return await withTaskGroup(of: (Int, CameraReading.Source?).self) { group in
+            for (index, guess) in guesses.enumerated() {
+                group.addTask {
+                    guard let url = URL(string: guess.0), let found = await page(url, site: guess.1, title: nil),
+                          found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else { return (index, nil) }
+                    return (index, found)
+                }
+            }
+            var results: [(Int, CameraReading.Source?)] = []
+            for await result in group { results.append(result) }
+            return results.sorted { $0.0 < $1.0 }.compactMap { $0.1 }
+        }
     }
 
     /// One page's title and paragraphs; nil when it can't be read.

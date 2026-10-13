@@ -407,6 +407,8 @@ private struct NoteRow: View {
     let quoted: Bool
     let open: Bool
     let toggle: () -> Void
+    /// A name in the sentence that was clicked: what it is shows under it.
+    @State private var looking: Term?
 
     var body: some View {
         // What it names, each explained once (Cooke S4/i and Cooke Panchro share an explanation).
@@ -416,14 +418,60 @@ private struct NoteRow: View {
             return Term(name: name, explanation: text)
         }
         let more = note.context != nil || !terms.isEmpty
+        let sentence = Self.linked(note.text, names: names, gear: note.names)
         VStack(alignment: .leading, spacing: 12) {
-            // Only a note with more to read is a button (a disabled one would look dimmed).
-            if more {
-                Button(action: toggle) { header(more: more) }
-                    .buttonStyle(.plain)
-                    .help(open ? "Show less" : "Read more")
-            } else {
-                header(more: more)
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                if let number {
+                    Text("\(number)")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.brand)
+                        .frame(width: 22, alignment: .leading)
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    if let topic {
+                        Text(topic.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(Theme.brand.opacity(0.85))
+                    }
+                    // Names in it are links: clicked, what they are shows below.
+                    Text(sentence.text)
+                        .font(quoted ? .system(size: number == nil ? 15 : 17, design: .serif).italic()
+                                     : .system(size: number == nil ? 14.5 : 16, weight: number == nil ? .regular : .medium))
+                        .lineSpacing(4)
+                        .foregroundStyle(Color.white.opacity(number == nil ? 0.86 : 0.94))
+                        .tint(Theme.brand)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                        .environment(\.openURL, OpenURLAction { url in
+                            guard let index = Int(url.host ?? ""), sentence.terms.indices.contains(index) else { return .discarded }
+                            let term = sentence.terms[index]
+                            withAnimation(.easeOut(duration: 0.18)) { looking = looking == term ? nil : term }
+                            return .handled
+                        })
+                    if let looking { lookUp(looking) }
+                    HStack(spacing: 14) {
+                        if let source = note.source, !source.hasPrefix("Wikipedia") {
+                            Text("— " + source).font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
+                        // Only a note with more to read has the button (a disabled one would look dimmed).
+                        if more {
+                            Button(action: toggle) {
+                                HStack(spacing: 4) {
+                                    Text(open ? "Less" : "Read more")
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .rotationEffect(.degrees(open ? 180 : 0))
+                                }
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.brand)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                Spacer(minLength: 8)
             }
             if open, more {
                 VStack(alignment: .leading, spacing: 14) {
@@ -456,45 +504,59 @@ private struct NoteRow: View {
         .padding(.vertical, number == nil ? 10 : 16)
     }
 
-    private func header(more: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            if let number {
-                Text("\(number)")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.brand)
-                    .frame(width: 22, alignment: .leading)
-            }
-            VStack(alignment: .leading, spacing: 7) {
-                if let topic {
-                    Text(topic.uppercased())
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(Theme.brand.opacity(0.85))
-                }
-                Text(CinematographyTab.emphasised(note.text, names: names))
-                    .font(quoted ? .system(size: number == nil ? 15 : 17, design: .serif).italic()
-                                 : .system(size: number == nil ? 14.5 : 16, weight: number == nil ? .regular : .medium))
-                    .lineSpacing(4)
-                    .foregroundStyle(Color.white.opacity(number == nil ? 0.86 : 0.94))
+    /// What a clicked name is, in a quiet box under the sentence.
+    private func lookUp(_ term: Term) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(term.name.prefix(1).uppercased() + term.name.dropFirst()).font(.system(size: 12.5, weight: .semibold))
+                Text(term.explanation)
+                    .font(.system(size: 13))
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-                if let source = note.source, !source.hasPrefix("Wikipedia") {
-                    Text("— " + source).font(.system(size: 12)).foregroundStyle(.secondary)
-                }
             }
-            Spacer(minLength: 8)
-            if more {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(open ? Theme.brand : Color.secondary)
-                    .rotationEffect(.degrees(open ? 180 : 0))
+            Spacer(minLength: 0)
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) { looking = nil }
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Close")
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.hairline))
+        .transition(.opacity)
+    }
+
+    /// The sentence with the gear in bold, and every name Reel can explain (the gear, and ways
+    /// of shooting such as "long take" or "magic hour") a link to its explanation.
+    static func linked(_ sentence: String, names: [String], gear: [String]) -> (text: AttributedString, terms: [Term]) {
+        var text = CinematographyTab.emphasised(sentence, names: names)
+        var found: [(range: Range<String.Index>, term: Term)] = []
+        for name in gear {
+            guard let explanation = CraftGlossary.explain(name) else { continue }
+            let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: name) + #"\b"#
+            if let range = sentence.range(of: pattern, options: [.regularExpression, .caseInsensitive]),
+               !found.contains(where: { $0.range.overlaps(range) }) {
+                found.append((range, Term(name: String(sentence[range]), explanation: explanation)))
             }
         }
-        .contentShape(Rectangle())
+        for term in CraftGlossary.terms(in: sentence) where !found.contains(where: { $0.range.overlaps(term.range) }) {
+            found.append((term.range, Term(name: term.name, explanation: term.explanation)))
+        }
+        var terms: [Term] = []
+        for (range, term) in found.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
+            guard let span = Range(range, in: text) else { continue }
+            text[span].link = URL(string: "reel-term://\(terms.count)")
+            terms.append(term)
+        }
+        return (text, terms)
     }
 
     /// A name the note mentions, and what it is.
-    struct Term: Identifiable {
+    struct Term: Identifiable, Equatable {
         let name: String
         let explanation: String
         var id: String { name }

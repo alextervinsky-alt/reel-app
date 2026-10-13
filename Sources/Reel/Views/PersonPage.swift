@@ -29,6 +29,9 @@ struct PersonPage: View {
                                                                        : "Films shot by \(route.name)",
                                       set: filmSet)
                 }
+                if person != nil, isCinematographer {
+                    CinematographerProfile(name: route.name, shot: films.filter { $0.roles.contains("Director of Photography") })
+                }
                 if person != nil {
                     let owned = films.filter { model.itemsByTMDB[$0.id] != nil }
                     if !owned.isEmpty {
@@ -107,6 +110,12 @@ struct PersonPage: View {
             }
             .padding(.top, 8)
         }
+    }
+
+    /// Someone whose work is the camera: known for it, or collected by the films they shot.
+    private var isCinematographer: Bool {
+        (person?.knownForDepartment == "Camera" || filmSet?.kind == .cinematographer)
+            && films.contains { $0.roles.contains("Director of Photography") }
     }
 
     /// "Camera · Born 1949 in Torquay, England · 84 films"
@@ -211,6 +220,77 @@ struct PersonPage: View {
                 .lineLimit(1)
         }
         .contentShape(Rectangle())
+    }
+}
+/// A cinematographer's page: the films they're known for, and their recurring gear and looks
+/// across the films of theirs in your library (as read about them, see `CraftIndex`).
+private struct CinematographerProfile: View {
+    @Environment(AppModel.self) private var model
+    let name: String
+    /// Their films as director of photography.
+    let shot: [FilmographyEntry]
+
+    var body: some View {
+        let knownFor = shot.sorted { $0.voteCount > $1.voteCount }.prefix(6)
+        let mine = model.items.filter { $0.main.tmdb?.cinematographers.contains(name) == true }
+        let read = mine.compactMap { $0.main.craft }
+        let habits = CraftHabits.recurring(read)
+        VStack(alignment: .leading, spacing: 18) {
+            if !knownFor.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    label("KNOWN FOR")
+                    Text(knownFor.map { entry in entry.year.map { "\(entry.title) (\($0))" } ?? entry.title }.joined(separator: "  ·  "))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if !mine.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    label(read.count > 1 ? "THEIR LOOK, FILM AFTER FILM" : "THEIR LOOK")
+                    if habits.isEmpty {
+                        Text(read.count < mine.count ? "Reel is still reading about how their films in your library were shot."
+                                                     : "Nothing recurs yet in what's written about their films in your library.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        FlowLayout(spacing: 8) {
+                            ForEach(habits, id: \.name) { habit in
+                                HStack(spacing: 6) {
+                                    Text(habit.name).font(.system(size: 13, weight: .medium))
+                                    if read.count > 1 {
+                                        Text("\(habit.films) of \(read.count)")
+                                            .font(.system(size: 11.5))
+                                            .foregroundStyle(.secondary)
+                                            .monospacedDigit()
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .frame(height: 30)
+                                .background(Capsule().fill(Theme.panel))
+                                .overlay(Capsule().strokeBorder(Theme.hairline))
+                                .help(CraftGlossary.explain(habit.name) ?? habit.name)
+                            }
+                        }
+                        Text(read.count > 1 ? "What's named in the articles about \(read.count) of their films in your library."
+                                            : "What's named in the articles about their film in your library.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: 820, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(1.2)
+            .foregroundStyle(Theme.brand)
     }
 }
 #endif
