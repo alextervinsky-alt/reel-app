@@ -302,8 +302,15 @@ struct LibraryGridView: View {
         case .newArrivals:
             return "Films found on your drives in the last 14 days."
         case .notOnBackup:
-            let scanned = model.lastBackupScan.map { " Backup last scanned \($0.formatted(.relative(presentation: .named)))." } ?? ""
-            return "Films on your main drive without a full copy on the Backup, compared by file size." + scanned
+            // Fixed words (a date, not "5 minutes ago"), so the line never changes length by itself.
+            let backups = model.backupDrives
+            if backups.contains(where: { model.reading[$0.id] != nil }) {
+                return "Reading the Backup. The list is updated when it's done."
+            }
+            let read = model.lastBackupScan.map { " The Backup was last read on \($0.formatted(date: .abbreviated, time: .shortened))." } ?? ""
+            let connected = backups.contains { model.mounted[$0.id] != nil }
+            return "Films on your main drive without a full copy on the Backup, compared by file size." + read
+                + (connected ? "" : " It isn't connected now: this is from that reading.")
         case .drive(let id) where model.mounted[id] == nil:
             let scanned = model.drive(id)?.lastScanned.map { " (last read \($0.formatted(.relative(presentation: .named))))" } ?? ""
             return "Not connected. These are its films from the last scan\(scanned)."

@@ -497,7 +497,7 @@ final class AppModel {
 
     func scheduleRebuild() {
         guard rebuildTask == nil else { return }
-        let wait = max(0, Self.rebuildInterval - Date().timeIntervalSince(lastRebuild))
+        let wait = max(0, rebuildInterval - Date().timeIntervalSince(lastRebuild))
         rebuildTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait))
             guard let self, !Task.isCancelled, self.rebuildTask != nil else { return }
@@ -505,7 +505,9 @@ final class AppModel {
         }
     }
 
-    static let rebuildInterval: TimeInterval = 0.5
+    /// How often the library is brought up to date: twice a second, and every two seconds
+    /// while film info is being looked up (hundreds of films then don't keep redrawing it).
+    var rebuildInterval: TimeInterval { lookupRunning ? 2 : 0.5 }
 
     /// The same film on several drives becomes one item; unchanged items are reused.
     /// Returns how many items had to be built anew (0: nothing about any film changed).
@@ -725,7 +727,10 @@ final class AppModel {
         case .favorites: list = items.filter { personal.favoriteKeys.contains($0.id) }
         case .watched: list = items.filter { personal.watchedKeys.contains($0.id) }
         case .needsCheck: list = items.filter { $0.main.matchState.needsCheck }
-        case .notOnBackup: list = items.filter { backupGaps[$0.id] != nil }
+        case .notOnBackup:
+            // A checklist: always by title, so nothing moves while film info refreshes.
+            list = items.filter { backupGaps[$0.id] != nil }
+            order = .title
         case .genre(let genre): list = items.filter { $0.genres.contains(genre) }
         case .drive(let id): list = items.filter { item in item.copies.contains { copy in copy.driveID == id } }
         }
