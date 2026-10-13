@@ -54,6 +54,9 @@ private struct CinemaHomeContent: View {
     /// pointer only highlights, so nothing moves away from under it.
     @State private var followSelection = false
     @State private var pointer = PointerWatch()
+    /// The mood chip the arrow keys are on (the chips sit above the rows).
+    @State private var chip: Int?
+    @Environment(CinemaBar.self) private var bar
 
     var body: some View {
         Group {
@@ -74,10 +77,34 @@ private struct CinemaHomeContent: View {
                         guard followSelection, let row else { return }
                         withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(row, anchor: .center) }
                     }
+                    .onChange(of: chip != nil) { _, onChips in
+                        guard onChips else { return }
+                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.top, anchor: .top) }
+                    }
                 }
             }
         }
         .onReelKey { key in active && move(key) }
+        // Down from the top bar: the chips (or the first poster) take the keys.
+        .onChange(of: bar.returned) { _, back in
+            guard back?.page == "home" else { return }
+            enterTop()
+        }
+    }
+
+    private var choices: [MoodChoiceCount] {
+        model.recommendedChoices.count > 1 ? model.recommendedChoices : []
+    }
+
+    private func enterTop() {
+        if !choices.isEmpty {
+            chip = choices.firstIndex { $0.choice == model.recommendedChoice } ?? 0
+            selection = nil
+        } else if let first = rows.first, let item = first.items.first {
+            followSelection = true
+            pointer.keysMoved()
+            selection = (first.id, item.id)
+        }
     }
 
     @ViewBuilder
@@ -101,6 +128,7 @@ private struct CinemaHomeContent: View {
                                   // Not a poster the rows scrolled under a resting pointer.
                                   guard pointer.moved() else { return }
                                   followSelection = false
+                                  chip = nil
                                   selection = (row.id, id)
                               } else if !followSelection, selection?.row == row.id, selection?.item == id {
                                   // The pointer left its poster: a highlight it made goes with it
@@ -113,23 +141,33 @@ private struct CinemaHomeContent: View {
         }
     }
 
+    private static let top = "cinema-home-top"
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text("What shall we watch?")
                 .font(.system(size: Cinema.title, weight: .bold))
-            if model.recommendedChoices.count > 1 {
-                CinemaMoodRow(choices: model.recommendedChoices, selected: model.recommendedChoice) { choice in
+            if !choices.isEmpty {
+                CinemaMoodRow(choices: choices, selected: model.recommendedChoice,
+                              focused: chip.flatMap { choices.indices.contains($0) ? choices[$0].choice : nil }) { choice in
                     withAnimation(.easeOut(duration: 0.25)) { model.chooseRecommended(choice) }
                 }
             }
         }
         .padding(.horizontal, Cinema.gutter)
+        .id(Self.top)
     }
 
     /// Arrow keys move the highlight (the first press shows it). On the highlighted poster:
     /// Return opens it, Space plays its trailer (or opens it), T adds it to Tonight.
     private func move(_ key: ReelKey) -> Bool {
-        guard !rows.isEmpty else { return false }
+        if let chip { return chipKey(key, at: chip) }
+        guard !rows.isEmpty else {
+            // Nothing to move through: up goes to the chips, or the bar.
+            guard key == .up else { return false }
+            if choices.isEmpty { bar.takeKeys() } else { enterTop() }
+            return true
+        }
         var row = selection.flatMap { s in rows.firstIndex { $0.id == s.row } }
         let item = selection.flatMap { s in row.flatMap { rows[$0].items.firstIndex { $0.id == s.item } } }
         var index = item ?? 0
@@ -137,6 +175,11 @@ private struct CinemaHomeContent: View {
         switch key {
         case .left where shown: index -= 1
         case .right where shown: index += 1
+        case .up where shown && row == 0:
+            // Above the rows: the mood chips, then the top bar.
+            selection = nil
+            if choices.isEmpty { bar.takeKeys() } else { enterTop() }
+            return true
         case .up where shown: row = row.map { $0 - 1 }
         case .down where shown: row = row.map { $0 + 1 }
         case .left, .right, .up, .down: break
@@ -150,6 +193,33 @@ private struct CinemaHomeContent: View {
         followSelection = true
         pointer.keysMoved()
         selection = (rows[r].id, rows[r].items[i].id)
+        return true
+    }
+
+    /// On the mood chips: left and right along them, Return chooses, Up to the bar, Down to the rows.
+    private func chipKey(_ key: ReelKey, at index: Int) -> Bool {
+        switch key {
+        case .left: chip = max(index - 1, 0)
+        case .right: chip = min(index + 1, choices.count - 1)
+        case .up:
+            chip = nil
+            bar.takeKeys()
+        case .down:
+            chip = nil
+            if let first = rows.first, let item = first.items.first {
+                followSelection = true
+                pointer.keysMoved()
+                selection = (first.id, item.id)
+            }
+        case .enter, .space:
+            guard choices.indices.contains(index) else { return false }
+            let choice = choices[index].choice
+            withAnimation(.easeOut(duration: 0.25)) { model.chooseRecommended(choice) }
+        case .escape:
+            chip = nil
+            return false
+        case .tonight, .fullScreen: return false
+        }
         return true
     }
 }
@@ -241,29 +311,6 @@ struct CinemaRowView: View {
             .equatable()
             .onHover { hover(index, $0) }
         }
-    }
-}
-
-/// A row that keeps its own pointer highlight (rows on a film page).
-struct CinemaHoverRow: View {
-    let title: String
-    let items: [LibraryItem]
-    var captions: [String: String] = [:]
-    let open: (String) -> Void
-    /// By film, so films arriving in the row never move the highlight to another one.
-    @State private var selected: String?
-
-    var body: some View {
-        CinemaRowView(title: title, items: items, selected: items.firstIndex { $0.id == selected }, captions: captions,
-                      hover: { index, inside in
-                          guard items.indices.contains(index) else { return }
-                          if inside {
-                              selected = items[index].id
-                          } else if selected == items[index].id {
-                              selected = nil
-                          }
-                      },
-                      open: { open($0.main.id) })
     }
 }
 
@@ -431,24 +478,34 @@ struct CinemaMoodRow: View {
     @Environment(\.isSnapshot) private var isSnapshot
     let choices: [MoodChoiceCount]
     let selected: MoodChoice
+    /// The chip the arrow keys are on.
+    var focused: MoodChoice? = nil
     let choose: (MoodChoice) -> Void
 
     var body: some View {
         if isSnapshot {
             chips.snapshotRow()
         } else {
-            ScrollView(.horizontal) { chips }
-                .scrollIndicators(.hidden)
-                .scrollClipDisabled()
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) { chips }
+                    .scrollIndicators(.hidden)
+                    .scrollClipDisabled()
+                    .onChange(of: focused) { _, choice in
+                        guard let choice else { return }
+                        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(choice, anchor: .center) }
+                    }
+            }
         }
     }
 
     private var chips: some View {
         HStack(spacing: 12) {
             ForEach(choices) { entry in
-                CinemaChip(title: entry.choice.title, symbol: entry.choice.symbol, isOn: entry.choice == selected) {
+                CinemaChip(title: entry.choice.title, symbol: entry.choice.symbol, isOn: entry.choice == selected,
+                           focused: entry.choice == focused) {
                     choose(entry.choice)
                 }
+                .id(entry.choice)
             }
         }
     }

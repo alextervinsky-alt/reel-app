@@ -200,6 +200,8 @@ struct SearchIndex: Equatable {
     let people: String
     let tags: String
     let plot: String
+    /// The gear, techniques and formats read about it ("anamorphic", "16mm", "Steadicam").
+    let craft: String
     let words: [String]
 
     init(film: FilmEntry, moods: [Mood]) {
@@ -243,12 +245,17 @@ struct SearchIndex: Equatable {
         people = n(names.joined(separator: " , "))
         tags = n(tagWords.joined(separator: " , "))
         plot = n([d?.tagline ?? "", d?.overview ?? ""].joined(separator: " "))
+        craft = film.craft.map { n($0.searchText) } ?? ""
         words = Array(Set((title + " " + people).split(separator: " ").map { String($0) }.filter { $0.count >= 3 }))
     }
 
     /// 0 when a term doesn't match anywhere; higher for title > people > tags > plot > near-miss.
     /// The typo-tolerant pass is only used when exact matching finds (almost) nothing.
     func relevance(_ terms: [String], allowTypos: Bool = false) -> Int {
+        // A craft phrase as a whole ("natural light", "black and white"), not word by word.
+        if terms.count > 1, !craft.isEmpty, (" " + craft + " ").contains(" " + terms.joined(separator: " ") + " ") {
+            return 50 * terms.count
+        }
         var total = 0
         for term in terms {
             var best = 0
@@ -256,6 +263,8 @@ struct SearchIndex: Equatable {
                 best = title.hasPrefix(term) || title.contains(" " + term) ? 120 : 100
             } else if people.contains(term) {
                 best = 60
+            } else if craft.contains(term) {
+                best = 45
             } else if tags.contains(term) {
                 best = 40
             } else if plot.contains(term) {
@@ -287,6 +296,8 @@ struct LibraryItem: Identifiable, Equatable {
     let moods: [Mood]
     let genres: Set<String>
     let keywords: Set<String>
+    /// Film, digital, anamorphic… (once read, see `CraftIndex`), for the Shot on filter.
+    let shotOn: Set<ShotOn>
     /// What "More Like This" compares (people, themes, tone, audience).
     let likeness: LikenessFeatures
     /// The film's original language ("ko"), for language rows and filters.
@@ -316,6 +327,7 @@ struct LibraryItem: Identifiable, Equatable {
         let d = main.tmdb
         self.genres = Set(d?.genreNames ?? [])
         self.keywords = Set(d?.keywordNames ?? [])
+        self.shotOn = Set(main.craft?.shotOn ?? []).union(LibraryItem.shotOnKnown(main))
         self.likeness = LikenessFeatures(
             tmdbID: d?.id, directors: d?.directors ?? [], writers: d?.writers ?? [],
             cinematographers: d?.cinematographers ?? [], cast: d.map { $0.topCast.prefix(5).map { $0.name } } ?? [],
@@ -340,6 +352,14 @@ struct LibraryItem: Identifiable, Equatable {
         hasher.combine(main.score)
         hasher.combine(isOnline)
         self.stamp = hasher.finalize()
+    }
+
+    /// Black and white, as Wikidata or TMDB already say before the film's craft is read.
+    static func shotOnKnown(_ film: FilmEntry) -> Set<ShotOn> {
+        guard film.craft == nil else { return [] }
+        let read = CraftIndex.make(from: TechSpecs.read([]), colour: film.funFacts?.quick?.colour,
+                                   keywords: film.tmdb?.keywordNames ?? [])
+        return Set(read.shotOn)
     }
 
     static let shortGenreNames = [

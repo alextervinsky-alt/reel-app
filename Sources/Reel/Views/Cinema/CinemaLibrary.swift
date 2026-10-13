@@ -2,12 +2,14 @@
 import SwiftUI
 import ReelCore
 
-/// Every film, in large posters: one row of five filters (sort, mood, length, language,
-/// unwatched only), each opening a large panel of choices, and the matches when something is
-/// typed in the search field. The pointer and the arrow keys share one highlight.
+/// Every film, in large posters: one row of filters (sort, mood, length, language, what it was
+/// shot on, unwatched only), each opening a large panel of choices, and the matches when something
+/// is typed in the search field. The pointer and the arrow keys share one highlight; the keys reach
+/// the search field, the filters and their panels too (up from the posters).
 struct CinemaLibrary: View {
     @Environment(AppModel.self) private var model
     @Environment(\.isSnapshot) private var isSnapshot
+    @Environment(CinemaBar.self) private var bar
     @Binding var searchText: String
     /// Set by ⌘F: the search field takes the focus.
     @Binding var focusSearch: Bool
@@ -19,12 +21,24 @@ struct CinemaLibrary: View {
     @State private var mood: Mood?
     @State private var length: LengthBand = .any
     @State private var language: String?
+    @State private var shotOn: ShotOn?
     @State private var unwatchedOnly = true
     @State private var panel: FilterPanel?
+    /// The highlighted poster (pointer or keys).
+    @State private var selected: String?
+    /// Where the keys are above the posters: the search field or a filter.
+    @State private var above: Above?
+    /// The highlighted choice in an open panel.
+    @State private var panelIndex = 0
 
     private enum FilterPanel: Identifiable {
-        case sort, mood, length, language
+        case sort, mood, length, language, shotOn
         var id: Self { self }
+    }
+
+    private enum Above: Equatable {
+        case search
+        case filter(Int)
     }
 
     private static let sorts: [LibrarySort] = [.rating, .random, .added, .year, .title]
@@ -45,7 +59,7 @@ struct CinemaLibrary: View {
         let searching = !query.isEmpty
         let films = model.cinemaLibrary(matching: query, sort: sort, mood: searching ? nil : mood,
                                         length: searching ? .any : length, language: searching ? nil : language,
-                                        unwatchedOnly: !searching && unwatchedOnly)
+                                        shotOn: searching ? nil : shotOn, unwatchedOnly: !searching && unwatchedOnly)
         Group {
             if isSnapshot {
                 content(films, scrollTo: { _ in }).snapshotPage()
@@ -57,6 +71,10 @@ struct CinemaLibrary: View {
                         }
                     }
                     .scrollIndicators(.hidden)
+                    .onChange(of: above) { _, now in
+                        guard now != nil else { return }
+                        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.top, anchor: .top) }
+                    }
                 }
             }
         }
@@ -71,11 +89,20 @@ struct CinemaLibrary: View {
             model.cinemaPanelOpen = false
         }
         .onReelKey { key in
-            guard panel != nil, key == .escape else { return false }
-            panel = nil
-            return true
+            if let panel { return panelKey(key, in: panel) }
+            guard active, let above else { return false }
+            return aboveKey(key, at: above, films: films)
+        }
+        // The pointer on a poster takes the highlight from the filters.
+        .onChange(of: selected) { _, now in if now != nil { above = nil } }
+        .onChange(of: bar.returned) { _, back in
+            guard back?.page == "library" else { return }
+            above = query.isEmpty ? .filter(0) : .search
+            selected = nil
         }
     }
+
+    private static let top = "cinema-library-top"
 
     private func content(_ films: [LibraryItem], scrollTo: @escaping (String) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -86,7 +113,12 @@ struct CinemaLibrary: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, Cinema.gutter)
             } else {
-                CinemaLibraryGrid(films: films, active: active && panel == nil, open: open, scrollTo: scrollTo)
+                CinemaLibraryGrid(films: films, selected: $selected, active: active && panel == nil && above == nil,
+                                  open: open, scrollTo: scrollTo) {
+                    // Up from the first row: the filters (the search field while searching).
+                    selected = nil
+                    above = query.isEmpty ? .filter(0) : .search
+                }
             }
         }
         .padding(.top, 130)
@@ -104,28 +136,51 @@ struct CinemaLibrary: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 20)
                 CinemaSearchField(text: $searchText, focusRequested: $focusSearch)
+                    .cinemaFocus(above == .search)
             }
             // Filters step aside while searching (a search looks through everything).
             if query.isEmpty { filters }
         }
         .padding(.horizontal, Cinema.gutter)
+        .id(Self.top)
+    }
+
+    /// One filter: what it shows, and what choosing it does.
+    private struct Filter {
+        let title: String
+        let symbol: String?
+        let isOn: Bool
+        let action: () -> Void
+    }
+
+    private var filterList: [Filter] {
+        var list = [
+            Filter(title: Self.title(sort) + "  ▾", symbol: "arrow.up.arrow.down", isOn: false) { show(.sort) },
+            Filter(title: (mood?.title ?? "Any Mood") + "  ▾", symbol: mood?.symbol ?? "sparkles", isOn: mood != nil) { show(.mood) },
+            Filter(title: (length == .any ? "Any Length" : length.title) + "  ▾", symbol: "clock", isOn: length != .any) {
+                show(.length)
+            },
+        ]
+        if model.languages.count > 1 {
+            list.append(Filter(title: (language.map(FilmLanguage.name) ?? "Any Language") + "  ▾", symbol: "globe",
+                               isOn: language != nil) { show(.language) })
+        }
+        if !model.shotOnKinds.isEmpty || shotOn != nil {
+            list.append(Filter(title: (shotOn.map { "Shot on " + $0.title } ?? "Shot on Anything") + "  ▾", symbol: "camera.aperture",
+                               isOn: shotOn != nil) { show(.shotOn) })
+        }
+        list.append(Filter(title: "Unwatched", symbol: unwatchedOnly ? "checkmark" : nil, isOn: unwatchedOnly) {
+            unwatchedOnly.toggle()
+        })
+        return list
     }
 
     /// One row: each filter shows its choice and opens a large panel.
     private var filters: some View {
         let row = HStack(spacing: 12) {
-            CinemaChip(title: Self.title(sort) + "  ▾", symbol: "arrow.up.arrow.down", isOn: false) { panel = .sort }
-            CinemaChip(title: (mood?.title ?? "Any Mood") + "  ▾", symbol: mood?.symbol ?? "sparkles", isOn: mood != nil) { panel = .mood }
-            CinemaChip(title: (length == .any ? "Any Length" : length.title) + "  ▾", symbol: "clock", isOn: length != .any) {
-                panel = .length
-            }
-            if model.languages.count > 1 {
-                CinemaChip(title: (language.map(FilmLanguage.name) ?? "Any Language") + "  ▾", symbol: "globe", isOn: language != nil) {
-                    panel = .language
-                }
-            }
-            CinemaChip(title: "Unwatched", symbol: unwatchedOnly ? "checkmark" : nil, isOn: unwatchedOnly) {
-                unwatchedOnly.toggle()
+            ForEach(Array(filterList.enumerated()), id: \.offset) { index, filter in
+                CinemaChip(title: filter.title, symbol: filter.symbol, isOn: filter.isOn, focused: above == .filter(index),
+                           action: filter.action)
             }
         }
         return Group {
@@ -139,7 +194,71 @@ struct CinemaLibrary: View {
         }
     }
 
-    /// A large panel of choices in the middle of the screen: one click picks and closes it.
+    private func show(_ shown: FilterPanel) {
+        panelIndex = options(shown).firstIndex { $0.isOn } ?? 0
+        panel = shown
+    }
+
+    /// Above the posters: left and right along the filters, Up to the search field and the bar,
+    /// Down to the posters, Return opens a filter (or the search field for typing).
+    private func aboveKey(_ key: ReelKey, at place: Above, films: [LibraryItem]) -> Bool {
+        let count = filterList.count
+        switch (key, place) {
+        case (.left, .filter(let i)): above = .filter(max(i - 1, 0))
+        case (.right, .filter(let i)): above = .filter(min(i + 1, count - 1))
+        case (.up, .filter): above = .search
+        case (.right, .search), (.left, .search): break
+        case (.up, .search):
+            above = nil
+            bar.takeKeys()
+        case (.down, .search) where query.isEmpty: above = .filter(0)
+        case (.down, _):
+            above = nil
+            selected = films.first?.id
+        case (.enter, .filter(let i)), (.space, .filter(let i)):
+            let list = filterList
+            guard list.indices.contains(i) else { return false }
+            list[i].action()
+        case (.enter, .search), (.space, .search):
+            // Typing takes the keys; Return or Esc in the field hands them back.
+            above = nil
+            focusSearch = true
+        case (.escape, _):
+            above = nil
+            return false
+        default:
+            return false
+        }
+        return true
+    }
+
+    /// One choice in a panel.
+    private struct Option {
+        let title: String
+        var symbol: String? = nil
+        let isOn: Bool
+        let pick: () -> Void
+    }
+
+    private func options(_ panel: FilterPanel) -> [Option] {
+        switch panel {
+        case .sort:
+            return Self.sorts.map { option in Option(title: Self.title(option), isOn: sort == option) { sort = option } }
+        case .mood:
+            return [Option(title: "Any Mood", symbol: "sparkles", isOn: mood == nil) { mood = nil }]
+                + model.moods.map { option in Option(title: option.title, symbol: option.symbol, isOn: mood == option) { mood = option } }
+        case .length:
+            return LengthBand.allCases.map { option in Option(title: option.title, isOn: length == option) { length = option } }
+        case .language:
+            return [Option(title: "Any Language", isOn: language == nil) { language = nil }]
+                + model.languages.map { code in Option(title: FilmLanguage.name(code), isOn: language == code) { language = code } }
+        case .shotOn:
+            return [Option(title: "Anything", symbol: "camera.aperture", isOn: shotOn == nil) { shotOn = nil }]
+                + model.shotOnKinds.map { kind in Option(title: kind.title, isOn: shotOn == kind) { shotOn = kind } }
+        }
+    }
+
+    /// A large panel of choices in the middle of the screen: one click (or Return) picks and closes it.
     private func panelView(_ panel: FilterPanel) -> some View {
         ZStack {
             Color.black.opacity(0.75)
@@ -148,24 +267,10 @@ struct CinemaLibrary: View {
             VStack(alignment: .leading, spacing: 26) {
                 Text(panelTitle(panel)).font(.system(size: Cinema.rowTitle, weight: .bold))
                 FlowChips {
-                    switch panel {
-                    case .sort:
-                        ForEach(Self.sorts) { option in
-                            choice(Self.title(option), isOn: sort == option) { sort = option }
-                        }
-                    case .mood:
-                        choice("Any Mood", symbol: "sparkles", isOn: mood == nil) { mood = nil }
-                        ForEach(model.moods, id: \.self) { option in
-                            choice(option.title, symbol: option.symbol, isOn: mood == option) { mood = option }
-                        }
-                    case .length:
-                        ForEach(LengthBand.allCases) { option in
-                            choice(option.title, isOn: length == option) { length = option }
-                        }
-                    case .language:
-                        choice("Any Language", isOn: language == nil) { language = nil }
-                        ForEach(model.languages, id: \.self) { code in
-                            choice(FilmLanguage.name(code), isOn: language == code) { language = code }
+                    ForEach(Array(options(panel).enumerated()), id: \.offset) { index, option in
+                        CinemaChip(title: option.title, symbol: option.symbol, isOn: option.isOn, focused: index == panelIndex) {
+                            option.pick()
+                            self.panel = nil
                         }
                     }
                 }
@@ -179,19 +284,29 @@ struct CinemaLibrary: View {
         }
     }
 
+    /// In a panel: the arrows move along the choices (they wrap onto lines, read in order),
+    /// Return picks, Esc closes.
+    private func panelKey(_ key: ReelKey, in panel: FilterPanel) -> Bool {
+        let list = options(panel)
+        switch key {
+        case .left, .up: panelIndex = max(panelIndex - 1, 0)
+        case .right, .down: panelIndex = min(panelIndex + 1, list.count - 1)
+        case .enter, .space:
+            if list.indices.contains(panelIndex) { list[panelIndex].pick() }
+            self.panel = nil
+        case .escape: self.panel = nil
+        case .tonight, .fullScreen: break
+        }
+        return true
+    }
+
     private func panelTitle(_ panel: FilterPanel) -> String {
         switch panel {
         case .sort: "Sort By"
         case .mood: "Mood"
         case .length: "Length"
         case .language: "Language"
-        }
-    }
-
-    private func choice(_ title: String, symbol: String? = nil, isOn: Bool, pick: @escaping () -> Void) -> some View {
-        CinemaChip(title: title, symbol: symbol, isOn: isOn) {
-            pick()
-            panel = nil
+        case .shotOn: "Shot On"
         }
     }
 }
@@ -292,10 +407,12 @@ private struct CinemaLibraryGrid: View {
     @Environment(AppModel.self) private var model
     @Environment(\.isSnapshot) private var isSnapshot
     let films: [LibraryItem]
+    @Binding var selected: String?
     let active: Bool
     let open: (String) -> Void
     let scrollTo: (String) -> Void
-    @State private var selected: String?
+    /// Up from the first row: the keys go to the filters.
+    let leaveTop: () -> Void
     /// The highlight was moved with the arrow keys, so the pointer leaving a poster keeps it.
     @State private var byKeys = false
     @State private var pointer = PointerWatch()
@@ -361,6 +478,9 @@ private struct CinemaLibraryGrid: View {
         switch key {
         case .left where current != nil: index -= 1
         case .right where current != nil: index += 1
+        case .up where (current ?? columns) < columns:
+            leaveTop()
+            return true
         case .up where current != nil: index -= columns
         case .down where current != nil: index += columns
         case .left, .right, .up, .down: break

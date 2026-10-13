@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var moods: Set<Mood> = []
     @State private var length: LengthBand = .any
     @State private var language: String?
+    @State private var shotOn: ShotOn?
     @State private var path = NavigationPath()
     /// The desk's search while Cinema mode has the field (put back when Cinema mode ends).
     @State private var deskSearch = ""
@@ -74,7 +75,8 @@ struct RootView: View {
         }
         .animation(.easeOut(duration: 0.3), value: model.cinemaMode)
         .animation(.easeOut(duration: 0.2), value: model.trailer)
-        .sheet(item: Binding(get: { model.ratingPrompt }, set: { model.ratingPrompt = $0 })) { prompt in
+        // Cinema mode asks on the TV, large (see `CinemaHowWasIt`).
+        .sheet(item: Binding(get: { model.cinemaMode ? nil : model.ratingPrompt }, set: { model.ratingPrompt = $0 })) { prompt in
             HowWasItSheet(prompt: prompt)
         }
     }
@@ -107,7 +109,7 @@ struct RootView: View {
                             // The desk's field doesn't take ⌘F while Cinema mode is over it.
                             LibraryGridView(shelf: shelf, searchText: $searchText,
                                             focusSearch: model.cinemaMode ? .constant(false) : $focusSearch, query: query, sort: $sort,
-                                            moods: $moods, length: $length, language: $language, path: $path)
+                                            moods: $moods, length: $length, language: $language, shotOn: $shotOn, path: $path)
                         }
                     }
                 }
@@ -172,6 +174,7 @@ struct RootView: View {
             moods = []
             length = .any
             language = nil
+            shotOn = nil
         }
         shelf = newShelf
     }

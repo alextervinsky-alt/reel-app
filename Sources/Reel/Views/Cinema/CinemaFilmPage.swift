@@ -8,13 +8,17 @@ import ReelCore
 struct CinemaFilmPage: View {
     @Environment(AppModel.self) private var model
     @Environment(\.isSnapshot) private var isSnapshot
+    @Environment(CinemaBar.self) private var bar
     let filmID: String
     /// False while a trailer plays over it (its keys then belong to the trailer).
     let active: Bool
     let open: (String) -> Void
+    /// Where the arrow keys are: a button (row 0), or a poster in a row below (rows 1…).
+    @State private var focus: (row: Int, index: Int)?
 
     var body: some View {
         if let film = model.film(id: filmID) {
+            let rows = rowItems(film)
             GeometryReader { geometry in
                 // The decision fits one screen; the rows below peek in at the bottom.
                 let heroHeight = max(560, geometry.size.height - 200)
@@ -22,32 +26,34 @@ struct CinemaFilmPage: View {
                     if isSnapshot {
                         content(film, heroHeight: heroHeight).snapshotPage()
                     } else {
-                        ScrollView { content(film, heroHeight: heroHeight) }
-                            .scrollIndicators(.hidden)
+                        ScrollViewReader { proxy in
+                            ScrollView { content(film, heroHeight: heroHeight) }
+                                .scrollIndicators(.hidden)
+                                .onChange(of: focus?.row) { _, row in
+                                    guard let row else { return }
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        if row == 0 { proxy.scrollTo(Self.top, anchor: .top) } else { proxy.scrollTo("row\(row)", anchor: .center) }
+                                    }
+                                }
+                        }
                     }
                 }
             }
-            // What viewers of this film went on to like (More Like This).
+            // What viewers of this film went on to like (More Like This), and its facts and
+            // article for Did You Know?.
             .onAppear {
                 model.warmPlayer()
                 TrailerEngine.shared.warm()
             }
-            .task(id: film.tmdb?.id) { await model.loadSimilar(for: film) }
-            .onReelKey { key in
-                guard active else { return false }
-                switch key {
-                case .enter:
-                    guard model.onlineCopy(of: film) != nil else { return false }
-                    model.play(film)
-                case .space:
-                    guard model.offersTrailer(for: film) else { return false }
-                    model.showTrailer(for: film)
-                case .tonight:
-                    model.toggleTonight(film.personalKey)
-                default:
-                    return false
-                }
-                return true
+            .task(id: film.tmdb?.id) {
+                await model.loadSimilar(for: film)
+                await model.loadFunFacts(for: film)
+                await model.loadArticle(for: film)
+            }
+            .onReelKey { key in active && handle(key, film: film, rows: rows) }
+            .onChange(of: bar.returned) { _, back in
+                guard back?.page == "film:" + filmID else { return }
+                focus = (0, 0)
             }
         } else {
             Text("This film is no longer in the library.")
@@ -57,20 +63,83 @@ struct CinemaFilmPage: View {
         }
     }
 
+    private static let top = "cinema-film-top"
+
     private func content(_ film: FilmEntry, heroHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 44) {
-            hero(film, height: heroHeight)
+            hero(film, height: heroHeight).id(Self.top)
             CinemaReviews(film: film)
-            CinemaFilmRows(film: film, open: open)
+            CinemaDidYouKnow(film: film)
+            CinemaFilmRows(film: film, keyFocus: focus.flatMap { $0.row > 0 ? ($0.row - 1, $0.index) : nil }, open: open)
         }
         .padding(.bottom, 80)
+    }
+
+    /// The posters in the rows under the film, as the keys move through them.
+    private func rowItems(_ film: FilmEntry) -> [[LibraryItem]] {
+        let related = model.relatedFilms(to: film, limit: 24)
+        return [related.people.map { $0.item }, related.similar].filter { !$0.isEmpty }
+    }
+
+    /// The buttons and the rows: left and right along them, up and down between them (Up from
+    /// the buttons goes to the top bar). Return presses the button or opens the poster; with
+    /// nothing highlighted Return plays, Space shows the trailer and T keeps it for tonight.
+    private func handle(_ key: ReelKey, film: FilmEntry, rows: [[LibraryItem]]) -> Bool {
+        let actions = buttonActions(film)
+        // The rows changed under the highlight (More Like This arrived, a film left): start at the buttons.
+        if let place = focus, place.row > rows.count || (place.row > 0 && !rows[place.row - 1].indices.contains(place.index)) {
+            focus = (0, 0)
+        }
+        guard let place = focus else {
+            switch key {
+            case .left, .right, .down:
+                focus = (0, 0)
+            case .up:
+                bar.takeKeys()
+            case .enter:
+                guard model.onlineCopy(of: film) != nil else { return false }
+                model.play(film)
+            case .space:
+                guard model.offersTrailer(for: film) else { return false }
+                model.showTrailer(for: film)
+            case .tonight:
+                model.toggleTonight(film.personalKey)
+            case .escape, .fullScreen:
+                return false
+            }
+            return true
+        }
+        let count = place.row == 0 ? actions.count : rows[place.row - 1].count
+        switch key {
+        case .left: focus = (place.row, max(place.index - 1, 0))
+        case .right: focus = (place.row, min(place.index + 1, max(count - 1, 0)))
+        case .up where place.row == 0:
+            focus = nil
+            bar.takeKeys()
+        case .up: focus = (place.row - 1, place.row - 1 == 0 ? 0 : min(place.index, rows[place.row - 2].count - 1))
+        case .down where place.row < rows.count: focus = (place.row + 1, min(place.index, rows[place.row].count - 1))
+        case .down: break
+        case .enter where place.row == 0, .space where place.row == 0:
+            guard actions.indices.contains(place.index) else { return false }
+            actions[place.index].action()
+        case .tonight where place.row == 0:
+            model.toggleTonight(film.personalKey)
+        case .enter, .space, .tonight:
+            let row = rows[place.row - 1]
+            guard row.indices.contains(place.index) else { return false }
+            return CinemaActions.perform(key, on: row[place.index], model: model, open: open)
+        case .escape:
+            focus = nil
+            return false
+        case .fullScreen: return false
+        }
+        return true
     }
 
     /// Title → year · running time · genres → ratings, two list badges and why it's offered →
     /// verdict → premise (three lines at most) → when it would end, subtitles, quality → Play,
     /// Trailer, Tonight, Watched.
     private func hero(_ film: FilmEntry, height: CGFloat) -> some View {
-        let record = model.record(for: film)
         let versions = model.versions(of: film)
         let badges = model.badges(for: film)
         let reason = model.pickReason(forKey: film.personalKey)
@@ -134,7 +203,7 @@ struct CinemaFilmPage: View {
                         .font(.system(size: Cinema.body))
                         .foregroundStyle(.secondary)
                 }
-                buttons(film, record: record, versions: versions)
+                buttons(film, versions: versions)
                     .padding(.top, 4)
             }
             .padding(.horizontal, Cinema.gutter)
@@ -142,55 +211,57 @@ struct CinemaFilmPage: View {
         }
     }
 
-    private func buttons(_ film: FilmEntry, record: PersonalRecord, versions: [FilmEntry]) -> some View {
+    /// One of the big buttons under the film.
+    private struct PageButton {
+        let title: String
+        let symbol: String
+        var primary = false
+        let action: () -> Void
+    }
+
+    /// Play (one per version: menus are too small to hit from the sofa), Trailer, Tonight, Watched.
+    private func buttonActions(_ film: FilmEntry) -> [PageButton] {
+        let versions = model.versions(of: film)
+        var list: [PageButton] = []
+        if versions.count > 1 {
+            for copy in versions {
+                list.append(PageButton(title: "Play \(model.versionTitle(copy))", symbol: "play.fill",
+                                       primary: copy.id == versions.first?.id) { model.play(film, version: copy) })
+            }
+        } else if !versions.isEmpty {
+            list.append(PageButton(title: "Play", symbol: "play.fill", primary: true) { model.play(film) })
+        }
+        if model.offersTrailer(for: film) {
+            list.append(PageButton(title: model.trailerLabel(for: film), symbol: "play.rectangle") { model.showTrailer(for: film) })
+        }
+        let tonight = model.isTonight(film.personalKey)
+        list.append(PageButton(title: tonight ? "On Tonight" : "Tonight", symbol: tonight ? "moon.fill" : "moon") {
+            model.toggleTonight(film.personalKey)
+        })
+        let watched = model.record(for: film).watched
+        list.append(PageButton(title: watched ? "Watched" : "Mark Watched",
+                               symbol: watched ? "checkmark.circle.fill" : "checkmark.circle") {
+            model.toggle(\.watched, for: film)
+        })
+        return list
+    }
+
+    private func buttons(_ film: FilmEntry, versions: [FilmEntry]) -> some View {
         HStack(spacing: 14) {
-            if versions.count > 1 {
-                // One big button per version: menus are too small to hit from the sofa.
-                ForEach(versions) { copy in
-                    Button {
-                        model.play(film, version: copy)
-                    } label: {
-                        // Long file names are cut in the middle, so every button stays on screen.
-                        Label("Play \(model.versionTitle(copy))", systemImage: "play.fill")
-                            .truncationMode(.middle)
-                            .frame(maxWidth: 300)
-                    }
-                    .buttonStyle(CinemaButtonStyle(primary: copy.id == versions.first?.id))
-                }
-            } else if !versions.isEmpty {
-                Button {
-                    model.play(film)
-                } label: {
-                    Label("Play", systemImage: "play.fill")
-                }
-                .buttonStyle(CinemaButtonStyle(primary: true))
-            } else {
+            if versions.isEmpty {
                 Label("Connect the drive to play", systemImage: "externaldrive")
                     .font(.system(size: Cinema.body))
                     .foregroundStyle(.secondary)
             }
-            if model.offersTrailer(for: film) {
-                Button {
-                    model.showTrailer(for: film)
-                } label: {
-                    Label(model.trailerLabel(for: film), systemImage: "play.rectangle")
+            ForEach(Array(buttonActions(film).enumerated()), id: \.offset) { index, button in
+                Button(action: button.action) {
+                    // Long file names are cut in the middle, so every button stays on screen.
+                    Label(button.title, systemImage: button.symbol)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: versions.count > 1 && button.symbol == "play.fill" ? 300 : nil)
                 }
-                .buttonStyle(CinemaButtonStyle())
+                .buttonStyle(CinemaButtonStyle(primary: button.primary, focused: focus.map { $0.row == 0 && $0.index == index } ?? false))
             }
-            Button {
-                model.toggleTonight(film.personalKey)
-            } label: {
-                Label(model.isTonight(film.personalKey) ? "On Tonight" : "Tonight",
-                      systemImage: model.isTonight(film.personalKey) ? "moon.fill" : "moon")
-            }
-            .buttonStyle(CinemaButtonStyle())
-            Button {
-                model.toggle(\.watched, for: film)
-            } label: {
-                Label(record.watched ? "Watched" : "Mark Watched",
-                      systemImage: record.watched ? "checkmark.circle.fill" : "checkmark.circle")
-            }
-            .buttonStyle(CinemaButtonStyle())
         }
     }
 }
@@ -277,21 +348,88 @@ private struct CinemaReviews: View {
 private struct CinemaFilmRows: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
+    /// The poster the arrow keys are on: which row (of those shown) and where in it.
+    let keyFocus: (row: Int, index: Int)?
     let open: (String) -> Void
+    /// The poster under the pointer, by row and film.
+    @State private var hovered: (row: Int, id: String)?
 
     var body: some View {
         let related = model.relatedFilms(to: film, limit: 24)
-        let people = related.people
-        let similar = related.similar
+        let rows: [(title: String, items: [LibraryItem], captions: [String: String])] = [
+            ("From the Same People", related.people.map { $0.item }, related.captions),
+            ("More Like This", related.similar, [:]),
+        ].filter { !$0.items.isEmpty }
         VStack(alignment: .leading, spacing: 40) {
-            if !people.isEmpty {
-                CinemaHoverRow(title: "From the Same People", items: people.map { $0.item },
-                               captions: related.captions, open: open)
-            }
-            if !similar.isEmpty {
-                CinemaHoverRow(title: "More Like This", items: similar, open: open)
+            ForEach(Array(rows.enumerated()), id: \.offset) { number, row in
+                let pointed = hovered.flatMap { $0.row == number ? row.items.firstIndex(where: { item in item.id == $0.id }) : nil }
+                CinemaRowView(title: row.title, items: row.items,
+                              selected: keyFocus.flatMap { $0.row == number ? $0.index : nil } ?? pointed,
+                              followSelection: keyFocus?.row == number, captions: row.captions,
+                              hover: { index, inside in
+                                  guard row.items.indices.contains(index) else { return }
+                                  if inside {
+                                      hovered = (number, row.items[index].id)
+                                  } else if hovered?.row == number, hovered?.id == row.items[index].id {
+                                      hovered = nil
+                                  }
+                              },
+                              open: { open($0.main.id) })
+                    .id("row\(number + 1)")
             }
         }
+    }
+}
+
+/// Did You Know? on the TV: three short things worth knowing about the making of the film, large,
+/// under the reviews. Spoiler-safe like Behind the Film (until watched, nothing that tells of the
+/// story, nor anything from the article's story sections).
+private struct CinemaDidYouKnow: View {
+    @Environment(AppModel.self) private var model
+    let film: FilmEntry
+
+    var body: some View {
+        let facts = Self.facts(film: film, article: film.tmdb.flatMap { model.articles[$0.id] },
+                               articleKnown: film.tmdb.map { model.articles[$0.id] != nil || model.articlesMissing.contains($0.id) } ?? false,
+                               hiding: model.hidesSpoilers(for: film))
+        if !facts.isEmpty {
+            VStack(alignment: .leading, spacing: 22) {
+                Label("Did You Know?", systemImage: "sparkles")
+                    .font(.system(size: Cinema.rowTitle, weight: .bold))
+                HStack(alignment: .top, spacing: 24) {
+                    ForEach(facts, id: \.text) { fact in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(fact.category.uppercased())
+                                .font(.system(size: 17, weight: .semibold))
+                                .tracking(1.2)
+                                .foregroundStyle(Theme.brand)
+                            Text(fact.text)
+                                .font(.system(size: Cinema.body + 2, weight: .medium))
+                                .lineSpacing(6)
+                                .foregroundStyle(Color.white.opacity(0.94))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(28)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Theme.panel))
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, Cinema.gutter)
+        }
+    }
+
+    /// The three most worth knowing that are short enough to read from the sofa. While spoilers
+    /// are hidden they wait for the article (its story sections are left out).
+    static func facts(film: FilmEntry, article: FilmArticle?, articleKnown: Bool, hiding: Bool) -> [FunFact] {
+        guard var facts = film.funFacts.map({ BehindTheFilmTab.withoutStory($0, hiding: hiding) }) else { return [] }
+        if hiding {
+            guard articleKnown else { return [] }
+            if let article { facts.facts = Digest.leftover(facts.facts, sections: article.after) }
+        }
+        return Array(BehindTheFilmTab.didYouKnow(facts).filter { $0.text.count <= 200 }.prefix(3))
     }
 }
 #endif

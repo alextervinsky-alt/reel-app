@@ -188,7 +188,58 @@ enum ScreenRenderer {
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("explore-mood.png"))
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
+        speedCheck(model.films)
         finish()
+    }
+
+    /// How long the library's everyday work takes with 500 films (the sample, copied under other
+    /// TMDB ids, on a main drive and a Backup): building the grid's items, sorting, searching,
+    /// More Like This and the Backup comparison. Written to the log, for keeping Reel quick.
+    private static func speedCheck(_ sample: [FilmEntry]) {
+        guard !sample.isEmpty else { return }
+        let count = 500
+        var films: [FilmEntry] = []
+        for index in 0..<count {
+            var source = sample[index % sample.count]
+            if var details = source.tmdb { details.id = 1_000_000 + index; source.tmdb = details }
+            let name = "Copy \(index) \(source.displayTitle)"
+            for drive in ["Main", "Backup"] where drive == "Main" || index % 10 != 0 {
+                films.append(FilmEntry(driveID: drive, relativePath: "\(name)/\(name).mkv", fileName: "\(name).mkv",
+                                       size: 18_000_000_000, modified: Date(), addedAt: Date(), matchState: .confirmed,
+                                       tmdb: source.tmdb))
+            }
+        }
+        func time(_ work: () -> Void) -> Int {
+            let start = ContinuousClock.now
+            work()
+            let elapsed = (ContinuousClock.now - start).components
+            return Int(elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000)
+        }
+        var items: [LibraryItem] = []
+        let build = time {
+            items = AppModel.makeItems(films: films, online: ["Main", "Backup"]) { film in
+                film.tmdb.map { MoodClassifier.moods(genres: $0.genreNames, keywords: $0.keywordNames, runtime: $0.runtime) } ?? []
+            }.items
+        }
+        let sort = time {
+            _ = items.sorted { $0.sortTitle < $1.sortTitle }
+            _ = items.map { (EveningOrder.stableHash("seed" + $0.id), $0) }.sorted { $0.0 < $1.0 }
+        }
+        let search = time {
+            for query in ["blade", "nolan", "anamorphic", "black and white", "villenueve"] {
+                let terms = TitleSimilarity.normalize(query).split(separator: " ").map(String.init)
+                _ = items.filter { $0.search.relevance(terms, allowTypos: true) > 0 }
+            }
+        }
+        let similar = time {
+            let counts = Likeness.keywordCounts(items.map(\.likeness))
+            for me in items.prefix(5) {
+                _ = items.map { Likeness.score(me.likeness, $0.likeness, keywordCounts: counts, libraryCount: items.count) }
+            }
+        }
+        let backup = time { _ = BackupCheck.gaps(in: films, backupDrives: ["Backup"]) }
+        log("speed with \(items.count) films: building \(build) ms, sorting \(sort) ms, five searches \(search) ms, "
+            + "More Like This for five films \(similar) ms, Backup comparison \(backup) ms")
     }
 
     /// Images must be in memory before drawing: a rendered view can't wait for a download.

@@ -206,12 +206,13 @@ extension AppModel {
         return found
     }
 
-    /// The films for Cinema mode's All Films: search, sort, mood, length, and unwatched only.
+    /// The films for Cinema mode's All Films: search, sort, mood, length, language, what it was
+    /// shot on, and unwatched only.
     func cinemaLibrary(matching query: String, sort: LibrarySort, mood: Mood?, length: LengthBand, language: String?,
-                       unwatchedOnly: Bool) -> [LibraryItem] {
+                       shotOn: ShotOn?, unwatchedOnly: Bool) -> [LibraryItem] {
         shelfItems(unwatchedOnly ? .unwatched : .all, matching: query, sortedBy: sort).filter { item in
             (mood.map { item.moods.contains($0) } ?? true) && length.contains(item.runtime)
-                && (language.map { item.language == $0 } ?? true)
+                && (language.map { item.language == $0 } ?? true) && (shotOn.map { item.shotOn.contains($0) } ?? true)
         }
     }
 

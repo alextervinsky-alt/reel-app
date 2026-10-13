@@ -170,6 +170,9 @@ extension AppModel {
                     }
                 }
                 refreshed += ids.count
+                // A long refresh (many films added at once) is spread out, so Reel stays quick
+                // and the sites it reads aren't flooded.
+                if stale.count > ids.count { try? await Task.sleep(for: .seconds(1)) }
             }
             work += refreshed
 
@@ -223,6 +226,8 @@ extension AppModel {
 
         if let stopMessage { notice = stopMessage }
         if work > 0 { ImageStore.shared.maintain(keeping: []) }
+        // Then, quietly, how each film was shot (for searching by craft).
+        if stopMessage == nil { Task { await readCraft() } }
     }
 
     nonisolated static func lookUp(_ job: LookupJob, client: TMDBClient, omdb: OMDbClient?, ratingsWanted: Bool) async -> LookupOutcome {

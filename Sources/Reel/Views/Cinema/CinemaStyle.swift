@@ -19,6 +19,8 @@ struct CinemaButtonStyle: ButtonStyle {
     var primary = false
     /// Smaller, beside a row title.
     var compact = false
+    /// The arrow keys are on it.
+    var focused = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -31,6 +33,7 @@ struct CinemaButtonStyle: ButtonStyle {
             .foregroundStyle(primary ? Color.black : Color.white)
             .opacity(configuration.isPressed && primary ? 0.8 : 1)
             .contentShape(Capsule())
+            .cinemaFocus(focused)
     }
 }
 
@@ -39,6 +42,8 @@ struct CinemaChip: View {
     let title: String
     var symbol: String? = nil
     let isOn: Bool
+    /// The arrow keys are on it.
+    var focused = false
     let action: () -> Void
 
     var body: some View {
@@ -57,6 +62,52 @@ struct CinemaChip: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .cinemaFocus(focused)
+    }
+}
+
+extension View {
+    /// Where the arrow keys are: a white ring around the button or chip, which grows a little.
+    func cinemaFocus(_ on: Bool, circle: Bool = false) -> some View {
+        overlay {
+            if circle {
+                Circle().strokeBorder(Color.white, lineWidth: on ? 4 : 0).padding(-6)
+            } else {
+                Capsule().strokeBorder(Color.white, lineWidth: on ? 4 : 0).padding(-6)
+            }
+        }
+        .scaleEffect(on ? 1.06 : 1)
+        .animation(.easeOut(duration: 0.15), value: on)
+    }
+}
+
+/// The top bar's share of the arrow keys in Cinema mode. Up from the top of a page moves the keys
+/// to the bar (its tabs, Back, Exit); Down hands them back to the page they came from, which
+/// highlights its first item.
+@MainActor
+@Observable
+final class CinemaBar {
+    /// The highlighted button in the bar; nil while the page has the keys.
+    var index: Int?
+    /// The bar's button for the place showing (its tab, or Back over a film page).
+    @ObservationIgnored var landing = 0
+    /// Set when the keys come back down: the page named takes them at its top.
+    var returned: Return?
+
+    struct Return: Equatable {
+        let page: String
+        let serial: Int
+    }
+
+    /// The page gives the keys up to the bar.
+    func takeKeys() {
+        index = landing
+    }
+
+    /// The bar gives the keys back to the page.
+    func giveBack(to page: String) {
+        index = nil
+        returned = Return(page: page, serial: (returned?.serial ?? 0) + 1)
     }
 }
 

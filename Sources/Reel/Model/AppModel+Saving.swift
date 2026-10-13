@@ -5,6 +5,9 @@ import ReelCore
 /// Writes are batched, atomic and done off the main thread.
 extension AppModel {
     func scheduleSave(_ target: SaveTarget) {
+        // The library changes in a steady stream while film info is looked up: a save already
+        // waiting takes its snapshot when it runs, so it isn't put off again (and again).
+        if target == .library, saveTasks[target] != nil { return }
         saveTasks[target]?.cancel()
         saveTasks[target] = Task { [weak self] in
             try? await Task.sleep(for: target.delay)

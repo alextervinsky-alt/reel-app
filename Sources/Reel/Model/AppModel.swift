@@ -163,6 +163,8 @@ final class AppModel {
     @ObservationIgnored var keywordCounts: [String: Int] = [:]
     /// The original languages in the library, most films first (for the Language filters).
     var languages: [String] = []
+    /// What the library's films were shot on, as far as read (for the Shot on filters).
+    var shotOnKinds: [ShotOn] = []
     /// Films whose fun facts are being fetched right now (the tab shows a spinner).
     var funFactsLoading: Set<Int> = []
 
@@ -221,6 +223,8 @@ final class AppModel {
     /// Previews being fetched: a second ask for the same film waits for the first.
     @ObservationIgnored var previewTasks: [Int: Task<(details: TMDBMovieDetails?, ratings: ExternalRatings?), Never>] = [:]
     @ObservationIgnored var lookupRunning = false
+    /// Films' gear and techniques are being read (see `readCraft`).
+    @ObservationIgnored var craftRunning = false
     @ObservationIgnored var rerunRequested = false
     /// Moods per film, worked out once per version of its info.
     @ObservationIgnored var moodCache: [String: [Mood]] = [:]
@@ -578,6 +582,9 @@ final class AppModel {
         for item in items { if let language = item.language { languageCounts[language, default: 0] += 1 } }
         let newLanguages = languageCounts.sorted { ($0.value, $1.key) > ($1.value, $0.key) }.map { $0.key }
         if newLanguages != languages { languages = newLanguages }
+        let shot = Set(items.flatMap { $0.shotOn })
+        let newShotOn = ShotOn.allCases.filter { shot.contains($0) }
+        if newShotOn != shotOnKinds { shotOnKinds = newShotOn }
         let newGenres = Set(items.flatMap { $0.genres }).sorted()
         if newGenres != genres { genres = newGenres }
         let newCheckCount = items.filter { $0.main.matchState.needsCheck }.count
@@ -737,8 +744,9 @@ final class AppModel {
 
         switch order {
         case .random:
+            // Each film's place worked out once, not in every comparison.
             let seed = shuffleSeed
-            list.sort { EveningOrder.stableHash(seed + $0.id) < EveningOrder.stableHash(seed + $1.id) }
+            list = list.map { (EveningOrder.stableHash(seed + $0.id), $0) }.sorted { $0.0 < $1.0 }.map { $0.1 }
         case .title: list.sort { $0.sortTitle < $1.sortTitle }
         case .year: list.sort { ($0.main.displayYear ?? 0) > ($1.main.displayYear ?? 0) }
         case .rating: list.sort { ($0.score ?? 0) > ($1.score ?? 0) }

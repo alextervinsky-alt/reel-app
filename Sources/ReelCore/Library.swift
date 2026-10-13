@@ -169,13 +169,15 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     public static let currentStillsCheck = 2
     /// Bonus videos, subtitles, notes and artwork found with the film (from the last scan).
     public var extras: [FilmExtra]
+    /// The gear and techniques read about the film, for searching by craft (see `CraftIndex`).
+    public var craft: CraftIndex?
     /// Read from the file name once, not stored on disk (so parser improvements apply automatically).
     public let parsed: ParsedFilename
 
     enum CodingKeys: String, CodingKey {
         case driveID, relativePath, fileName, size, modified, addedAt, matchState, matchScore, tmdb, candidates, lastError
         case ratings, reception, infoVersion, lastLookup, ratingsDue, ratingsTriedAt, funFacts, checkedStills, extras
-        case infoUpdatedAt, checkedStillsVersion
+        case infoUpdatedAt, checkedStillsVersion, craft
     }
 
     /// Bump when Reel starts storing more film info, so existing entries get refreshed.
@@ -212,6 +214,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         self.infoUpdatedAt = nil
         self.checkedStillsVersion = nil
         self.extras = extras
+        self.craft = nil
         self.parsed = FilenameParser.parse(fileName)
     }
 
@@ -239,6 +242,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         extras = try c.decodeIfPresent([FilmExtra].self, forKey: .extras) ?? []
         infoUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .infoUpdatedAt)
         checkedStillsVersion = try c.decodeIfPresent(Int.self, forKey: .checkedStillsVersion)
+        craft = try? c.decodeIfPresent(CraftIndex.self, forKey: .craft)
         if checkedStillsVersion != FilmEntry.currentStillsCheck { checkedStills = nil }
         if infoUpdatedAt == nil, let id = tmdb?.id {
             // Saved before Reel kept this date: spread the first refresh over the coming month
@@ -278,7 +282,10 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
 
     /// New TMDB info only; ratings stay as they are.
     public mutating func applyDetails(_ details: TMDBMovieDetails, reception: ReceptionSummary?) {
-        if tmdb?.id != details.id { funFacts = nil }
+        if tmdb?.id != details.id {
+            funFacts = nil
+            craft = nil
+        }
         if tmdb?.stillPaths != details.stillPaths { checkedStills = nil }
         tmdb = details
         self.reception = reception

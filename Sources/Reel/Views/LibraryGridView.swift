@@ -28,6 +28,7 @@ struct LibraryGridView: View {
     @Binding var moods: Set<Mood>
     @Binding var length: LengthBand
     @Binding var language: String?
+    @Binding var shotOn: ShotOn?
     @Binding var path: NavigationPath
     @State private var scroll = ScrollState()
     @State private var readAhead = PosterReadAhead()
@@ -39,13 +40,15 @@ struct LibraryGridView: View {
     static let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 24, alignment: .top)]
 
     var body: some View {
-        // Shelf + search, then language, length and moods. Each filter's counts reflect the others.
+        // Shelf + search, then language, what it was shot on, length and moods. Each filter's
+        // counts reflect the others.
         let all = model.shelfItems(shelf, matching: query, sortedBy: sort)
         let inLanguage = language.map { code in all.filter { $0.language == code } } ?? all
-        let lengthFiltered = length == .any ? inLanguage : inLanguage.filter { length.contains($0.runtime) }
+        let inShot = shotOn.map { kind in inLanguage.filter { $0.shotOn.contains(kind) } } ?? inLanguage
+        let lengthFiltered = length == .any ? inShot : inShot.filter { length.contains($0.runtime) }
         let shown = moods.isEmpty ? lengthFiltered : lengthFiltered.filter { moods.isSubset(of: $0.moods) }
-        let moodFiltered = moods.isEmpty ? inLanguage : inLanguage.filter { moods.isSubset(of: $0.moods) }
-        let featured = shelf == .all && query.isEmpty && moods.isEmpty && length == .any && language == nil ? model.featured : nil
+        let moodFiltered = moods.isEmpty ? inShot : inShot.filter { moods.isSubset(of: $0.moods) }
+        let featured = shelf == .all && query.isEmpty && !filtering ? model.featured : nil
 
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -56,7 +59,10 @@ struct LibraryGridView: View {
                         model.showTrailer(for: featured.main)
                     }
                 }
-                header(count: shown.count, moodBase: lengthFiltered, lengthBase: moodFiltered, languageBase: all)
+                header(count: shown.count, moodBase: lengthFiltered, lengthBase: moodFiltered, languageBase: all,
+                       shotBase: shotOn == nil ? shown : inLanguage.filter { item in
+                           (length == .any || length.contains(item.runtime)) && moods.isSubset(of: item.moods)
+                       })
                     .padding(.horizontal, 32)
                     .padding(.top, featured == nil ? 18 : 6)
                 if let about = shelfDescription {
@@ -148,7 +154,10 @@ struct LibraryGridView: View {
     // MARK: Header and filters
 
     /// Moods in front (how you choose); length, language and sort as compact menus at the right.
-    private func header(count: Int, moodBase: [LibraryItem], lengthBase: [LibraryItem], languageBase: [LibraryItem]) -> some View {
+    private var filtering: Bool { !moods.isEmpty || length != .any || language != nil || shotOn != nil }
+
+    private func header(count: Int, moodBase: [LibraryItem], lengthBase: [LibraryItem], languageBase: [LibraryItem],
+                        shotBase: [LibraryItem]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(title)
@@ -165,17 +174,21 @@ struct LibraryGridView: View {
                 ForEach(Mood.allCases.filter { moods.contains($0) }) { mood in
                     RemovableChip(title: mood.title) { moods.remove(mood) }
                 }
-                if !moods.isEmpty || length != .any || language != nil {
+                if filtering {
                     Button("Clear") {
                         moods = []
                         length = .any
                         language = nil
+                        shotOn = nil
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.brand)
                 }
                 Spacer(minLength: 12)
+                if !model.shotOnKinds.isEmpty || shotOn != nil {
+                    ShotOnFilterMenu(shotOn: $shotOn, base: shotBase, kinds: model.shotOnKinds)
+                }
                 LengthFilterMenu(length: $length, base: lengthBase)
                 if model.languages.count > 1 {
                     LanguageFilterMenu(language: $language, base: languageBase, languages: model.languages)
@@ -239,13 +252,15 @@ struct LibraryGridView: View {
     private var emptyState: some View {
         if !query.isEmpty {
             ContentUnavailableView.search(text: query)
-        } else if !moods.isEmpty || length != .any {
+        } else if filtering {
             ContentUnavailableView {
                 Label("No films match these filters", systemImage: "line.3.horizontal.decrease.circle")
             } actions: {
                 Button("Clear Filters") {
                     moods = []
                     length = .any
+                    language = nil
+                    shotOn = nil
                 }
             }
         } else {
@@ -457,6 +472,34 @@ struct LanguageFilterMenu: View {
     }
 }
 
+/// What the films were shot on (film, digital, anamorphic, IMAX, black and white), as read about
+/// them in the background; only what's in the library is offered.
+struct ShotOnFilterMenu: View {
+    @Binding var shotOn: ShotOn?
+    /// Films before this filter.
+    let base: [LibraryItem]
+    let kinds: [ShotOn]
+
+    var body: some View {
+        Menu {
+            Button("Anything  (\(base.count))") { shotOn = nil }
+            Divider()
+            ForEach(kinds) { kind in
+                let count = base.filter { $0.shotOn.contains(kind) }.count
+                if count > 0 || kind == shotOn {
+                    Button("\(kind.title)  (\(count))") { shotOn = kind }
+                }
+            }
+        } label: {
+            FilterPill(icon: "camera.aperture", text: shotOn?.title ?? "Shot on", active: shotOn != nil)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+}
+
 struct SortMenu: View {
     @Binding var sort: LibrarySort
 
@@ -529,7 +572,7 @@ struct LibrarySearchField: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("Search films, people, places", text: $text)
+            TextField("Search films, people, craft", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($focused)
