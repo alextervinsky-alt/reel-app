@@ -318,6 +318,7 @@ extension AppModel {
                 list[i].infoVersion = twin.infoVersion
                 list[i].infoUpdatedAt = twin.infoUpdatedAt
                 list[i].funFacts = twin.funFacts
+                list[i].craft = twin.craft
                 list[i].candidates = twin.candidates
                 list[i].matchScore = twin.matchScore
                 list[i].matchState = twin.matchState

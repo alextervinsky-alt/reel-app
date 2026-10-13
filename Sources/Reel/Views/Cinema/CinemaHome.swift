@@ -198,8 +198,13 @@ private struct CinemaHomeContent: View {
 
     /// On the mood chips: left and right along them, Return chooses, Up to the bar, Down to the rows.
     private func chipKey(_ key: ReelKey, at index: Int) -> Bool {
+        // The chips went away under the highlight (the library changed): the rows take the keys.
+        guard !choices.isEmpty else {
+            chip = nil
+            return move(key)
+        }
         switch key {
-        case .left: chip = max(index - 1, 0)
+        case .left: chip = min(max(index - 1, 0), choices.count - 1)
         case .right: chip = min(index + 1, choices.count - 1)
         case .up:
             chip = nil

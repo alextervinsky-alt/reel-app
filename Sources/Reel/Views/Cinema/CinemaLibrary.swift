@@ -90,8 +90,19 @@ struct CinemaLibrary: View {
         }
         .onReelKey { key in
             if let panel { return panelKey(key, in: panel) }
-            guard active, let above else { return false }
-            return aboveKey(key, at: above, films: films)
+            guard active else { return false }
+            guard var place = above else {
+                // No posters to move through (nothing matches): up and down reach the filters.
+                guard films.isEmpty, key == .up || key == .down else { return false }
+                above = query.isEmpty ? .filter(0) : .search
+                return true
+            }
+            // The filters step aside while searching: the keys go to the search field.
+            if !query.isEmpty, case .filter = place {
+                place = .search
+                above = place
+            }
+            return aboveKey(key, at: place, films: films)
         }
         // The pointer on a poster takes the highlight from the filters.
         .onChange(of: selected) { _, now in if now != nil { above = nil } }
@@ -213,8 +224,9 @@ struct CinemaLibrary: View {
             bar.takeKeys()
         case (.down, .search) where query.isEmpty: above = .filter(0)
         case (.down, _):
+            guard let first = films.first else { break }
             above = nil
-            selected = films.first?.id
+            selected = first.id
         case (.enter, .filter(let i)), (.space, .filter(let i)):
             let list = filterList
             guard list.indices.contains(i) else { return false }

@@ -178,7 +178,7 @@ extension AppModel {
     /// "Pair it with": one film from the library for a double feature with this one, and why
     /// (see `DoubleFeature`). Worked out once until the library or what you've watched changes.
     func pairing(for film: FilmEntry) -> (item: LibraryItem, reason: String)? {
-        let stamp = "\(libraryVersion)|\(personal.watchedKeys.count)"
+        let stamp = "\(libraryVersion)|\(personal.watchedKeys.count)|\(spoilerSafe)"
         let key = film.personalKey
         if let cached = pairCache[key], cached.stamp == stamp {
             return cached.pick.flatMap { pick in itemCache[pick.id].map { ($0, pick.reason) } }
@@ -189,7 +189,7 @@ extension AppModel {
         }
         guard let me = itemCache[key] else { return nil }
         let pick = DoubleFeature.pick(for: pairable(me), from: items.map(pairable), keywordCounts: keywordCounts,
-                                      libraryCount: items.count)
+                                      libraryCount: items.count, spoilerSafe: spoilerSafe)
         pairCache[key] = (stamp, pick)
         return pick.flatMap { pick in itemCache[pick.id].map { ($0, pick.reason) } }
     }

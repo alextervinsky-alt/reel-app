@@ -40,17 +40,21 @@ public enum DoubleFeature {
     ]
 
     /// Ways of shooting worth a double feature (not "digital" or "anamorphic": too many films are).
-    static let distinctiveCraft = ["16 mm", "Super 16 mm", "Super 8 mm", "65 mm", "70 mm", "VistaVision", "IMAX", "Techniscope",
+    static let distinctiveCraft = ["16 mm", "Super 16 mm", "Super 16", "Super 8 mm", "Super 8", "65 mm", "70 mm", "VistaVision", "IMAX", "Techniscope",
                                    "Ultra Panavision 70", "Three-strip Technicolor", "Natural light", "Candlelight", "Handheld",
                                    "SnorriCam", "LED volume", "Bleach bypass"]
 
     /// The best partner for `film` among `others`, or nil when none is a good enough match.
-    public static func pick(for film: Film, from others: [Film], keywordCounts: [String: Int], libraryCount: Int) -> Pick? {
+    /// - Parameter spoilerSafe: a theme (a TMDB keyword) is named only when it can't give either
+    ///   film's story away ("twist ending", "time loop" never).
+    public static func pick(for film: Film, from others: [Film], keywordCounts: [String: Int], libraryCount: Int,
+                            spoilerSafe: Bool = true) -> Pick? {
         var best: (film: Film, score: Double, reason: String)?
         for other in others where other.id != film.id {
             // A sequel is next in its series, not a double feature's surprise.
             if let series = film.collectionID, series == other.collectionID { continue }
-            guard let shared = connection(film, other, keywordCounts: keywordCounts, libraryCount: libraryCount) else { continue }
+            guard let shared = connection(film, other, keywordCounts: keywordCounts, libraryCount: libraryCount,
+                                          spoilerSafe: spoilerSafe) else { continue }
             let alike = Likeness.score(film.features, other.features, keywordCounts: keywordCounts, libraryCount: libraryCount)
             // Tone and audience must sit together (Likeness halves or worse a mismatch).
             guard alike >= 1.5 else { continue }
@@ -61,7 +65,8 @@ public enum DoubleFeature {
     }
 
     /// What the two share that makes them a pair, the strongest first, and how much it counts.
-    static func connection(_ a: Film, _ b: Film, keywordCounts: [String: Int], libraryCount: Int) -> (weight: Double, reason: String)? {
+    static func connection(_ a: Film, _ b: Film, keywordCounts: [String: Int], libraryCount: Int,
+                           spoilerSafe: Bool = true) -> (weight: Double, reason: String)? {
         let x = a.features, y = b.features
         if let name = first(x.directors, y.directors) {
             var reason = "Two by \(name)"
@@ -81,13 +86,21 @@ public enum DoubleFeature {
         if let name = first(x.composers, y.composers) { return (2, "Both scored by \(name)") }
         // The rarest theme they share, if it's rare in the library.
         let total = max(libraryCount, 1)
-        let themes = x.keywords.intersection(y.keywords).filter { !plainThemes.contains($0) }
+        let themes = x.keywords.intersection(y.keywords)
+            .filter { !plainThemes.contains($0) && !(spoilerSafe && revealsStory($0)) }
             .map { ($0, keywordCounts[$0] ?? 1) }
             .filter { $0.1 <= max(3, total / 12) }
             .sorted { ($0.1, $0.0) < ($1.1, $1.0) }
         if let theme = themes.first { return (2, "A shared theme: \(theme.0)") }
         return nil
     }
+
+    /// Themes that tell what happens (a twist, a death, a secret, what someone turns out to be).
+    static func revealsStory(_ keyword: String) -> Bool {
+        Spoilers.mentionsPlot(keyword) || keyword.range(of: storyWords, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    static let storyWords = #"\b(?:twist|ending|ends?|death|dies|dying|dead|deceased|killed|kill\w*|murder\w*|suicide|reveal\w*|secret\w*|identity|imaginary|dream\w*|hallucinat\w*|afterlife|purgatory|time loop|split personality|multiple personalit\w*|unreliable|betray\w*|double life|amnesia|impersonat\w*|fake\w*|clone|undercover|framed|survivor|terminal|pregnan\w*|affair|cheating|revenge)\b"#
 
     private static func first(_ a: Set<String>, _ b: Set<String>) -> String? {
         a.intersection(b).sorted().first

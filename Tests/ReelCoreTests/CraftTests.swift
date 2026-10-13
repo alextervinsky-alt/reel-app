@@ -37,7 +37,7 @@ final class CraftTests: XCTestCase {
         XCTAssertTrue(CraftIndex(version: 0, readAt: now, shotOn: [], names: []).isStale(now: now))
     }
 
-    func testKeptWithTheFilmAndDroppedWhenItsMatchChanges() throws {
+    func testKeptWithTheFilm() throws {
         var film = FilmEntry(driveID: "d", relativePath: "A/A.mkv", fileName: "A.mkv", size: 1, modified: nil, addedAt: Date())
         film.craft = CraftIndex(shotOn: [.film], names: ["Steadicam"])
         let data = try JSONEncoder().encode(film)

@@ -209,7 +209,8 @@ struct LibraryGridView: View {
                 if model.languages.count > 1 {
                     LanguageFilterMenu(language: $language, base: languageBase, languages: model.languages)
                 }
-                SortMenu(sort: $sort)
+                // Not on Backup is a checklist, always by title.
+                if shelf != .notOnBackup { SortMenu(sort: $sort) }
             }
         }
     }

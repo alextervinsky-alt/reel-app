@@ -479,7 +479,6 @@ struct OverviewTab: View {
     }
 }
 
-/// A name that opens the person's page (underlined on hover).
 /// "Pair it with": one film from your library for a double feature with this one, and why.
 struct PairItWith: View {
     let film: FilmEntry
@@ -537,6 +536,7 @@ struct PairItWith: View {
     }
 }
 
+/// A name that opens the person's page (underlined on hover).
 struct PersonLink: View {
     let name: String
     let id: Int?

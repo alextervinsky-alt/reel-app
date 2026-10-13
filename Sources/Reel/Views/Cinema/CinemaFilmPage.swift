@@ -119,9 +119,13 @@ struct CinemaFilmPage: View {
         case .up: focus = (place.row - 1, place.row - 1 == 0 ? 0 : min(place.index, rows[place.row - 2].count - 1))
         case .down where place.row < rows.count: focus = (place.row + 1, min(place.index, rows[place.row].count - 1))
         case .down: break
-        case .enter where place.row == 0, .space where place.row == 0:
+        case .enter where place.row == 0:
             guard actions.indices.contains(place.index) else { return false }
             actions[place.index].action()
+        case .space where place.row == 0:
+            // Space is the trailer, as everywhere in Cinema mode.
+            guard model.offersTrailer(for: film) else { return false }
+            model.showTrailer(for: film)
         case .tonight where place.row == 0:
             model.toggleTonight(film.personalKey)
         case .enter, .space, .tonight:

@@ -75,8 +75,9 @@ struct CinemaTonight: View {
             guard let index else { return false }
             return CinemaActions.perform(key, on: items[index], model: model, open: open)
         case .escape:
-            guard focus != nil else { return false }
+            // Esc also goes back, as on every page.
             focus = nil
+            return false
         case .fullScreen: return false
         }
         return true

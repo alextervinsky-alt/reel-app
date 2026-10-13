@@ -173,10 +173,13 @@ struct SeenSweep: View {
     /// Each answer, to take back: the film and how its notes were before.
     @State private var answers: [(key: String, before: PersonalRecord)] = []
     @State private var seenCount = 0
+    /// The queue has been worked out (until then nothing is said about it).
+    @State private var started: Bool
 
     /// `queue`: the films to ask about (worked out when it opens when not given).
     init(queue: [String] = []) {
         _queue = State(initialValue: queue)
+        _started = State(initialValue: !queue.isEmpty)
     }
 
     var body: some View {
@@ -193,8 +196,10 @@ struct SeenSweep: View {
             }
             if let key = queue.indices.contains(position) ? queue[position] : nil, let item = model.item(forKey: key) {
                 question(item)
-            } else {
+            } else if started {
                 done
+            } else {
+                Color.clear.frame(height: 315)
             }
             HStack {
                 Button("Undo") { undo() }
@@ -283,6 +288,7 @@ struct SeenSweep: View {
 
     private func start() {
         if queue.isEmpty { queue = model.seenSweepQueue() }
+        started = true
     }
 
     private func answer(_ item: LibraryItem, seen: Bool, stars: Int?) {
@@ -292,7 +298,11 @@ struct SeenSweep: View {
             model.markSeenBefore(item.id, stars: stars)
             seenCount += 1
         }
-        withAnimation(.easeOut(duration: 0.15)) { position += 1 }
+        withAnimation(.easeOut(duration: 0.15)) {
+            position += 1
+            // A film that left the library meanwhile is skipped.
+            while queue.indices.contains(position), model.item(forKey: queue[position]) == nil { position += 1 }
+        }
     }
 
     private func undo() {

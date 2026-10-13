@@ -537,8 +537,10 @@ private struct NoteRow: View {
         var found: [(range: Range<String.Index>, term: Term)] = []
         for name in gear {
             guard let explanation = CraftGlossary.explain(name) else { continue }
+            // As written: a name Reel chose ("Film", "Digital") isn't looked for in the sentence
+            // (its "film" is usually the movie); ways of shooting are found by the glossary below.
             let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: name) + #"\b"#
-            if let range = sentence.range(of: pattern, options: [.regularExpression, .caseInsensitive]),
+            if let range = sentence.range(of: pattern, options: .regularExpression),
                !found.contains(where: { $0.range.overlaps(range) }) {
                 found.append((range, Term(name: String(sentence[range]), explanation: explanation)))
             }

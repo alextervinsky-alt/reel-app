@@ -46,8 +46,9 @@ struct CinemaHowWasIt: View {
         }
         .onAppear {
             stars = film.map { model.record(for: $0).rating } ?? nil
-            row = prompt.askFinished ? 1 : 0
-            index = prompt.askFinished ? 0 : max((stars ?? 0) - 1, 0)
+            // On the stars only when there are some: Return never saves stars nobody chose.
+            row = prompt.askFinished || stars == nil ? 1 : 0
+            index = row == 1 ? 0 : max((stars ?? 1) - 1, 0)
         }
         .onReelKey(key)
     }
@@ -106,27 +107,28 @@ struct CinemaHowWasIt: View {
     private func key(_ key: ReelKey) -> Bool {
         let count = row == 0 ? 5 : buttons.count
         switch key {
-        case .left: index = max(index - 1, 0)
-        case .right: index = min(index + 1, count - 1)
-        case .up where !asking: row = 0; index = max((stars ?? 1) - 1, 0)
-        case .down where !asking: row = 1; index = 0
+        case .left, .right:
+            index = key == .left ? max(index - 1, 0) : min(index + 1, count - 1)
+            // On the stars, left and right set them.
+            if row == 0 { stars = index + 1 }
+        case .up where !asking:
+            row = 0
+            index = max((stars ?? 3) - 1, 0)
+        case .down where !asking:
+            row = 1
+            index = 0
         case .up, .down: break
         case .enter, .space:
             if row == 1, buttons.indices.contains(index) {
                 buttons[index].action()
-            } else if row == 0 {
-                // Return on the stars keeps them.
-                stars = index + 1
+            } else if row == 0, let stars {
+                // Return on the stars keeps them (once some are chosen).
                 model.rate(prompt, stars: stars, line: "")
             }
-            return true
         case .escape:
             model.ratingPrompt = nil
-            return true
-        case .tonight, .fullScreen: return true
+        case .tonight, .fullScreen: break
         }
-        // On the stars the highlight is the rating.
-        if row == 0 { stars = index + 1 }
         return true
     }
 }

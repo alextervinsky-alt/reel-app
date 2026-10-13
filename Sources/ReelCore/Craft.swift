@@ -82,7 +82,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         let name = spec.name.lowercased()
         var found = Set<ShotOn>()
         if name.contains("anamorphic") || name.contains("cinemascope") || name.contains("ultra panavision")
-            || name.hasPrefix("hawk") || name.hasPrefix("kowa") || name.hasPrefix("lomo")
+            || name.hasPrefix("hawk")
             || name.range(of: #"\b[cegt]-series\b"#, options: .regularExpression) != nil {
             found.insert(.anamorphic)
         }
@@ -120,6 +120,8 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         // "16 mm" is searched as "16mm" too.
         let joined = names.filter { $0.range(of: #"\d mm\b"#, options: .regularExpression) != nil }
             .map { $0.replacingOccurrences(of: " mm", with: "mm") }
+            + names.filter { $0.range(of: #"^Super \d+$"#, options: .regularExpression) != nil }
+            .map { String($0.dropFirst(6)) + "mm" }
         return (names + joined + shotOn.flatMap(\.searchWords)).joined(separator: " , ")
     }
 }
