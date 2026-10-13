@@ -362,7 +362,7 @@ private struct CinemaFilmRows: View {
         ].filter { !$0.items.isEmpty }
         VStack(alignment: .leading, spacing: 40) {
             ForEach(Array(rows.enumerated()), id: \.offset) { number, row in
-                let pointed = hovered.flatMap { $0.row == number ? row.items.firstIndex(where: { item in item.id == $0.id }) : nil }
+                let pointed = hovered.flatMap { spot in spot.row == number ? row.items.firstIndex { $0.id == spot.id } : nil }
                 CinemaRowView(title: row.title, items: row.items,
                               selected: keyFocus.flatMap { $0.row == number ? $0.index : nil } ?? pointed,
                               followSelection: keyFocus?.row == number, captions: row.captions,

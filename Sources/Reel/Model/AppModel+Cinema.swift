@@ -175,6 +175,25 @@ extension AppModel {
         return films
     }
 
+    /// "Pair it with": one film from the library for a double feature with this one, and why
+    /// (see `DoubleFeature`). Worked out once until the library or what you've watched changes.
+    func pairing(for film: FilmEntry) -> (item: LibraryItem, reason: String)? {
+        let stamp = "\(libraryVersion)|\(personal.watchedKeys.count)"
+        let key = film.personalKey
+        if let cached = pairCache[key], cached.stamp == stamp {
+            return cached.pick.flatMap { pick in itemCache[pick.id].map { ($0, pick.reason) } }
+        }
+        func pairable(_ item: LibraryItem) -> DoubleFeature.Film {
+            DoubleFeature.Film(id: item.id, features: item.likeness, collectionID: item.main.tmdb?.collection?.id,
+                               shotOn: item.shotOn, craftNames: item.main.craft?.names ?? [], watched: personal.watchedKeys.contains(item.id))
+        }
+        guard let me = itemCache[key] else { return nil }
+        let pick = DoubleFeature.pick(for: pairable(me), from: items.map(pairable), keywordCounts: keywordCounts,
+                                      libraryCount: items.count)
+        pairCache[key] = (stamp, pick)
+        return pick.flatMap { pick in itemCache[pick.id].map { ($0, pick.reason) } }
+    }
+
     /// Other films in the library by the people who made this one, each with how it's connected
     /// (director first, then writer, cinematographer, composer, lead actors). Unwatched first, at
     /// most 12.

@@ -205,6 +205,8 @@ final class AppModel {
     @ObservationIgnored var badgeCache: [Int: (version: Int, badges: [ListBadge])] = [:]
     /// From the Same People and More Like This per film page (see `relatedFilms`), until the library changes.
     @ObservationIgnored var relatedCache: [String: (stamp: String, films: RelatedFilms)] = [:]
+    /// Each film's double feature (see `pairing`), until the library or what you've watched changes.
+    @ObservationIgnored var pairCache: [String: (stamp: String, pick: DoubleFeature.Pick?)] = [:]
     /// The other films in the library each cinematographer shot (see `filmsShot`), per library version.
     @ObservationIgnored var shotByCache: [String: [LibraryItem]] = [:]
     /// Cinema mode's home rows, kept until something they show changes.

@@ -36,6 +36,8 @@ struct LibraryGridView: View {
     @State private var regrouping: LibraryItem?
     /// Quick Look: Space on the poster under the pointer, or right-click.
     @State private var previewing: LibraryItem?
+    /// Seen It? (Unwatched): one poster at a time.
+    @State private var sweeping = false
 
     static let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 24, alignment: .top)]
 
@@ -71,6 +73,19 @@ struct LibraryGridView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 32)
                         .padding(.top, 10)
+                }
+                if shelf == .unwatched, query.isEmpty, !shown.isEmpty {
+                    HStack(spacing: 10) {
+                        Text("Seen some of these before they came to Reel?")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                        Button("Seen It?  One at a Time") { sweeping = true }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.brand)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 10)
                 }
                 if shown.isEmpty {
                     emptyState.frame(maxWidth: .infinity, minHeight: 360)
@@ -109,6 +124,7 @@ struct LibraryGridView: View {
         .sheet(item: $regrouping) { item in
             RegroupSheet(item: item)
         }
+        .sheet(isPresented: $sweeping) { SeenSweep() }
         .cardOverlay(item: $previewing) { item in
             QuickPreview(item: item) { previewing = nil } openFilm: { path.append(FilmRoute(id: item.main.id)) }
         }

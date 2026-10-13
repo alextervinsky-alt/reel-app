@@ -32,6 +32,16 @@ extension AppModel {
         }
     }
 
+    /// Seen before it came to Reel (the Seen It? sweep): watched with no date, off the
+    /// watchlist, with your stars when given.
+    func markSeenBefore(_ key: String, stars: Int?) {
+        var r = personal.stored(key)
+        r.watched = true
+        r.watchlist = false
+        if let stars { r.rating = stars }
+        setRecord(r, forKey: key)
+    }
+
     func setRating(_ rating: Int?, for film: FilmEntry) {
         var r = personal.stored(film.personalKey)
         r.rating = rating

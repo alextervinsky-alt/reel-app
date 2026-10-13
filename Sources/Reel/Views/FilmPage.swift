@@ -351,6 +351,9 @@ struct OverviewTab: View {
                 }
             }
             if let details, !details.topCast.isEmpty { cast(details) }
+            if let pair = model.pairing(for: film) {
+                PairItWith(film: film, partner: pair.item, reason: pair.reason)
+            }
             if !people.isEmpty {
                 PosterRow(title: "From the Same People", items: people.map { $0.item }, captions: related.captions)
             }
@@ -477,6 +480,63 @@ struct OverviewTab: View {
 }
 
 /// A name that opens the person's page (underlined on hover).
+/// "Pair it with": one film from your library for a double feature with this one, and why.
+struct PairItWith: View {
+    let film: FilmEntry
+    let partner: LibraryItem
+    let reason: String
+    @State private var hovering = false
+
+    var body: some View {
+        NavigationLink(value: FilmRoute(id: partner.main.id)) {
+            HStack(spacing: 0) {
+                FocusedBackdrop(path: partner.main.tmdb?.backdropPath)
+                    .frame(width: 300, height: 150)
+                    .clipped()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("PAIR IT WITH")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.brand)
+                    Text(partner.main.displayTitle)
+                        .font(.system(size: 19, weight: .bold))
+                        .lineLimit(1)
+                    Text(reason)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.9))
+                        .lineLimit(2)
+                    if let together = together {
+                        Text(together)
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 22)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.trailing, 20)
+            }
+            .frame(maxWidth: 820, alignment: .leading)
+            .background(Theme.panel)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(hovering ? Theme.brand.opacity(0.5) : Theme.hairline))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .help("A double feature from your library")
+    }
+
+    /// "A double feature of 4 h 12 min"
+    private var together: String? {
+        guard let a = film.tmdb?.runtime, let b = partner.runtime, a > 0, b > 0 else { return nil }
+        return "A double feature of " + Format.runtime(a + b)
+    }
+}
+
 struct PersonLink: View {
     let name: String
     let id: Int?
