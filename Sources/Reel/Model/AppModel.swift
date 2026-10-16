@@ -444,7 +444,11 @@ final class AppModel {
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.askIfFinished() }
+            MainActor.assumeIsolated {
+                self?.askIfFinished()
+                // Files copied or deleted while Reel was in the background.
+                self?.readFreeSpace()
+            }
         })
         // Left full screen by hand (green button, ⌃⌘F): leaving Cinema mode later must not
         // put the window back into full screen.

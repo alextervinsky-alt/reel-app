@@ -226,7 +226,7 @@ public enum ReceptionAnalyzer {
     /// weighted average score of 96", "a score of 8 out of 10").
     static func aspects(in lower: String) -> [String] {
         let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
-        let scoreIsRating = lower.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\b(?:weighted|aggregate)\s+(?:average\s+)?scores?\b|\bscored?\s+\d"#,
+        let scoreIsRating = lower.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\b(?:weighted|aggregate)\s+(?:average\s+)?scores?\b|\bscored?\s+(?:an?\s+)?(?:perfect\s+)?\d|\bout of (?:five|ten)\b"#,
                                         options: .regularExpression) != nil
         return aspects.filter { aspect in
             aspect.words.contains { word in
@@ -241,7 +241,7 @@ public enum ReceptionAnalyzer {
     /// rankings, polls and nominations, unless it says what someone praised or faulted.
     static func reportsFigures(_ sentence: String, critic: Bool) -> Bool {
         let always = #"\b(?:metacritic|rotten tomatoes|cinemascore|approval rating|weighted average|box office|grossed|grossing)\b"#
-        let honours = #"\b(?:ranked|ranking|rankings|top \d+|list of|nominat\w*|accolades?|polls?|sight (?:and|&) sound|surveys?|writers guild|out of (?:10|100)|based on \d+|\d+ (?:critics|reviews))\b"#
+        let honours = #"\b(?:ranked|ranking|rankings|top \d+|list of|nominat\w*|accolades?|polls?|sight (?:and|&) sound|surveys?|awards?|oscars?|golden globes?|baftas?|festivals?|guild|out of (?:10|100)|based on \d+|\d+ (?:critics|reviews))\b"#
         let lower = sentence.lowercased()
         if lower.range(of: always, options: .regularExpression) != nil { return true }
         return critic && lower.range(of: honours, options: .regularExpression) != nil && reported(lower) == 0
@@ -274,14 +274,17 @@ public enum ReceptionAnalyzer {
     /// One of the three words before a position denies it (whole words: "another", "nothing"
     /// and "relentless" don't).
     static func denied(before index: String.Index, in lower: String) -> Bool {
-        let before = lower[..<index].split(whereSeparator: { !$0.isLetter && $0 != "'" && $0 != "’" }).suffix(3)
+        let before = Array(lower[..<index].split(whereSeparator: { !$0.isLetter && $0 != "'" && $0 != "’" }).suffix(3))
+        // "not only praised", "not just", "no less impressive" aren't denials.
+        let phrase = before.joined(separator: " ")
+        if [" not only", " not just", " no less", " not merely"].contains(where: { (" " + phrase).contains($0) }) { return false }
         return before.contains { ["not", "never", "hardly", "without", "nor", "no", "less"].contains($0) || $0.hasSuffix("n't") || $0.hasSuffix("n’t") }
     }
 
     /// A sentence's parts on either side of "but", "although", "however", "whereas", ", while",
     /// ", yet" or a semicolon (and of the comma after a leading "Although …"), each read on its own.
     static func clauses(of sentence: String) -> [String] {
-        let marker = #"\s*;\s*|,?\s+(?:but|although|though|however|whereas)\s+|,\s+(?:while|yet)\s+"#
+        let marker = #"\s*;\s*|,?\s+(?:but|although|though|however|whereas),?\s+|,\s+(?:while|yet)\s+"#
         var parts: [String] = []
         var rest = sentence[...]
         while let range = rest.range(of: marker, options: [.regularExpression, .caseInsensitive]) {

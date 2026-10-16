@@ -38,7 +38,7 @@ extension AppModel {
                 return seen.insert(id).inserted
             }
             if craftPending != due.count + read.count { craftPending = due.count + read.count }
-            // Two films at a time, each reading its own few pages one after another.
+            // Two films at a time (each reads its article and camera sources side by side).
             let batch = Array(due.prefix(2))
             guard !batch.isEmpty else { return }
             for film in batch { if let id = film.tmdb?.id { attempted.insert(id) } }

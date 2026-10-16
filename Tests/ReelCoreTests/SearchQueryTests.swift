@@ -17,6 +17,6 @@ final class SearchQueryTests: XCTestCase {
         XCTAssertGreaterThan(SearchQuery.slips("cartoon", "carson"), SearchQuery.typoAllowance("cartoon"))
         XCTAssertEqual(SearchQuery.slips("kubrcik", "kubrick"), 1, "a swap is one slip")
         XCTAssertEqual(SearchQuery.terms("romcom"), [["romance"], ["comedy"]])
-        XCTAssertEqual(SearchQuery.terms("docs"), [["documentary"]])
+        XCTAssertEqual(SearchQuery.terms("docs"), [["docs", "documentary"]])
     }
 }

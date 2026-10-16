@@ -192,13 +192,13 @@ struct FilmList: View {
     private func column(_ title: String, sortsBy order: LibrarySort?) -> some View {
         let label = HStack(spacing: 4) {
             Text(title.uppercased())
-            if let order, sort == order {
+            if let order, sortable, sort == order {
                 Image(systemName: order == .title || order == .runtime ? "chevron.up" : "chevron.down").font(.system(size: 7, weight: .bold))
             }
         }
         .font(.system(size: 10, weight: .semibold))
         .tracking(0.6)
-        .foregroundStyle(order != nil && sort == order ? Theme.brand : Color.secondary)
+        .foregroundStyle(sortable && order != nil && sort == order ? Theme.brand : Color.secondary)
         if let order, sortable {
             Button { sort = order } label: { label.contentShape(Rectangle()) }
                 .buttonStyle(.plain)

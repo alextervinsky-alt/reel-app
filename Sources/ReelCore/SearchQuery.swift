@@ -63,7 +63,6 @@ public enum SearchQuery {
         // In order: "romcom" becomes "rom com", then both "romance comedy".
         ("sci fi", "science fiction"), ("b and w", "black and white"), ("black white", "black and white"),
         ("film noir", "noir"), ("romcom", "rom com"), ("rom com", "romance comedy"),
-        ("doc", "documentary"), ("docs", "documentary"),
     ]
 
     /// Searched as one, not word by word.
@@ -72,6 +71,8 @@ public enum SearchQuery {
     static let synonyms: [String: [String]] = [
         "cartoon": ["animation", "animated"], "cartoons": ["animation", "animated"], "animated": ["animation"],
         "anime": ["animation"], "animations": ["animation"],
+        // "doc" still finds itself too (Doctor Strange, Pete Docter).
+        "doc": ["documentary"], "docs": ["documentary"],
         "documentaries": ["documentary"], "comedies": ["comedy"], "funny": ["comedy"],
         "scifi": ["science fiction"], "kids": ["family"], "children": ["family"], "childrens": ["family"],
         "musicals": ["musical"], "scary": ["horror"],

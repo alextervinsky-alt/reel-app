@@ -521,6 +521,8 @@ struct FilmFactSheet: View {
         guard let copy = copies.first else { return nil }
         var parts: [String] = []
         if let quality = copy.qualityLabel { parts.append(quality) }
+        // HLG and other HDR named only by its kind.
+        if copy.parsed.dynamicRange.isHDR, copy.parsed.hdr == nil { parts.append(copy.parsed.dynamicRange.rawValue) }
         if copy.size > 0 { parts.append(Format.bytes(copy.size)) }
         let ext = (copy.fileName as NSString).pathExtension.uppercased()
         if !ext.isEmpty { parts.append(ext) }
