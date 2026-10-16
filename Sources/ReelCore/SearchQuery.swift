@@ -60,9 +60,10 @@ public enum SearchQuery {
     }
 
     static let phrases: [(String, String)] = [
-        ("sci fi", "science fiction"), ("rom com", "romance comedy"), ("b and w", "black and white"),
-        ("black white", "black and white"), ("film noir", "noir"), ("romcom", "rom com"),
-        ("rom com", "romance comedy"), ("doc", "documentary"), ("docs", "documentary"),
+        // In order: "romcom" becomes "rom com", then both "romance comedy".
+        ("sci fi", "science fiction"), ("b and w", "black and white"), ("black white", "black and white"),
+        ("film noir", "noir"), ("romcom", "rom com"), ("rom com", "romance comedy"),
+        ("doc", "documentary"), ("docs", "documentary"),
     ]
 
     /// Searched as one, not word by word.
