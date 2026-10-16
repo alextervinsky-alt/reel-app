@@ -238,13 +238,23 @@ public enum ReceptionAnalyzer {
         }
 
         // Each sentence quoted once: a point whose sentences are all shown already says nothing new.
+        // The points with the fewest sentences to choose from choose first, so one sentence that
+        // names several aspects doesn't leave another point without one.
         var used = Set<String>()
         func points(_ keys: [String], quotes: (Tally) -> [(text: String, quality: Double)], mentions: (Tally) -> Int) -> [ReceptionPoint] {
-            keys.compactMap { key in
-                guard let tally = tallies[key] else { return nil }
-                guard let quote = quotes(tally).first(where: { !used.contains($0.text) }) else { return nil }
+            let order = keys.enumerated().sorted { a, b in
+                let ca = tallies[a.element].map { quotes($0).count } ?? 0, cb = tallies[b.element].map { quotes($0).count } ?? 0
+                return ca != cb ? ca < cb : a.offset < b.offset
+            }
+            var chosen: [String: String] = [:]
+            for (_, key) in order {
+                guard let tally = tallies[key], let quote = quotes(tally).first(where: { !used.contains($0.text) }) else { continue }
                 used.insert(quote.text)
-                return ReceptionPoint(aspect: key, mentions: mentions(tally), quote: shorten(quote.text))
+                chosen[key] = quote.text
+            }
+            return keys.compactMap { key in
+                guard let tally = tallies[key], let quote = chosen[key] else { return nil }
+                return ReceptionPoint(aspect: key, mentions: mentions(tally), quote: shorten(quote))
             }
         }
         let likedPoints = points(liked, quotes: \.likeQuotes, mentions: \.like).prefix(4)

@@ -7,6 +7,7 @@ import ReelCore
 /// Built from the films you marked as watched, and the ones you saw elsewhere when they count.
 struct YearInFilmView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.isSnapshot) private var isSnapshot
     @State private var chosenYear: Int?
     @State private var preview: PreviewFilm?
 
@@ -18,8 +19,7 @@ struct YearInFilmView: View {
         let years = Array(Set(YearInFilm.years(in: all)).union(elsewhere.map { calendar.component(.year, from: $0.date) }))
             .sorted(by: >)
         let year = chosenYear.flatMap { years.contains($0) ? $0 : nil } ?? years.first
-        ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
+        let page = VStack(alignment: .leading, spacing: 30) {
                 header(years: years, year: year, hasElsewhere: !elsewhere.isEmpty)
                 if let year {
                     let before = YearInFilm(year: year - 1, from: all)
@@ -34,6 +34,13 @@ struct YearInFilmView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
             .frame(maxWidth: 1120, alignment: .leading)
+        // Drawn to an image (the CI screens), the page as it is: a scroll view draws nothing there.
+        Group {
+            if isSnapshot {
+                page.frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                ScrollView { page }
+            }
         }
         .background(Theme.background)
         .navigationTitle("Year in Film")
