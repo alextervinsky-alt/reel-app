@@ -93,33 +93,34 @@ struct HoverDetails: View {
                     .lineLimit(1)
             }
             HStack(spacing: 6) {
+                // Inside the poster's link, so they take the click first (like the Tonight button).
                 if item.isOnline {
-                    Button {
-                        model.play(film)
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 28)
-                            .background(Capsule().fill(Color.white))
-                            .foregroundStyle(Color.black)
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
+                    Label("Play", systemImage: "play.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .background(Capsule().fill(Color.white))
+                        .foregroundStyle(Color.black)
+                        .contentShape(Capsule())
+                        .highPriorityGesture(TapGesture().onEnded { model.play(film) })
+                        .accessibilityElement()
+                        .accessibilityLabel("Play")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { model.play(film) }
                 }
                 if model.offersTrailer(for: film) {
-                    Button {
-                        model.showTrailer(for: film)
-                    } label: {
-                        Image(systemName: "play.rectangle")
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(width: 32, height: 28)
-                            .background(Capsule().fill(Color.white.opacity(0.18)))
-                            .foregroundStyle(Color.white)
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help(model.trailerLabel(for: film))
+                    Image(systemName: "play.rectangle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 32, height: 28)
+                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                        .foregroundStyle(Color.white)
+                        .contentShape(Capsule())
+                        .highPriorityGesture(TapGesture().onEnded { model.showTrailer(for: film) })
+                        .help(model.trailerLabel(for: film))
+                        .accessibilityElement()
+                        .accessibilityLabel(model.trailerLabel(for: film))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { model.showTrailer(for: film) }
                 }
             }
         }
@@ -133,14 +134,15 @@ struct HoverDetails: View {
 
 // MARK: - List
 
-/// The library as a list: everything about each film side by side, sorted by the column you
-/// click (title, year, length or rating). Columns that don't fit a narrow window step aside.
+/// The library as a list: everything about each film side by side. Title, year, length and
+/// rating headers sort it (except where the order is fixed). Columns that don't fit a narrow
+/// window step aside.
 struct FilmList: View {
     @Environment(AppModel.self) private var model
     @Environment(\.isSnapshot) private var isSnapshot
     let items: [LibraryItem]
     @Binding var sort: LibrarySort
-    /// False where the order is fixed (Not on Backup).
+    /// False where the order is fixed (New Arrivals, Not on Backup, search results).
     let sortable: Bool
     @State private var width: CGFloat = 1100
 

@@ -3,7 +3,7 @@ import Foundation
 import ReelCore
 
 /// Searching by craft: each film's Wikipedia article and the interviews and craft articles about
-/// it are read in the background, one film at a time, and only the names of the gear and
+/// it are read in the background, two films at a time, and only the names of the gear and
 /// techniques are kept (see `CraftIndex`).
 extension AppModel {
     /// Reads the films not read yet (or read long ago). Runs after film info is looked up; stops
@@ -34,12 +34,12 @@ extension AppModel {
             // Films whose info and Wikipedia facts are in (the article's title comes with the facts).
             var seen = Set<Int>()
             let due = films.filter { film in
-                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil, seen.insert(id).inserted else { return false }
-                return film.craft?.isStale() ?? true
+                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil, film.craft?.isStale() ?? true else { return false }
+                return seen.insert(id).inserted
             }
             if craftPending != due.count + read.count { craftPending = due.count + read.count }
-            // Three films at a time (each reads several pages, at most three at once overall).
-            let batch = Array(due.prefix(3))
+            // Two films at a time, each reading its own few pages one after another.
+            let batch = Array(due.prefix(2))
             guard !batch.isEmpty else { return }
             for film in batch { if let id = film.tmdb?.id { attempted.insert(id) } }
             let results = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
@@ -65,7 +65,7 @@ extension AppModel {
             if failedInARow >= 6 { return }
             if read.count >= 9 || Date().timeIntervalSince(lastWrite) > 30 { write() }
             // A short pause between batches, whatever the size of the library.
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .seconds(2))
         }
     }
 

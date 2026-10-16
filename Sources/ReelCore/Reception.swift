@@ -164,7 +164,7 @@ public enum ReceptionAnalyzer {
                     }
                     for cue in negativeCues where lower.contains(cue) {
                         // "never boring" praises.
-                        score += negated(cue, in: lower) ? 0.2 : -0.4
+                        score += negated(cue, in: lower) ? 0.5 : -0.4
                         break
                     }
                     let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
@@ -223,10 +223,10 @@ public enum ReceptionAnalyzer {
     }
 
     /// The aspects a clause is about. "Score" is the music only when it isn't a rating ("a
-    /// weighted average score of 96").
+    /// weighted average score of 96", "a score of 8 out of 10").
     static func aspects(in lower: String) -> [String] {
         let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
-        let scoreIsRating = lower.range(of: #"\b(?:average|weighted|approval|aggregate)\b[^.]*\bscores?\b|\bscores?\s+(?:of|out)\b|\bscored?\s+\d"#,
+        let scoreIsRating = lower.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\b(?:weighted|aggregate)\s+(?:average\s+)?scores?\b|\bscored?\s+\d"#,
                                         options: .regularExpression) != nil
         return aspects.filter { aspect in
             aspect.words.contains { word in
@@ -236,42 +236,52 @@ public enum ReceptionAnalyzer {
         }.map(\.name)
     }
 
-    /// A sentence of figures and honours: review aggregators, box office, rankings, polls and
-    /// awards (for critics' sentences also festivals and release). It says how the film fared,
-    /// not what anyone liked or disliked about it.
+    /// A sentence of figures and honours, which says how the film fared, not what anyone liked
+    /// or disliked: review aggregators and box office always; for critics' sentences also
+    /// rankings, polls and nominations, unless it says what someone praised or faulted.
     static func reportsFigures(_ sentence: String, critic: Bool) -> Bool {
-        let always = #"\b(?:metacritic|rotten tomatoes|cinemascore|approval rating|weighted average|box office|grossed|grossing|imdb rating)\b"#
-        let critics = #"\b(?:ranked|ranking|rankings|greatest|top \d+|list of|nominat\w*|awards?|accolades?|polls?|sight (?:and|&) sound|survey\w*|guild|academy|oscars?|golden globes?|baftas?|festival|premiere\w*|released|release|out of (?:10|100)|based on \d+|\d+ (?:critics|reviews))\b"#
+        let always = #"\b(?:metacritic|rotten tomatoes|cinemascore|approval rating|weighted average|box office|grossed|grossing)\b"#
+        let honours = #"\b(?:ranked|ranking|rankings|top \d+|list of|nominat\w*|accolades?|polls?|sight (?:and|&) sound|surveys?|writers guild|out of (?:10|100)|based on \d+|\d+ (?:critics|reviews))\b"#
         let lower = sentence.lowercased()
         if lower.range(of: always, options: .regularExpression) != nil { return true }
-        return critic && lower.range(of: critics, options: .regularExpression) != nil
+        return critic && lower.range(of: honours, options: .regularExpression) != nil && reported(lower) == 0
     }
 
-    /// What a critic is said to have done: praised (1), faulted (-1), or neither (0). "Not
-    /// impressed" is faulting.
+    static let praiseWords = #"\b(?:prais\w*|laud\w*|applaud\w*|acclaim\w*|admired|admires|admiring|admiration|commend\w*|hail\w*|complimen\w*|favou?rabl\w*|enjoy\w*|loved|impressed|impressive\w*|raved?|highlight\w*|singled out|delight\w*|triumph\w*)\b"#
+    static let faultWords = #"\b(?:critici[sz]\w*|fault\w*|panned|derid\w*|dismiss\w*|complain\w*|dislik\w*|took issue|unimpress\w*|less enthusiastic|unfavou?rabl\w*|negative|lament\w*|bemoan\w*|weakness\w*|flaws?|flawed|marred|disappoint(?:ed|ing|ment|s)?)\b"#
+
+    /// What a critic is said to have done: praised (1), faulted (-1), or neither (0). The first
+    /// such word decides; denied ("not impressed", "never disappoints") it turns around.
     static func reported(_ lower: String) -> Int {
-        let praise = #"\b(?:prais\w*|laud\w*|applaud\w*|acclaim\w*|admir\w*|commend\w*|hail\w*|celebrat\w*|complimen\w*|favou?rabl\w*|enjoy\w*|loved|impress\w*|marvel\w*|raved?|highlight\w*|singled out|delight\w*|triumph\w*)\b"#
-        let fault = #"\b(?:critici[sz]\w*|fault\w*|panned|derid\w*|dismiss\w*|complain\w*|dislik\w*|took issue|unimpress\w*|less enthusiastic|unfavou?rabl\w*|negative|lament\w*|bemoan\w*|weakness\w*|flaw\w*|marred|suffer\w*|disappoint\w*|mixed)\b"#
-        let faulted = lower.range(of: fault, options: .regularExpression) != nil
-        if let range = lower.range(of: praise, options: .regularExpression) {
-            let before = lower[..<range.lowerBound].split(separator: " ").suffix(2).joined(separator: " ")
-            if before.contains("not") || before.contains("n't") || before.contains("never") || before.contains("less") { return -1 }
-            return faulted ? 0 : 1
+        let praise = lower.range(of: praiseWords, options: .regularExpression)
+        let fault = lower.range(of: faultWords, options: .regularExpression)
+        let first: (range: Range<String.Index>, sign: Int)? = switch (praise, fault) {
+        case let (p?, f?): p.lowerBound <= f.lowerBound ? (p, 1) : (f, -1)
+        case let (p?, nil): (p, 1)
+        case let (nil, f?): (f, -1)
+        case (nil, nil): nil
         }
-        return faulted ? -1 : 0
+        guard let first else { return 0 }
+        return denied(before: first.range.lowerBound, in: lower) ? -first.sign : first.sign
     }
 
     /// Whether a word is denied just before it ("not boring", "never dull", "isn't predictable").
     static func negated(_ cue: String, in lower: String) -> Bool {
         guard let range = lower.range(of: cue) else { return false }
-        let before = lower[..<range.lowerBound].split(separator: " ").suffix(3)
-        return before.contains { ["not", "never", "hardly", "without", "nor"].contains($0) || $0.hasSuffix("n't") }
+        return denied(before: range.lowerBound, in: lower)
     }
 
-    /// A sentence's parts on either side of "but", "although", "while", "however" or a semicolon
-    /// (and of the comma after a leading "Although …"), each read on its own.
+    /// One of the three words before a position denies it (whole words: "another", "nothing"
+    /// and "relentless" don't).
+    static func denied(before index: String.Index, in lower: String) -> Bool {
+        let before = lower[..<index].split(whereSeparator: { !$0.isLetter && $0 != "'" && $0 != "’" }).suffix(3)
+        return before.contains { ["not", "never", "hardly", "without", "nor", "no", "less"].contains($0) || $0.hasSuffix("n't") || $0.hasSuffix("n’t") }
+    }
+
+    /// A sentence's parts on either side of "but", "although", "however", "whereas", ", while",
+    /// ", yet" or a semicolon (and of the comma after a leading "Although …"), each read on its own.
     static func clauses(of sentence: String) -> [String] {
-        let marker = #"\s*;\s*|,?\s+(?:but|although|though|however|whereas|while|yet)\s+"#
+        let marker = #"\s*;\s*|,?\s+(?:but|although|though|however|whereas)\s+|,\s+(?:while|yet)\s+"#
         var parts: [String] = []
         var rest = sentence[...]
         while let range = rest.range(of: marker, options: [.regularExpression, .caseInsensitive]) {

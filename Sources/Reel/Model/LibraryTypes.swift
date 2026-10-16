@@ -249,9 +249,10 @@ struct SearchIndex: Equatable {
         tags = n(tagWords.joined(separator: " , "))
         plot = n([d?.tagline ?? "", d?.overview ?? ""].joined(separator: " "))
         craft = film.craft.map { n($0.searchText) } ?? ""
-        // Slips are forgiven against titles and real names only, never characters or plots
-        // ("cartoon" isn't "Carson").
-        words = Array(Set((title + " " + peopleNames).split(separator: " ").map { String($0) }.filter { $0.count >= 4 }))
+        // Slips are forgiven against titles, real names and the words you'd filter by (genres,
+        // moods, how it was shot), never characters or plots ("cartoon" isn't "Carson").
+        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title) + (film.craft?.shotOn ?? []).map(\.title)).joined(separator: " "))
+        words = Array(Set((title + " " + peopleNames + " " + vocabulary).split(separator: " ").map { String($0) }.filter { $0.count >= 4 }))
     }
 
     /// 0 when a term doesn't match anywhere; higher for title > people > craft > tags > plot >
@@ -286,7 +287,7 @@ struct SearchIndex: Equatable {
         let allowed = SearchQuery.typoAllowance(term)
         guard allowTypos, allowed > 0, !term.contains(" ") else { return 0 }
         let near = words.contains { word in
-            abs(word.count - term.count) <= allowed && word.first == term.first && TitleSimilarity.distance(word, term) <= allowed
+            abs(word.count - term.count) <= allowed && word.first == term.first && SearchQuery.slips(word, term) <= allowed
         }
         return near ? 8 : 0
     }

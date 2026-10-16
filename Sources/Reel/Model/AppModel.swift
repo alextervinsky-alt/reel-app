@@ -229,6 +229,8 @@ final class AppModel {
     @ObservationIgnored var craftRunning = false
     /// How many films are still to be read for searching by craft (0 when done).
     var craftPending = 0
+    /// Free bytes on each connected drive, for the sidebar.
+    var freeSpace: [String: Int64] = [:]
     @ObservationIgnored var rerunRequested = false
     /// Moods per film, worked out once per version of its info.
     @ObservationIgnored var moodCache: [String: [Mood]] = [:]
@@ -389,6 +391,7 @@ final class AppModel {
                 async let listsRefresh: Void = self.lists.refreshStale(sets: self.setCandidates, using: self.tmdb)
                 _ = await (libraryRefresh, listsRefresh)
                 try? await Task.sleep(for: .seconds(6 * 3600))
+                self.readFreeSpace()
                 // People and previews are fetched again when next opened.
                 self.personCache = [:]
                 self.previewCache = [:]

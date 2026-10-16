@@ -39,6 +39,17 @@ final class ReceptionTests: XCTestCase {
         XCTAssertTrue(summary.disliked.map(\.aspect).contains("Pacing"))
     }
 
+    func testOrdinaryWordsAreNotVerdicts() {
+        XCTAssertEqual(ReceptionAnalyzer.reported("ebert called the cinematography flawless"), 0)
+        XCTAssertEqual(ReceptionAnalyzer.reported("another reviewer praised the score"), 1)
+        XCTAssertEqual(ReceptionAnalyzer.reported("nevertheless, critics praised the acting"), 1)
+        XCTAssertEqual(ReceptionAnalyzer.reported("it never disappoints"), 1)
+        XCTAssertEqual(ReceptionAnalyzer.reported("critics were not impressed by the story"), -1)
+        XCTAssertEqual(ReceptionAnalyzer.aspects(in: "the score of this movie is phenomenal"), ["Music and sound"])
+        XCTAssertFalse(ReceptionAnalyzer.reportsFigures("Upon its release, it received widespread acclaim, with praise for its direction.", critic: true))
+        XCTAssertTrue(ReceptionAnalyzer.reportsFigures("It was ranked the 67th greatest screenplay of the century.", critic: true))
+    }
+
     func testQuotesKeepTheirOwnMarks() {
         XCTAssertEqual(ReceptionAnalyzer.tidyQuotes("\"\" Orlando said it is \"perfect.\""), "Orlando said it is \"perfect.\"")
         XCTAssertEqual(ReceptionAnalyzer.sentences(in: "He called it \"a small, perfect gem.\" The rest of the cast is just as good here.").first,

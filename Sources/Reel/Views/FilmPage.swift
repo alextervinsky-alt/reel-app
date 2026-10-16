@@ -471,7 +471,7 @@ struct FilmFactSheet: View {
             if let shot = shotOn { row("Shot on", Text(shot)) }
             if let language = FilmLanguage.code(d?.originalLanguage) { row("Language", Text(FilmLanguage.name(language))) }
             if let file = fileLine(copies) { row("File", Text(file)) }
-            if let sound = soundLine { row("Sound", Text(sound)) }
+            if let subtitles = subtitlesLine { row("Subtitles", Text(subtitles)) }
             row("Copies", Text(copiesLine(copies)))
             row("You", Text(youLine(record)), last: true)
         }
@@ -521,18 +521,17 @@ struct FilmFactSheet: View {
         guard let copy = copies.first else { return nil }
         var parts: [String] = []
         if let quality = copy.qualityLabel { parts.append(quality) }
-        if copy.parsed.dynamicRange.isHDR, copy.parsed.hdr == nil { parts.append(copy.parsed.dynamicRange.rawValue) }
         if copy.size > 0 { parts.append(Format.bytes(copy.size)) }
         let ext = (copy.fileName as NSString).pathExtension.uppercased()
         if !ext.isEmpty { parts.append(ext) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// "Estonian, English subtitles"
-    private var soundLine: String? {
+    /// "Estonian and English"
+    private var subtitlesLine: String? {
         let subtitles = film.subtitleLanguages
-        if !subtitles.isEmpty { return ListFormatter.localizedString(byJoining: subtitles) + " subtitles" }
-        return film.hasSubtitles ? "Subtitles" : nil
+        if !subtitles.isEmpty { return ListFormatter.localizedString(byJoining: subtitles) }
+        return film.hasSubtitles ? "Yes" : nil
     }
 
     /// "filmikogu · Backup complete"
@@ -540,10 +539,13 @@ struct FilmFactSheet: View {
         let main = copies.filter { !(model.drive($0.driveID)?.isBackup ?? false) }.compactMap { model.drive($0.driveID)?.name }
         var parts = Array(Set(main)).sorted()
         if model.drives.contains(where: { $0.isBackup }) {
-            switch model.backupGaps[film.personalKey] {
-            case .missing: parts.append("not on Backup")
-            case .incomplete: parts.append("Backup copy incomplete")
-            case nil: parts.append("on Backup")
+            let onBackup = copies.contains { model.drive($0.driveID)?.isBackup ?? false }
+            if !onBackup {
+                parts.append("not on Backup")
+            } else if case .incomplete = model.backupGaps[film.personalKey] {
+                parts.append("Backup copy incomplete")
+            } else {
+                parts.append("on Backup")
             }
         }
         return parts.isEmpty ? "No copy found" : parts.joined(separator: " · ")
@@ -552,7 +554,7 @@ struct FilmFactSheet: View {
     /// "Watched · 4★", "On your watchlist", "Unwatched"
     private func youLine(_ record: PersonalRecord) -> String {
         var parts: [String] = [record.watched ? "Watched" : "Unwatched"]
-        if let stars = record.rating { parts.append(String(repeating: "★", count: stars)) }
+        if let stars = record.rating { parts.append(String(repeating: "★", count: min(max(stars, 1), 5))) }
         if record.watchlist && !record.watched { parts.append("on your watchlist") }
         if record.favorite { parts.append("a favourite") }
         if model.isTonight(film.personalKey) { parts.append("on Tonight") }

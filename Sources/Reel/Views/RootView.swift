@@ -353,7 +353,7 @@ struct SidebarView: View {
 
     private func driveRow(_ drive: Drive) -> some View {
         let online = model.mounted[drive.id] != nil
-        let free = online ? model.freeSpace(on: drive).map { Format.bytes($0) + " free" } : nil
+        let free = online ? model.freeSpace[drive.id].map { Format.bytes($0) + " free" } : nil
         let detail = [drive.isBackup ? "Backup" : nil, online ? free : "off"].compactMap { $0 }.joined(separator: " · ")
         return Button {
             onSelect(.drive(drive.id))
@@ -422,9 +422,10 @@ struct SidebarView: View {
             .help("Settings")
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 18)
         .overlay(alignment: .top) {
-            Rectangle().fill(Theme.hairline).frame(height: 1)
+            Rectangle().fill(Theme.hairline).frame(height: 1).padding(.horizontal, 18)
         }
     }
 }
@@ -548,11 +549,7 @@ struct SidebarRow: View {
     let count: Int?
     /// Draws attention to the count (New Arrivals).
     var countTint: Color? = nil
-    /// A small tag after the title ("Backup").
-    var badge: String? = nil
     let isSelected: Bool
-    /// Connected / not connected dot for drives.
-    var status: Bool? = nil
     let action: () -> Void
     @State private var hovering = false
 
@@ -569,22 +566,8 @@ struct SidebarRow: View {
                     .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.82))
                     .lineLimit(1)
-                if let badge {
-                    Text(badge.uppercased())
-                        .font(.system(size: 8.5, weight: .bold))
-                        .tracking(0.6)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().strokeBorder(Color.secondary.opacity(0.45)))
-                        .fixedSize()
-                }
                 Spacer(minLength: 4)
-                if let status {
-                    Circle()
-                        .fill(status ? Color.green : Color.white.opacity(0.25))
-                        .frame(width: 7, height: 7)
-                } else if let count, count > 0 {
+                if let count, count > 0 {
                     if let countTint {
                         Text("\(count)")
                             .font(.system(size: 11, weight: .semibold))

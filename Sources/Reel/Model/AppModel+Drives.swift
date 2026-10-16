@@ -15,12 +15,15 @@ extension AppModel {
         return all.filter { drive($0.driveID)?.isBackup != true } + all.filter { drive($0.driveID)?.isBackup == true }
     }
 
-    /// How much room is left on a connected drive (read from the volume, nothing written).
-    func freeSpace(on drive: Drive) -> Int64? {
-        guard let url = mounted[drive.id],
-              let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityKey]),
-              let free = values.volumeAvailableCapacity else { return nil }
-        return Int64(free)
+    /// How much room is left on each connected drive (read from the volume, nothing written).
+    func readFreeSpace() {
+        var result: [String: Int64] = [:]
+        for (id, url) in mounted {
+            if let free = (try? url.resourceValues(forKeys: [.volumeAvailableCapacityKey]))?.volumeAvailableCapacity {
+                result[id] = Int64(free)
+            }
+        }
+        if result != freeSpace { freeSpace = result }
     }
 
     func drive(_ id: String) -> Drive? {
@@ -134,6 +137,7 @@ extension AppModel {
         if now != mounted {
             mounted = now
             rebuild()
+            readFreeSpace()
         }
         for i in drives.indices {
             if let url = now[drives[i].id], drives[i].lastKnownPath != url.path {
@@ -198,6 +202,7 @@ extension AppModel {
         if firstScan { drives[index].arrivalsSince = now }
         drives[index].lastScanned = now
         scheduleSave(.settings)
+        readFreeSpace()
 
         // Files that appear because of a regrouping by hand aren't arrivals: they're dated back.
         let stamp = announcing ? now : (drives[index].arrivalsSince ?? now)

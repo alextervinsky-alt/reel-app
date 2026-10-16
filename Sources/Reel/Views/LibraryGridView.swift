@@ -99,7 +99,7 @@ struct LibraryGridView: View {
                 if shown.isEmpty {
                     emptyState.frame(maxWidth: .infinity, minHeight: 360)
                 } else if asList {
-                    FilmList(items: shown, sort: $sort, sortable: shelf != .notOnBackup)
+                    FilmList(items: shown, sort: $sort, sortable: query.isEmpty && shelf != .notOnBackup && shelf != .newArrivals)
                         .padding(.horizontal, 32)
                         .padding(.top, 18)
                         .padding(.bottom, 40)
@@ -152,6 +152,8 @@ struct LibraryGridView: View {
             return true
         }
         .onDisappear { scroll.pointed = nil }
+        // The poster under the pointer is gone once the list replaces the grid.
+        .onChange(of: asList) { scroll.pointed = nil }
     }
 
     private func card(_ item: LibraryItem) -> some View {
@@ -828,7 +830,7 @@ final class PosterReadAhead {
         guard warmed.isEmpty || needAhead || needBehind else { return }
         let range = max(0, index - 12)..<min(list.count, index + 48)
         let wanted = list[range].compactMap { item in
-            item.main.tmdb?.posterPath.map { (path: $0, monochrome: !item.isOnline) }
+            item.main.tmdb?.posterPath.map { (path: $0, monochrome: false) }
         }
         warmed = range
         ImageStore.shared.warm(wanted, .poster)
