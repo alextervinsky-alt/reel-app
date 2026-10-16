@@ -56,7 +56,7 @@ extension AppModel {
                                         spoilerSafe: spoilerSafe, player: player.rawValue, playFullScreen: playFullScreen, tonight: tonight,
                                         tonightEvening: tonightEvening, notTonight: notTonight,
                                         yearCountsElsewhere: yearCountsElsewhere, lastExplorePicks: explorePicksShown,
-                                        switchedToIINA: switchedToIINA)
+                                        switchedToIINA: switchedToIINA, notForMe: notForMe.sorted())
             writer.enqueue {
                 do { try JSONStore.save(snapshot, to: folder.settings, permissions: 0o600) } catch { report(error) }
             }

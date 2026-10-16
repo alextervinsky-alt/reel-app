@@ -448,8 +448,7 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
     /// asked for too when English gives fewer than two to try (a failed request changes nothing).
     func withOwnLanguageTrailers(_ details: TMDBMovieDetails) async -> TMDBMovieDetails {
         guard let language = details.originalLanguage, language != "en", !language.isEmpty,
-              Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: false,
-                                  originalLanguage: language).count < 2,
+              Trailers.candidates(details.videos?.results ?? [], title: details.title, originalLanguage: language).count < 2,
               let list: TMDBVideoList = try? await get("/movie/\(details.id)/videos",
                                                        [URLQueryItem(name: "include_video_language", value: language)])
         else { return details }

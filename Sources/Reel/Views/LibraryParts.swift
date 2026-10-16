@@ -2,35 +2,6 @@
 import SwiftUI
 import ReelCore
 
-extension Format {
-    /// The corner of a poster: "4K DV", "4K HDR", "1080p" (from the file name; nil when it says nothing).
-    static func posterTag(_ film: FilmEntry) -> String? {
-        let resolution = film.parsed.resolution.map { $0 == "2160p" ? "4K" : $0 }
-        let range: String? = switch film.parsed.dynamicRange {
-        case .dolbyVision: "DV"
-        case .sdr: nil
-        default: "HDR"
-        }
-        let parts = [resolution, range].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
-    }
-}
-
-/// A small dark label on a poster ("4K HDR").
-struct QualityTag: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9.5, weight: .semibold))
-            .tracking(0.3)
-            .foregroundStyle(Color.white.opacity(0.92))
-            .padding(.horizontal, 6)
-            .frame(height: 18)
-            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.black.opacity(0.6)))
-    }
-}
-
 /// "IMDb 8.5  RT 77%  MC 66": each source's name in its own colour, small, the number plain.
 /// TMDB's score when there are none of those.
 struct RatingsLine: View {
@@ -69,72 +40,10 @@ struct RatingsLine: View {
     }
 }
 
-/// Over a poster under the pointer: the premise, when it would end (and its subtitles), and
-/// Play and the trailer. Only built for the one poster under the pointer.
-struct HoverDetails: View {
-    @Environment(AppModel.self) private var model
-    let item: LibraryItem
-
-    var body: some View {
-        let film = item.main
-        VStack(alignment: .leading, spacing: 8) {
-            Spacer(minLength: 0)
-            if let overview = film.tmdb?.overview, !overview.isEmpty {
-                Text(overview)
-                    .font(.system(size: 11.5))
-                    .lineSpacing(1.5)
-                    .lineLimit(4)
-                    .foregroundStyle(Color.white.opacity(0.88))
-            }
-            if let ends = Format.endsLine(film, runtime: item.runtime, quality: false) {
-                Text(ends)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(Theme.brand)
-                    .lineLimit(1)
-            }
-            HStack(spacing: 6) {
-                // Inside the poster's link, so they take the click first (like the Tonight button).
-                if item.isOnline {
-                    Label("Play", systemImage: "play.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 28)
-                        .background(Capsule().fill(Color.white))
-                        .foregroundStyle(Color.black)
-                        .contentShape(Capsule())
-                        .highPriorityGesture(TapGesture().onEnded { model.play(film) })
-                        .accessibilityElement()
-                        .accessibilityLabel("Play")
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { model.play(film) }
-                }
-                if model.offersTrailer(for: film) {
-                    Image(systemName: "play.rectangle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 32, height: 28)
-                        .background(Capsule().fill(Color.white.opacity(0.18)))
-                        .foregroundStyle(Color.white)
-                        .contentShape(Capsule())
-                        .highPriorityGesture(TapGesture().onEnded { model.showTrailer(for: film) })
-                        .help(model.trailerLabel(for: film))
-                        .accessibilityElement()
-                        .accessibilityLabel(model.trailerLabel(for: film))
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityAction { model.showTrailer(for: film) }
-                }
-            }
-        }
-        .padding(11)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .background(LinearGradient(stops: [.init(color: .black.opacity(0.15), location: 0), .init(color: .black.opacity(0.6), location: 0.45),
-                                           .init(color: .black.opacity(0.92), location: 1)],
-                                   startPoint: .top, endPoint: .bottom))
-    }
-}
-
 // MARK: - List
 
-/// The library as a list: everything about each film side by side. Title, year, length and
+/// The library as a list: everything about each film side by side (the file's quality is
+/// left for its page). Title, year, length and
 /// rating headers sort it (except where the order is fixed). Columns that don't fit a narrow
 /// window step aside.
 struct FilmList: View {
@@ -180,7 +89,6 @@ struct FilmList: View {
             if wide { column("Genre · Mood", sortsBy: nil).frame(width: FilmListRow.genre, alignment: .leading) }
             column("Ratings", sortsBy: .rating).frame(width: FilmListRow.ratings, alignment: .leading)
             if wide { column("Shot on", sortsBy: nil).frame(width: FilmListRow.shot, alignment: .leading) }
-            column("File", sortsBy: nil).frame(width: FilmListRow.file, alignment: .leading)
             column("", sortsBy: nil).frame(width: FilmListRow.status, alignment: .leading)
         }
         .padding(.trailing, 14)
@@ -221,7 +129,6 @@ struct FilmListRow: View {
     static let genre: CGFloat = 170
     static let ratings: CGFloat = 160
     static let shot: CGFloat = 170
-    static let file: CGFloat = 76
     static let status: CGFloat = 92
 
     var body: some View {
@@ -255,10 +162,6 @@ struct FilmListRow: View {
                     .lineLimit(1)
                     .frame(width: Self.shot, alignment: .leading)
             }
-            Group {
-                if let tag = Format.posterTag(film) { QualityTag(text: tag) } else { Text("") }
-            }
-            .frame(width: Self.file, alignment: .leading)
             status(record).frame(width: Self.status, alignment: .leading)
         }
         .font(.system(size: 12))

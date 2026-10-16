@@ -38,10 +38,18 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Play full screen", isOn: Binding(get: { model.playFullScreen }, set: { model.setPlayFullScreen($0) }))
+                if !model.notForMe.isEmpty {
+                    LabeledContent("Not for me") {
+                        HStack(spacing: 10) {
+                            Text(model.notForMe.count == 1 ? "1 film" : "\(model.notForMe.count) films").foregroundStyle(.secondary)
+                            Button("Suggest Them Again") { model.clearNotForMe() }
+                        }
+                    }
+                }
             } header: {
                 Text("Watching")
             } footer: {
-                Text("Reviews and Behind the Film keep the story, twists and ending hidden until a film is marked watched (each can be shown anyway), and Reel plays the official teaser rather than the full trailer, since it shows less. Trailers are only ever the studio's own, and play inside Reel. IINA and VLC load subtitle files next to the film on their own, and start full screen when Play full screen is on (always in Cinema mode). The first time, macOS asks whether Reel may control VLC: that's what puts VLC in full screen.")
+                Text("Reviews and Behind the Film keep the story, twists and ending hidden until a film is marked watched (each can be shown anyway), Trailers are the studio's full trailer (a teaser only when there's no trailer), never a clip or a short promo, and play inside Reel. Films you mark Not for Me in For You or Explore aren't suggested again. IINA and VLC load subtitle files next to the film on their own, and start full screen when Play full screen is on (always in Cinema mode). The first time, macOS asks whether Reel may control VLC: that's what puts VLC in full screen.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

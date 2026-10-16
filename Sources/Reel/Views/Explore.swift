@@ -24,7 +24,7 @@ struct ExploreView: View {
     @State private var searchFailed = false
 
     private var lists: [DiscoverList] {
-        (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .trending, .newAtHome] + model.exploreShelves
+        (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .comingSoon, .trending, .newAtHome] + model.exploreShelves
     }
 
     private static let moodChoices = [MoodChoiceCount(choice: .any, count: 0)]
@@ -358,8 +358,15 @@ struct DiscoverRow: View {
 extension DiscoverRow {
     private func cards(_ films: [TMDBMovieSummary]) -> some View {
         ForEach(films.prefix(20)) { movie in
-            DiscoverCard(film: PreviewFilm(movie), width: 146, onPreview: onPreview)
+            DiscoverCard(film: PreviewFilm(movie), width: 146, reason: list == .comingSoon ? Self.opening(movie.releaseDate) : nil,
+                         offersNotForMe: true, onPreview: onPreview)
         }
+    }
+
+    /// "Opens 14 November", for Coming Soon.
+    static func opening(_ releaseDate: String?) -> String? {
+        guard let releaseDate, let date = try? Date(releaseDate, strategy: .iso8601.year().month().day()) else { return nil }
+        return "Opens " + date.formatted(.dateTime.day().month(.wide))
     }
 }
 
@@ -405,7 +412,8 @@ struct DiscoverListPage: View {
                     let all = model.discover[list] ?? []
                     ForEach(films) { movie in
                         // Ranked by the whole list, seen films included.
-                        DiscoverCard(film: PreviewFilm(movie), rank: isRanked ? all.firstIndex { $0.id == movie.id }.map { $0 + 1 } : nil) {
+                        DiscoverCard(film: PreviewFilm(movie), rank: isRanked ? all.firstIndex { $0.id == movie.id }.map { $0 + 1 } : nil,
+                                     reason: list == .comingSoon ? DiscoverRow.opening(movie.releaseDate) : nil, offersNotForMe: true) {
                             preview = $0
                         }
                     }
@@ -492,6 +500,8 @@ struct DiscoverCard: View {
     var badge: String?
     /// Why it's suggested, in Reel's colour under the title ("From the director of Her").
     var reason: String?
+    /// Offers "Not for me" under the pointer (Explore's rows, where it leaves for good).
+    var offersNotForMe = false
     let onPreview: (PreviewFilm) -> Void
     @State private var hovering = false
 
@@ -568,6 +578,10 @@ struct DiscoverCard: View {
             if !owned {
                 HoverAction(symbol: wished ? "star.fill" : "star", isOn: wished, onColor: .yellow,
                             help: wished ? "On your wishlist" : "Add to wishlist") { model.toggleWishlist(film) }
+                if offersNotForMe {
+                    HoverAction(symbol: "hand.thumbsdown", isOn: false, onColor: .white,
+                                help: "Not for me: never suggest it again") { model.setNotForMe(film.id, true) }
+                }
             }
         }
         .padding(8)
@@ -836,8 +850,7 @@ struct FilmPreview: View {
     /// The film's trailers (see `Trailers`) unless they all failed to play here this session.
     private var trailerVideos: [TMDBVideo] {
         guard let details, !model.unplayableTrailers.contains(film.id) else { return [] }
-        return Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: model.spoilerSafe,
-                                   originalLanguage: details.originalLanguage)
+        return Trailers.candidates(details.videos?.results ?? [], title: details.title, originalLanguage: details.originalLanguage)
     }
 
     private var overview: String? {

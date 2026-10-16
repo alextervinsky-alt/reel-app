@@ -194,6 +194,9 @@ enum ScreenRenderer {
         render(TonightCard(isSelected: false) {}.frame(width: 216).padding(20).background(Theme.sidebar).background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("desk-tonight-card.png"))
         log("desk drawn")
+        render(YearInFilmView().frame(width: 1240, height: 2700).background(Theme.background),
+               model: model, scale: 1, to: output.appendingPathComponent("year-in-film.png"))
+        log("Year in Film: \(YearInFilm(year: Calendar.current.component(.year, from: Date()), from: model.yearFilms()).films.count) films")
         // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
         // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
@@ -420,8 +423,13 @@ extension AppModel {
 
         // Four watched and rated (Recommended learns from them), two on tonight's shortlist, all
         // before the first build, as when Reel opens.
-        for (film, stars) in zip(sample.prefix(4), [5, 4, 5, 3]) {
-            _ = personal.set(PersonalRecord(watched: true, rating: stars, watchedOn: now), forKey: film.personalKey)
+        // Three nights in a row and one a week before, for Year in Film; two more a month ago.
+        let day: TimeInterval = 86_400
+        for (film, (stars, ago)) in zip(sample.prefix(4), [(5, 0.0), (4, 1), (5, 2), (3, 9)]) {
+            _ = personal.set(PersonalRecord(watched: true, rating: stars, watchedOn: now.addingTimeInterval(-ago * day)), forKey: film.personalKey)
+        }
+        for (film, (stars, ago)) in zip(sample.dropFirst(6).prefix(2), [(Optional(2), 40.0), (nil, 41)]) {
+            _ = personal.set(PersonalRecord(watched: true, rating: stars, watchedOn: now.addingTimeInterval(-ago * day)), forKey: film.personalKey)
         }
         startNewEveningIfNeeded()
         tonight = sample.dropFirst(4).prefix(2).map { $0.personalKey }

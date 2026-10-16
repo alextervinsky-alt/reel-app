@@ -27,6 +27,7 @@ struct ListsView: View {
                 }
                 ListSearchSection()
                 StartHereSection(preparing: preparing) { preview = $0 }
+                YourProgressSection()
                 awardsSection
                 IMDbSection(columns: cardColumns)
                 setsSection
@@ -132,6 +133,80 @@ struct ListsView: View {
                 }
             }
         }
+    }
+}
+
+/// The lists you're furthest through (as Letterboxd keeps your progress on a list): how much
+/// you've seen, and how many of the rest are already on your drives. Up to four, once you've
+/// seen at least two films of a list.
+struct YourProgressSection: View {
+    @Environment(AppModel.self) private var model
+
+    private struct Entry: Identifiable {
+        let kind: FilmListKind
+        let progress: ListProgress
+        var id: String { kind.title }
+    }
+
+    var body: some View {
+        let entries = started
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeading(title: "Your Progress",
+                               subtitle: "The lists you're furthest through, and how many of the rest are already on your drives")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
+                    ForEach(entries) { entry in card(entry) }
+                }
+            }
+        }
+    }
+
+    private var started: [Entry] {
+        let kinds: [FilmListKind] = [.sightAndSound, .imdbAllTime] + AwardList.allCases.map { .award($0) }
+        return kinds.compactMap { kind -> Entry? in
+            let all = model.lists.films(for: kind)
+            let films = kind.hasNominees ? all.filter { $0.isWinner } : all
+            let progress = model.progress(of: films)
+            guard progress.seen >= 2, progress.seen < progress.total else { return nil }
+            return Entry(kind: kind, progress: progress)
+        }
+        .sorted { $0.progress.seenFraction != $1.progress.seenFraction ? $0.progress.seenFraction > $1.progress.seenFraction : $0.id < $1.id }
+        .prefix(4)
+        .map { $0 }
+    }
+
+    private func card(_ entry: Entry) -> some View {
+        NavigationLink(value: ListRoute(kind: entry.kind)) {
+            HStack(spacing: 14) {
+                ZStack {
+                    ProgressRing(fraction: entry.progress.seenFraction, lineWidth: 5)
+                    Text("\(Int((entry.progress.seenFraction * 100).rounded()))%")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                }
+                .frame(width: 52, height: 52)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.kind.title)
+                        .font(.system(size: 13.5, weight: .semibold))
+                        .lineLimit(2)
+                    Text("\(entry.progress.seen) of \(entry.progress.total) seen")
+                        .font(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    if entry.progress.waiting > 0 {
+                        Text(entry.progress.waiting == 1 ? "1 more on your drives" : "\(entry.progress.waiting) more on your drives")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.brand)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -6,6 +6,8 @@ import ReelCore
 struct ExplorePick: Identifiable {
     let film: PreviewFilm
     let reason: String
+    /// The loved film it follows (nil for what the lists agree on).
+    var following: String? = nil
 
     var id: Int { film.id }
 }
@@ -69,13 +71,54 @@ extension AppModel {
     }
 
     /// For You in one mood (its chips): the strongest fifteen of the films found that
-    /// have it, left out once seen or wished for.
+    /// have it, left out once seen, wished for or not for you.
     func explorePicks(in mood: Mood) -> [ExplorePick] {
-        exploreCandidates
-            .filter { $0.fits(mood) && !isSeen($0.movie.id) && !wishlistIDs.contains($0.movie.id) }
+        openCandidates
+            .filter { $0.fits(mood) }
             .sorted(by: ExplorePicks.order)
             .prefix(Self.forYouCount)
-            .map { ExplorePick(film: PreviewFilm($0.movie, note: $0.reason.long), reason: $0.reason.long) }
+            .map(Self.pick)
+    }
+
+    /// For You after one loved film ("Because you loved"): the strongest fifteen that follow it.
+    func explorePicks(following title: String) -> [ExplorePick] {
+        openCandidates
+            .filter { $0.seed.title == title }
+            .sorted(by: ExplorePicks.order)
+            .prefix(Self.forYouCount)
+            .map(Self.pick)
+    }
+
+    /// The loved films For You's picks follow, the one with the most first (for its chips).
+    var exploreSeedTitles: [String] {
+        var counts: [String: Int] = [:]
+        for candidate in openCandidates { counts[candidate.seed.title, default: 0] += 1 }
+        return counts.filter { $0.value >= 2 }.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
+    }
+
+    /// Says a film isn't for you (or takes it back): it leaves For You and Explore for good.
+    func setNotForMe(_ id: Int, _ on: Bool) {
+        if on { notForMe.insert(id) } else { notForMe.remove(id) }
+        if on, let shown = explorePicks, shown.contains(where: { $0.id == id }) {
+            explorePicks = shown.filter { $0.id != id }
+        }
+        scheduleSave(.settings)
+    }
+
+    /// Every film turned down is suggested again (Settings).
+    func clearNotForMe() {
+        notForMe = []
+        scheduleSave(.settings)
+    }
+
+    /// Candidates still worth showing: not seen, not wished for, not turned down.
+    private var openCandidates: [ExploreCandidate] {
+        exploreCandidates.filter { !isSeen($0.movie.id) && !wishlistIDs.contains($0.movie.id) && !notForMe.contains($0.movie.id) }
+    }
+
+    private static func pick(_ candidate: ExploreCandidate) -> ExplorePick {
+        ExplorePick(film: PreviewFilm(candidate.movie, note: candidate.reason.long), reason: candidate.reason.long,
+                    following: candidate.seed.title)
     }
 
     /// Fifteen others from the same films, none of the ones showing now.
@@ -89,11 +132,8 @@ extension AppModel {
 
     private func drawExplorePicks(avoiding: Set<Int>) {
         var generator = SystemRandomNumberGenerator()
-        // Films marked seen or wished for since they were found are left out.
-        let open = exploreCandidates.filter { !isSeen($0.movie.id) && !wishlistIDs.contains($0.movie.id) }
-        var picks = ExplorePicks.sample(open, count: Self.forYouCount, avoiding: avoiding, using: &generator).map { candidate in
-            ExplorePick(film: PreviewFilm(candidate.movie, note: candidate.reason.long), reason: candidate.reason.long)
-        }
+        // Films marked seen, wished for or turned down since they were found are left out.
+        var picks = ExplorePicks.sample(openCandidates, count: Self.forYouCount, avoiding: avoiding, using: &generator).map(Self.pick)
         // Without loved films to start from (or too few found), what the lists agree on fills in.
         if picks.count < Self.forYouCount {
             picks += listPicksForExplore(excluding: Set(picks.map(\.id))).prefix(Self.forYouCount - picks.count)
@@ -106,7 +146,7 @@ extension AppModel {
     /// Films the lists agree on, from the Lists hub's Start Here.
     private func listPicksForExplore(excluding shown: Set<Int>) -> [ExplorePick] {
         startHere().toFind
-            .filter { !shown.contains($0.film.id) && $0.film.id != 0 }
+            .filter { !shown.contains($0.film.id) && $0.film.id != 0 && !notForMe.contains($0.film.id) }
             .prefix(Self.forYouCount)
             .map { ExplorePick(film: $0.film, reason: $0.reason) }
     }

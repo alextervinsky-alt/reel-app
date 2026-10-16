@@ -26,5 +26,36 @@ final class YearInFilmStatsTests: XCTestCase {
         XCTAssertEqual(year.languages.first, Tally(name: "Korean", count: 2))
         XCTAssertEqual(year.languageCount, 3)
         XCTAssertEqual(year.topActors, [Tally(name: "Song Kang-ho", count: 2)])
+        XCTAssertEqual(year.shortest?.id, "a")
+        XCTAssertEqual(year.newest?.id, "a", "the first of the newest releases")
+        XCTAssertEqual(year.starCounts, [0, 0, 1, 1, 1])
+        XCTAssertEqual(year.averageAge, 9, "0, 7, 27 and 0 years old: 8.5")
+        XCTAssertNil(year.longestRun, "a week apart")
+        XCTAssertEqual(year.weekdays[5], 3, "three Fridays")
+        XCTAssertEqual(year.warmerThanMost.map(\.film.id), ["a"], "5★ is 10 against 8: two points is enough (D has no score)")
+    }
+
+    func testRunsGapsAndCrew() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        func day(_ d: Int) -> Date { calendar.date(from: DateComponents(year: 2026, month: 1, day: d, hour: 22))! }
+        func film(_ id: String, _ d: Int, stars: Int?, score: Double?, dp: [String] = [], elsewhere: Bool = false) -> YearFilm {
+            YearFilm(id: id, title: id, releaseYear: 2000, watchedOn: day(d), runtime: 100, genres: [], directors: [],
+                     yourRating: stars, score: score, elsewhere: elsewhere, cinematographers: dp)
+        }
+        let films = [
+            film("a", 3, stars: 5, score: 6.1, dp: ["Roger Deakins"]),
+            film("b", 4, stars: 1, score: 8.2, dp: ["Roger Deakins"]),
+            film("c", 5, stars: 3, score: 6.0),
+            film("d", 6, stars: nil, score: 7, elsewhere: true),
+            film("e", 9, stars: 4, score: 7.9),
+            film("f", 10, stars: nil, score: nil),
+        ]
+        let year = YearInFilm(year: 2026, from: films, calendar: calendar)
+        XCTAssertEqual(year.longestRun?.nights, 3, "3, 4 and 5 January (a film seen elsewhere isn't a night)")
+        XCTAssertEqual(year.longestRun?.start, calendar.startOfDay(for: day(3)))
+        XCTAssertEqual(year.warmerThanMost.map(\.film.id), ["a"])
+        XCTAssertEqual(year.coolerThanMost.map(\.film.id), ["b"])
+        XCTAssertEqual(year.topCinematographers, [Tally(name: "Roger Deakins", count: 2)])
     }
 }

@@ -14,10 +14,10 @@ enum Theme {
     static let field = Color(red: 0.098, green: 0.098, blue: 0.114)
     static let hairline = Color.white.opacity(0.08)
     static let secondaryText = Color.white.opacity(0.62)
-    /// Reel's one accent: warm tungsten amber, for what's chosen or needs you.
-    static let brand = Color(red: 0.914, green: 0.659, blue: 0.278)
+    /// Reel's one accent: a warm projector-light orange, for what's chosen or needs you.
+    static let brand = Color(red: 1.0, green: 0.45, blue: 0.28)
     static let brandGradient = LinearGradient(
-        colors: [Color(red: 0.96, green: 0.74, blue: 0.36), Color(red: 0.86, green: 0.48, blue: 0.2)],
+        colors: [Color(red: 1.0, green: 0.62, blue: 0.3), Color(red: 0.93, green: 0.25, blue: 0.33)],
         startPoint: .topLeading, endPoint: .bottomTrailing)
     /// The ratings' own colours, as small labels ("IMDb 8.5").
     static let imdb = Color(red: 0.96, green: 0.77, blue: 0.09)
@@ -546,12 +546,13 @@ struct PictureRangeTag: View {
         }
     }
 
-    /// "HDR · Dolby Vision + HDR10", "SDR"; with copies that differ, each with its resolution.
+    /// "HDR · Dolby Vision + HDR10", "SDR · Open Matte", "HDR · HDR10 · IMAX"; with copies that
+    /// differ, each with its resolution.
     static func entries(_ copies: [FilmEntry]) -> [(text: String, hdr: Bool)] {
         func range(_ copy: FilmEntry) -> String {
             let range = copy.parsed.dynamicRange
-            guard range.isHDR else { return "SDR" }
-            return "HDR · " + range.rawValue + (copy.parsed.fallbackRange.map { " + " + $0.rawValue } ?? "")
+            let picture = range.isHDR ? "HDR · " + range.rawValue + (copy.parsed.fallbackRange.map { " + " + $0.rawValue } ?? "") : "SDR"
+            return ([picture] + copy.parsed.editions).joined(separator: " · ")
         }
         let differ = Set(copies.map(range)).count > 1
         var seen = Set<String>()

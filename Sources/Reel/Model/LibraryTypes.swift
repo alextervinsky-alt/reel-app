@@ -77,6 +77,8 @@ struct ListProgress: Equatable {
     var owned = 0
     var seen = 0
     var wishlisted = 0
+    /// On your drives and not seen yet: the list's next films, ready to play.
+    var waiting = 0
 
     var seenFraction: Double { total == 0 ? 0 : Double(seen) / Double(total) }
     var ownedFraction: Double { total == 0 ? 0 : Double(owned) / Double(total) }

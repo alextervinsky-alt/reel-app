@@ -20,7 +20,7 @@ extension AppModel {
             let item = libraryItem(film)
             let id = item?.main.tmdb?.id ?? lists.tmdbID(film)
             if item != nil { progress.owned += 1 } else if isWishlisted(id) { progress.wishlisted += 1 }
-            if isSeen(id) { progress.seen += 1 }
+            if isSeen(id) { progress.seen += 1 } else if item != nil { progress.waiting += 1 }
         }
         return progress
     }
@@ -67,8 +67,17 @@ extension AppModel {
         if !force, discover[list] != nil, let loaded = discoverLoadedAt[list], loaded > Date().addingTimeInterval(-6 * 3600) { return }
         discoverLoading.insert(list)
         defer { discoverLoading.remove(list) }
+        let client = TMDBClient(token: token)
+        if case .director(let id, _) = list {
+            // A filmography, not a page of results.
+            if let person = try? await client.person(id: id) {
+                discover[list] = DirectorFilms.films(from: person.movieCredits, today: Date().formatted(.iso8601.year().month().day()))
+                discoverLoadedAt[list] = Date()
+            }
+            return
+        }
         let request = list.request()
-        if let films = try? await TMDBClient(token: token).movies(request.path, request.query, pages: request.pages) {
+        if let films = try? await client.movies(request.path, request.query, pages: request.pages) {
             discover[list] = films
             discoverLoadedAt[list] = Date()
         }

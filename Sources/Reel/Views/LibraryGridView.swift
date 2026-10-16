@@ -125,6 +125,7 @@ struct LibraryGridView: View {
             }
             let stopped = !isScrolling && scroll.isScrolling
             scroll.isScrolling = isScrolling
+            model.userIsScrolling = isScrolling
             if stopped {
                 scroll.waiting?.lift()
                 scroll.waiting = nil
@@ -151,7 +152,10 @@ struct LibraryGridView: View {
             previewing = item
             return true
         }
-        .onDisappear { scroll.pointed = nil }
+        .onDisappear {
+            scroll.pointed = nil
+            model.userIsScrolling = false
+        }
         // The poster under the pointer is gone once the list replaces the grid.
         .onChange(of: asList) { scroll.pointed = nil }
     }
@@ -880,7 +884,7 @@ struct PosterCard: View, Equatable {
                 .scaleEffect(lifted ? 1.04 : 1)
                 .animation(.spring(response: 0.28, dampingFraction: 0.82), value: lifted)
 
-            // Title; year, length and director; the ratings: what you need without opening it.
+            // Title; year, length and director (the ratings show under the pointer).
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.main.displayTitle)
                     .font(.system(size: 13.5, weight: .semibold))
@@ -888,7 +892,6 @@ struct PosterCard: View, Equatable {
                 caption
                     .font(.system(size: 12))
                     .lineLimit(1)
-                RatingsLine(film: item.main)
             }
         }
         .contentShape(Rectangle())
@@ -946,16 +949,13 @@ struct PosterCard: View, Equatable {
     }
 
     /// In colour whether or not its drive is connected (the line under it says when it isn't),
-    /// with its quality in the corner and NEW while it's new.
+    /// with NEW while it's new; the file's quality is left for the film's page.
     private var poster: some View {
         Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12)
-            .overlay {
-                if lifted { HoverDetails(item: item).transition(.opacity) }
+            .overlay(alignment: .bottom) {
+                if lifted { hoverRatings.transition(.opacity) }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(alignment: .topLeading) {
-                if let tag = Format.posterTag(item.main) { QualityTag(text: tag).padding(8) }
-            }
             .overlay(alignment: .topTrailing) {
                 // Under the pointer: add to (or take off) tonight's shortlist in one click.
                 if lifted {
@@ -995,6 +995,36 @@ struct PosterCard: View, Equatable {
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
             Text(item.isOnline ? line : (line.isEmpty ? "Drive not connected" : line + " · Offline"))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Under the pointer: the ratings on one line and when it would end (with subtitles). Only
+    /// built while the pointer is on it.
+    @ViewBuilder
+    private var hoverRatings: some View {
+        let ends = Format.endsLine(item.main, runtime: item.runtime, quality: false)
+        let hasRatings = PosterRatings.has(item.main)
+        if hasRatings || ends != nil {
+            VStack(alignment: .leading, spacing: 7) {
+                if hasRatings {
+                    PosterRatings(film: item.main, spacing: 7)
+                        .environment(\.ratingScale, 0.85)
+                }
+                if let ends {
+                    Text(ends)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.top, 34)
+            .padding(.bottom, 10)
+            .background(
+                LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+            )
         }
     }
 

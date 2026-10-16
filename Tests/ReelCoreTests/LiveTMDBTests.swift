@@ -69,13 +69,19 @@ final class LiveTMDBTests: XCTestCase {
         }
         let client = TMDBClient(token: token)
         var counts: [String] = []
-        for list in [DiscoverList.inCinemas, .trending, .newAtHome, .bestOf(year: 1999), .mood(.feelGood), .mood(.epic)] {
+        for list in [DiscoverList.inCinemas, .comingSoon, .trending, .newAtHome, .bestOf(year: 1999), .mood(.feelGood), .mood(.epic)] {
             let r = list.request()
             let films = try await client.movies(r.path, r.query, pages: r.pages)
             XCTAssertFalse(films.isEmpty, list.title)
             counts.append("\(list.title) \(films.count)")
         }
         print("::notice::Explore: \(counts.joined(separator: ", "))")
+        // More from a director (Bong Joon-ho): only the films they directed.
+        let person = try await client.person(id: 21684)
+        let today = Date().formatted(.iso8601.year().month().day())
+        let directed = DirectorFilms.films(from: person.movieCredits, today: today)
+        XCTAssertTrue(directed.contains { $0.title == "Memories of Murder" }, directed.map(\.title).joined(separator: ", "))
+        print("::notice::More from Bong Joon-ho: \(directed.prefix(5).map(\.title).joined(separator: ", "))")
         let recs = try await client.movies("/movie/335984/recommendations")
         let similar = try await client.movies("/movie/335984/similar")
         let ranked = SimilarFilms.rank(recommendations: recs, similar: similar, genres: ["Science Fiction", "Drama"], excluding: 335984)

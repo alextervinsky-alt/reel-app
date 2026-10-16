@@ -54,8 +54,7 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertEqual(d.logoPath, "/logo.png")
         XCTAssertEqual(d.collection?.name, "Blade Runner Collection")
         XCTAssertEqual(d.keywordNames, ["dystopia", "artificial intelligence"])
-        XCTAssertEqual(Trailers.candidates(d.videos?.results ?? [], title: d.title, preferTeaser: false,
-                                           originalLanguage: d.originalLanguage).map(\.key), ["t1"],
+        XCTAssertEqual(Trailers.candidates(d.videos?.results ?? [], title: d.title, originalLanguage: d.originalLanguage).map(\.key), ["t1"],
                        "someone else's upload with no name isn't trusted")
         XCTAssertEqual(d.videos?.results.map(\.key), ["c5", "t1"], "only YouTube trailers and teasers are kept")
     }
@@ -275,6 +274,25 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertEqual(DiscoverList.because(id: 496243, title: "Parasite").request(today: today).path, "/movie/496243/recommendations")
         XCTAssertTrue(DiscoverList.decade(1970).request(today: today).query.contains(URLQueryItem(name: "primary_release_date.lte", value: "1979-12-31")))
         XCTAssertEqual(DiscoverList.country(code: "JP").title, "Cinema from Japan")
+        let soon = DiscoverList.comingSoon.request(today: today)
+        XCTAssertTrue(soon.query.contains(URLQueryItem(name: "release_date.gte", value: "2026-10-07")))
+        XCTAssertTrue(soon.query.contains(URLQueryItem(name: "release_date.lte", value: "2027-01-04")))
+        XCTAssertEqual(DiscoverList.director(id: 21684, name: "Bong Joon-ho").title, "More from Bong Joon-ho")
+    }
+
+    func testOnlyTheFilmsADirectorMadeAndCanBeSeen() throws {
+        let json = """
+        {"cast": [], "crew": [
+          {"id": 1, "title": "Mother", "job": "Director", "release_date": "2009-05-28", "vote_average": 7.8, "vote_count": 1200},
+          {"id": 1, "title": "Mother", "job": "Writer", "release_date": "2009-05-28", "vote_average": 7.8, "vote_count": 1200},
+          {"id": 2, "title": "Produced", "job": "Producer", "release_date": "2015-01-01", "vote_average": 9, "vote_count": 500},
+          {"id": 3, "title": "Next One", "job": "Director", "release_date": "2027-03-01", "vote_average": 0, "vote_count": 30},
+          {"id": 4, "title": "Short", "job": "Director", "release_date": "1994-01-01", "vote_average": 6, "vote_count": 4},
+          {"id": 5, "title": "Parasite", "job": "Director", "release_date": "2019-05-30", "vote_average": 8.5, "vote_count": 18000}
+        ]}
+        """
+        let credits = try JSONDecoder().decode(TMDBPersonCredits.self, from: Data(json.utf8))
+        XCTAssertEqual(DirectorFilms.films(from: credits, today: "2026-10-16").map(\.title), ["Parasite", "Mother"])
     }
 
     func testThreeShelvesEachLaunch() {
@@ -283,6 +301,9 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertEqual(shelves.count, 3)
         XCTAssertEqual(shelves.first, .because(id: 496243, title: "Parasite"))
         XCTAssertEqual(DiscoverList.shelves(loved: [], using: &generator).count, 2, "no loved films: no Because You Loved")
+        let more = DiscoverList.shelves(loved: [(496243, "Parasite")], directors: [(21684, "Bong Joon-ho")], using: &generator)
+        XCTAssertEqual(more.count, 4)
+        XCTAssertEqual(more[1], .director(id: 21684, name: "Bong Joon-ho"))
     }
 
     func testWikipediaFallbackOnlyAcceptsExactTitles() {

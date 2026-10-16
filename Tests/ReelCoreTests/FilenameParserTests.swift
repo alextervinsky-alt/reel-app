@@ -22,6 +22,18 @@ final class FilenameParserTests: XCTestCase {
         XCTAssertFalse(p.looksLikeSample)
     }
 
+    func testEditionsFromTheName() {
+        let imax = FilenameParser.parse("/Volumes/Films/Dune Part Two 2024 IMAX 2160p WEB-DL DV HDR10+ x265.mkv")
+        XCTAssertEqual(imax.title, "Dune Part Two")
+        XCTAssertEqual(imax.editions, ["IMAX"])
+        let matte = FilenameParser.parse("/Volumes/Films/Avatar Open Matte 1080p BluRay x264.mkv")
+        XCTAssertEqual(matte.title, "Avatar")
+        XCTAssertEqual(matte.editions, ["Open Matte"])
+        let both = FilenameParser.parse("/Volumes/Films/The Dark Knight (2008) [IMAX][OpenMatte][1080p].mkv")
+        XCTAssertEqual(both.editions, ["IMAX", "Open Matte"])
+        XCTAssertEqual(FilenameParser.parse("/Volumes/Films/Heat (1995) 1080p.mkv").editions, [])
+    }
+
     func testDredd() {
         let p = FilenameParser.parse("/Volumes/Films/Dredd 2012 UHD 1080p 10bit HDR BluRay HEVC x265 [Hindi DTH DD 2.0 384kbps + English DDP 7.1] ESub-EXAMPLE.mkv")
         XCTAssertEqual(p.title, "Dredd")

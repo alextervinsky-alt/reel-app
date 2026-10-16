@@ -19,6 +19,9 @@ public enum Trailers {
             "honest trailers?", "mash-?up", "re-?upload", "sizzle", "vignette", "trailer (tease|teaser|reveal|preview)",
             "tickets?", "now playing", "in (cinemas|theaters|theatres) (now|today)", "(blu-?ray|dvd|digital|4k uhd) release",
             "own it", "available now", "commentary",
+            // Short pieces studios label Teaser: a character, a scene, the first minutes.
+            "meet", "characters?", "scenes?", "opening (scene|minutes)", "first \\d+ minutes", "extended look",
+            "audio described", "shorts", "vertical", "motion poster", "title (reveal|announcement)",
         ]
         return try! NSRegularExpression(pattern: "\\b(" + words.joined(separator: "|") + ")\\b", options: [.caseInsensitive])
     }()
@@ -32,12 +35,14 @@ public enum Trailers {
             name = name.replacingOccurrences(of: title, with: " ", options: [.caseInsensitive, .diacriticInsensitive])
         }
         guard notATrailer.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) == nil else { return false }
-        // Someone else's upload must call itself a trailer (or a teaser).
-        if video.official != true {
-            let lower = name.lowercased()
-            return lower.contains("trailer") || lower.contains("teaser")
-        }
-        return true
+        // It must call itself a trailer or a teaser ("Isle of Dogs | Meet the Pack", labelled a
+        // teaser, is a short promo). A studio's upload named only for the film counts when it's
+        // labelled a trailer.
+        let lower = name.lowercased()
+        if lower.contains("trailer") || lower.contains("teaser") { return true }
+        if video.name == nil { return video.official == true }
+        let rest = lower.split(whereSeparator: { !$0.isLetter }).filter { !["official", "hd", "uhd", "k", "us", "uk", "the", "film", "movie"].contains($0) }
+        return video.official == true && video.type == "Trailer" && rest.isEmpty
     }
 
     /// What's kept from TMDB (the name is checked when one is picked): YouTube trailers and teasers.
@@ -52,12 +57,11 @@ public enum Trailers {
     }
 
     /// Up to five to try, best first: the studio's own uploads before anyone else's; English,
-    /// then no language, then the film's own language; the trailer before the teaser, or with
-    /// `preferTeaser` (spoiler-safe, unwatched) a real teaser first; HD before lower resolutions
-    /// (1080p and 4K, then 720p); the earliest first (the first
-    /// release usually gives away least). Five, because studios block some of theirs from
-    /// playing outside YouTube.
-    public static func candidates(_ videos: [TMDBVideo], title: String?, preferTeaser: Bool, originalLanguage: String?) -> [TMDBVideo] {
+    /// then no language, then the film's own language; the full trailer before a teaser (a
+    /// teaser only when there's no trailer); HD before lower resolutions (1080p and 4K, then
+    /// 720p); the earliest first (the first release usually gives away least). Five, because
+    /// studios block some of theirs from playing outside YouTube.
+    public static func candidates(_ videos: [TMDBVideo], title: String?, originalLanguage: String?) -> [TMDBVideo] {
         func languageRank(_ video: TMDBVideo) -> Int {
             switch video.language {
             case "en": 0
@@ -67,7 +71,7 @@ public enum Trailers {
             }
         }
         func typeRank(_ video: TMDBVideo) -> Int {
-            isTeaser(video) == preferTeaser ? 0 : 1
+            isTeaser(video) ? 1 : 0
         }
         /// HD first: 1080p or 4K, then 720p, then anything smaller (or not known).
         func sharpness(_ video: TMDBVideo) -> Int {
@@ -78,11 +82,7 @@ public enum Trailers {
             }
         }
         func rank(_ video: TMDBVideo) -> (Int, Int, Int, Int, String) {
-            let official = video.official == true ? 0 : 1
-            // Spoiler-safe: a real teaser in any of the languages beats a full trailer in English.
-            return preferTeaser
-                ? (official, typeRank(video), languageRank(video), sharpness(video), video.publishedAt ?? "~")
-                : (official, languageRank(video), typeRank(video), sharpness(video), video.publishedAt ?? "~")
+            (video.official == true ? 0 : 1, languageRank(video), typeRank(video), sharpness(video), video.publishedAt ?? "~")
         }
         var seen = Set<String>()
         return videos

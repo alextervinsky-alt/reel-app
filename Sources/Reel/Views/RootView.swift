@@ -252,24 +252,25 @@ struct SidebarView: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .padding(.top, 4)
+                .padding(.top, 12)
                 .padding(.bottom, 14)
             }
             if !model.drives.isEmpty {
                 drivesCard
                     .padding(.horizontal, 10)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 6)
             }
             SidebarStatus { onSelect(.newArrivals) }
             footer
         }
-        // A floating panel, inset from the window's edges.
+        // A floating panel, inset from the window's edges and starting under the window's
+        // close, minimise and full-screen buttons (never behind them).
         .background {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Theme.sidebar)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
-                .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 2))
-                .ignoresSafeArea()
+                .padding(EdgeInsets(top: 0, leading: 8, bottom: 8, trailing: 2))
+                .ignoresSafeArea(edges: .bottom)
         }
         .padding(.leading, 6)
         .background(Theme.background.ignoresSafeArea())
@@ -289,12 +290,9 @@ struct SidebarView: View {
     /// The drives at the foot of the sidebar: each with whether it's connected and its free
     /// space or role, then what needs fixing (matches to check, films not on the Backup).
     private var drivesCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(model.drives) { drive in
                 driveRow(drive)
-            }
-            if model.checkCount > 0 || model.count(.notOnBackup) > 0 {
-                Rectangle().fill(Theme.hairline).frame(height: 1).padding(.vertical, 4)
             }
             if model.checkCount > 0 {
                 fixLink(model.checkCount == 1 ? "1 match to check" : "\(model.checkCount) matches to check", shelf: .needsCheck)
@@ -304,8 +302,9 @@ struct SidebarView: View {
                     .help("Films on your main drive without a full copy on the Backup")
             }
         }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.sidebarCard))
+        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline).frame(height: 1).padding(.horizontal, 8) }
     }
 
     private func fixLink(_ text: String, shelf: Shelf) -> some View {
@@ -317,10 +316,10 @@ struct SidebarView: View {
                 Spacer()
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
             }
-            .font(.system(size: 12.5, weight: selection == shelf ? .semibold : .medium))
+            .font(.system(size: 11.5, weight: selection == shelf ? .semibold : .medium))
             .foregroundStyle(Theme.brand)
-            .padding(.horizontal, 6)
-            .frame(height: 24)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -358,22 +357,23 @@ struct SidebarView: View {
         return Button {
             onSelect(.drive(drive.id))
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Circle()
                     .fill(online ? Color.green : Color.white.opacity(0.25))
-                    .frame(width: 7, height: 7)
+                    .frame(width: 6, height: 6)
                 Text(drive.name)
-                    .font(.system(size: 12.5, weight: selection == .drive(drive.id) ? .semibold : .regular))
+                    .font(.system(size: 11.5, weight: selection == .drive(drive.id) ? .semibold : .regular))
+                    .foregroundStyle(Color.primary.opacity(0.8))
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 10))
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 6)
-            .frame(height: 26)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
             .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(selection == .drive(drive.id) ? Color.white.opacity(0.08) : Color.clear))
             .contentShape(Rectangle())

@@ -21,12 +21,11 @@ struct TrailerRequest: Equatable {
 /// Trailers: only official ones (see `Trailers`), played inside Reel. In Cinema mode Reel never
 /// opens a browser; a film whose trailers won't play here loses its button for the session.
 extension AppModel {
-    /// The official videos to try for a film: a teaser first for an unwatched film while
-    /// spoiler-safe is on (it shows less), otherwise the trailer.
+    /// The videos to try for a film, the studio's full trailer first (a teaser only when there's
+    /// no trailer).
     func trailerVideos(for film: FilmEntry) -> [TMDBVideo] {
         guard let details = film.tmdb, !unplayableTrailers.contains(details.id) else { return [] }
-        return Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: hidesSpoilers(for: film),
-                                   originalLanguage: details.originalLanguage)
+        return Trailers.candidates(details.videos?.results ?? [], title: details.title, originalLanguage: details.originalLanguage)
     }
 
     /// Whether to offer a trailer button: in Cinema mode only while trailers play inside Reel.

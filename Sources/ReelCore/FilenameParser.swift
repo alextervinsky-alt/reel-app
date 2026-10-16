@@ -39,6 +39,8 @@ public struct ParsedFilename: Equatable, Sendable {
     public var isIncomplete: Bool
     public var looksLikeSample: Bool
     public var badges: [String]
+    /// What the picture is beyond its quality, from the name: "IMAX", "Open Matte".
+    public var editions: [String] = []
 }
 
 public enum FilenameParser {
@@ -124,6 +126,10 @@ public enum FilenameParser {
         while let last = titleTokens.last, last == "-" || last == "–" {
             titleTokens.removeLast()
         }
+        // "Avatar Open Matte (2009)": the edition isn't part of the title.
+        if titleTokens.count > 2, titleTokens.suffix(2).map({ $0.lowercased() }) == ["open", "matte"] {
+            titleTokens.removeLast(2)
+        }
         if titleTokens.isEmpty { titleTokens = allTokens }
         // "Rosetta, Dardenne, 1999" → "Rosetta, Dardenne"
         let title = titleTokens.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: ",;: "))
@@ -191,6 +197,14 @@ public enum FilenameParser {
         // The HDR layer a Dolby Vision file also carries, for TVs without Dolby Vision.
         let fallbackRange: DynamicRange? = !isDV ? nil : isHDR10Plus ? .hdr10Plus : isHDR10 ? .hdr10 : nil
 
+        // Editions: the whole frame the camera saw, or the IMAX version.
+        let allNamed = words.map(String.init) + tags
+        var editions: [String] = []
+        if shows(["imax"]) { editions.append("IMAX") }
+        if allNamed.contains("openmatte") || zip(allNamed, allNamed.dropFirst()).contains(where: { $0 == "open" && $1 == "matte" }) {
+            editions.append("Open Matte")
+        }
+
         // Video codec
         var codec: String? = nil
         if has(["hevc", "x265", "h265"]) {
@@ -237,7 +251,8 @@ public enum FilenameParser {
             isVideo: isVideo,
             isIncomplete: incomplete,
             looksLikeSample: sample,
-            badges: badges
+            badges: badges,
+            editions: editions
         )
     }
 

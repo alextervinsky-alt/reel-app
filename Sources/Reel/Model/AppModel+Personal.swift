@@ -261,7 +261,8 @@ extension AppModel {
             return YearFilm(id: key, title: item.main.displayTitle, releaseYear: item.main.displayYear, watchedOn: date,
                             runtime: d?.runtime, genres: d?.genreNames ?? [], directors: d?.directors ?? [],
                             yourRating: personal.record(forKey: key).rating, score: item.score, language: d?.originalLanguage,
-                            cast: YearFilm.leads(d))
+                            cast: YearFilm.leads(d), cinematographers: d?.cinematographers ?? [],
+                            composers: d?.people(forJobs: TMDBMovieDetails.composerJobs).map(\.name) ?? [])
         }
         guard yearCountsElsewhere else { return library }
         return library + seenElsewhereFilms.compactMap { entry in

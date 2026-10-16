@@ -10,6 +10,8 @@ struct ForYouView: View {
     @Environment(AppModel.self) private var model
     @State private var preview: PreviewFilm?
     @State private var mood: Mood?
+    /// "Because you loved": only the picks that follow one of your films.
+    @State private var following: String?
 
     private static let moodChoices = [MoodChoiceCount(choice: .any, count: 0)]
         + Mood.allCases.map { MoodChoiceCount(choice: .mood($0), count: 0) }
@@ -25,7 +27,7 @@ struct ForYouView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if mood == nil, model.explorePicks?.isEmpty == false, model.canShuffleExplorePicks {
+                    if mood == nil, following == nil, model.explorePicks?.isEmpty == false, model.canShuffleExplorePicks {
                         Button {
                             withAnimation(.easeOut(duration: 0.25)) { model.shuffleExplorePicks() }
                         } label: {
@@ -38,8 +40,10 @@ struct ForYouView: View {
                 MoodChips(choices: Self.moodChoices, selected: mood.map { .mood($0) } ?? .any, counted: false) { choice in
                     withAnimation(.easeOut(duration: 0.25)) {
                         if case .mood(let chosen) = choice { mood = chosen } else { mood = nil }
+                        following = nil
                     }
                 }
+                becauseChips
                 content
             }
             .padding(.horizontal, 32)
@@ -55,9 +59,36 @@ struct ForYouView: View {
         }
     }
 
+    /// "Because you loved": one chip per loved film the picks follow (with two or more of them).
+    @ViewBuilder
+    private var becauseChips: some View {
+        let titles = Array(model.exploreSeedTitles.prefix(8))
+        if titles.count >= 2, model.explorePicks != nil {
+            HStack(spacing: 8) {
+                Text("Because you loved")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(titles, id: \.self) { title in
+                            FilterChip(title: title, isOn: following == title) {
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    following = following == title ? nil : title
+                                    mood = nil
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
-        let picks = model.explorePicks.map { all in mood.map { model.explorePicks(in: $0) } ?? all }
+        let picks = model.explorePicks.map { all in
+            following.map { model.explorePicks(following: $0) } ?? mood.map { model.explorePicks(in: $0) } ?? all
+        }
         if !model.hasToken {
             ContentUnavailableView("Connect TMDB to find films for you", systemImage: "sparkles",
                                    description: Text("Add your TMDB token in Settings (⌘,)."))
@@ -187,6 +218,9 @@ struct ForYouCard: View {
                         Label(seen ? "Seen" : "Seen It?", systemImage: seen ? "eye.fill" : "eye")
                     }
                     .buttonStyle(SecondaryCapsuleStyle())
+                    RoundToggle(symbol: "hand.thumbsdown", isOn: false, help: "Not for me: never suggest it again") {
+                        withAnimation(.easeOut(duration: 0.25)) { model.setNotForMe(film.id, true) }
+                    }
                 }
                 .padding(.top, 4)
             }
@@ -215,8 +249,7 @@ struct ForYouCard: View {
     /// The film's trailers (see `Trailers`), unless they all failed to play here this session.
     private func trailerVideos(_ details: TMDBMovieDetails?) -> [TMDBVideo] {
         guard let details, !model.unplayableTrailers.contains(pick.film.id) else { return [] }
-        return Trailers.candidates(details.videos?.results ?? [], title: details.title, preferTeaser: model.spoilerSafe,
-                                   originalLanguage: details.originalLanguage)
+        return Trailers.candidates(details.videos?.results ?? [], title: details.title, originalLanguage: details.originalLanguage)
     }
 }
 #endif

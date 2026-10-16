@@ -13,7 +13,7 @@ extension AppModel {
         // Before your notes are read there are no loved films to start from: chosen once they are.
         guard isLoaded else { return [] }
         var generator = SystemRandomNumberGenerator()
-        let chosen = DiscoverList.shelves(loved: lovedFilms(), using: &generator)
+        let chosen = DiscoverList.shelves(loved: lovedFilms(), directors: lovedDirectors(), using: &generator)
         exploreShelvesChosen = chosen
         return chosen
     }
@@ -21,7 +21,9 @@ extension AppModel {
     /// The films of an Explore list as shown: none you've seen, only the mood's when one is
     /// chosen, and in this launch's order when the list ranks by quality.
     func exploreFilms(_ list: DiscoverList, mood: Mood?) -> [TMDBMovieSummary] {
-        var films = (discover[list] ?? []).filter { !hasSeen($0.id) }
+        var films = (discover[list] ?? []).filter { !hasSeen($0.id) && !notForMe.contains($0.id) }
+        // More from a director: the films you don't have yet.
+        if case .director = list { films = films.filter { itemsByTMDB[$0.id] == nil } }
         // What people went on to love after one of yours: only the well-liked (TMDB's own list
         // reaches far down).
         if case .because = list { films = films.filter { ($0.voteAverage ?? 0) >= 6.6 && ($0.voteCount ?? 0) >= 150 } }
@@ -44,6 +46,17 @@ extension AppModel {
             guard let title = itemCache[key]?.main.displayTitle ?? lists.briefs[id]?.title else { return nil }
             return (id, title)
         }
+    }
+
+    /// Directors of films you loved on your drives, for "More from" (each once).
+    private func lovedDirectors() -> [(id: Int, name: String)] {
+        var found: [Int: String] = [:]
+        for (key, record) in personal.records where (record.rating ?? (record.favorite ? 4 : 0)) >= 4 {
+            for person in itemCache[key]?.main.tmdb?.credits?.crew ?? [] where person.job == "Director" {
+                if let id = person.id { found[id] = person.name }
+            }
+        }
+        return found.map { (id: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
     }
 
     // MARK: Best of a year

@@ -126,16 +126,20 @@ public struct ReelSettings: Codable, Equatable, Sendable {
     public var lastExplorePicks: [Int]
     /// VLC was switched to IINA once (Reel 1.7.1, for HDR on the TV); choosing VLC again is kept.
     public var switchedToIINA: Bool
+    /// TMDB ids of films you said aren't for you: never suggested again in For You and Explore.
+    public var notForMe: [Int]
 
     enum CodingKeys: String, CodingKey {
         case tmdbToken, omdbKey, drives, lastFeatured, lastRecommended, spoilerSafe, player, playFullScreen, tonight, tonightEvening
-        case notTonight, yearCountsElsewhere, lastExplorePicks, switchedToIINA
+        case notTonight, yearCountsElsewhere, lastExplorePicks, switchedToIINA, notForMe
     }
 
     public init(tmdbToken: String = "", omdbKey: String = "", drives: [Drive] = [], lastFeatured: String = "",
                 lastRecommended: [String] = [], spoilerSafe: Bool = true, player: String = "system", playFullScreen: Bool = true,
                 tonight: [String] = [], tonightEvening: String = "", notTonight: [String: Date] = [:],
-                yearCountsElsewhere: Bool = true, lastExplorePicks: [Int] = [], switchedToIINA: Bool = false) {
+                yearCountsElsewhere: Bool = true, lastExplorePicks: [Int] = [], switchedToIINA: Bool = false,
+                notForMe: [Int] = []) {
+        self.notForMe = notForMe
         self.tmdbToken = tmdbToken
         self.omdbKey = omdbKey
         self.drives = drives
@@ -168,6 +172,7 @@ public struct ReelSettings: Codable, Equatable, Sendable {
         yearCountsElsewhere = try c.decodeIfPresent(Bool.self, forKey: .yearCountsElsewhere) ?? true
         lastExplorePicks = try c.decodeIfPresent([Int].self, forKey: .lastExplorePicks) ?? []
         switchedToIINA = try c.decodeIfPresent(Bool.self, forKey: .switchedToIINA) ?? false
+        notForMe = try c.decodeIfPresent([Int].self, forKey: .notForMe) ?? []
     }
 }
 

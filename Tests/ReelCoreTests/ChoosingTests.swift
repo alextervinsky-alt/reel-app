@@ -86,21 +86,33 @@ final class ChoosingTests: XCTestCase {
             TMDBVideo(key: "korean", site: "YouTube", type: "Trailer", official: true, language: "ko", publishedAt: "2018-12-01"),
             TMDBVideo(key: "french", site: "YouTube", type: "Trailer", official: true, language: "fr"),
         ]
-        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: false, originalLanguage: "ko").map(\.key),
+        XCTAssertEqual(Trailers.candidates(videos, title: nil, originalLanguage: "ko").map(\.key),
                        ["trailer1", "trailer2", "teaser", "korean"])
-        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: true, originalLanguage: "ko").map(\.key),
-                       ["teaser", "trailer1", "trailer2", "korean"])
         let korean = videos.filter { $0.language != "en" }
-        XCTAssertEqual(Trailers.candidates(korean, title: nil, preferTeaser: false, originalLanguage: "ko").map(\.key), ["korean"])
+        XCTAssertEqual(Trailers.candidates(korean, title: nil, originalLanguage: "ko").map(\.key), ["korean"])
     }
 
-    func testATeaserInTheFilmsLanguageBeatsAnEnglishTrailerWhenSpoilerSafe() {
+    func testTheFullTrailerBeforeATeaser() {
         let videos = [
-            TMDBVideo(key: "english", site: "YouTube", type: "Trailer", official: true, language: "en", publishedAt: "2019-05-01"),
-            TMDBVideo(key: "teaser", site: "YouTube", type: "Teaser", official: true, language: "ko", publishedAt: "2019-03-01"),
+            TMDBVideo(key: "teaser", site: "YouTube", type: "Teaser", name: "Official Teaser", official: true, language: "en", publishedAt: "2019-03-01"),
+            TMDBVideo(key: "english", site: "YouTube", type: "Trailer", name: "Official Trailer", official: true, language: "en", publishedAt: "2019-05-01"),
         ]
-        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: true, originalLanguage: "ko").map(\.key), ["teaser", "english"])
-        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: false, originalLanguage: "ko").map(\.key), ["english", "teaser"])
+        XCTAssertEqual(Trailers.candidates(videos, title: nil, originalLanguage: "ko").map(\.key), ["english", "teaser"])
+    }
+
+    /// Isle of Dogs: short character promos labelled teasers are never played.
+    func testShortPromosAreNotTrailers() {
+        func video(_ key: String, _ name: String, type: String = "Teaser") -> TMDBVideo {
+            TMDBVideo(key: key, site: "YouTube", type: type, name: name, official: true, language: "en", publishedAt: "2018-01-01")
+        }
+        let videos = [
+            video("pack", "ISLE OF DOGS | Meet the Pack"),
+            video("chief", "Isle of Dogs | Chief"),
+            video("scene", "Isle of Dogs | Opening Scene", type: "Trailer"),
+            video("main", "ISLE OF DOGS | Official Trailer | FOX Searchlight", type: "Trailer"),
+            video("plain", "Isle of Dogs", type: "Trailer"),
+        ]
+        XCTAssertEqual(Set(Trailers.candidates(videos, title: "Isle of Dogs", originalLanguage: "en").map(\.key)), ["main", "plain"])
     }
 
     func testTheNameDecidesWhatIsATrailer() {
@@ -119,14 +131,12 @@ final class ChoosingTests: XCTestCase {
             video("archive", "The Interview (2014) Trailer", official: false, date: "2014-01-01"),
             video("fan", "Concept Video", official: false),
         ]
-        XCTAssertEqual(Trailers.candidates(videos, title: "The Interview", preferTeaser: false, originalLanguage: nil).map(\.key),
-                       ["trailer", "teaser", "archive"], "the studio's own first; the title isn't mistaken for an interview")
-        XCTAssertEqual(Trailers.candidates(videos, title: "The Interview", preferTeaser: true, originalLanguage: nil).map(\.key),
-                       ["teaser", "trailer", "archive"], "a teaser named one, never an announcement labelled Teaser")
-        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: false, originalLanguage: nil).map(\.key),
+        XCTAssertEqual(Trailers.candidates(videos, title: "The Interview", originalLanguage: nil).map(\.key),
+                       ["trailer", "teaser", "archive"], "the studio's own first; the title isn't mistaken for an interview; never an announcement labelled Teaser")
+        XCTAssertEqual(Trailers.candidates(videos, title: nil, originalLanguage: nil).map(\.key),
                        ["trailer", "teaser"], "without the title the archive upload reads as an interview")
         let onlyOthers = [video("old", "Rashomon - Original Trailer (1950)", official: false), video("x", "Rashomon", official: false)]
-        XCTAssertEqual(Trailers.candidates(onlyOthers, title: "Rashomon", preferTeaser: false, originalLanguage: nil).map(\.key), ["old"],
+        XCTAssertEqual(Trailers.candidates(onlyOthers, title: "Rashomon", originalLanguage: nil).map(\.key), ["old"],
                        "an older film still has its trailer")
     }
 
@@ -136,6 +146,6 @@ final class ChoosingTests: XCTestCase {
             TMDBVideo(key: "hd", site: "YouTube", type: "Trailer", name: "Official Trailer", official: true, language: "en", publishedAt: "2019-02-01", size: 1080),
             TMDBVideo(key: "uhd", site: "YouTube", type: "Trailer", name: "Official Trailer 2", official: true, language: "en", publishedAt: "2019-03-01", size: 2160),
         ]
-        XCTAssertEqual(Trailers.candidates(videos, title: nil, preferTeaser: false, originalLanguage: nil).map(\.key), ["hd", "uhd", "sd"])
+        XCTAssertEqual(Trailers.candidates(videos, title: nil, originalLanguage: nil).map(\.key), ["hd", "uhd", "sd"])
     }
 }

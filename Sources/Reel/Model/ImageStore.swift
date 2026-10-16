@@ -346,6 +346,8 @@ final class Interest: @unchecked Sendable {
 /// others fade in when they arrive.
 struct CachedImage<Placeholder: View>: View {
     @Environment(\.isSnapshot) private var isSnapshot
+    /// In a scrolling grid: images that arrive mid-scroll appear at once, without fading in.
+    @Environment(ScrollState.self) private var scroll: ScrollState?
     let path: String?
     let kind: ImageKind
     var fit = false
@@ -388,9 +390,14 @@ struct CachedImage<Placeholder: View>: View {
             var wait = 0
             while !Task.isCancelled, !ImageStore.shared.isMissing(path, kind) {
                 if let fetched = await ImageStore.shared.image(path, kind, monochrome: monochrome) {
-                    withAnimation(.easeOut(duration: 0.25)) {
+                    if scroll?.isScrolling == true {
                         loaded = fetched
                         loadedKey = wanted
+                    } else {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            loaded = fetched
+                            loadedKey = wanted
+                        }
                     }
                     return
                 }

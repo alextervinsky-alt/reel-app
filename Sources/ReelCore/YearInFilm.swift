@@ -18,10 +18,15 @@ public struct YearFilm: Equatable, Sendable, Identifiable {
     public let cast: [String]
     /// Seen somewhere else (its date is a guess or a month, not a night).
     public let elsewhere: Bool
+    /// Who shot it and who wrote its music (TMDB's credits; not known for films seen elsewhere).
+    public let cinematographers: [String]
+    public let composers: [String]
 
     public init(id: String, title: String, releaseYear: Int?, watchedOn: Date, runtime: Int?, genres: [String],
                 directors: [String], yourRating: Int?, score: Double?, language: String? = nil,
-                cast: [String] = [], elsewhere: Bool = false) {
+                cast: [String] = [], elsewhere: Bool = false, cinematographers: [String] = [], composers: [String] = []) {
+        self.cinematographers = cinematographers
+        self.composers = composers
         self.id = id
         self.title = title
         self.releaseYear = releaseYear
@@ -115,6 +120,29 @@ public struct Tally: Equatable, Sendable, Identifiable {
     public let name: String
     public let count: Int
     public var id: String { name }
+
+    public init(name: String, count: Int) {
+        self.name = name
+        self.count = count
+    }
+}
+
+/// A film you rated well above or below its average score (your stars on the same 10-point
+/// scale: ★★★★★ is 10).
+public struct RatingGap: Equatable, Sendable, Identifiable {
+    public let film: YearFilm
+    public let stars: Int
+    public let score: Double
+    public var id: String { film.id }
+    /// Your stars on a 10-point scale minus the score: positive, you liked it more.
+    public var difference: Double { Double(stars * 2) - score }
+}
+
+/// Nights in a row with a film.
+public struct FilmRun: Equatable, Sendable {
+    public let nights: Int
+    public let start: Date
+    public let end: Date
 }
 
 /// A year of watching, worked out from the films you marked as watched (with the date).
@@ -148,6 +176,25 @@ public struct YearInFilm: Equatable, Sendable {
     public let languageCount: Int
     /// Actors in at least two of the year's films.
     public let topActors: [Tally]
+    // More of the year, each counted from the film's own facts or your own dates and stars:
+    public let shortest: YearFilm?
+    /// The most recent release among them.
+    public let newest: YearFilm?
+    /// Cinematographers and composers of at least two of the year's films.
+    public let topCinematographers: [Tally]
+    public let topComposers: [Tally]
+    /// How many films got each number of stars, one star first.
+    public let starCounts: [Int]
+    /// How old the films were, on average, when you watched them (in years; from three films).
+    public let averageAge: Int?
+    /// The most nights in a row you watched a film on your drives (two or more).
+    public let longestRun: FilmRun?
+    /// Films watched on your drives on each day of the week, Sunday first.
+    public let weekdays: [Int]
+    /// Films you rated at least two points above (or below) their average score, the biggest
+    /// gaps first, three at most.
+    public let warmerThanMost: [RatingGap]
+    public let coolerThanMost: [RatingGap]
 
     public init(year: Int, from all: [YearFilm], calendar: Calendar = .current) {
         self.year = year
@@ -185,6 +232,38 @@ public struct YearInFilm: Equatable, Sendable {
         languages = Self.tally(spoken, minimum: 1, limit: 4)
         languageCount = Set(spoken).count
         topActors = Self.tally(films.flatMap(\.cast), minimum: 2, limit: 4)
+
+        shortest = films.filter { ($0.runtime ?? 0) > 0 }.min { ($0.runtime ?? 0) < ($1.runtime ?? 0) }
+        newest = films.filter { $0.releaseYear != nil }.max { ($0.releaseYear ?? 0) < ($1.releaseYear ?? 0) }
+        topCinematographers = Self.tally(films.flatMap { Set($0.cinematographers) }, minimum: 2, limit: 3)
+        topComposers = Self.tally(films.flatMap { Set($0.composers) }, minimum: 2, limit: 3)
+        var starCounts = Array(repeating: 0, count: 5)
+        for star in stars where (1...5).contains(star) { starCounts[star - 1] += 1 }
+        self.starCounts = starCounts
+        let ages = films.compactMap { film in film.releaseYear.map { max(0, calendar.component(.year, from: film.watchedOn) - $0) } }
+        averageAge = ages.count < 3 ? nil : Int((Double(ages.reduce(0, +)) / Double(ages.count)).rounded())
+        longestRun = Self.longestRun(films.filter { !$0.elsewhere }.map(\.watchedOn), calendar: calendar)
+        weekdays = Array(nights[1...7])
+        let gaps = films.compactMap { film -> RatingGap? in
+            guard let stars = film.yourRating, let score = film.score, score > 0 else { return nil }
+            return RatingGap(film: film, stars: stars, score: score)
+        }
+        warmerThanMost = Array(gaps.filter { $0.difference >= 2 }.sorted { $0.difference > $1.difference }.prefix(3))
+        coolerThanMost = Array(gaps.filter { $0.difference <= -2 }.sorted { $0.difference < $1.difference }.prefix(3))
+    }
+
+    /// The most days in a row with at least one film (two or more; the earliest such run).
+    static func longestRun(_ dates: [Date], calendar: Calendar) -> FilmRun? {
+        let days = Set(dates.map { calendar.startOfDay(for: $0) }).sorted()
+        var best: FilmRun?
+        var start = 0
+        for i in days.indices {
+            let continues = i > 0 && calendar.dateComponents([.day], from: days[i - 1], to: days[i]).day == 1
+            if !continues { start = i }
+            let length = i - start + 1
+            if length >= 2, length > (best?.nights ?? 0) { best = FilmRun(nights: length, start: days[start], end: days[i]) }
+        }
+        return best
     }
 
     /// Years with at least one dated viewing, newest first.

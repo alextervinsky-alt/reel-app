@@ -34,6 +34,8 @@ public enum BestOfSource: String, CaseIterable, Hashable, Sendable, Identifiable
 public enum DiscoverList: Hashable, Sendable {
     /// In cinemas now.
     case inCinemas
+    /// Opening in cinemas in the next three months.
+    case comingSoon
     /// Most popular this week.
     case trending
     /// Popular films released three to five months ago: by now out on Blu-ray and digital.
@@ -53,6 +55,8 @@ public enum DiscoverList: Hashable, Sendable {
     case hiddenGems
     /// Films with one of TMDB's themes (Lists' search): "Heist", "Time Travel".
     case theme(ListSearch.Theme)
+    /// The other films of a director whose film you loved (from their TMDB filmography).
+    case director(id: Int, name: String)
 
     /// Countries whose cinema Explore offers a shelf of, one each time Reel opens.
     public static let countries: [(code: String, name: String)] = [
@@ -67,6 +71,7 @@ public enum DiscoverList: Hashable, Sendable {
     public var title: String {
         switch self {
         case .inCinemas: "In Cinemas Now"
+        case .comingSoon: "Coming Soon"
         case .trending: "Trending This Week"
         case .newAtHome: "New at Home"
         case .bestOf(let year, _): "Best of \(year)"
@@ -76,12 +81,14 @@ public enum DiscoverList: Hashable, Sendable {
         case .because(_, let title): "Because You Loved \(title)"
         case .hiddenGems: "Hidden Gems"
         case .theme(let theme): theme.title
+        case .director(_, let name): "More from \(name)"
         }
     }
 
     public var subtitle: String {
         switch self {
         case .inCinemas: "Playing in cinemas right now"
+        case .comingSoon: "Opening in cinemas in the next three months, the most awaited first"
         case .trending: "What everyone is watching this week"
         case .newAtHome: "Big films from 3–5 months ago, now out on Blu-ray and digital"
         case .bestOf(let year, let source): source.subtitle(year)
@@ -91,6 +98,7 @@ public enum DiscoverList: Hashable, Sendable {
         case .because: "What people who loved it went on to love · a different film of yours each time"
         case .hiddenGems: "Rated highly by the few who've seen them, from any time"
         case .theme(let theme): "Films about \(theme.name), the best-rated first"
+        case .director: "The other films of a director whose film you loved, the best-rated first · a different one each time Reel opens"
         }
     }
 
@@ -116,6 +124,17 @@ public enum DiscoverList: Hashable, Sendable {
         case .inCinemas:
             // US releases: the same big films that reach European cinemas, without obscure entries.
             return ("/movie/now_playing", [URLQueryItem(name: "region", value: "US")], 2)
+        case .comingSoon:
+            func daysAhead(_ n: Int) -> String { day.string(from: today.addingTimeInterval(Double(n) * 86_400)) }
+            // Cinema releases in the US (theatrical: types 2 and 3), the ones people wait for.
+            return ("/discover/movie", [
+                URLQueryItem(name: "region", value: "US"),
+                URLQueryItem(name: "with_release_type", value: "2|3"),
+                URLQueryItem(name: "release_date.gte", value: daysAhead(1)),
+                URLQueryItem(name: "release_date.lte", value: daysAhead(90)),
+                URLQueryItem(name: "sort_by", value: "popularity.desc"),
+                noAdult,
+            ], 2)
         case .trending:
             return ("/trending/movie/week", [], 2)
         case .newAtHome:
@@ -182,6 +201,9 @@ public enum DiscoverList: Hashable, Sendable {
                 URLQueryItem(name: "vote_count.gte", value: "60"),
                 noAdult,
             ], 3)
+        case .director(let id, _):
+            // Their filmography, not a list of results: see `DirectorFilms`.
+            return ("/person/\(id)/movie_credits", [], 1)
         }
     }
 
@@ -191,11 +213,13 @@ public enum DiscoverList: Hashable, Sendable {
         return nil
     }
 
-    /// Three shelves for this launch, by chance: one of your loved films' (when there are
-    /// any), a country's cinema, and a decade or the hidden gems.
-    public static func shelves<G: RandomNumberGenerator>(loved: [(id: Int, title: String)], using generator: inout G) -> [DiscoverList] {
+    /// Shelves for this launch, by chance: one of your loved films' (when there are any), more
+    /// from the director of one (when known), a country's cinema, and a decade or the hidden gems.
+    public static func shelves<G: RandomNumberGenerator>(loved: [(id: Int, title: String)], directors: [(id: Int, name: String)] = [],
+                                                         using generator: inout G) -> [DiscoverList] {
         var shelves: [DiscoverList] = []
         if let film = loved.randomElement(using: &generator) { shelves.append(.because(id: film.id, title: film.title)) }
+        if let director = directors.randomElement(using: &generator) { shelves.append(.director(id: director.id, name: director.name)) }
         if let country = countries.randomElement(using: &generator) { shelves.append(.country(code: country.code)) }
         if Bool.random(using: &generator), let decade = decades.randomElement(using: &generator) {
             shelves.append(.decade(decade))
@@ -263,5 +287,23 @@ public struct WishlistFilm: Codable, Equatable, Sendable, Identifiable {
         self.posterPath = posterPath
         self.backdropPath = backdropPath
         self.addedAt = addedAt
+    }
+}
+
+/// A director's films for Explore, from their TMDB filmography: the ones they directed that are
+/// out, known enough to have votes, best-rated first.
+public enum DirectorFilms {
+    public static func films(from credits: TMDBPersonCredits?, today: String) -> [TMDBMovieSummary] {
+        var seen = Set<Int>()
+        return (credits?.crew ?? [])
+            .filter { $0.job == "Director" && ($0.voteCount ?? 0) >= 20 }
+            .filter { credit in credit.releaseDate.map { !$0.isEmpty && $0 <= today } ?? false }
+            .filter { seen.insert($0.id).inserted }
+            .sorted { ($0.voteAverage ?? 0) > ($1.voteAverage ?? 0) }
+            .map { credit in
+                TMDBMovieSummary(id: credit.id, title: credit.title ?? "", releaseDate: credit.releaseDate, overview: credit.overview,
+                                 posterPath: credit.posterPath, backdropPath: credit.backdropPath, voteAverage: credit.voteAverage,
+                                 voteCount: credit.voteCount, genreIDs: credit.genreIDs)
+            }
     }
 }

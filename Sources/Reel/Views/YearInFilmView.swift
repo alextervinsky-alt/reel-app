@@ -22,8 +22,9 @@ struct YearInFilmView: View {
             VStack(alignment: .leading, spacing: 30) {
                 header(years: years, year: year, hasElsewhere: !elsewhere.isEmpty)
                 if let year {
-                    YearSummary(summary: YearInFilm(year: year, from: all), elsewhere: model.seenElsewhere(in: year),
-                                counted: model.yearCountsElsewhere) { preview = $0 }
+                    let before = YearInFilm(year: year - 1, from: all)
+                    YearSummary(summary: YearInFilm(year: year, from: all), previous: before.films.isEmpty ? nil : before,
+                                elsewhere: model.seenElsewhere(in: year), counted: model.yearCountsElsewhere) { preview = $0 }
                 } else {
                     ContentUnavailableView("Your year starts with a film", systemImage: "calendar",
                                            description: Text("Mark films as watched and they'll be counted here, month by month."))
@@ -80,6 +81,8 @@ struct YearInFilmView: View {
 private struct YearSummary: View {
     @Environment(AppModel.self) private var model
     let summary: YearInFilm
+    /// The year before, when it has films: to compare with.
+    let previous: YearInFilm?
     /// This year's films seen elsewhere, newest first.
     let elsewhere: [SeenElsewhere]
     /// They're in the numbers (otherwise only listed, to rate and date).
@@ -93,8 +96,9 @@ private struct YearSummary: View {
                 months
                 inNumbers
                 highlights
-                if !summary.topGenres.isEmpty || !summary.topDirectors.isEmpty || summary.languageCount > 1
-                    || !summary.topActors.isEmpty { tastes }
+                if summary.starCounts.reduce(0, +) >= 3 || summary.weekdays.reduce(0, +) >= 5 { starsAndNights }
+                if !summary.warmerThanMost.isEmpty || !summary.coolerThanMost.isEmpty { youAndTheCritics }
+                tastes
                 everyFilm
             }
             if !elsewhere.isEmpty { seenElsewhere }
@@ -126,7 +130,8 @@ private struct YearSummary: View {
     // MARK: Numbers
 
     private var numbers: some View {
-        HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
             BigNumber(value: "\(summary.films.count)", label: summary.films.count == 1 ? "film" : "films")
             BigNumber(value: hours, label: "hours of film")
             if let genre = summary.topGenres.first {
@@ -135,7 +140,25 @@ private struct YearSummary: View {
             if let decade = summary.decades.max(by: { $0.count < $1.count }) {
                 BigNumber(value: decade.name, label: "favourite decade")
             }
+            }
+            if let previous { comparison(with: previous) }
         }
+    }
+
+    /// "4 more films and 9 more hours than in 2025"
+    private func comparison(with previous: YearInFilm) -> some View {
+        let films = summary.films.count - previous.films.count
+        let hours = Int((Double(summary.minutes - previous.minutes) / 60).rounded())
+        func part(_ n: Int, _ one: String, _ many: String) -> String? {
+            n == 0 ? nil : "\(abs(n)) \(n > 0 ? "more" : "fewer") \(abs(n) == 1 ? one : many)"
+        }
+        let parts = [part(films, "film", "films"), part(hours, "hour", "hours")]
+            .compactMap { $0 }
+        let text = parts.isEmpty ? "As many films as in \(String(previous.year))" : parts.joined(separator: " and ") + " than in \(String(previous.year))"
+        return Label(text, systemImage: films >= 0 ? "arrow.up.right" : "arrow.down.right")
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            .help("\(String(previous.year)): \(previous.films.count) films, \(Int((Double(previous.minutes) / 60).rounded())) hours")
     }
 
     private var hours: String {
@@ -177,6 +200,15 @@ private struct YearSummary: View {
             figures.append((Calendar.current.weekdaySymbols[day - 1] + "s", "your film night"))
         }
         if summary.languageCount > 1 { figures.append(("\(summary.languageCount)", "Languages")) }
+        if let run = summary.longestRun {
+            let span = run.start.formatted(.dateTime.day().month(.abbreviated)) + "–" + run.end.formatted(.dateTime.day().month(.abbreviated))
+            figures.append(("\(run.nights) nights", "your longest run · \(span)"))
+        }
+        if let age = summary.averageAge {
+            figures.append((age == 1 ? "1 year" : "\(age) years", "how old a film was, on average, when you saw it"))
+        }
+        let rated = summary.starCounts.reduce(0, +)
+        if rated > 0 { figures.append(("\(rated) of \(summary.films.count)", "films you gave stars")) }
         return figures
     }
 
@@ -219,7 +251,7 @@ private struct YearSummary: View {
         if !picks.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Theme.sectionTitle("Highlights")
-                HStack(alignment: .top, spacing: 16) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16, alignment: .top)], alignment: .leading, spacing: 18) {
                     ForEach(picks, id: \.label) { pick in
                         opening(pick.film) {
                             HighlightCard(label: pick.label, title: pick.film.title, detail: pick.detail,
@@ -248,18 +280,117 @@ private struct YearSummary: View {
         if let film = summary.oldest {
             add(Highlight(label: "Oldest", film: film, detail: film.releaseYear.map(String.init) ?? ""))
         }
+        if let film = summary.shortest {
+            add(Highlight(label: "Shortest", film: film, detail: film.runtime.map { Format.runtime($0) } ?? ""))
+        }
+        if let film = summary.newest {
+            add(Highlight(label: "Newest", film: film, detail: film.releaseYear.map(String.init) ?? ""))
+        }
+        if let film = summary.films.first {
+            add(Highlight(label: "First of the year", film: film, detail: film.watchedOn.formatted(.dateTime.day().month(.wide))))
+        }
         return picks
     }
 
-    // MARK: Genres and directors
+    // MARK: Stars and nights
 
+    /// How you rated the year (one star to five), and which nights you watched.
+    private var starsAndNights: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
+            if summary.starCounts.reduce(0, +) >= 3 {
+                CountChart(title: "Your Stars", labels: (1...5).map { String(repeating: "★", count: $0) }, counts: summary.starCounts,
+                           note: "Every film you rated this year")
+            }
+            if summary.weekdays.reduce(0, +) >= 5 {
+                let calendar = Calendar.current
+                // In the week's own order here (Monday first in Estonia).
+                let order = (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 }
+                CountChart(title: "Your Film Nights", labels: order.map { calendar.shortWeekdaySymbols[$0] },
+                           counts: order.map { summary.weekdays[$0] }, note: "Films watched from your drives, by day of the week")
+            }
+        }
+    }
+
+    // MARK: You and the critics
+
+    /// Films you rated well above or below their average score (IMDb, else TMDB): ★★★★★ is 10.
+    private var youAndTheCritics: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Theme.sectionTitle("You and Everyone Else")
+                Text("Your stars against each film's average score (IMDb, else TMDB), with five stars as 10")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
+                if !summary.warmerThanMost.isEmpty { gapPanel("You liked more than most", summary.warmerThanMost) }
+                if !summary.coolerThanMost.isEmpty { gapPanel("You liked less than most", summary.coolerThanMost) }
+            }
+        }
+    }
+
+    private func gapPanel(_ title: String, _ gaps: [RatingGap]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.system(size: 15, weight: .semibold))
+            ForEach(gaps) { gap in
+                opening(gap.film) {
+                    HStack(spacing: 12) {
+                        Poster(path: posterPath(gap.film), title: "", kind: .thumbnail, cornerRadius: 4)
+                            .frame(width: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(gap.film.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                            Text("You " + String(repeating: "★", count: max(1, min(5, gap.stars))) + " · average " + Format.rating(gap.score))
+                                .font(.system(size: 12))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+    }
+
+    // MARK: Genres, people, decades and lists
+
+    /// The great lists your films of the year are on (from your drives: winners and members only).
+    private var onTheLists: [Tally] {
+        var names: [String] = []
+        for film in summary.films {
+            guard let item = model.item(forKey: film.id) else { continue }
+            names += Set(model.badges(for: item.main).filter(\.isWin).map { $0.kind.title })
+        }
+        var counts: [String: Int] = [:]
+        for name in names { counts[name, default: 0] += 1 }
+        return counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(5).map { Tally(name: $0.key, count: $0.value) }
+    }
+
+    @ViewBuilder
     private var tastes: some View {
+        let lists = onTheLists
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
             if !summary.topGenres.isEmpty {
                 TallyPanel(title: "Genres", tallies: summary.topGenres)
             }
+            if summary.decades.count > 1 {
+                TallyPanel(title: "Decades", tallies: summary.decades)
+            }
             if !summary.topDirectors.isEmpty {
                 TallyPanel(title: "Directors you came back to", tallies: summary.topDirectors)
+            }
+            if !summary.topCinematographers.isEmpty {
+                TallyPanel(title: "Cinematographers you came back to", tallies: summary.topCinematographers)
+            }
+            if !summary.topComposers.isEmpty {
+                TallyPanel(title: "Composers you came back to", tallies: summary.topComposers)
+            }
+            if !lists.isEmpty {
+                TallyPanel(title: "On the great lists", tallies: lists)
             }
             // Only when the year goes beyond one language.
             if summary.languageCount > 1 {
@@ -504,6 +635,42 @@ private struct DateByReleaseButton: View {
         }
     }
 }
+/// A small bar chart of counts (stars, nights of the week), each bar with its number.
+private struct CountChart: View {
+    let title: String
+    let labels: [String]
+    let counts: [Int]
+    let note: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.system(size: 15, weight: .semibold))
+            Chart {
+                ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                    BarMark(x: .value("Kind", label), y: .value("Films", counts[index]))
+                        .foregroundStyle(Theme.brandGradient)
+                        .cornerRadius(4)
+                        .annotation(position: .top) {
+                            if counts[index] > 0 {
+                                Text("\(counts[index])")
+                                    .font(.system(size: 10.5, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                }
+            }
+            .chartYAxis(.hidden)
+            .chartXAxis { AxisMarks { _ in AxisValueLabel().font(.system(size: 11)) } }
+            .frame(height: 120)
+            Text(note).font(.system(size: 11.5)).foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
+    }
+}
+
 /// One figure of In Numbers: the number, and what it counts.
 private struct FigureCell: View {
     let value: String

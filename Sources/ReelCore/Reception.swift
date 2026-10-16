@@ -96,6 +96,7 @@ public enum ReceptionAnalyzer {
         case "Emotion": return disliked ? "a lack of emotional pull" : "its emotional pull"
         case "Realism": return disliked ? "implausible moments" : "its realism"
         case "Humour": return "its humour"
+        case "Intensity": return disliked ? "scenes too dark or intense" : "its intensity"
         default: return "its \(aspect.lowercased())"
         }
     }
@@ -104,6 +105,21 @@ public enum ReceptionAnalyzer {
         "boring", "drags", "dragged", "overlong", "too long", "tedious", "predictable", "forgettable",
         "confusing", "bland", "messy", "cliched", "clichéd", "dull", "shallow", "pretentious", "cheesy",
         "uneven", "bloated", "disappointing", "underwhelming", "wasted", "lacks", "lacking", "falls flat",
+        // How viewers say what didn't work for them in an otherwise warm review.
+        "complaint", "gripe", "nitpick", "downside", "drawback", "weakest", "could have been",
+        "would have liked", "a bit too", "a little too", "too slow", "too dark", "too scary", "too intense",
+        "too violent", "too much", "not enough", "convoluted", "lost me",
+    ]
+
+    /// What a clause with no aspect word is about, from the way it complains ("it's a bit
+    /// confusing" is the story, "it drags" the pacing).
+    static let cueAspects: [(cue: String, aspect: String)] = [
+        ("confusing", "Story"), ("convoluted", "Story"), ("lost me", "Story"), ("messy", "Story"),
+        ("predictable", "Originality"), ("cliched", "Originality"), ("clichéd", "Originality"), ("formulaic", "Originality"),
+        ("boring", "Pacing"), ("dull", "Pacing"), ("tedious", "Pacing"), ("drags", "Pacing"), ("dragged", "Pacing"),
+        ("overlong", "Pacing"), ("too long", "Pacing"), ("bloated", "Pacing"), ("too slow", "Pacing"),
+        ("cheesy", "Dialogue"), ("pretentious", "Tone"),
+        ("too dark", "Intensity"), ("too scary", "Intensity"), ("too intense", "Intensity"), ("too violent", "Intensity"),
     ]
 
     static let positiveCues: Set<String> = [
@@ -145,10 +161,26 @@ public enum ReceptionAnalyzer {
                 // Each part of "praised the visuals but faulted the pacing" counts on its own.
                 for clause in clauses(of: sentence) {
                     let lower = clause.lowercased()
-                    let matched = aspects(in: lower)
+                    var matched = aspects(in: lower)
+                    // "It's a bit confusing at times": a complaint names its aspect itself.
+                    if matched.isEmpty, let cue = cueAspects.first(where: { lower.contains($0.cue) }), !negated(cue.cue, in: lower) {
+                        matched = [cue.aspect]
+                    }
                     guard !matched.isEmpty else { continue }
 
                     let said = reported(lower)
+                    // Each way of complaining counts ("my only complaint is that it drags");
+                    // denied, it praises ("never boring", "no complaints").
+                    var cues = 0.0
+                    var complains = false
+                    for cue in negativeCues where lower.contains(cue) {
+                        if negated(cue, in: lower) {
+                            cues += 0.5
+                        } else {
+                            cues -= 0.4
+                            complains = true
+                        }
+                    }
                     var score: Double
                     if review.isCritic {
                         // A critic as Wikipedia tells it: what they're said to have done decides
@@ -160,13 +192,10 @@ public enum ReceptionAnalyzer {
                             guard abs(score) >= 0.5 else { continue }
                         }
                     } else {
-                        score = sentiment(clause) + bias + 0.3 * Double(said)
+                        // A warm review's score doesn't soften what it complains about.
+                        score = sentiment(clause) + (complains ? min(bias, 0) : bias) + 0.3 * Double(said)
                     }
-                    for cue in negativeCues where lower.contains(cue) {
-                        // "never boring" praises.
-                        score += negated(cue, in: lower) ? 0.5 : -0.4
-                        break
-                    }
+                    score += max(cues, -0.8)
                     let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
                     if !words.isDisjoint(with: positiveCues) { score += 0.2 }
                     guard abs(score) >= 0.25 else { continue }
@@ -200,6 +229,11 @@ public enum ReceptionAnalyzer {
             .filter { $0.value.dislike >= minimum && Double($0.value.dislike) >= Double($0.value.like) * 0.4 && !liked.contains($0.key) }
             .map { $0.key }
         for entry in byDislikes where disliked.count < 2 && entry.value.dislike >= 1 && !disliked.contains(entry.key) && !liked.prefix(2).contains(entry.key) {
+            disliked.append(entry.key)
+        }
+        // Still short: a real complaint about something most liked counts too ("the story is
+        // beautiful" from many, "a bit confusing" from one), shown with its own sentence.
+        for entry in byDislikes where disliked.count < 2 && entry.value.dislike >= 1 && !disliked.contains(entry.key) {
             disliked.append(entry.key)
         }
 

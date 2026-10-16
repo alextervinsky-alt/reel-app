@@ -39,6 +39,37 @@ final class ReceptionTests: XCTestCase {
         XCTAssertTrue(summary.disliked.map(\.aspect).contains("Pacing"))
     }
 
+    /// A warm film whose few complaints don't name an aspect, or are about what most loved.
+    func testRealComplaintsAreFound() {
+        let reviews = [
+            ReviewText(text: "The story is beautiful and the animation is stunning in every frame.", rating: 9),
+            ReviewText(text: "A beautiful story, gorgeous visuals and a wonderful score.", rating: 10),
+            ReviewText(text: "I loved it. My only complaint is that the middle section drags a little.", rating: 8),
+            ReviewText(text: "Wonderful film, although the story is a bit confusing at times for younger kids.", rating: 8),
+            ReviewText(text: "No complaints at all, a masterpiece from start to finish.", rating: 10),
+        ]
+        let sentiment: (String) -> Double = { s in
+            let l = s.lowercased()
+            if ["beautiful", "stunning", "gorgeous", "wonderful", "loved", "masterpiece"].contains(where: { l.contains($0) }) { return 0.7 }
+            return 0
+        }
+        let summary = try! XCTUnwrap(ReceptionAnalyzer.summarize(reviews, sentiment: sentiment))
+        let disliked = summary.disliked.map(\.aspect)
+        XCTAssertTrue(disliked.contains("Pacing"), "\(disliked)")
+        XCTAssertTrue(disliked.contains("Story"), "a complaint about what most liked still counts: \(disliked)")
+        XCTAssertTrue(summary.liked.map(\.aspect).contains("Story"))
+    }
+
+    /// Nothing negative said: nothing is made up.
+    func testNoComplaintsNoDislikes() {
+        let reviews = [
+            ReviewText(text: "The story is beautiful and the animation is stunning in every frame.", rating: 9),
+            ReviewText(text: "No complaints at all, the music is a masterpiece.", rating: 10),
+        ]
+        let summary = try! XCTUnwrap(ReceptionAnalyzer.summarize(reviews, sentiment: { $0.lowercased().contains("beautiful") ? 0.7 : 0.1 }))
+        XCTAssertEqual(summary.disliked, [])
+    }
+
     func testOrdinaryWordsAreNotVerdicts() {
         XCTAssertEqual(ReceptionAnalyzer.reported("ebert called the cinematography flawless"), 0)
         XCTAssertEqual(ReceptionAnalyzer.reported("another reviewer praised the score"), 1)

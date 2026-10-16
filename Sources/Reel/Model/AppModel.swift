@@ -115,6 +115,8 @@ final class AppModel {
     @ObservationIgnored let tonightMarks = TonightMarks()
     /// Film key → until when it's kept out of Recommended.
     var notTonight: [String: Date] = [:]
+    /// Films you said aren't for you (TMDB ids): never suggested again in For You and Explore.
+    var notForMe: Set<Int> = []
     /// Why each of the five picks is there ("From the director of Stalker").
     var recommendedReasons: [String: PickReason] = [:]
     /// "How was it?", asked after a film is marked watched.
@@ -242,6 +244,9 @@ final class AppModel {
     /// A rebuild waiting to run (background changes are gathered, see `setFilms`).
     @ObservationIgnored var rebuildTask: Task<Void, Never>?
     @ObservationIgnored var lastRebuild = Date.distantPast
+    /// A grid of posters is being scrolled: library updates wait until it stops (for at most a
+    /// few seconds), so new film info never redraws posters mid-scroll.
+    @ObservationIgnored var userIsScrolling = false
     /// Set candidates wait for the end of a lookup run (see `rebuild`).
     @ObservationIgnored var candidatesDirty = false
     @ObservationIgnored var finishedClear: Task<Void, Never>?
@@ -309,6 +314,7 @@ final class AppModel {
             tonightEvening = value.tonightEvening
             tonight = value.tonightEvening == Evening.of(Date()) ? value.tonight : []
             notTonight = value.notTonight.filter { $0.value > Date() }
+            notForMe = Set(value.notForMe)
         }
         hasToken = !token.isEmpty
         switchToIINAOnce()
@@ -515,6 +521,11 @@ final class AppModel {
         let wait = max(0, rebuildInterval - Date().timeIntervalSince(lastRebuild))
         rebuildTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait))
+            var waited = 0
+            while self?.userIsScrolling == true, waited < 16, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                waited += 1
+            }
             guard let self, !Task.isCancelled, self.rebuildTask != nil else { return }
             self.rebuild()
         }
