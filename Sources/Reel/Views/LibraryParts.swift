@@ -144,7 +144,7 @@ struct FilmList: View {
     let sortable: Bool
     @State private var width: CGFloat = 1100
 
-    private var wide: Bool { width >= 1020 }
+    private var wide: Bool { width >= 1080 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -217,8 +217,8 @@ struct FilmListRow: View {
     static let year: CGFloat = 58
     static let length: CGFloat = 70
     static let genre: CGFloat = 170
-    static let ratings: CGFloat = 170
-    static let shot: CGFloat = 130
+    static let ratings: CGFloat = 160
+    static let shot: CGFloat = 170
     static let file: CGFloat = 76
     static let status: CGFloat = 92
 
