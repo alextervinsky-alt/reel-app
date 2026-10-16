@@ -24,7 +24,10 @@ final class ReceptionTests: XCTestCase {
     }
 
     func testEachPartOfASentenceCountsOnItsOwn() {
-        let reviews = [ReviewText(text: "The visuals are gorgeous but the pacing is tedious and the ending is never boring.", rating: 6)]
+        let reviews = [
+            ReviewText(text: "The visuals are gorgeous but the pacing is tedious in the middle.", rating: 6),
+            ReviewText(text: "Honestly the pacing is tedious from the start to the end.", rating: 5),
+        ]
         let sentiment: (String) -> Double = { s in
             let l = s.lowercased()
             if l.contains("gorgeous") { return 0.7 }

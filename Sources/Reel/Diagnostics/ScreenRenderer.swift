@@ -188,7 +188,7 @@ enum ScreenRenderer {
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("desk-list.png"))
         if let film = model.film(id: first.id) {
-            render(AtAGlance(film: film).frame(width: 340).padding(32).background(Theme.background),
+            render(FilmFactSheet(film: film).frame(width: 340).padding(32).background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("desk-at-a-glance.png"))
         }
         render(TonightCard(isSelected: false) {}.frame(width: 216).padding(20).background(Theme.sidebar).background(Theme.background),

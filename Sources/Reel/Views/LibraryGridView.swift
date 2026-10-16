@@ -42,8 +42,11 @@ struct LibraryGridView: View {
     /// Seen It? (Unwatched): one poster at a time.
     @State private var sweeping = false
 
+    /// The posters' columns elsewhere (Explore, lists): the default size.
+    static let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 24, alignment: .top)]
+
     /// As many columns as fit at the chosen poster size.
-    private var columns: [GridItem] {
+    private var gridColumns: [GridItem] {
         [GridItem(.adaptive(minimum: posterSize, maximum: posterSize * 1.22), spacing: 22, alignment: .top)]
     }
 
@@ -103,7 +106,7 @@ struct LibraryGridView: View {
                 } else if shelf == .watched && query.isEmpty {
                     watchedByMonth(shown)
                 } else {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
+                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 30) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
                             card(item).onAppear { readAhead.warm(at: index, in: shown) }
                         }
@@ -250,7 +253,7 @@ struct LibraryGridView: View {
     private func watchedByMonth(_ shown: [LibraryItem]) -> some View {
         let dates = model.personal.watchedDates
         let groups = Self.monthGroups(shown) { dates[$0.id] }
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 30, pinnedViews: []) {
+        return LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 30, pinnedViews: []) {
             ForEach(groups, id: \.title) { group in
                 Section {
                     ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in

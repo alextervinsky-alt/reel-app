@@ -342,11 +342,11 @@ struct OverviewTab: View {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 48) {
                     story(details, moods: moods).frame(width: 540, alignment: .leading)
-                    AtAGlance(film: film).frame(width: 340, alignment: .leading)
+                    FilmFactSheet(film: film).frame(width: 340, alignment: .leading)
                 }
                 VStack(alignment: .leading, spacing: 28) {
                     story(details, moods: moods)
-                    AtAGlance(film: film).frame(maxWidth: 560, alignment: .leading)
+                    FilmFactSheet(film: film).frame(maxWidth: 560, alignment: .leading)
                 }
             }
             if let details, !details.topCast.isEmpty { cast(details) }
@@ -453,7 +453,7 @@ struct OverviewTab: View {
 
 /// Everything about the film in one place: who made it, how it was shot, the file, where your
 /// copies are, and your own notes on it.
-struct AtAGlance: View {
+struct FilmFactSheet: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
 
