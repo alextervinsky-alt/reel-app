@@ -106,9 +106,9 @@ public enum ReceptionAnalyzer {
         "confusing", "bland", "messy", "cliched", "clichéd", "dull", "shallow", "pretentious", "cheesy",
         "uneven", "bloated", "disappointing", "underwhelming", "wasted", "lacks", "lacking", "falls flat",
         // How viewers say what didn't work for them in an otherwise warm review.
-        "complaint", "gripe", "nitpick", "downside", "drawback", "weakest", "could have been",
+        "complaint", "complaints", "gripe", "nitpick", "downside", "drawback", "weakest",
         "would have liked", "a bit too", "a little too", "too slow", "too dark", "too scary", "too intense",
-        "too violent", "too much", "not enough", "convoluted", "lost me",
+        "too violent", "not enough", "convoluted", "lost me",
     ]
 
     /// What a clause with no aspect word is about, from the way it complains ("it's a bit
@@ -118,7 +118,7 @@ public enum ReceptionAnalyzer {
         ("predictable", "Originality"), ("cliched", "Originality"), ("clichéd", "Originality"), ("formulaic", "Originality"),
         ("boring", "Pacing"), ("dull", "Pacing"), ("tedious", "Pacing"), ("drags", "Pacing"), ("dragged", "Pacing"),
         ("overlong", "Pacing"), ("too long", "Pacing"), ("bloated", "Pacing"), ("too slow", "Pacing"),
-        ("cheesy", "Dialogue"), ("pretentious", "Tone"),
+        ("cheesy", "Dialogue"), ("pretentious", "Atmosphere"),
         ("too dark", "Intensity"), ("too scary", "Intensity"), ("too intense", "Intensity"), ("too violent", "Intensity"),
     ]
 
@@ -141,6 +141,9 @@ public enum ReceptionAnalyzer {
             /// each point gets one no other point shows).
             var likeQuotes: [(text: String, quality: Double)] = []
             var dislikeQuotes: [(text: String, quality: Double)] = []
+            /// Dislikes that say so in words (a complaint, or a critic said to have faulted it),
+            /// not only by the sentence's tone.
+            var complaints = 0
         }
         func keep(_ quote: (text: String, quality: Double), in quotes: inout [(text: String, quality: Double)]) {
             guard !quotes.contains(where: { $0.text == quote.text }) else { return }
@@ -163,7 +166,7 @@ public enum ReceptionAnalyzer {
                     let lower = clause.lowercased()
                     var matched = aspects(in: lower)
                     // "It's a bit confusing at times": a complaint names its aspect itself.
-                    if matched.isEmpty, let cue = cueAspects.first(where: { lower.contains($0.cue) }), !negated(cue.cue, in: lower) {
+                    if matched.isEmpty, let cue = cueAspects.first(where: { word($0.cue, in: lower) != nil }), !negated(cue.cue, in: lower) {
                         matched = [cue.aspect]
                     }
                     guard !matched.isEmpty else { continue }
@@ -173,7 +176,7 @@ public enum ReceptionAnalyzer {
                     // denied, it praises ("never boring", "no complaints").
                     var cues = 0.0
                     var complains = false
-                    for cue in negativeCues where lower.contains(cue) {
+                    for cue in negativeCues where word(cue, in: lower) != nil {
                         if negated(cue, in: lower) {
                             cues += 0.5
                         } else {
@@ -208,6 +211,7 @@ public enum ReceptionAnalyzer {
                             keep((sentence, quality), in: &t.likeQuotes)
                         } else {
                             t.dislike += 1
+                            if complains || said < 0 { t.complaints += 1 }
                             keep((sentence, quality), in: &t.dislikeQuotes)
                         }
                         tallies[aspect] = t
@@ -233,7 +237,7 @@ public enum ReceptionAnalyzer {
         }
         // Still short: a real complaint about something most liked counts too ("the story is
         // beautiful" from many, "a bit confusing" from one), shown with its own sentence.
-        for entry in byDislikes where disliked.count < 2 && entry.value.dislike >= 1 && !disliked.contains(entry.key) {
+        for entry in byDislikes where disliked.count < 2 && entry.value.complaints >= 1 && !disliked.contains(entry.key) {
             disliked.append(entry.key)
         }
 
@@ -311,8 +315,14 @@ public enum ReceptionAnalyzer {
 
     /// Whether a word is denied just before it ("not boring", "never dull", "isn't predictable").
     static func negated(_ cue: String, in lower: String) -> Bool {
-        guard let range = lower.range(of: cue) else { return false }
+        guard let range = word(cue, in: lower) else { return false }
         return denied(before: range.lowerBound, in: lower)
+    }
+
+    /// A cue as whole words: "lacks" isn't in "inky blacks", "predictable" isn't "unpredictable",
+    /// "dull" isn't "Dullea".
+    static func word(_ cue: String, in lower: String) -> Range<String.Index>? {
+        lower.range(of: "\\b" + NSRegularExpression.escapedPattern(for: cue) + "\\b", options: .regularExpression)
     }
 
     /// One of the three words before a position denies it (whole words: "another", "nothing"

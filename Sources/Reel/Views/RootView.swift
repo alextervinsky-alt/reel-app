@@ -255,6 +255,7 @@ struct SidebarView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 14)
             }
+            .clipped()
             if !model.drives.isEmpty {
                 drivesCard
                     .padding(.horizontal, 10)

@@ -87,7 +87,7 @@ final class ChoosingTests: XCTestCase {
             TMDBVideo(key: "french", site: "YouTube", type: "Trailer", official: true, language: "fr"),
         ]
         XCTAssertEqual(Trailers.candidates(videos, title: nil, originalLanguage: "ko").map(\.key),
-                       ["trailer1", "trailer2", "teaser", "korean"])
+                       ["trailer1", "trailer2", "korean", "teaser"], "any full trailer before a teaser")
         let korean = videos.filter { $0.language != "en" }
         XCTAssertEqual(Trailers.candidates(korean, title: nil, originalLanguage: "ko").map(\.key), ["korean"])
     }
@@ -113,6 +113,10 @@ final class ChoosingTests: XCTestCase {
             video("plain", "Isle of Dogs", type: "Trailer"),
         ]
         XCTAssertEqual(Set(Trailers.candidates(videos, title: "Isle of Dogs", originalLanguage: "en").map(\.key)), ["main", "plain"])
+        let local = [TMDBVideo(key: "es", site: "YouTube", type: "Trailer", name: "Tráiler oficial", official: true, language: "es", publishedAt: "2020-01-01"),
+                     TMDBVideo(key: "fr", site: "YouTube", type: "Trailer", name: "Bande-annonce VF", official: true, language: "fr", publishedAt: "2020-01-01")]
+        XCTAssertEqual(Set(Trailers.candidates(local, title: nil, originalLanguage: "fr").map(\.key)), ["fr"], "the film's own language (Spanish isn't it)")
+        XCTAssertTrue(Trailers.isTrailer(local[0]), "an accented name still says trailer")
     }
 
     func testTheNameDecidesWhatIsATrailer() {

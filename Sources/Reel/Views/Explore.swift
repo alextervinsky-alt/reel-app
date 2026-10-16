@@ -176,7 +176,7 @@ struct BestOfRow: View {
     var body: some View {
         let found = model.bestOf(year: year, source: source)
         let films = (found ?? []).filter { film in
-            !model.hasSeen(film.id) && (mood.map { film.genres.isEmpty || MoodGenres.of($0).fits(film.genres) } ?? true)
+            !model.hasSeen(film.id) && !model.notForMe.contains(film.id) && (mood.map { film.genres.isEmpty || MoodGenres.of($0).fits(film.genres) } ?? true)
         }
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 12) {
@@ -305,9 +305,10 @@ struct DiscoverRow: View {
     let onPreview: (PreviewFilm) -> Void
 
     var body: some View {
-        let all = model.discover[list] ?? []
         let films = model.exploreFilms(list, mood: mood)
-        if mood == nil || !films.isEmpty || all.isEmpty {
+        // Loading or failed: the row says so. Loaded with nothing left to show (all seen, or a
+        // director's films all on your drives): no row.
+        if !films.isEmpty || model.discover[list] == nil {
             row(films)
         }
     }

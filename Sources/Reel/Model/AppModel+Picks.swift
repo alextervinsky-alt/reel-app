@@ -6,8 +6,6 @@ import ReelCore
 struct ExplorePick: Identifiable {
     let film: PreviewFilm
     let reason: String
-    /// The loved film it follows (nil for what the lists agree on).
-    var following: String? = nil
 
     var id: Int { film.id }
 }
@@ -99,8 +97,15 @@ extension AppModel {
     /// Says a film isn't for you (or takes it back): it leaves For You and Explore for good.
     func setNotForMe(_ id: Int, _ on: Bool) {
         if on { notForMe.insert(id) } else { notForMe.remove(id) }
+        // Its place goes to the strongest film found that isn't showing.
         if on, let shown = explorePicks, shown.contains(where: { $0.id == id }) {
-            explorePicks = shown.filter { $0.id != id }
+            var kept = shown.filter { $0.id != id }
+            let showing = Set(kept.map(\.id))
+            if let next = openCandidates.filter({ !showing.contains($0.movie.id) }).sorted(by: ExplorePicks.order).first {
+                kept.append(Self.pick(next))
+            }
+            explorePicks = kept
+            explorePicksShown = kept.map(\.id)
         }
         scheduleSave(.settings)
     }
@@ -117,8 +122,7 @@ extension AppModel {
     }
 
     private static func pick(_ candidate: ExploreCandidate) -> ExplorePick {
-        ExplorePick(film: PreviewFilm(candidate.movie, note: candidate.reason.long), reason: candidate.reason.long,
-                    following: candidate.seed.title)
+        ExplorePick(film: PreviewFilm(candidate.movie, note: candidate.reason.long), reason: candidate.reason.long)
     }
 
     /// Fifteen others from the same films, none of the ones showing now.

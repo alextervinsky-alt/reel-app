@@ -185,7 +185,8 @@ public struct YearInFilm: Equatable, Sendable {
     public let topComposers: [Tally]
     /// How many films got each number of stars, one star first.
     public let starCounts: [Int]
-    /// How old the films were, on average, when you watched them (in years; from three films).
+    /// How old the films from your drives were, on average, when you watched them (in years;
+    /// from three films).
     public let averageAge: Int?
     /// The most nights in a row you watched a film on your drives (two or more).
     public let longestRun: FilmRun?
@@ -240,7 +241,8 @@ public struct YearInFilm: Equatable, Sendable {
         var starCounts = Array(repeating: 0, count: 5)
         for star in stars where (1...5).contains(star) { starCounts[star - 1] += 1 }
         self.starCounts = starCounts
-        let ages = films.compactMap { film in film.releaseYear.map { max(0, calendar.component(.year, from: film.watchedOn) - $0) } }
+        // Films seen elsewhere have a guessed date: left out.
+        let ages = films.filter { !$0.elsewhere }.compactMap { film in film.releaseYear.map { max(0, calendar.component(.year, from: film.watchedOn) - $0) } }
         averageAge = ages.count < 3 ? nil : Int((Double(ages.reduce(0, +)) / Double(ages.count)).rounded())
         longestRun = Self.longestRun(films.filter { !$0.elsewhere }.map(\.watchedOn), calendar: calendar)
         weekdays = Array(nights[1...7])

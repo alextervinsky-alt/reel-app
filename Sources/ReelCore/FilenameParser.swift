@@ -58,7 +58,7 @@ public enum FilenameParser {
     static let techWords: Set<String> = [
         "uhd", "4k", "hdr", "hdr10", "hdr10+", "dv", "dovi", "hevc", "x264", "x265", "h264", "h265",
         "avc", "bluray", "blu-ray", "bdrip", "brrip", "bdremux", "web-dl", "webdl", "webrip", "hdtv",
-        "dvdrip", "dvdscr", "remux", "extended", "unrated", "imax", "repack", "multi", "esub", "esubs",
+        "dvdrip", "dvdscr", "remux", "extended", "unrated", "imax", "openmatte", "repack", "multi", "esub", "esubs",
     ]
 
     static let languages: Set<String> = [

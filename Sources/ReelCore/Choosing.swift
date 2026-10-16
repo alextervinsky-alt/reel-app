@@ -38,12 +38,19 @@ public enum Trailers {
         // It must call itself a trailer or a teaser ("Isle of Dogs | Meet the Pack", labelled a
         // teaser, is a short promo). A studio's upload named only for the film counts when it's
         // labelled a trailer.
-        let lower = name.lowercased()
-        if lower.contains("trailer") || lower.contains("teaser") { return true }
+        // In other languages too ("Tráiler", "Bande-annonce", "예고편"); accents don't matter.
+        let lower = name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        if trailerWords.contains(where: { lower.contains($0) }) { return true }
         if video.name == nil { return video.official == true }
         let rest = lower.split(whereSeparator: { !$0.isLetter }).filter { !["official", "hd", "uhd", "k", "us", "uk", "the", "film", "movie"].contains($0) }
         return video.official == true && video.type == "Trailer" && rest.isEmpty
     }
+
+    /// "Trailer" and "teaser" in the languages films' own trailers come in (accents folded).
+    static let trailerWords = [
+        "trailer", "teaser", "treiler", "bande-annonce", "bande annonce", "fragman", "zwiastun", "elozetes", "upoutavka",
+        "трейлер", "тизер", "예고편", "予告", "预告", "預告",
+    ]
 
     /// What's kept from TMDB (the name is checked when one is picked): YouTube trailers and teasers.
     public static func isKept(_ video: TMDBVideo) -> Bool {
@@ -57,8 +64,8 @@ public enum Trailers {
     }
 
     /// Up to five to try, best first: the studio's own uploads before anyone else's; English,
-    /// then no language, then the film's own language; the full trailer before a teaser (a
-    /// teaser only when there's no trailer); HD before lower resolutions (1080p and 4K, then
+    /// the full trailer before a teaser (a teaser only when there's no trailer); English, then no
+    /// language, then the film's own language; HD before lower resolutions (1080p and 4K, then
     /// 720p); the earliest first (the first release usually gives away least). Five, because
     /// studios block some of theirs from playing outside YouTube.
     public static func candidates(_ videos: [TMDBVideo], title: String?, originalLanguage: String?) -> [TMDBVideo] {
@@ -82,7 +89,7 @@ public enum Trailers {
             }
         }
         func rank(_ video: TMDBVideo) -> (Int, Int, Int, Int, String) {
-            (video.official == true ? 0 : 1, languageRank(video), typeRank(video), sharpness(video), video.publishedAt ?? "~")
+            (video.official == true ? 0 : 1, typeRank(video), languageRank(video), sharpness(video), video.publishedAt ?? "~")
         }
         var seen = Set<String>()
         return videos

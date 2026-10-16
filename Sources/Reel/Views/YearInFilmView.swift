@@ -22,8 +22,12 @@ struct YearInFilmView: View {
         let page = VStack(alignment: .leading, spacing: 30) {
                 header(years: years, year: year, hasElsewhere: !elsewhere.isEmpty)
                 if let year {
-                    let before = YearInFilm(year: year - 1, from: all)
+                    // This year so far against last year by the same day (a whole past year against its whole).
+                    let thisYear = year == calendar.component(.year, from: Date())
+                    let cutoff = calendar.date(byAdding: .year, value: -1, to: Date()) ?? Date()
+                    let before = YearInFilm(year: year - 1, from: thisYear ? all.filter { $0.watchedOn <= cutoff } : all)
                     YearSummary(summary: YearInFilm(year: year, from: all), previous: before.films.isEmpty ? nil : before,
+                                soFar: thisYear,
                                 elsewhere: model.seenElsewhere(in: year), counted: model.yearCountsElsewhere) { preview = $0 }
                 } else {
                     ContentUnavailableView("Your year starts with a film", systemImage: "calendar",
@@ -90,6 +94,8 @@ private struct YearSummary: View {
     let summary: YearInFilm
     /// The year before, when it has films: to compare with.
     let previous: YearInFilm?
+    /// The year isn't over: compared with the year before up to the same day.
+    let soFar: Bool
     /// This year's films seen elsewhere, newest first.
     let elsewhere: [SeenElsewhere]
     /// They're in the numbers (otherwise only listed, to rate and date).
@@ -161,11 +167,12 @@ private struct YearSummary: View {
         }
         let parts = [part(films, "film", "films"), part(hours, "hour", "hours")]
             .compactMap { $0 }
-        let text = parts.isEmpty ? "As many films as in \(String(previous.year))" : parts.joined(separator: " and ") + " than in \(String(previous.year))"
+        let when = soFar ? "by this time in \(String(previous.year))" : "in \(String(previous.year))"
+        let text = parts.isEmpty ? "As many films as \(when)" : parts.joined(separator: " and ") + " than \(when)"
         return Label(text, systemImage: films >= 0 ? "arrow.up.right" : "arrow.down.right")
             .font(.system(size: 13))
             .foregroundStyle(.secondary)
-            .help("\(String(previous.year)): \(previous.films.count) films, \(Int((Double(previous.minutes) / 60).rounded())) hours")
+            .help("\(String(previous.year))\(soFar ? " to this date" : ""): \(previous.films.count) films, \(Int((Double(previous.minutes) / 60).rounded())) hours")
     }
 
     private var hours: String {
@@ -293,7 +300,7 @@ private struct YearSummary: View {
         if let film = summary.newest {
             add(Highlight(label: "Newest", film: film, detail: film.releaseYear.map(String.init) ?? ""))
         }
-        if let film = summary.films.first {
+        if let film = summary.films.first(where: { !$0.elsewhere }) {
             add(Highlight(label: "First of the year", film: film, detail: film.watchedOn.formatted(.dateTime.day().month(.wide))))
         }
         return picks

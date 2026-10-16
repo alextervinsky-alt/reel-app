@@ -70,6 +70,18 @@ final class ReceptionTests: XCTestCase {
         XCTAssertEqual(summary.disliked, [])
     }
 
+    /// Praise that only looks like a complaint inside other words.
+    func testComplaintsAreWholeWords() {
+        let reviews = [
+            ReviewText(text: "The cinematography is gorgeous, all inky blacks and shallow focus.", rating: 9),
+            ReviewText(text: "An unpredictable story, almost mesmerizing from start to end.", rating: 9),
+        ]
+        let summary = try! XCTUnwrap(ReceptionAnalyzer.summarize(reviews, sentiment: { _ in 0.3 }))
+        XCTAssertEqual(summary.disliked, [])
+        XCTAssertNil(ReceptionAnalyzer.word("lacks", in: "inky blacks"))
+        XCTAssertNotNil(ReceptionAnalyzer.word("lacks", in: "it lacks tension"))
+    }
+
     func testOrdinaryWordsAreNotVerdicts() {
         XCTAssertEqual(ReceptionAnalyzer.reported("ebert called the cinematography flawless"), 0)
         XCTAssertEqual(ReceptionAnalyzer.reported("another reviewer praised the score"), 1)

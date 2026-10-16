@@ -21,7 +21,7 @@ enum Theme {
         startPoint: .topLeading, endPoint: .bottomTrailing)
     /// The ratings' own colours, as small labels ("IMDb 8.5").
     static let imdb = Color(red: 0.96, green: 0.77, blue: 0.09)
-    static let rottenTomatoes = Color(red: 0.98, green: 0.42, blue: 0.31)
+    static let rottenTomatoes = Color(red: 0.98, green: 0.2, blue: 0.16)
     static let metacritic = Color(red: 0.44, green: 0.81, blue: 0.37)
 
     static func sectionTitle(_ text: String) -> some View {

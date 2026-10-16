@@ -29,7 +29,7 @@ final class YearInFilmStatsTests: XCTestCase {
         XCTAssertEqual(year.shortest?.id, "a")
         XCTAssertEqual(year.newest?.id, "a", "the first of the newest releases")
         XCTAssertEqual(year.starCounts, [0, 0, 1, 1, 1])
-        XCTAssertEqual(year.averageAge, 9, "0, 7, 27 and 0 years old: 8.5")
+        XCTAssertEqual(year.averageAge, 11, "0, 7 and 27 years old (D was seen elsewhere)")
         XCTAssertNil(year.longestRun, "a week apart")
         XCTAssertEqual(year.weekdays[5], 3, "three Fridays")
         XCTAssertEqual(year.warmerThanMost.map(\.film.id), ["a"], "5★ is 10 against 8: two points is enough (D has no score)")
