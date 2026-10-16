@@ -227,6 +227,8 @@ final class AppModel {
     @ObservationIgnored var lookupRunning = false
     /// Films' gear and techniques are being read (see `readCraft`).
     @ObservationIgnored var craftRunning = false
+    /// How many films are still to be read for searching by craft (0 when done).
+    var craftPending = 0
     @ObservationIgnored var rerunRequested = false
     /// Moods per film, worked out once per version of its info.
     @ObservationIgnored var moodCache: [String: [Mood]] = [:]
@@ -756,7 +758,7 @@ final class AppModel {
         case .runtime: list.sort { ($0.runtime ?? .max) < ($1.runtime ?? .max) }
         }
 
-        let terms = TitleSimilarity.normalize(query).split(separator: " ").map { String($0) }
+        let terms = SearchQuery.terms(query)
         guard !terms.isEmpty else { return list }
         func ranked(allowTypos: Bool) -> [LibraryItem] {
             // Stable: equal relevance keeps the chosen sort order.
@@ -768,8 +770,9 @@ final class AppModel {
                 .sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1 < $1.1 }
                 .map { $0.2 }
         }
+        // Slips are forgiven only when nothing matches as typed.
         let exact = ranked(allowTypos: false)
-        return exact.count >= 3 ? exact : ranked(allowTypos: true)
+        return exact.isEmpty ? ranked(allowTypos: true) : exact
     }
 
     /// Picks the banner film once per launch (never the same as last time). Runs in `rebuild()`,

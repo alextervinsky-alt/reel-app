@@ -140,29 +140,49 @@ public enum ReceptionAnalyzer {
                 if rating >= 7 { bias = 0.2 } else if rating <= 4 { bias = -0.2 }
             }
             for sentence in sentences(in: clean(review.text)) {
-                let lower = sentence.lowercased()
-                let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
-                let matched = aspects.filter { aspect in
-                    aspect.words.contains { word in word.contains(" ") ? lower.contains(word) : words.contains(word) }
-                }
-                guard !matched.isEmpty else { continue }
+                // Scores, rankings and prizes are facts about the film, not opinions about it.
+                if reportsFigures(sentence, critic: review.isCritic) { continue }
+                // Each part of "praised the visuals but faulted the pacing" counts on its own.
+                for clause in clauses(of: sentence) {
+                    let lower = clause.lowercased()
+                    let matched = aspects(in: lower)
+                    guard !matched.isEmpty else { continue }
 
-                var score = sentiment(sentence) + bias
-                if negativeCues.contains(where: { lower.contains($0) }) { score -= 0.4 }
-                if !words.isDisjoint(with: positiveCues) { score += 0.2 }
-                guard abs(score) >= 0.25 else { continue }
-
-                let quality = abs(score) - lengthPenalty(sentence.count)
-                for aspect in matched {
-                    var t = tallies[aspect.name] ?? Tally()
-                    if score > 0 {
-                        t.like += 1
-                        keep((sentence, quality), in: &t.likeQuotes)
+                    let said = reported(lower)
+                    var score: Double
+                    if review.isCritic {
+                        // A critic as Wikipedia tells it: what they're said to have done decides
+                        // ("praised", "faulted"); the sentence's tone alone only when it's clear.
+                        if said != 0 {
+                            score = 0.6 * Double(said)
+                        } else {
+                            score = sentiment(clause)
+                            guard abs(score) >= 0.5 else { continue }
+                        }
                     } else {
-                        t.dislike += 1
-                        keep((sentence, quality), in: &t.dislikeQuotes)
+                        score = sentiment(clause) + bias + 0.3 * Double(said)
                     }
-                    tallies[aspect.name] = t
+                    for cue in negativeCues where lower.contains(cue) {
+                        // "never boring" praises.
+                        score += negated(cue, in: lower) ? 0.2 : -0.4
+                        break
+                    }
+                    let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
+                    if !words.isDisjoint(with: positiveCues) { score += 0.2 }
+                    guard abs(score) >= 0.25 else { continue }
+
+                    let quality = abs(score) - lengthPenalty(sentence.count)
+                    for aspect in matched {
+                        var t = tallies[aspect] ?? Tally()
+                        if score > 0 {
+                            t.like += 1
+                            keep((sentence, quality), in: &t.likeQuotes)
+                        } else {
+                            t.dislike += 1
+                            keep((sentence, quality), in: &t.dislikeQuotes)
+                        }
+                        tallies[aspect] = t
+                    }
                 }
             }
         }
@@ -202,6 +222,74 @@ public enum ReceptionAnalyzer {
                                 averageRating: average, criticCount: critics > 0 ? critics : nil)
     }
 
+    /// The aspects a clause is about. "Score" is the music only when it isn't a rating ("a
+    /// weighted average score of 96").
+    static func aspects(in lower: String) -> [String] {
+        let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
+        let scoreIsRating = lower.range(of: #"\b(?:average|weighted|approval|aggregate)\b[^.]*\bscores?\b|\bscores?\s+(?:of|out)\b|\bscored?\s+\d"#,
+                                        options: .regularExpression) != nil
+        return aspects.filter { aspect in
+            aspect.words.contains { word in
+                if word == "score", scoreIsRating { return false }
+                return word.contains(" ") ? lower.contains(word) : words.contains(word)
+            }
+        }.map(\.name)
+    }
+
+    /// A sentence of figures and honours: review aggregators, box office, rankings, polls and
+    /// awards (for critics' sentences also festivals and release). It says how the film fared,
+    /// not what anyone liked or disliked about it.
+    static func reportsFigures(_ sentence: String, critic: Bool) -> Bool {
+        let always = #"\b(?:metacritic|rotten tomatoes|cinemascore|approval rating|weighted average|box office|grossed|grossing|imdb rating)\b"#
+        let critics = #"\b(?:ranked|ranking|rankings|greatest|top \d+|list of|nominat\w*|awards?|accolades?|polls?|sight (?:and|&) sound|survey\w*|guild|academy|oscars?|golden globes?|baftas?|festival|premiere\w*|released|release|out of (?:10|100)|based on \d+|\d+ (?:critics|reviews))\b"#
+        let lower = sentence.lowercased()
+        if lower.range(of: always, options: .regularExpression) != nil { return true }
+        return critic && lower.range(of: critics, options: .regularExpression) != nil
+    }
+
+    /// What a critic is said to have done: praised (1), faulted (-1), or neither (0). "Not
+    /// impressed" is faulting.
+    static func reported(_ lower: String) -> Int {
+        let praise = #"\b(?:prais\w*|laud\w*|applaud\w*|acclaim\w*|admir\w*|commend\w*|hail\w*|celebrat\w*|complimen\w*|favou?rabl\w*|enjoy\w*|loved|impress\w*|marvel\w*|raved?|highlight\w*|singled out|delight\w*|triumph\w*)\b"#
+        let fault = #"\b(?:critici[sz]\w*|fault\w*|panned|derid\w*|dismiss\w*|complain\w*|dislik\w*|took issue|unimpress\w*|less enthusiastic|unfavou?rabl\w*|negative|lament\w*|bemoan\w*|weakness\w*|flaw\w*|marred|suffer\w*|disappoint\w*|mixed)\b"#
+        let faulted = lower.range(of: fault, options: .regularExpression) != nil
+        if let range = lower.range(of: praise, options: .regularExpression) {
+            let before = lower[..<range.lowerBound].split(separator: " ").suffix(2).joined(separator: " ")
+            if before.contains("not") || before.contains("n't") || before.contains("never") || before.contains("less") { return -1 }
+            return faulted ? 0 : 1
+        }
+        return faulted ? -1 : 0
+    }
+
+    /// Whether a word is denied just before it ("not boring", "never dull", "isn't predictable").
+    static func negated(_ cue: String, in lower: String) -> Bool {
+        guard let range = lower.range(of: cue) else { return false }
+        let before = lower[..<range.lowerBound].split(separator: " ").suffix(3)
+        return before.contains { ["not", "never", "hardly", "without", "nor"].contains($0) || $0.hasSuffix("n't") }
+    }
+
+    /// A sentence's parts on either side of "but", "although", "while", "however" or a semicolon
+    /// (and of the comma after a leading "Although …"), each read on its own.
+    static func clauses(of sentence: String) -> [String] {
+        let marker = #"\s*;\s*|,?\s+(?:but|although|though|however|whereas|while|yet)\s+"#
+        var parts: [String] = []
+        var rest = sentence[...]
+        while let range = rest.range(of: marker, options: [.regularExpression, .caseInsensitive]) {
+            parts.append(String(rest[..<range.lowerBound]))
+            rest = rest[range.upperBound...]
+        }
+        parts.append(String(rest))
+        // "Although the plot is thin, the visuals are stunning": the comma ends the first part.
+        return parts.flatMap { part -> [String] in
+            let lower = part.lowercased()
+            guard ["although ", "though ", "while ", "despite ", "even if "].contains(where: lower.hasPrefix),
+                  let comma = part.firstIndex(of: ",") else { return [part] }
+            return [String(part[..<comma]), String(part[part.index(after: comma)...])]
+        }
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { $0.count >= 8 }
+    }
+
     /// Quotes read best at 40–200 characters.
     static func lengthPenalty(_ length: Int) -> Double {
         if length < 40 { return Double(40 - length) / 80 }
@@ -227,20 +315,45 @@ public enum ReceptionAnalyzer {
         var result: [String] = []
         var current = ""
         let chars = Array(text)
-        for (i, ch) in chars.enumerated() {
+        var i = 0
+        while i < chars.count {
+            let ch = chars[i]
+            i += 1
             if ch == "\n" {
                 flush(&current, into: &result)
                 continue
             }
             current.append(ch)
             if ch == "." || ch == "!" || ch == "?" {
-                let next = i + 1 < chars.count ? chars[i + 1] : " "
-                if next == " " || next == "\n" || next == "\"" || next == "”" {
+                var next: Character = i < chars.count ? chars[i] : " "
+                // A closing quote stays with its sentence (not at the start of the next one).
+                if next == "\"" || next == "”" {
+                    current.append(next)
+                    i += 1
+                    next = i < chars.count ? chars[i] : " "
+                }
+                if next == " " || next == "\n" {
                     flush(&current, into: &result)
                 }
             }
         }
         flush(&current, into: &result)
+        return result
+    }
+
+    /// Quotation marks that open or close nothing are taken off the ends ("" Orlando…" →
+    /// "Orlando…"), so a quote shows its own words only.
+    static func tidyQuotes(_ text: String) -> String {
+        let marks: Set<Character> = ["\"", "“", "”"]
+        var result = text.trimmingCharacters(in: .whitespaces)
+        func unbalanced() -> Bool { result.filter { marks.contains($0) }.count % 2 == 1 }
+        while let first = result.first, marks.contains(first),
+              unbalanced() || result.dropFirst().first.map({ $0 == " " || marks.contains($0) }) ?? true {
+            result = String(result.dropFirst()).trimmingCharacters(in: .whitespaces)
+        }
+        while let last = result.last, marks.contains(last), unbalanced() {
+            result = String(result.dropLast()).trimmingCharacters(in: .whitespaces)
+        }
         return result
     }
 
@@ -251,6 +364,7 @@ public enum ReceptionAnalyzer {
     }
 
     static func shorten(_ sentence: String, limit: Int = 220) -> String {
+        let sentence = tidyQuotes(sentence)
         guard sentence.count > limit else { return sentence }
         let cut = sentence.prefix(limit)
         let end = cut.lastIndex(of: " ") ?? cut.endIndex

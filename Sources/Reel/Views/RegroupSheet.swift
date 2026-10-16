@@ -61,7 +61,7 @@ struct RegroupSheet: View {
         let others = model.items.filter { other in
             other.id != item.id && other.copies.contains { $0.driveID == drive }
         }
-        let terms = TitleSimilarity.normalize(query).split(separator: " ").map { String($0) }
+        let terms = SearchQuery.terms(query)
         guard !terms.isEmpty else { return others.sorted { $0.sortTitle < $1.sortTitle } }
         return others
             .map { ($0, $0.search.relevance(terms, allowTypos: true)) }

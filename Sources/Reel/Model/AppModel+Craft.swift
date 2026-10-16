@@ -11,7 +11,10 @@ extension AppModel {
     func readCraft() async {
         guard !craftRunning else { return }
         craftRunning = true
-        defer { craftRunning = false }
+        defer {
+            craftRunning = false
+            if craftPending != 0 { craftPending = 0 }
+        }
         var attempted = Set<Int>()
         var failedInARow = 0
         // Kept and written in batches: the library is rebuilt once per batch, not per film.
@@ -29,23 +32,40 @@ extension AppModel {
         defer { write() }
         while !Task.isCancelled {
             // Films whose info and Wikipedia facts are in (the article's title comes with the facts).
-            guard let film = films.first(where: { film in
-                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil else { return false }
+            var seen = Set<Int>()
+            let due = films.filter { film in
+                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil, seen.insert(id).inserted else { return false }
                 return film.craft?.isStale() ?? true
-            }), let details = film.tmdb else { return }
-            attempted.insert(details.id)
-            if let index = await Self.readCraft(of: details, articleTitle: film.funFacts?.articleTitle,
-                                                colour: film.funFacts?.quick?.colour) {
-                read[details.id] = index
-                failedInARow = 0
-            } else {
-                // One film that can't be read is tried again next time; several in a row: offline.
-                failedInARow += 1
-                if failedInARow >= 3 { return }
             }
-            if read.count >= 8 || Date().timeIntervalSince(lastWrite) > 60 { write() }
-            // Gently: one film every few seconds, whatever the size of the library.
-            try? await Task.sleep(for: .seconds(3))
+            if craftPending != due.count + read.count { craftPending = due.count + read.count }
+            // Three films at a time (each reads several pages, at most three at once overall).
+            let batch = Array(due.prefix(3))
+            guard !batch.isEmpty else { return }
+            for film in batch { if let id = film.tmdb?.id { attempted.insert(id) } }
+            let results = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
+                for film in batch {
+                    guard let details = film.tmdb else { continue }
+                    let title = film.funFacts?.articleTitle
+                    let colour = film.funFacts?.quick?.colour
+                    group.addTask { (details.id, await Self.readCraft(of: details, articleTitle: title, colour: colour)) }
+                }
+                var all: [(Int, CraftIndex?)] = []
+                for await result in group { all.append(result) }
+                return all
+            }
+            for (id, index) in results {
+                if let index {
+                    read[id] = index
+                    failedInARow = 0
+                } else {
+                    // One film that can't be read is tried again next time; several in a row: offline.
+                    failedInARow += 1
+                }
+            }
+            if failedInARow >= 6 { return }
+            if read.count >= 9 || Date().timeIntervalSince(lastWrite) > 30 { write() }
+            // A short pause between batches, whatever the size of the library.
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 

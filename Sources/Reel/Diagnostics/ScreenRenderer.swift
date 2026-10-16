@@ -170,6 +170,30 @@ enum ScreenRenderer {
                    model: model, scale: 2, to: output.appendingPathComponent("banner-and-card.png"))
         }
         log("banner drawn")
+        // The desk's posters (with their quality, ratings and NEW), the list, a film's At a
+        // Glance and the sidebar's Tonight card.
+        let deskItems = Array(model.items.prefix(6))
+        render(HStack(alignment: .top, spacing: 22) {
+                    ForEach(deskItems) { item in
+                        PosterCard(item: item, isNew: model.arrivals[item.id] != nil).frame(width: 170)
+                    }
+                }
+                .padding(32)
+                .background(Theme.background)
+                .environment(ScrollState()),
+               model: model, scale: 2, to: output.appendingPathComponent("desk-posters.png"))
+        render(FilmList(items: Array(model.items.prefix(10)), sort: .constant(.rating), sortable: true)
+                .padding(32)
+                .frame(width: 1240)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("desk-list.png"))
+        if let film = model.film(id: first.id) {
+            render(AtAGlance(film: film).frame(width: 340).padding(32).background(Theme.background),
+                   model: model, scale: 2, to: output.appendingPathComponent("desk-at-a-glance.png"))
+        }
+        render(TonightCard(isSelected: false) {}.frame(width: 216).padding(20).background(Theme.sidebar).background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("desk-tonight-card.png"))
+        log("desk drawn")
         // Explore in one mood (the mood's own row), this launch's shelves, and the best of a year
         // (from the hidden gems: one TMDB request, where the award winners need all the award lists).
         let year = Calendar.current.component(.year, from: Date()) - 2
@@ -233,7 +257,7 @@ enum ScreenRenderer {
             guard let index = film.tmdb.flatMap({ read[$0.id] }) else { continue }
             log("craft of \(film.displayTitle): \(index.shotOn.map(\.title).joined(separator: ", ")); \(index.names.prefix(8).joined(separator: ", "))")
         }
-        for query in ["anamorphic", "imax", "steadicam"] {
+        for query in ["anamorphic", "imax", "steadicam", "cartoon", "sci-fi"] {
             let found = model.shelfItems(.all, matching: query, sortedBy: .title).prefix(4).map(\.main.displayTitle)
             log("search “\(query)”: \(found.joined(separator: ", "))")
         }
@@ -273,8 +297,8 @@ enum ScreenRenderer {
             _ = items.map { (EveningOrder.stableHash("seed" + $0.id), $0) }.sorted { $0.0 < $1.0 }
         }
         let search = time {
-            for query in ["blade", "nolan", "anamorphic", "black and white", "villenueve"] {
-                let terms = TitleSimilarity.normalize(query).split(separator: " ").map(String.init)
+            for query in ["blade", "nolan", "anamorphic", "cartoon", "villenueve"] {
+                let terms = SearchQuery.terms(query)
                 _ = items.filter { $0.search.relevance(terms, allowTypos: true) > 0 }
             }
         }

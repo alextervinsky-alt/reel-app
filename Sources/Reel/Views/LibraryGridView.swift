@@ -29,6 +29,9 @@ struct LibraryGridView: View {
     @Binding var length: LengthBand
     @Binding var language: String?
     @Binding var shotOn: ShotOn?
+    /// The posters' width (the slider beside Sort) and posters or a list, for this session.
+    @Binding var posterSize: Double
+    @Binding var asList: Bool
     @Binding var path: NavigationPath
     @State private var scroll = ScrollState()
     @State private var readAhead = PosterReadAhead()
@@ -39,7 +42,10 @@ struct LibraryGridView: View {
     /// Seen It? (Unwatched): one poster at a time.
     @State private var sweeping = false
 
-    static let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 24, alignment: .top)]
+    /// As many columns as fit at the chosen poster size.
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: posterSize, maximum: posterSize * 1.22), spacing: 22, alignment: .top)]
+    }
 
     var body: some View {
         // Shelf + search, then language, what it was shot on, length and moods. Each filter's
@@ -61,7 +67,7 @@ struct LibraryGridView: View {
                         model.showTrailer(for: featured.main)
                     }
                 }
-                header(count: shown.count, moodBase: lengthFiltered, lengthBase: moodFiltered, languageBase: all,
+                header(shown: shown, moodBase: lengthFiltered, lengthBase: moodFiltered, languageBase: all,
                        shotBase: shotOn == nil ? shown : inLanguage.filter { item in
                            (length == .any || length.contains(item.runtime)) && moods.isSubset(of: item.moods)
                        })
@@ -89,16 +95,21 @@ struct LibraryGridView: View {
                 }
                 if shown.isEmpty {
                     emptyState.frame(maxWidth: .infinity, minHeight: 360)
+                } else if asList {
+                    FilmList(items: shown, sort: $sort, sortable: shelf != .notOnBackup)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 18)
+                        .padding(.bottom, 40)
                 } else if shelf == .watched && query.isEmpty {
                     watchedByMonth(shown)
                 } else {
-                    LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 32) {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 30) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
                             card(item).onAppear { readAhead.warm(at: index, in: shown) }
                         }
                     }
                     .padding(.horizontal, 32)
-                    .padding(.top, 18)
+                    .padding(.top, 20)
                     .padding(.bottom, 40)
                 }
             }
@@ -142,7 +153,8 @@ struct LibraryGridView: View {
 
     private func card(_ item: LibraryItem) -> some View {
         NavigationLink(value: FilmRoute(id: item.main.id)) {
-            PosterCard(item: item, note: note(for: item), regroup: { regrouping = item }, preview: { previewing = item })
+            PosterCard(item: item, note: note(for: item), isNew: shelf != .newArrivals && model.arrivals[item.id] != nil && !model.isWatched(item.id),
+                       regroup: { regrouping = item }, preview: { previewing = item })
                 .equatable()
         }
         .buttonStyle(.plain)
@@ -172,23 +184,33 @@ struct LibraryGridView: View {
     /// Moods in front (how you choose); length, language and sort as compact menus at the right.
     private var filtering: Bool { !moods.isEmpty || length != .any || language != nil || shotOn != nil }
 
-    private func header(count: Int, moodBase: [LibraryItem], lengthBase: [LibraryItem], languageBase: [LibraryItem],
+    private func header(shown: [LibraryItem], moodBase: [LibraryItem], lengthBase: [LibraryItem], languageBase: [LibraryItem],
                         shotBase: [LibraryItem]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(title)
-                    .font(.system(size: 30, weight: .bold))
-                Text(count == 1 ? "1 film" : "\(count) films")
-                    .font(.system(size: 14))
+                    .font(.system(size: 26, weight: .bold))
+                    .tracking(-0.3)
+                    .lineLimit(1)
+                Text(summary(shown))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                Spacer()
+                    .lineLimit(1)
+                Spacer(minLength: 12)
                 LibrarySearchField(text: $searchText, focusRequested: $focusSearch)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 MoodFilterButton(selected: $moods, base: moodBase, available: model.moods)
                 ForEach(Mood.allCases.filter { moods.contains($0) }) { mood in
                     RemovableChip(title: mood.title) { moods.remove(mood) }
+                }
+                if !model.shotOnKinds.isEmpty || shotOn != nil {
+                    ShotOnFilterMenu(shotOn: $shotOn, base: shotBase, kinds: model.shotOnKinds)
+                }
+                LengthFilterMenu(length: $length, base: lengthBase)
+                if model.languages.count > 1 {
+                    LanguageFilterMenu(language: $language, base: languageBase, languages: model.languages)
                 }
                 if filtering {
                     Button("Clear") {
@@ -200,19 +222,27 @@ struct LibraryGridView: View {
                     .buttonStyle(.plain)
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.brand)
+                    .padding(.leading, 4)
                 }
                 Spacer(minLength: 12)
-                if !model.shotOnKinds.isEmpty || shotOn != nil {
-                    ShotOnFilterMenu(shotOn: $shotOn, base: shotBase, kinds: model.shotOnKinds)
-                }
-                LengthFilterMenu(length: $length, base: lengthBase)
-                if model.languages.count > 1 {
-                    LanguageFilterMenu(language: $language, base: languageBase, languages: model.languages)
-                }
+                if !asList { PosterSizeSlider(size: $posterSize) }
                 // Not on Backup is a checklist, always by title.
                 if shelf != .notOnBackup { SortMenu(sort: $sort) }
+                ViewModeToggle(asList: $asList)
             }
         }
+    }
+
+    /// "84 films · 78 unwatched · 6 watched · 50 new · 187 hours": the shelf at a glance.
+    private func summary(_ shown: [LibraryItem]) -> String {
+        var parts = [shown.count == 1 ? "1 film" : "\(shown.count) films"]
+        if shelf == .all, query.isEmpty, !filtering {
+            parts += ["\(model.count(.unwatched)) unwatched", "\(model.count(.watched)) watched"]
+            if model.count(.newArrivals) > 0 { parts.append("\(model.count(.newArrivals)) new") }
+        }
+        let minutes = shown.reduce(0) { $0 + ($1.runtime ?? 0) }
+        if minutes >= 120 { parts.append("\(minutes / 60) hours") }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: Watched diary
@@ -220,7 +250,7 @@ struct LibraryGridView: View {
     private func watchedByMonth(_ shown: [LibraryItem]) -> some View {
         let dates = model.personal.watchedDates
         let groups = Self.monthGroups(shown) { dates[$0.id] }
-        return LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 32, pinnedViews: []) {
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 30, pinnedViews: []) {
             ForEach(groups, id: \.title) { group in
                 Section {
                     ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
@@ -268,7 +298,16 @@ struct LibraryGridView: View {
     @ViewBuilder
     private var emptyState: some View {
         if !query.isEmpty {
-            ContentUnavailableView.search(text: query)
+            if model.craftPending > 0 {
+                // Gear and techniques are still being read: a craft search finds more soon.
+                ContentUnavailableView {
+                    Label("No Results for “\(query)” Yet", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Reel is still reading how your films were shot (\(model.craftPending) to go). Searches for gear and techniques such as anamorphic or 16mm find more once that's done.")
+                }
+            } else {
+                ContentUnavailableView.search(text: query)
+            }
         } else if filtering {
             ContentUnavailableView {
                 Label("No films match these filters", systemImage: "line.3.horizontal.decrease.circle")
@@ -529,7 +568,15 @@ struct SortMenu: View {
             }
             .pickerStyle(.inline)
         } label: {
-            FilterPill(icon: "arrow.up.arrow.down", text: sort.title, active: false)
+            HStack(spacing: 5) {
+                Text(sort.title)
+                Image(systemName: "chevron.down").font(.system(size: 8.5, weight: .bold)).opacity(0.7)
+            }
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.8))
+            .padding(.horizontal, 8)
+            .frame(height: 30)
+            .contentShape(Rectangle())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -547,14 +594,64 @@ struct FilterPill: View {
         HStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 11, weight: .semibold))
             Text(text)
-            Image(systemName: "chevron.down").font(.system(size: 8.5, weight: .bold)).opacity(0.7)
+            Image(systemName: "chevron.down").font(.system(size: 8.5, weight: .bold)).opacity(0.6)
         }
-        .font(.system(size: 13, weight: .medium))
+        .font(.system(size: 12.5, weight: .medium))
         .padding(.horizontal, 12)
-        .frame(height: 28)
-        .background(Capsule().fill(active ? Color.white : Color.white.opacity(0.08)))
-        .foregroundStyle(active ? Color.black : Color.white.opacity(0.88))
+        .frame(height: 30)
+        .background(Capsule().fill(active ? Theme.brand.opacity(0.14) : Theme.field))
+        .overlay(Capsule().strokeBorder(active ? Theme.brand.opacity(0.5) : Color.white.opacity(0.07)))
+        .foregroundStyle(active ? Theme.brand : Color.white.opacity(0.85))
         .contentShape(Capsule())
+    }
+}
+
+/// The posters' size: small to large, as in Photos.
+struct PosterSizeSlider: View {
+    @Binding var size: Double
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "rectangle.portrait").font(.system(size: 8, weight: .semibold))
+            Slider(value: $size, in: 130...240)
+                .controlSize(.mini)
+                .frame(width: 84)
+            Image(systemName: "rectangle.portrait").font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundStyle(.secondary)
+        .tint(Theme.brand)
+        .help("Poster size")
+    }
+}
+
+/// Posters or a list.
+struct ViewModeToggle: View {
+    @Binding var asList: Bool
+
+    var body: some View {
+        HStack(spacing: 2) {
+            option("square.grid.2x2", list: false, help: "Posters")
+            option("list.bullet", list: true, help: "List")
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.field))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.white.opacity(0.07)))
+    }
+
+    private func option(_ symbol: String, list: Bool, help: String) -> some View {
+        Button {
+            asList = list
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(asList == list ? Color.white : Color.secondary)
+                .frame(width: 28, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(asList == list ? Color.white.opacity(0.12) : Color.clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -747,6 +844,8 @@ struct PosterCard: View, Equatable {
     @Environment(ScrollState.self) private var scroll
     let item: LibraryItem
     var note: CardNote? = nil
+    /// Arrived in the last two weeks and not watched: a NEW tag on the poster.
+    var isNew = false
     /// Opens "This Is an Extra Of…" (the grid shows the sheet); not offered when nil.
     var regroup: (() -> Void)? = nil
     /// Opens Quick Look; not offered when nil.
@@ -760,7 +859,7 @@ struct PosterCard: View, Equatable {
 
     /// Cards only redraw when what they show changes (their own state still updates them).
     nonisolated static func == (lhs: PosterCard, rhs: PosterCard) -> Bool {
-        lhs.item.id == rhs.item.id && lhs.item.stamp == rhs.item.stamp && lhs.note == rhs.note
+        lhs.item.id == rhs.item.id && lhs.item.stamp == rhs.item.stamp && lhs.note == rhs.note && lhs.isNew == rhs.isNew
     }
 
     var body: some View {
@@ -776,13 +875,15 @@ struct PosterCard: View, Equatable {
                 .scaleEffect(lifted ? 1.04 : 1)
                 .animation(.spring(response: 0.28, dampingFraction: 0.82), value: lifted)
 
-            VStack(alignment: .leading, spacing: 2) {
+            // Title; year, length and director; the ratings: what you need without opening it.
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.main.displayTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13.5, weight: .semibold))
                     .lineLimit(1)
                 caption
-                    .font(.system(size: 11.5))
+                    .font(.system(size: 12))
                     .lineLimit(1)
+                RatingsLine(film: item.main)
             }
         }
         .contentShape(Rectangle())
@@ -839,14 +940,17 @@ struct PosterCard: View, Equatable {
         }
     }
 
-    /// An offline film's poster comes grey and dimmed from the image cache (made once), instead
-    /// of a colour filter applied on every frame.
+    /// In colour whether or not its drive is connected (the line under it says when it isn't),
+    /// with its quality in the corner and NEW while it's new.
     private var poster: some View {
-        Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12, monochrome: !item.isOnline)
-            .overlay(alignment: .bottom) {
-                if lifted { hoverRatings.transition(.opacity) }
+        Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12)
+            .overlay {
+                if lifted { HoverDetails(item: item).transition(.opacity) }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                if let tag = Format.posterTag(item.main) { QualityTag(text: tag).padding(8) }
+            }
             .overlay(alignment: .topTrailing) {
                 // Under the pointer: add to (or take off) tonight's shortlist in one click.
                 if lifted {
@@ -855,9 +959,21 @@ struct PosterCard: View, Equatable {
                     marks
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if isNew && !lifted {
+                    Text("NEW")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 6)
+                        .frame(height: 18)
+                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.brand))
+                        .padding(9)
+                }
+            }
     }
 
-    /// "2017 · 2h 19m": what the film is, at a glance (ratings show under the pointer).
+    /// "2017 · 2h 44m · Denis Villeneuve": what the film is, at a glance.
     @ViewBuilder
     private var caption: some View {
         if let note {
@@ -869,40 +985,11 @@ struct PosterCard: View, Equatable {
         } else if item.main.matchState.needsCheck {
             Text("Check match").foregroundStyle(Color.orange)
         } else {
-            let line = Format.glanceLine(year: item.main.displayYear, runtime: item.runtime)
-            Text(item.isOnline ? line : (line.isEmpty ? "Offline" : line + " · Offline"))
+            let director = item.main.tmdb?.directors.first
+            let line = [Format.glanceLine(year: item.main.displayYear, runtime: item.runtime), director]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+            Text(item.isOnline ? line : (line.isEmpty ? "Drive not connected" : line + " · Offline"))
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Under the pointer: the ratings on one line and when it would end (with subtitles). Only
-    /// built while the pointer is on it.
-    @ViewBuilder
-    private var hoverRatings: some View {
-        let r = item.main.ratings
-        let ends = Format.endsLine(item.main, runtime: item.runtime, quality: false)
-        let hasRatings = r?.imdb != nil || r?.rottenTomatoes != nil || r?.metacritic != nil
-        if hasRatings || ends != nil {
-            VStack(alignment: .leading, spacing: 7) {
-                if hasRatings {
-                    PosterRatings(film: item.main, spacing: 7)
-                        .environment(\.ratingScale, 0.85)
-                }
-                if let ends {
-                    Text(ends)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .lineLimit(1)
-                }
-            }
-            .foregroundStyle(Color.white)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.top, 34)
-            .padding(.bottom, 10)
-            .background(
-                LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
-            )
         }
     }
 

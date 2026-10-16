@@ -302,21 +302,20 @@ struct TabStrip: View {
     let tabs: [FilmTab]
 
     var body: some View {
-        HStack(spacing: 30) {
+        // Pills: the chosen tab in white.
+        HStack(spacing: 4) {
             ForEach(tabs) { tab in
                 Button {
                     withAnimation(.easeOut(duration: 0.18)) { selection = tab }
                 } label: {
-                    VStack(spacing: 9) {
-                        Text(tab.title)
-                            .font(.system(size: 15, weight: selection == tab ? .semibold : .regular))
-                            .foregroundStyle(selection == tab ? Color.white : Theme.secondaryText)
-                        Capsule()
-                            .fill(selection == tab ? Color.white : Color.clear)
-                            .frame(height: 2)
-                    }
-                    .fixedSize()
-                    .contentShape(Rectangle())
+                    Text(tab.title)
+                        .font(.system(size: 13.5, weight: selection == tab ? .semibold : .medium))
+                        .foregroundStyle(selection == tab ? Color.black : Color.white.opacity(0.8))
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .background(Capsule().fill(selection == tab ? Color.white : Color.clear))
+                        .fixedSize()
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -341,13 +340,13 @@ struct OverviewTab: View {
 
         VStack(alignment: .leading, spacing: 36) {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 56) {
-                    story(details, moods: moods).frame(width: 560, alignment: .leading)
-                    credits(details).frame(width: 300, alignment: .leading)
+                HStack(alignment: .top, spacing: 48) {
+                    story(details, moods: moods).frame(width: 540, alignment: .leading)
+                    AtAGlance(film: film).frame(width: 340, alignment: .leading)
                 }
                 VStack(alignment: .leading, spacing: 28) {
                     story(details, moods: moods)
-                    credits(details)
+                    AtAGlance(film: film).frame(maxWidth: 560, alignment: .leading)
                 }
             }
             if let details, !details.topCast.isEmpty { cast(details) }
@@ -408,33 +407,6 @@ struct OverviewTab: View {
         }
     }
 
-    @ViewBuilder
-    private func credits(_ details: TMDBMovieDetails?) -> some View {
-        if let d = details {
-            let rows: [(String, [TMDBCrewMember])] = [
-                ("Director", d.people(forJobs: ["Director"])),
-                ("Director of Photography", d.people(forJobs: ["Director of Photography"])),
-                ("Writers", Array(d.people(forJobs: TMDBMovieDetails.writerJobs).prefix(3))),
-                ("Music", Array(d.people(forJobs: TMDBMovieDetails.composerJobs).prefix(2))),
-                ("Editor", Array(d.people(forJobs: ["Editor"]).prefix(2))),
-                ("Production Design", Array(d.people(forJobs: ["Production Design"]).prefix(2))),
-            ].filter { !$0.1.isEmpty }
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(rows, id: \.0) { row in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(row.0.uppercased())
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(.tertiary)
-                        ForEach(row.1, id: \.name) { person in
-                            PersonLink(name: person.name, id: person.id)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private func cast(_ details: TMDBMovieDetails) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Theme.sectionTitle("Cast")
@@ -476,6 +448,115 @@ struct OverviewTab: View {
         }
         .frame(width: 96)
         .contentShape(Rectangle())
+    }
+}
+
+/// Everything about the film in one place: who made it, how it was shot, the file, where your
+/// copies are, and your own notes on it.
+struct AtAGlance: View {
+    @Environment(AppModel.self) private var model
+    let film: FilmEntry
+
+    var body: some View {
+        let d = film.tmdb
+        let copies = model.copies(of: film)
+        let record = model.record(for: film)
+        VStack(alignment: .leading, spacing: 0) {
+            people("Director", d?.people(forJobs: ["Director"]) ?? [])
+            people("Writers", Array((d?.people(forJobs: TMDBMovieDetails.writerJobs) ?? []).prefix(3)))
+            people("Camera", d?.people(forJobs: ["Director of Photography"]) ?? [])
+            people("Music", Array((d?.people(forJobs: TMDBMovieDetails.composerJobs) ?? []).prefix(2)))
+            people("Editor", Array((d?.people(forJobs: ["Editor"]) ?? []).prefix(2)))
+            people("Design", Array((d?.people(forJobs: ["Production Design"]) ?? []).prefix(2)))
+            if let shot = shotOn { row("Shot on", Text(shot)) }
+            if let language = FilmLanguage.code(d?.originalLanguage) { row("Language", Text(FilmLanguage.name(language))) }
+            if let file = fileLine(copies) { row("File", Text(file)) }
+            if let sound = soundLine { row("Sound", Text(sound)) }
+            row("Copies", Text(copiesLine(copies)))
+            row("You", Text(youLine(record)), last: true)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.035)))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+    }
+
+    @ViewBuilder
+    private func people(_ label: String, _ crew: [TMDBCrewMember]) -> some View {
+        if !crew.isEmpty {
+            row(label, VStack(alignment: .leading, spacing: 3) {
+                ForEach(crew, id: \.name) { person in PersonLink(name: person.name, id: person.id) }
+            })
+        }
+    }
+
+    private func row(_ label: String, _ value: some View, last: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
+                .frame(width: 74, alignment: .leading)
+            value
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) {
+            if !last { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
+        }
+    }
+
+    /// "Film · Anamorphic · 2.39:1", from what's read about it and Wikidata.
+    private var shotOn: String? {
+        var parts = (film.craft?.shotOn ?? []).map(\.title)
+        if let ratio = film.funFacts?.quick?.aspectRatios?.first { parts.append(ratio) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "4K · HDR10 · 58 GB · MKV"
+    private func fileLine(_ copies: [FilmEntry]) -> String? {
+        guard let copy = copies.first else { return nil }
+        var parts: [String] = []
+        if let quality = copy.qualityLabel { parts.append(quality) }
+        if copy.parsed.dynamicRange.isHDR, copy.parsed.hdr == nil { parts.append(copy.parsed.dynamicRange.rawValue) }
+        if copy.size > 0 { parts.append(Format.bytes(copy.size)) }
+        let ext = (copy.fileName as NSString).pathExtension.uppercased()
+        if !ext.isEmpty { parts.append(ext) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Estonian, English subtitles"
+    private var soundLine: String? {
+        let subtitles = film.subtitleLanguages
+        if !subtitles.isEmpty { return ListFormatter.localizedString(byJoining: subtitles) + " subtitles" }
+        return film.hasSubtitles ? "Subtitles" : nil
+    }
+
+    /// "filmikogu · Backup complete"
+    private func copiesLine(_ copies: [FilmEntry]) -> String {
+        let main = copies.filter { !(model.drive($0.driveID)?.isBackup ?? false) }.compactMap { model.drive($0.driveID)?.name }
+        var parts = Array(Set(main)).sorted()
+        if model.drives.contains(where: { $0.isBackup }) {
+            switch model.backupGaps[film.personalKey] {
+            case .missing: parts.append("not on Backup")
+            case .incomplete: parts.append("Backup copy incomplete")
+            case nil: parts.append("on Backup")
+            }
+        }
+        return parts.isEmpty ? "No copy found" : parts.joined(separator: " · ")
+    }
+
+    /// "Watched · 4★", "On your watchlist", "Unwatched"
+    private func youLine(_ record: PersonalRecord) -> String {
+        var parts: [String] = [record.watched ? "Watched" : "Unwatched"]
+        if let stars = record.rating { parts.append(String(repeating: "★", count: stars)) }
+        if record.watchlist && !record.watched { parts.append("on your watchlist") }
+        if record.favorite { parts.append("a favourite") }
+        if model.isTonight(film.personalKey) { parts.append("on Tonight") }
+        return parts.joined(separator: " · ")
     }
 }
 

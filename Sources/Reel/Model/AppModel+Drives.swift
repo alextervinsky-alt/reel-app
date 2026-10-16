@@ -15,6 +15,14 @@ extension AppModel {
         return all.filter { drive($0.driveID)?.isBackup != true } + all.filter { drive($0.driveID)?.isBackup == true }
     }
 
+    /// How much room is left on a connected drive (read from the volume, nothing written).
+    func freeSpace(on drive: Drive) -> Int64? {
+        guard let url = mounted[drive.id],
+              let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityKey]),
+              let free = values.volumeAvailableCapacity else { return nil }
+        return Int64(free)
+    }
+
     func drive(_ id: String) -> Drive? {
         drives.first { $0.id == id }
     }

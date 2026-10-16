@@ -4,16 +4,25 @@ import SwiftUI
 import ReelCore
 
 enum Theme {
-    /// Near-black with a hint of blue, like Apple TV.
-    static let background = Color(red: 0.067, green: 0.067, blue: 0.078)
+    /// A neutral near-black: the films' own pictures are the only colour on screen.
+    static let background = Color(red: 0.043, green: 0.043, blue: 0.051)
     static let panel = Color.white.opacity(0.055)
+    /// The floating sidebar and the cards in it.
+    static let sidebar = Color(red: 0.082, green: 0.082, blue: 0.094)
+    static let sidebarCard = Color(red: 0.11, green: 0.11, blue: 0.125)
+    /// Search fields and filter buttons.
+    static let field = Color(red: 0.098, green: 0.098, blue: 0.114)
     static let hairline = Color.white.opacity(0.08)
     static let secondaryText = Color.white.opacity(0.62)
-    /// Reel's own colour: a warm projector-light orange.
-    static let brand = Color(red: 1.0, green: 0.45, blue: 0.28)
+    /// Reel's one accent: warm tungsten amber, for what's chosen or needs you.
+    static let brand = Color(red: 0.914, green: 0.659, blue: 0.278)
     static let brandGradient = LinearGradient(
-        colors: [Color(red: 1.0, green: 0.62, blue: 0.3), Color(red: 0.93, green: 0.25, blue: 0.33)],
+        colors: [Color(red: 0.96, green: 0.74, blue: 0.36), Color(red: 0.86, green: 0.48, blue: 0.2)],
         startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// The ratings' own colours, as small labels ("IMDb 8.5").
+    static let imdb = Color(red: 0.96, green: 0.77, blue: 0.09)
+    static let rottenTomatoes = Color(red: 0.98, green: 0.42, blue: 0.31)
+    static let metacritic = Color(red: 0.44, green: 0.81, blue: 0.37)
 
     static func sectionTitle(_ text: String) -> some View {
         Text(text).font(.system(size: 17, weight: .semibold))

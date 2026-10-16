@@ -211,10 +211,12 @@ struct SearchIndex: Equatable {
         title = (titles + [titles[0].replacingOccurrences(of: " ", with: "")]).joined(separator: " ")
 
         var names: [String] = []
+        var characters: [String] = []
         var tagWords: [String] = moods.map { $0.title } + film.parsed.badges
         if let d {
             names += (d.credits?.crew ?? []).map { $0.name }
-            names += (d.credits?.cast ?? []).flatMap { [$0.name, $0.character ?? ""] }
+            names += (d.credits?.cast ?? []).map { $0.name }
+            characters = (d.credits?.cast ?? []).compactMap { $0.character }
             tagWords += d.genreNames + d.keywordNames
             tagWords += (d.productionCountries ?? []).map { $0.name }
             if let code = d.originalLanguage, let language = Locale(identifier: "en_US").localizedString(forLanguageCode: code) {
@@ -242,44 +244,51 @@ struct SearchIndex: Equatable {
             tagWords += bonus.map { $0.title(removing: [film.displayTitle]) }
         }
         // Normalized per word list, not per name (this runs for every film on every rebuild).
-        people = n(names.joined(separator: " , "))
+        let peopleNames = n(names.joined(separator: " , "))
+        people = peopleNames + " , " + n(characters.joined(separator: " , "))
         tags = n(tagWords.joined(separator: " , "))
         plot = n([d?.tagline ?? "", d?.overview ?? ""].joined(separator: " "))
         craft = film.craft.map { n($0.searchText) } ?? ""
-        words = Array(Set((title + " " + people).split(separator: " ").map { String($0) }.filter { $0.count >= 3 }))
+        // Slips are forgiven against titles and real names only, never characters or plots
+        // ("cartoon" isn't "Carson").
+        words = Array(Set((title + " " + peopleNames).split(separator: " ").map { String($0) }.filter { $0.count >= 4 }))
     }
 
-    /// 0 when a term doesn't match anywhere; higher for title > people > tags > plot > near-miss.
-    /// The typo-tolerant pass is only used when exact matching finds (almost) nothing.
-    func relevance(_ terms: [String], allowTypos: Bool = false) -> Int {
-        // A craft phrase as a whole ("natural light", "black and white"), not word by word.
-        if terms.count > 1, !craft.isEmpty, (" " + craft + " ").contains(" " + terms.joined(separator: " ") + " ") {
-            return 50 * terms.count
+    /// 0 when a term doesn't match anywhere; higher for title > people > craft > tags > plot >
+    /// near-miss. Each term is a word with its stand-ins (see `SearchQuery.terms`), the best of
+    /// them counting. The typo-tolerant pass is only used when exact matching finds nothing.
+    func relevance(_ terms: [[String]], allowTypos: Bool = false) -> Int {
+        // A craft phrase as a whole ("natural light"), not word by word.
+        let typed = terms.compactMap(\.first)
+        if typed.count > 1, !craft.isEmpty, (" " + craft + " ").contains(" " + typed.joined(separator: " ") + " ") {
+            return 50 * typed.count
         }
         var total = 0
-        for term in terms {
-            var best = 0
-            if title.contains(term) {
-                best = title.hasPrefix(term) || title.contains(" " + term) ? 120 : 100
-            } else if people.contains(term) {
-                best = 60
-            } else if craft.contains(term) {
-                best = 45
-            } else if tags.contains(term) {
-                best = 40
-            } else if plot.contains(term) {
-                best = 15
-            } else if allowTypos && term.count >= 4 {
-                // Small typos: "blade runer", "villenueve".
-                let allowed = term.count >= 7 ? 2 : 1
-                if words.contains(where: { abs($0.count - term.count) <= allowed && TitleSimilarity.distance($0, term) <= allowed }) {
-                    best = 8
-                }
-            }
+        for alternatives in terms {
+            let best = alternatives.enumerated().map { index, term in
+                // A stand-in counts a little less than the word typed.
+                let score = relevance(of: term, allowTypos: allowTypos)
+                return index == 0 ? score : score * 9 / 10
+            }.max() ?? 0
             if best == 0 { return 0 }
             total += best
         }
         return total
+    }
+
+    private func relevance(of term: String, allowTypos: Bool) -> Int {
+        if title.contains(term) { return title.hasPrefix(term) || title.contains(" " + term) ? 120 : 100 }
+        if people.contains(term) { return 60 }
+        if craft.contains(term) { return 45 }
+        if tags.contains(term) { return 40 }
+        if plot.contains(term) { return 15 }
+        // Small slips in a title or a name: "blade runer", "villenueve".
+        let allowed = SearchQuery.typoAllowance(term)
+        guard allowTypos, allowed > 0, !term.contains(" ") else { return 0 }
+        let near = words.contains { word in
+            abs(word.count - term.count) <= allowed && word.first == term.first && TitleSimilarity.distance(word, term) <= allowed
+        }
+        return near ? 8 : 0
     }
 }
 

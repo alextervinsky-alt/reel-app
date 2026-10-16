@@ -14,6 +14,9 @@ struct RootView: View {
     @State private var length: LengthBand = .any
     @State private var language: String?
     @State private var shotOn: ShotOn?
+    /// Poster width in the grids, and posters or a list (for this session).
+    @State private var posterSize = 168.0
+    @State private var asList = false
     @State private var path = NavigationPath()
     /// The desk's search while Cinema mode has the field (put back when Cinema mode ends).
     @State private var deskSearch = ""
@@ -109,7 +112,8 @@ struct RootView: View {
                             // The desk's field doesn't take ⌘F while Cinema mode is over it.
                             LibraryGridView(shelf: shelf, searchText: $searchText,
                                             focusSearch: model.cinemaMode ? .constant(false) : $focusSearch, query: query, sort: $sort,
-                                            moods: $moods, length: $length, language: $language, shotOn: $shotOn, path: $path)
+                                            moods: $moods, length: $length, language: $language, shotOn: $shotOn,
+                                            posterSize: $posterSize, asList: $asList, path: $path)
                         }
                     }
                 }
@@ -196,12 +200,16 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    brand
+                VStack(alignment: .leading, spacing: 20) {
                     // In the order you use them: choosing tonight's film, your library, finding more.
                     section("Tonight") {
                         row(.recommended, "Recommended", icon: "wand.and.stars")
-                        row(.tonight, "Tonight", icon: "moon", highlightCount: true)
+                        if model.tonightItems.isEmpty {
+                            row(.tonight, "Tonight", icon: "moon")
+                        } else {
+                            TonightCard(isSelected: selection == .tonight) { onSelect(.tonight) }
+                                .padding(.vertical, 2)
+                        }
                         row(.newArrivals, "New Arrivals", icon: "shippingbox", highlightCount: true)
                     }
                     section("Library") {
@@ -212,7 +220,7 @@ struct SidebarView: View {
                         row(.watched, "Watched", icon: "checkmark.circle")
                     }
                     if !model.genres.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 1) {
                             Button {
                                 withAnimation(.easeOut(duration: 0.2)) { showGenres.toggle() }
                             } label: {
@@ -242,29 +250,29 @@ struct SidebarView: View {
                         row(.wishlist, "Wishlist", icon: "star")
                         row(.yearInFilm, "Year in Film", icon: "calendar")
                     }
-                    if !model.drives.isEmpty {
-                        section("Drives") {
-                            ForEach(model.drives) { drive in
-                                driveRow(drive)
-                            }
-                            // Only when something needs fixing.
-                            if model.checkCount > 0 {
-                                row(.needsCheck, "Check Matches", icon: "questionmark.circle", tint: .orange)
-                            }
-                            if model.count(.notOnBackup) > 0 {
-                                row(.notOnBackup, "Not on Backup", icon: "exclamationmark.triangle", tint: .orange)
-                                    .help("Films on your main drive without a full copy on the Backup")
-                            }
-                        }
-                    }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
                 .padding(.top, 4)
-                .padding(.bottom, 16)
+                .padding(.bottom, 14)
+            }
+            if !model.drives.isEmpty {
+                drivesCard
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
             }
             SidebarStatus { onSelect(.newArrivals) }
             footer
         }
+        // A floating panel, inset from the window's edges.
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.sidebar)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+                .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 2))
+                .ignoresSafeArea()
+        }
+        .padding(.leading, 6)
+        .background(Theme.background.ignoresSafeArea())
         .confirmationDialog(
             "Remove \(driveToRemove?.name ?? "drive") from Reel?",
             isPresented: Binding(get: { driveToRemove != nil }, set: { if !$0 { driveToRemove = nil } })
@@ -278,40 +286,56 @@ struct SidebarView: View {
         }
     }
 
-    private var brand: some View {
-        HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Theme.brandGradient)
-                .frame(width: 30, height: 30)
-                .overlay {
-                    Image(systemName: "film")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.white)
-                }
-                .shadow(color: Theme.brand.opacity(0.35), radius: 8, y: 3)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Reel")
-                    .font(.system(size: 19, weight: .bold))
-                Text(model.count(.all) == 1 ? "1 film" : "\(model.count(.all)) films")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+    /// The drives at the foot of the sidebar: each with whether it's connected and its free
+    /// space or role, then what needs fixing (matches to check, films not on the Backup).
+    private var drivesCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(model.drives) { drive in
+                driveRow(drive)
+            }
+            if model.checkCount > 0 || model.count(.notOnBackup) > 0 {
+                Rectangle().fill(Theme.hairline).frame(height: 1).padding(.vertical, 4)
+            }
+            if model.checkCount > 0 {
+                fixLink(model.checkCount == 1 ? "1 match to check" : "\(model.checkCount) matches to check", shelf: .needsCheck)
+            }
+            if model.count(.notOnBackup) > 0 {
+                fixLink("\(model.count(.notOnBackup)) not on Backup", shelf: .notOnBackup)
+                    .help("Films on your main drive without a full copy on the Backup")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 2)
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.sidebarCard))
+    }
+
+    private func fixLink(_ text: String, shelf: Shelf) -> some View {
+        Button {
+            onSelect(shelf)
+        } label: {
+            HStack {
+                Text(text)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+            }
+            .font(.system(size: 12.5, weight: selection == shelf ? .semibold : .medium))
+            .foregroundStyle(Theme.brand)
+            .padding(.horizontal, 6)
+            .frame(height: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func sectionTitle(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 10.5, weight: .semibold))
-            .tracking(1.1)
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.tertiary)
             .padding(.leading, 10)
             .padding(.bottom, 4)
     }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             sectionTitle(title)
             content()
         }
@@ -329,10 +353,32 @@ struct SidebarView: View {
 
     private func driveRow(_ drive: Drive) -> some View {
         let online = model.mounted[drive.id] != nil
-        return SidebarRow(title: drive.name, icon: "externaldrive", tint: nil, count: nil,
-                          badge: drive.isBackup ? "Backup" : nil, isSelected: selection == .drive(drive.id), status: online) {
+        let free = online ? model.freeSpace(on: drive).map { Format.bytes($0) + " free" } : nil
+        let detail = [drive.isBackup ? "Backup" : nil, online ? free : "off"].compactMap { $0 }.joined(separator: " · ")
+        return Button {
             onSelect(.drive(drive.id))
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(online ? Color.green : Color.white.opacity(0.25))
+                    .frame(width: 7, height: 7)
+                Text(drive.name)
+                    .font(.system(size: 12.5, weight: selection == .drive(drive.id) ? .semibold : .regular))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(detail)
+                    .font(.system(size: 10.5))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 6)
+            .frame(height: 26)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(selection == .drive(drive.id) ? Color.white.opacity(0.08) : Color.clear))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .help((online ? "Connected" : "Not connected. Its films stay in the library.")
               + (drive.isBackup ? " A copy of your main drive." : ""))
         .contextMenu {
@@ -383,6 +429,58 @@ struct SidebarView: View {
     }
 }
 
+/// Tonight in the sidebar, once something is on it: how many films, with their posters and
+/// titles. Opens Tonight.
+struct TonightCard: View {
+    @Environment(AppModel.self) private var model
+    let isSelected: Bool
+    let open: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        let items = model.tonightItems
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 7) {
+                    Image(systemName: "moon.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.brand)
+                    Text("Tonight").font(.system(size: 13.5, weight: .semibold))
+                    Spacer()
+                    Text(items.count == 1 ? "1 film" : "\(items.count) films")
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                HStack(alignment: .center, spacing: 6) {
+                    ForEach(items.prefix(3)) { item in
+                        Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 4)
+                            .frame(width: 30)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(items.prefix(2)) { item in
+                            Text(item.main.displayTitle).lineLimit(1)
+                        }
+                        if items.count > 2 { Text("and \(items.count - 2) more").foregroundStyle(.tertiary) }
+                    }
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 2)
+                }
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? Color.white.opacity(0.1) : (hovering ? Color.white.opacity(0.07) : Theme.sidebarCard)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(isSelected ? Theme.brand.opacity(0.5) : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Tonight's shortlist")
+    }
+}
+
 /// What Reel is doing in the background ("Reading Films…", "Finding film info… 3 of 20"),
 /// then what it found ("3 new films on Films"). Its own view, so progress updates redraw
 /// only this line.
@@ -390,7 +488,7 @@ struct SidebarStatus: View {
     @Environment(AppModel.self) private var model
     let showArrivals: () -> Void
 
-    private var isIdle: Bool { model.reading.isEmpty && model.work == nil && model.finished == nil }
+    private var isIdle: Bool { model.reading.isEmpty && model.work == nil && model.finished == nil && model.craftPending == 0 }
 
     var body: some View {
         Group {
@@ -421,6 +519,14 @@ struct SidebarStatus: View {
                 .buttonStyle(.plain)
                 .disabled(model.count(.newArrivals) == 0)
                 .help(model.count(.newArrivals) > 0 ? "Show New Arrivals" : "")
+                .transition(.opacity)
+            } else if model.craftPending > 0 {
+                // Quietly, after everything else: how each film was shot, for searching by craft.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.mini)
+                    Text("Reading how films were shot · \(model.craftPending) to go").monospacedDigit()
+                }
+                .help("For searching by craft (anamorphic, 16mm, Steadicam…) and the Shot on filter")
                 .transition(.opacity)
             }
         }
@@ -481,17 +587,14 @@ struct SidebarRow: View {
                 } else if let count, count > 0 {
                     if let countTint {
                         Text("\(count)")
-                            .font(.system(size: 10.5, weight: .bold))
+                            .font(.system(size: 11, weight: .semibold))
                             .monospacedDigit()
-                            .foregroundStyle(Color.white)
-                            .padding(.horizontal, 6)
-                            .frame(minWidth: 18, minHeight: 17)
-                            .background(Capsule().fill(countTint))
+                            .foregroundStyle(countTint)
                     } else {
                         Text("\(count)")
                             .font(.system(size: 11, weight: .medium))
                             .monospacedDigit()
-                            .foregroundStyle(tint ?? Color.secondary.opacity(0.8))
+                            .foregroundStyle(tint ?? Color.secondary.opacity(0.7))
                     }
                 }
             }
@@ -499,7 +602,7 @@ struct SidebarRow: View {
             .frame(height: 30)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.white.opacity(0.11) : (hovering ? Color.white.opacity(0.05) : Color.clear))
+                    .fill(isSelected ? Color.white.opacity(0.08) : (hovering ? Color.white.opacity(0.045) : Color.clear))
             )
             .contentShape(Rectangle())
         }
