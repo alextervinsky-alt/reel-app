@@ -166,7 +166,7 @@ struct CinemaFilmPage: View {
                     Text(Format.metaLine(film))
                         .font(.system(size: Cinema.body))
                         .foregroundStyle(Theme.secondaryText)
-                    // HDR or SDR, to set the TV before pressing Play.
+                    // HDR or SDR, to set the Mac's display before pressing Play.
                     PictureRangeTag(film: film, large: true)
                 }
                 HStack(spacing: 16) {

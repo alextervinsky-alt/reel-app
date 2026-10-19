@@ -1,132 +1,264 @@
 import Foundation
 
-/// What a file's picture is (HDR or SDR), so the TV can be set before Play: from your own
-/// setting, else from what the file name proves. When nothing proves it, it's "not stated":
-/// Reel never guesses SDR. The file itself is never opened.
+/// The picture words in a release name, read from the whole name (dots, spaces, brackets and
+/// words run together: "DV.HDR10+", "[DV HDR10]", "Dolby.Vision.And.HDR10.PLUS", "HDR10+REMUX",
+/// "DV.P7"). Release names list every picture format the file carries, so a format not named is
+/// one it doesn't have ("DV HDR10" has no HDR10+).
+public struct PictureWords: Equatable, Sendable {
+    public var dolbyVision = false
+    public var hdr10Plus = false
+    /// HDR10, or "HDR" alone (HDR10 by convention).
+    public var hdr10 = false
+    public var hlg = false
+    public var sdr = false
+    /// Converted from HDR to SDR ("tonemapped", "HDR to SDR").
+    public var toneMapped = false
+    /// The Dolby Vision profile when named ("DV.P7", "DoVi P8", "FEL"): 5 has no HDR10 layer.
+    public var dolbyVisionProfile: Int?
+    /// "HDR" itself (not only "HDR10"), to write it as the name does.
+    var saysHDR = false
+
+    public init() {}
+
+    public static func read(_ name: String) -> PictureWords {
+        let lower = name.lowercased()
+        func has(_ pattern: String) -> Bool { lower.range(of: pattern, options: .regularExpression) != nil }
+        var words = PictureWords()
+        words.toneMapped = has(#"tone[ ._-]?map|(?<![a-z0-9])hdr[ ._-]?(?:to|2)[ ._-]?sdr(?![a-z])"#)
+        words.dolbyVision = has(#"(?<![a-z0-9])(?:dovi|dolby[ ._-]?vision|dv(?=hdr|[^a-z0-9]|$))"#)
+        words.hdr10Plus = has(#"(?<![a-z0-9])hdr10(?:\+|p(?![a-z0-9])|plus(?![a-z])|[ ._-]plus(?![a-z]))|(?<![a-z0-9])hdr\+"#)
+        // "HDRip" is a rip of an HD source, not HDR.
+        words.saysHDR = has(#"(?<![a-z0-9])hdr(?![a-z]|10)"#)
+        words.hdr10 = words.saysHDR || has(#"(?<![a-z0-9])hdr10(?![0-9])"#)
+        words.hlg = has(#"(?<![a-z0-9])hlg(?![a-z0-9])"#)
+        words.sdr = has(#"(?<![a-z0-9])sdr(?![a-z0-9])"#)
+        if words.dolbyVision {
+            if let found = lower.range(of: #"(?<![a-z0-9])(?:dv|dovi)[ ._-]?p([578])(?![0-9])|(?<![a-z0-9])profile[ ._-]?([578])(?![0-9])|(?<![a-z0-9])p([578])(?:\.\d)?(?![a-z0-9])"#,
+                                       options: .regularExpression) {
+                words.dolbyVisionProfile = lower[found].last { $0.isNumber && "578".contains($0) }.flatMap { Int(String($0)) }
+            } else if has(#"(?<![a-z0-9])(?:fel|mel)(?![a-z0-9])"#) {
+                words.dolbyVisionProfile = 7
+            }
+        }
+        return words
+    }
+
+    /// As a name writes it, short: "DV HDR10+", "DV HDR", "DV", "HDR10", "HLG"; nil for none.
+    public var written: String? {
+        var parts: [String] = []
+        if dolbyVision { parts.append("DV") }
+        if hdr10Plus {
+            parts.append("HDR10+")
+        } else if saysHDR {
+            parts.append("HDR")
+        } else if hdr10 {
+            parts.append("HDR10")
+        } else if hlg {
+            parts.append("HLG")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    /// What the name says the picture is, the richest first; SDR only when it says so.
+    public var dynamicRange: DynamicRange? {
+        if toneMapped { return .sdr }
+        if dolbyVision { return .dolbyVision }
+        if hdr10Plus { return .hdr10Plus }
+        if hdr10 { return .hdr10 }
+        if hlg { return .hlg }
+        return sdr ? .sdr : nil
+    }
+}
+
+/// What a file's picture is, for one choice before Play: whether to switch the Mac's display to
+/// HDR. A Mac sends HDR to the TV in one form (HDR10) whatever the file carries, so Dolby Vision,
+/// HDR10+ and HDR10 files all need the same setting; the format is kept as detail. From your own
+/// setting, else what the file name (or the film's own folder) proves, else what the kind of
+/// release makes likely, said as a guess. The file itself is never opened.
 public struct FilePicture: Equatable, Sendable {
+    /// What to set the Mac to.
+    public enum Setting: String, Equatable, Sendable {
+        case hdr = "HDR"
+        case sdr = "SDR"
+    }
+
+    /// The HDR formats a file carries.
+    public enum Format: String, Equatable, Sendable {
+        case dolbyVisionHDR10Plus = "Dolby Vision + HDR10+"
+        case dolbyVisionHDR10 = "Dolby Vision + HDR10"
+        case dolbyVisionHLG = "Dolby Vision + HLG"
+        /// Dolby Vision with no HDR10 layer (profile 5, as streaming services send it): players
+        /// that can't read Dolby Vision show it in wrong colours.
+        case dolbyVisionOnly = "Dolby Vision only"
+        /// Dolby Vision, whether there's an HDR10 layer unknown.
+        case dolbyVision = "Dolby Vision"
+        case hdr10Plus = "HDR10+"
+        case hdr10 = "HDR10"
+        case hlg = "HLG"
+
+        /// Words a search can find it by.
+        var searchWords: [String] {
+            switch self {
+            case .dolbyVisionHDR10Plus: ["Dolby Vision", "HDR10+", "HDR10"]
+            case .dolbyVisionHDR10: ["Dolby Vision", "HDR10"]
+            case .dolbyVisionHLG: ["Dolby Vision", "HLG"]
+            case .dolbyVisionOnly, .dolbyVision: ["Dolby Vision"]
+            case .hdr10Plus: ["HDR10+", "HDR10"]
+            case .hdr10: ["HDR10"]
+            case .hlg: ["HLG"]
+            }
+        }
+    }
+
     /// Why Reel says so, the most certain first.
     public enum Basis: Equatable, Sendable {
         /// You set it.
         case yours
         /// The file name says it ("DV HDR10", "SDR").
         case named
-        /// The source can't carry HDR (a DVD, 720p or lower, a 1080p Blu-ray).
-        case source
-        /// A full release name (resolution and source or codec) with no HDR word: release names
-        /// always say HDR, so it's SDR.
-        case convention
         /// The film's own folder says it ("Dune (2021) 2160p DV/dune.mkv"), or the folder of the
         /// collection it's part of ("The Fast and the Furious - Complete Collection 1080p HDR10/…").
         case folder
+        /// What the file is can't carry HDR: a DVD, 720p or lower, a 1080p Blu-ray, an H.264 (AVC),
+        /// VC-1 or MPEG-2 file (HDR video is made in HEVC or AV1).
+        case source
         /// Nothing proves it, but the kind of release makes it likely: a 4K Blu-ray is HDR10 as
-        /// standard; a 4K web release or a 1080p file whose name doesn't say HDR is most likely SDR.
+        /// standard; a 4K web release or a 1080p file whose name doesn't say HDR is most likely SDR
+        /// (release names say HDR when it is).
         case likely
         /// Nothing to go on (a file renamed by hand, "2013. Furious 6.mkv").
         case notStated
     }
 
     /// Nil when not stated.
-    public let range: DynamicRange?
-    /// For Dolby Vision, the HDR layer it also carries.
-    public let fallback: DynamicRange?
+    public let setting: Setting?
+    /// The HDR format, when known.
+    public let format: Format?
     public let basis: Basis
-    /// Why, for the tag's help: "the file name says DV HDR10", "1080p Blu-ray: SDR only".
+    /// Why, for the tag's help: "the file name says DV HDR10", "a 1080p Blu-ray: HDR is only on 4K Blu-rays".
     public let reason: String
 
-    public var isHDR: Bool { range?.isHDR ?? false }
-    public var isKnown: Bool { range != nil }
+    public var isHDR: Bool { setting == .hdr }
+    public var isKnown: Bool { setting != nil }
     /// An inference, said as one ("Likely SDR").
-    public var isGuess: Bool { basis == .likely || basis == .convention }
+    public var isGuess: Bool { basis == .likely }
+    /// Dolby Vision with no HDR10 layer: worth knowing before Play.
+    public var isDolbyVisionOnly: Bool { format == .dolbyVisionOnly }
 
-    /// "HDR · Dolby Vision + HDR10", "SDR", or nil when not stated.
+    /// "HDR", "SDR", "Likely HDR", "HDR · Dolby Vision only", or nil when not stated.
     public var label: String? {
-        guard let range else { return nil }
-        if isGuess { return "Likely " + (range.isHDR ? range.rawValue : "SDR") }
-        guard range.isHDR else { return "SDR" }
-        if range == .hdr { return "HDR" }
-        return "HDR · " + range.rawValue + (fallback.map { " + " + $0.rawValue } ?? "")
+        guard let setting else { return nil }
+        if isGuess { return "Likely " + setting.rawValue }
+        return isDolbyVisionOnly ? "HDR · Dolby Vision only" : setting.rawValue
     }
 
     /// Words a search can find it by ("HDR", "Dolby Vision", "SDR").
     public var searchWords: [String] {
-        guard let range else { return [] }
-        if !range.isHDR { return ["SDR"] }
-        return ["HDR", range.rawValue] + (fallback.map { [$0.rawValue] } ?? [])
+        guard let setting else { return [] }
+        return [setting.rawValue] + (format?.searchWords ?? [])
     }
 
-    /// The choices you can make in the film's "…" menu.
-    public static let choices: [DynamicRange] = [.dolbyVision, .hdr, .sdr]
+    /// What you can set in the film's "…" menu (all the Mac's display knows).
+    public static let choices: [DynamicRange] = [.hdr, .sdr]
 
     /// - Parameters:
     ///   - name: the file name, parsed.
     ///   - ownFolder: the film's folder name, parsed: only when the folder holds this film alone, or
     ///     is named as one collection (see `isCollection`). A folder of assorted films ("4K HDR
     ///     Films") says nothing about each film in it.
-    ///   - yours: what you set, which always wins.
+    ///   - yours: what you set, which always wins (an older Reel's "Dolby Vision" is HDR).
     public static func of(_ name: ParsedFilename, ownFolder: ParsedFilename? = nil, yours: DynamicRange? = nil) -> FilePicture {
-        if let yours {
-            return FilePicture(range: yours, fallback: nil, basis: .yours, reason: "You set this")
-        }
         // What proves it first, the file's name then its folder; only then what's likely, the
         // same order (a folder that says "HDR10" beats a guess from the file's name).
-        let byName = proven(by: name, what: "the file name")
-        if let byName, !byName.isGuess { return byName }
-        let byFolder = ownFolder.flatMap { proven(by: $0, what: "the film's folder") }
-        if let byFolder, !byFolder.isGuess {
-            return FilePicture(range: byFolder.range, fallback: byFolder.fallback, basis: .folder, reason: byFolder.reason)
+        let byName = read(name, what: "the file name")
+        let byFolder = ownFolder.flatMap { read($0, what: "the film's folder") }.map {
+            $0.basis == .named ? FilePicture(setting: $0.setting, format: $0.format, basis: .folder, reason: $0.reason) : $0
         }
-        if let byName { return byName }
-        if let byFolder { return byFolder }
-        if let guess = likely(name) { return guess }
+        let found = [byName, byFolder].compactMap { $0 }.first { !$0.isGuess } ?? byName ?? byFolder
+        if let yours {
+            let setting: Setting = yours.isHDR ? .hdr : .sdr
+            // The format the name says, when it agrees.
+            let format = setting == .hdr && found?.setting == .hdr && found?.isGuess == false ? found?.format : nil
+            return FilePicture(setting: setting, format: format, basis: .yours, reason: "You set this")
+        }
+        if let found { return found }
         let why = name.anyResolution == "2160p"
-            ? "4K, and the file name doesn't say HDR or SDR"
-            : "The file name doesn't say HDR or SDR"
-        return FilePicture(range: nil, fallback: nil, basis: .notStated, reason: why)
+            ? "4K, and the file name doesn't say HDR or SDR (4K files can be either)"
+            : "The file name doesn't say HDR or SDR, or what kind of release it is"
+        return FilePicture(setting: nil, format: nil, basis: .notStated, reason: why)
     }
 
-    /// What the kind of release makes likely, when nothing proves it; nil when the name says
-    /// nothing about the release at all.
-    static func likely(_ parsed: ParsedFilename) -> FilePicture? {
-        let bluRay = parsed.anySource.map { $0.hasPrefix("BluRay") || $0 == "REMUX" } ?? false
-        switch parsed.anyResolution {
-        case "2160p" where bluRay:
-            return FilePicture(range: .hdr10, fallback: nil, basis: .likely,
-                               reason: "A 4K Blu-ray whose name doesn't say: 4K Blu-rays are HDR10 as standard, so likely HDR10")
-        case "2160p":
-            return FilePicture(range: .sdr, fallback: nil, basis: .likely,
-                               reason: "A 4K release whose name doesn't say HDR: release names usually say it when it is, so likely SDR")
+    /// What one name says, proves or makes likely; nil when it says nothing about the picture.
+    static func read(_ parsed: ParsedFilename, what: String) -> FilePicture? {
+        let words = parsed.pictureWords
+        let source = parsed.anySource ?? ""
+        let disc = source.hasPrefix("BluRay") || source == "REMUX"
+        let web = source == "WEB" || source.hasPrefix("WEB")
+        let subject = what.prefix(1).uppercased() + what.dropFirst()
+        // Said outright.
+        if words.toneMapped {
+            return FilePicture(setting: .sdr, format: nil, basis: .named, reason: "\(subject) says it was converted from HDR to SDR")
+        }
+        if words.sdr, !words.dolbyVision, !words.hdr10, !words.hdr10Plus, !words.hlg {
+            return FilePicture(setting: .sdr, format: nil, basis: .named, reason: "\(subject) says SDR")
+        }
+        if words.dynamicRange?.isHDR == true {
+            let (kind, why) = Self.format(of: words, disc: disc, web: web)
+            let said = words.written ?? "HDR"
+            return FilePicture(setting: .hdr, format: kind, basis: .named, reason: "\(subject) says \(said)" + (why.map { ": " + $0 } ?? ""))
+        }
+        // What the file is can't carry HDR.
+        if parsed.isDVD {
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A DVD: always SDR")
+        }
+        let resolution = parsed.anyResolution
+        if let resolution, ["720p", "576p", "480p"].contains(resolution) {
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "\(resolution): HDR releases are 1080p or 4K")
+        }
+        // HDR Blu-rays are 4K discs only; a 1080p copy of one says "UHD".
+        if resolution == "1080p", disc, !parsed.mentionsUHD {
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A 1080p Blu-ray: HDR is only on 4K Blu-rays")
+        }
+        if let codec = parsed.videoCodec, ["AVC", "VC-1", "MPEG-2", "XviD"].contains(codec) {
+            return FilePicture(setting: .sdr, format: nil, basis: .source,
+                               reason: "\(codec == "AVC" ? "H.264 (AVC)" : codec) video: HDR releases are made in HEVC or AV1")
+        }
+        // Likely, from the kind of release.
+        switch resolution {
+        case "2160p" where disc:
+            return FilePicture(setting: .hdr, format: .hdr10, basis: .likely,
+                               reason: "A 4K Blu-ray whose name doesn't say: 4K Blu-rays are HDR10 as standard")
+        case "2160p" where web:
+            return FilePicture(setting: .sdr, format: nil, basis: .likely,
+                               reason: "A 4K web release whose name doesn't say HDR: web releases name HDR and Dolby Vision when they have them")
+        case "1080p" where parsed.mentionsUHD:
+            return FilePicture(setting: .sdr, format: nil, basis: .likely,
+                               reason: "A 1080p copy of a 4K disc whose name doesn't say HDR: copies that keep HDR say so")
         case "1080p":
-            return FilePicture(range: .sdr, fallback: nil, basis: .likely,
-                               reason: "A 1080p file whose name doesn't say HDR: likely SDR")
+            return FilePicture(setting: .sdr, format: nil, basis: .likely,
+                               reason: "A 1080p file whose name doesn't say HDR: 1080p releases are almost always SDR")
         default:
             return nil
         }
     }
 
-    /// What one name proves, or nil.
-    static func proven(by parsed: ParsedFilename, what: String) -> FilePicture? {
-        if let range = parsed.dynamicRange {
-            let said = range == .sdr ? "SDR" : (parsed.hdr ?? range.rawValue)
-            return FilePicture(range: range, fallback: parsed.fallbackRange, basis: .named, reason: "\(what.prefix(1).uppercased() + what.dropFirst()) says \(said)")
+    /// The format a name's HDR words make, and why when it's worked out ("DV" alone on a 4K
+    /// Blu-ray: its Dolby Vision always sits on HDR10).
+    static func format(of words: PictureWords, disc: Bool, web: Bool) -> (Format, String?) {
+        guard words.dolbyVision else {
+            return (words.hdr10Plus ? .hdr10Plus : words.hdr10 ? .hdr10 : .hlg, nil)
         }
-        let resolution = parsed.anyResolution
-        if parsed.isDVD {
-            return FilePicture(range: .sdr, fallback: nil, basis: .source, reason: "A DVD: always SDR")
+        if words.hdr10Plus { return (.dolbyVisionHDR10Plus, nil) }
+        if words.hdr10 { return (.dolbyVisionHDR10, nil) }
+        if words.hlg { return (.dolbyVisionHLG, nil) }
+        switch words.dolbyVisionProfile {
+        case 5: return (.dolbyVisionOnly, "Dolby Vision profile 5 has no HDR10 layer")
+        case 7, 8: return (.dolbyVisionHDR10, "Dolby Vision profile \(words.dolbyVisionProfile ?? 7) sits on HDR10")
+        default: break
         }
-        if let resolution, ["720p", "576p", "480p"].contains(resolution) {
-            return FilePicture(range: .sdr, fallback: nil, basis: .source, reason: "\(resolution): SDR")
-        }
-        guard resolution == "1080p" else { return nil }
-        // HDR Blu-rays are 4K discs only; a 1080p copy of one says "UHD".
-        let bluRay = parsed.anySource.map { $0.hasPrefix("BluRay") || $0 == "REMUX" } ?? false
-        if bluRay, !parsed.mentionsUHD {
-            return FilePicture(range: .sdr, fallback: nil, basis: .source, reason: "A 1080p Blu-ray: HDR is only on 4K Blu-rays")
-        }
-        if parsed.anySource != nil || parsed.videoCodec != nil {
-            return FilePicture(range: .sdr, fallback: nil, basis: .convention,
-                           reason: "A 1080p release name without HDR: release names usually say HDR when it is, so likely SDR")
-        }
-        return nil
+        if disc { return (.dolbyVisionHDR10, "a 4K Blu-ray's Dolby Vision always sits on HDR10") }
+        if web { return (.dolbyVisionOnly, "a web release named only DV usually has no HDR10 layer (Dolby Vision profile 5)") }
+        return (.dolbyVision, nil)
     }
 }
 

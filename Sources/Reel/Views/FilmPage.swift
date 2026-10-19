@@ -129,7 +129,7 @@ struct FilmHero: View {
                     Text(Format.metaLine(film))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.secondaryText)
-                    // HDR or SDR, to set the TV before pressing Play.
+                    // HDR or SDR, to set the Mac's display before pressing Play.
                     PictureRangeTag(film: film)
                 }
                 HStack(spacing: 16) {
@@ -536,13 +536,14 @@ struct FilmFactSheet: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// "4K · HDR10 · 58 GB · MKV"
+    /// "4K · Dolby Vision + HDR10 · 58 GB · MKV": the picture's format as Reel reads it (see
+    /// `FilePicture`), or the name's own words.
     private func fileLine(_ copies: [FilmEntry]) -> String? {
         guard let copy = copies.first else { return nil }
         var parts: [String] = []
-        if let quality = copy.qualityLabel { parts.append(quality) }
-        // HLG and other HDR named only by its kind.
-        if let range = copy.parsed.dynamicRange, range.isHDR, copy.parsed.hdr == nil { parts.append(range.rawValue) }
+        if let resolution = copy.parsed.resolution { parts.append(resolution == "2160p" ? "4K" : resolution) }
+        let picture = model.picture(of: copy)
+        if let format = picture.isGuess ? nil : picture.format?.rawValue ?? copy.parsed.hdr { parts.append(format) }
         parts += copy.parsed.editions
         if copy.size > 0 { parts.append(Format.bytes(copy.size)) }
         let ext = (copy.fileName as NSString).pathExtension.uppercased()
@@ -1190,8 +1191,8 @@ struct MatchFixer: View {
     }
 }
 
-/// Picture (in the film's "…" menu): what the file Play opens is, when the name doesn't say or
-/// says it wrong. Kept in Your Notes for that file.
+/// Picture (in the film's "…" menu): HDR or SDR for the file Play opens, when the name doesn't
+/// say or says it wrong (the two settings a Mac's display has). Kept in Your Notes for that file.
 struct PictureMenu: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
@@ -1203,8 +1204,9 @@ struct PictureMenu: View {
         } ?? "Not Stated"
         Menu("Picture") {
             ForEach(FilePicture.choices, id: \.self) { range in
-                Toggle(range == .hdr ? "HDR (HDR10, HDR10+, HLG)" : range.rawValue, isOn: Binding(
-                    get: { yours == range },
+                Toggle(range == .hdr ? "HDR (Dolby Vision, HDR10, HDR10+, HLG)" : range.rawValue, isOn: Binding(
+                    // An older Reel's "Dolby Vision" is HDR.
+                    get: { yours.map { $0.isHDR == range.isHDR } ?? false },
                     set: { if $0 { model.setPicture(range, for: film) } }))
             }
             Divider()

@@ -3,8 +3,10 @@ import XCTest
 
 /// Live, run with the TMDB check (not offline): Shot on for well-known films whose answers are on
 /// record, read from the real sources the way the app reads them. A tag a film shouldn't have is
-/// reported with its sentence; a tag it should have and lacks is reported too. It never fails a
-/// build (the sites change and refuse): the reports are what's checked.
+/// reported with its sentence; a tag it should have and lacks is reported with the sentences that
+/// named it but didn't say it was shot that way. It never fails a build (the sites change and
+/// refuse): the reports are what's checked. CI reads one film per run (SHOTON_FILM), so a crash in
+/// Linux's networking costs one film, not the rest.
 final class LiveShotOnTests: XCTestCase {
     private struct Known {
         let title: String
@@ -12,12 +14,14 @@ final class LiveShotOnTests: XCTestCase {
         /// Tags it must have, and tags it must not.
         let has: Set<ShotOn>
         let hasNot: Set<ShotOn>
+        /// Tags it may have only as "in part" (one IMAX shot, black-and-white storylines).
+        var partOnly: Set<ShotOn> = []
     }
 
     private let films: [Known] = [
-        Known(title: "Oppenheimer", year: 2023, has: [.film, .imax], hasNot: [.digital, .anamorphic]),
+        Known(title: "Oppenheimer", year: 2023, has: [.film, .imax], hasNot: [.digital, .anamorphic], partOnly: [.blackAndWhite]),
         Known(title: "Interstellar", year: 2014, has: [.film, .imax, .anamorphic], hasNot: [.digital]),
-        Known(title: "The Prestige", year: 2006, has: [.film], hasNot: [.digital, .imax]),
+        Known(title: "The Prestige", year: 2006, has: [.film], hasNot: [.digital], partOnly: [.imax]),
         Known(title: "The Dark Knight", year: 2008, has: [.film, .imax], hasNot: [.digital]),
         Known(title: "Inception", year: 2010, has: [.film, .anamorphic], hasNot: []),
         Known(title: "The Matrix", year: 1999, has: [.film], hasNot: [.digital, .anamorphic]),
@@ -48,11 +52,11 @@ final class LiveShotOnTests: XCTestCase {
             throw XCTSkip("TMDB_TOKEN not set")
         }
         let client = TMDBClient(token: token)
-        var read = 0
-        // Each film's line is written as soon as it's read (unbuffered): CI sums them up even if
-        // Linux's networking stops the run part way.
+        // Written as soon as it's known (unbuffered), for CI to sum up.
         func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
-        for known in films {
+        let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
+        let reading = chosen.map { films.indices.contains($0) ? [films[$0]] : [] } ?? films
+        for known in reading {
             guard let id = try? await client.searchMovies(query: known.title, year: known.year).first?.id,
                   let details = try? await client.movieDetails(id: id) else {
                 say("Shot on: \(known.title) | not found on TMDB")
@@ -63,25 +67,34 @@ final class LiveShotOnTests: XCTestCase {
             if let collection = details.collection, let set = try? await client.collection(id: collection.id) {
                 others = set.parts.filter { $0.id != details.id }.map(\.title)
             }
-            guard let craft = await CraftReader.read(details, articleTitle: facts?.articleTitle, colour: facts?.quick?.colour,
-                                                     otherTitles: others) else {
-                say("Shot on: \(known.title) | nothing could be reached")
-                continue
-            }
-            read += 1
+            // Read as CraftReader reads it, keeping what was read to say why a tag is missing.
+            async let fetched = CameraSourcesClient().read(articleTitle: facts?.articleTitle, filmTitle: details.title,
+                                                           cinematographers: details.cinematographers, directors: details.directors,
+                                                           year: details.year, otherTitles: others)
+            var article: FilmArticle?
+            if let title = facts?.articleTitle { article = try? await WikipediaClient().article(title: title) }
+            let texts = CraftReader.texts(article: article, reading: await fetched, hiding: false)
+            let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
+                                       year: details.year, title: details.title, otherTitles: others)
+            let craft = CraftIndex.make(from: specs, colour: facts?.quick?.colour, keywords: details.keywordNames, sources: texts.count)
             let tags = craft.shotOn.map { craft.label(for: $0) }.joined(separator: ", ")
             var wrong: [String] = [], missing: [String] = []
-            for tag in ShotOn.allCases where craft.shotOn.contains(tag) && known.hasNot.contains(tag) {
-                wrong.append(tag.title)
+            for tag in ShotOn.allCases where craft.shotOn.contains(tag) {
+                let wholeWhenPart = known.partOnly.contains(tag) && craft.evidence(for: tag)?.partial != true
+                guard known.hasNot.contains(tag) || wholeWhenPart else { continue }
+                wrong.append(tag.title + (wholeWhenPart ? " (whole)" : ""))
                 let why = craft.evidence(for: tag).map { "\($0.source): \($0.text.prefix(220))" } ?? ""
-                say("::warning::Shot on wrong: \(known.title) is not \(tag.title): \(why)")
+                say("::warning::Shot on wrong: \(known.title) is not \(craft.label(for: tag)): \(why)")
             }
             for tag in ShotOn.allCases where known.has.contains(tag) && !craft.shotOn.contains(tag) {
                 missing.append(tag.title)
+                // What named it without saying it was shot that way.
+                for spec in specs.specs where !spec.capture && CraftIndex.shotOn(spec).contains(tag) {
+                    say("Shot on not counted: \(known.title) \(tag.title): \(spec.source ?? "Wikipedia"): \((spec.evidence ?? spec.name).prefix(200))")
+                }
             }
-            say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(craft.sources) texts | known \(known.has.count + known.hasNot.count)"
+            say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(texts.count) texts | known \(known.has.count + known.hasNot.count)"
                 + " | wrong \(wrong.joined(separator: "+")) | missing \(missing.joined(separator: "+"))")
         }
-        try XCTSkipIf(read == 0, "no film could be read: the sources may be refusing for now")
     }
 }

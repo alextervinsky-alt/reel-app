@@ -1,111 +1,143 @@
 import XCTest
 @testable import ReelCore
 
-/// HDR or SDR, so the TV can be set before Play: only what the name proves, never a guess.
+/// HDR or SDR, the one choice a Mac's display has before Play: what the name says, what the kind of
+/// file proves, and what's likely said as a guess. The names are made up, shaped like real ones.
 final class PictureTests: XCTestCase {
     private func picture(_ name: String, folder: String? = nil, yours: DynamicRange? = nil) -> FilePicture {
         FilePicture.of(FilenameParser.parse(name), ownFolder: folder.map { FilenameParser.parse($0) }, yours: yours)
     }
 
-    /// The real file names of a library (Reel 1.8.8's fixes), each with what the TV must be set to.
-    func testRealNames() {
-        let expected: [(String, DynamicRange?, DynamicRange?, FilePicture.Basis)] = [
-            ("2001. The Fast and the Furious.mkv", nil, nil, .notStated),
-            ("2003. 2 Fast 2 Furious.mkv", nil, nil, .notStated),
-            ("2009, Fast & Furious.mkv", nil, nil, .notStated),
-            ("2011. Fast Five [Extended Cut].mkv", nil, nil, .notStated),
-            ("2013. Furious 6 [Extended.Cut].mkv", nil, nil, .notStated),
-            ("2021. Fast & Furious 9 The Fast Saga.mkv", nil, nil, .notStated),
-            ("Ah-ga-ssi.aka.The.Handmaiden.2016.Extended.BluRay.1080p.DTS-HD.MA.5.1.AVC.REMUX-FraMeSToR.mkv", .sdr, nil, .source),
-            ("Anatomy of a Fall 2024 1080p BluRay REMUX AVC x264 [Hindi AMZN DDP 5.1 640kbps + English DTS-HD MA 5.1] ESub-CiNEPHiLES-4kHdHub.mkv", .sdr, nil, .source),
-            ("Dune Part One (2021) 2160p 4K UHD DV HDR10 BluRay REMUX x265 10bit HEVC [Telugu AMZN DD5.1 640Kbps + Org Hindi BD 5.1 448Kbps + English DTS-HDMA TrueHD Atmos 7.1] ESub TeluguDrives.mkv", .dolbyVision, .hdr10, .named),
-            ("Ex Machina (2014) 1080p UHD BluRay HDR 10bit HEVC [Hindi NF DDP 5.1 + English DDP 7.1] x265 (SA89-4kHDHub).mkv", .hdr10, nil, .named),
-            ("F1 - The Movie 2025 2160p UHD BluRay REMUX DV HDR 10bit HEVC [Hindi-Tamil-Telugu DDP 5.1 + English TrueHD Atmos 7.1] x265 CiNPEHiLES-LUMiX.mkv", .dolbyVision, .hdr10, .named),
-            ("Flow.AKA.Straume.2024.2160p.UHD.BluRay.HDR10.DTS-HD.MA.5.1.x265.10bit-StOiC-4kHDHub.com.mkv", .hdr10, nil, .named),
-            ("Good Luck, Have Fun, Dont Die (2025) 2160p 10bit HDR10+ DV BluRay HEVC x265 [Hindi AMZN DDP 5.1 640kbps + English TrueHD Atmos 7.1] ESub-(SPHD-4kHdHub).mkv", .dolbyVision, .hdr10Plus, .named),
-            ("Leon.the.Professional.Extended.1994.Dual.1080p.mkv", .sdr, nil, .likely),
-            ("Nomadland (2020) 1080p BluRay REMUX AVC [English DTS-HD MA 5.1] (FraMeSToR-Ionicboy).mkv", .sdr, nil, .source),
-            ("Obsession (2025) 2160p UHD BluRay REMUX DV HDR 10bit HEVC [Hindi AMZN DDP 5.1 + English TrueHD Atmos 7.1] x265 (CiNEPHiLES-LUMiX).mkv", .dolbyVision, .hdr10, .named),
-            ("Society.of.the.Snow.2024.1080p.NF.WEB-DL.DUAL.AAC5.1.HDR.AV1-AV1Core.mkv", .hdr10, nil, .named),
-            ("The Girl with Dragon Tattoo (2011) 1080p 10bit BluRay x265 HEVC [Hindi (Org DVD DD 5.1 - 448 Kbps) + English DDP 5.1] ESubs (K1tKat-LUMiX).mkv", .sdr, nil, .source),
-            ("The Place Beyond the Pines (2012) MULTi VFI 2160p 10bit 4KLight DV HDR BluRay DTS-HD MA 5.1 x265-QTZ.mkv", .dolbyVision, .hdr10, .named),
-            ("The.Boy.and.the.Heron.2024.1080p.Blu-ray.Remux.AVC.TrueHD.Atmos.7.1-CiNEPHiLES.mkv", .sdr, nil, .source),
+    // MARK: Said in the name
+
+    func testTheWaysNamesWriteHDR() {
+        let cases: [(String, FilePicture.Format)] = [
+            ("Film (2017) 2160p UHD BluRay REMUX DV HDR 10bit HEVC [Hindi DDP 2.0 + English TrueHD Atmos 7.1] x265 (GRP).mkv", .dolbyVisionHDR10),
+            ("Film.2024.UHD.Blu-Ray.2160p.REMUX.HDR.DoVi.[Hindi.DDP5.1+English.TrueHD.Atmos.7.1].HEVC(GRP).mkv", .dolbyVisionHDR10),
+            ("Film 2019 2160p 4K UHD HDR10 DV BluRay REMUX x265 10bit HEVC.mkv", .dolbyVisionHDR10),
+            ("Film 2025 Hybrid 2160p UHD Blu-ray Remux DV HDR10P HEVC [English TrueHD Atmos 7.1] (GRP).mkv", .dolbyVisionHDR10Plus),
+            ("Film.2021.Hybrid.2160p.UHD.Blu-ray.Remux.DV.HDR10plus.HEVC-GRP.mkv", .dolbyVisionHDR10Plus),
+            ("Film.2023.2160p.REMUX.IMAX.Dolby.Vision.And.HDR10.PLUS.ENG.DTS-HD.Master.x265.mkv", .dolbyVisionHDR10Plus),
+            ("Film 2015 Open Matte 2160p UHD BluRay DV HDR10+REMUX TrueHD Atmos 7.1-GRP.mkv.crdownload", .dolbyVisionHDR10Plus),
+            ("Film (2025) 2160p 10bit HDR10+ DV BluRay HEVC x265.mkv", .dolbyVisionHDR10Plus),
+            ("Film.2024.2160p.UHD.BluRay.HDR10.DTS-HD.MA.5.1.x265.10bit-GRP.mkv", .hdr10),
+            ("Film 2012 UHD 1080p 10bit HDR BluRay HEVC x265 [Hindi DD 2.0 + English DDP 7.1] ESub-GRP.mkv", .hdr10),
+            ("Film.2024.1080p.NF.WEB-DL.DUAL.AAC5.1.HDR.AV1-GRP.mkv", .hdr10),
+            ("Film.2020.2160p.WEB-DL.HDR10Plus.HEVC-GRP.mkv", .hdr10Plus),
+            ("Film.2020.2160p.HLG.WEB.H265-GRP.mkv", .hlg),
+            ("Film (2021) [Bluray-2160p][DV HDR10][x265].mkv", .dolbyVisionHDR10),
         ]
-        for (name, range, fallback, basis) in expected {
+        for (name, format) in cases {
             let found = picture(name)
-            XCTAssertEqual(found.range, range, name)
-            XCTAssertEqual(found.fallback, fallback, name)
-            XCTAssertEqual(found.basis, basis, name)
+            XCTAssertEqual(found.setting, .hdr, name)
+            XCTAssertEqual(found.format, format, name)
+            XCTAssertEqual(found.basis, .named, name)
+            XCTAssertEqual(found.label, "HDR", name)
         }
     }
 
-    func testAnAudioTrackFromADVDIsNotADVD() {
-        let found = picture("The Girl with Dragon Tattoo (2011) 1080p 10bit BluRay x265 HEVC [Hindi (Org DVD DD 5.1 - 448 Kbps) + English DDP 5.1] ESubs (K1tKat-LUMiX).mkv")
-        XCTAssertTrue(found.reason.contains("1080p Blu-ray"), found.reason)
+    /// Release names list every format a file has: "DV" alone means no HDR10 is named. On a 4K
+    /// Blu-ray that's still HDR10 underneath (its Dolby Vision always is); on a web release it
+    /// usually isn't (profile 5), which some players show in the wrong colours.
+    func testDolbyVisionAlone() {
+        let disc = picture("Film.2015.UHD.BluRay.2160p.TrueHD.Atmos.7.1.DV.HEVC.HYBRID.REMUX-GRP.mkv")
+        XCTAssertEqual(disc.format, .dolbyVisionHDR10)
+        XCTAssertTrue(disc.reason.contains("4K Blu-ray"), disc.reason)
+        XCTAssertEqual(picture("Film 2012 EXTENDED 1080p UHD BluRay DoVi x265 HEVC 10bit.mkv").format, .dolbyVisionHDR10, "a copy of the disc")
+        let web = picture("Film.2025.2160p.IT.WEB-DL.MULTI.DDP5.1.Atmos.DV.H.265-GRP.mkv")
+        XCTAssertEqual(web.format, .dolbyVisionOnly)
+        XCTAssertEqual(web.label, "HDR · Dolby Vision only")
+        XCTAssertTrue(web.isDolbyVisionOnly)
+        XCTAssertEqual(picture("Film.2025.2160p.WEB-DL.DV.HDR.H.265-GRP.mkv").format, .dolbyVisionHDR10, "a hybrid names both")
+        XCTAssertEqual(picture("Film.2026.2160p.UHD.BluRay.REMUX.DV.P7.MULTi.H265-GRP.mkv").format, .dolbyVisionHDR10)
+        XCTAssertEqual(picture("Film.2024.2160p.WEB-DL.DV.P5.H265-GRP.mkv").format, .dolbyVisionOnly)
+        XCTAssertEqual(picture("Film.2024.2160p.DV.x265.mkv").format, .dolbyVision, "the source unknown: just Dolby Vision")
+        XCTAssertEqual(picture("Film.2021.2160p.WEB-DL.Dolby.Vision.HEVC-GRP.mkv").format, .dolbyVisionOnly)
     }
 
-    func testNotStatedIsNeverSDR() {
+    func testSDRSaidOutright() {
+        XCTAssertEqual(picture("Film (2026) 2160p 10bit UHD BluRay REMUX HEVC SDR x265.mkv").setting, .sdr, "a 4K disc without HDR")
+        XCTAssertEqual(picture("Film 2025 2160p NF 10bit WEB-DL SDR HEVC H.265-GRP.mkv").basis, .named)
+        XCTAssertEqual(picture("Film.2020.2160p.UHD.BluRay.Tonemapped.x265-GRP.mkv").setting, .sdr)
+        XCTAssertEqual(picture("Film.2020.2160p.HDR.to.SDR.x265-GRP.mkv").setting, .sdr)
+        XCTAssertEqual(picture("Film.2020.2160p.UHD.BluRay.Tonemapped.x265-GRP.mkv").label, "SDR")
+    }
+
+    // MARK: What the file is
+
+    func testWhatCantCarryHDR() {
+        let bluRay = picture("Film.2014.BluRay.Remux.1080p.AVC.DTS-HD.MA.7.1-GRP.mkv")
+        XCTAssertEqual(bluRay.setting, .sdr)
+        XCTAssertEqual(bluRay.basis, .source)
+        XCTAssertTrue(bluRay.reason.contains("1080p Blu-ray"), bluRay.reason)
+        XCTAssertEqual(picture("Film (2016) 1080p Open Matte BluRay x265 HEVC 10bit.mkv").basis, .source, "10-bit isn't HDR")
+        let avc = picture("Film.2023.1080p.AMZN.WEB-DL.DUAL.DDP5.1.H.264-GRP.mkv")
+        XCTAssertEqual(avc.setting, .sdr)
+        XCTAssertEqual(avc.basis, .source)
+        XCTAssertTrue(avc.reason.contains("H.264"), avc.reason)
+        XCTAssertEqual(picture("Film.1995.1080p.BluRay.REMUX.VC1.TrueHD.5.1-GRP.mkv").basis, .source)
+        XCTAssertEqual(picture("Film.2001.DVD.mkv").setting, .sdr)
+        XCTAssertEqual(picture("Film (1999) DVDRip XviD.avi").basis, .source)
+        XCTAssertEqual(picture("Film.2018.720p.WEB.mkv").setting, .sdr)
+        // HDRip is an old word for a rip of an HD source.
+        XCTAssertEqual(picture("Film.2019.1080p.HDRip.x264-GRP.mkv").setting, .sdr)
+        // The uploader's site name isn't 4K; a 4K remaster on a 1080p Blu-ray is still a 1080p Blu-ray.
+        XCTAssertEqual(picture("Film 2020 1080p BluRay x264 (4kHDHub).mkv").basis, .source)
+        XCTAssertEqual(picture("Film.1976.4K.Remaster.1080p.BluRay.Opus.5.1.AV1-GRP.mkv").basis, .source)
+        XCTAssertEqual(picture("Film 1996 RM4K 1080p BluRay x265 10bit GRP.mkv").basis, .source)
+        XCTAssertEqual(picture("Film [Bluray-1080p].mkv").basis, .source)
+        // An audio track taken from a DVD doesn't make the film a DVD.
+        XCTAssertTrue(picture("Film (2011) 1080p 10bit BluRay x265 HEVC [Hindi (Org DVD DD 5.1) + English DDP 5.1].mkv").reason.contains("Blu-ray"))
+    }
+
+    // MARK: Likely, said as a guess
+
+    func testLikelyFromTheKindOfRelease() {
+        let web = picture("Film.2025.2160p.AMZN.WEB-DL.DDP5.1.H.265-GRP.mkv")
+        XCTAssertEqual(web.setting, .sdr)
+        XCTAssertEqual(web.basis, .likely)
+        XCTAssertEqual(web.label, "Likely SDR")
+        XCTAssertTrue(web.reason.hasPrefix("A 4K web release"), web.reason)
+        XCTAssertEqual(picture("Film (2019) [WEBDL-2160p].mkv").label, "Likely SDR")
+        let disc = picture("Film.2018.UHD.BluRay.2160p.TrueHD.Atmos.7.1.HEVC.HYBRID.REMUX-GRP.mkv")
+        XCTAssertEqual(disc.setting, .hdr)
+        XCTAssertEqual(disc.label, "Likely HDR")
+        XCTAssertTrue(disc.isHDR)
+        XCTAssertEqual(picture("Film (2014) 1080p UHD BluRay 10bit HEVC x265.mkv").label, "Likely SDR", "a 1080p copy of a 4K disc that doesn't say HDR")
+        XCTAssertEqual(picture("Film 1999 1080p 10bit DS4K BluRay x265 HEVC.mkv").basis, .likely, "made from a 4K source")
+        XCTAssertEqual(picture("Film.1997.1080p.NF.WEB-DL.DDP5.1.H.265-GRP.mkv").label, "Likely SDR")
+        XCTAssertEqual(picture("Film.Extended.1994.Dual.1080p.mkv").label, "Likely SDR")
+        XCTAssertEqual(picture("Film.2025.2160p.AMZN.WEB-DL.H.265-GRP.mkv").searchWords, ["SDR"])
+    }
+
+    func testNotStated() {
         let found = picture("2013. Furious 6 [Extended.Cut].mkv")
         XCTAssertNil(found.label)
         XCTAssertFalse(found.isHDR)
         XCTAssertFalse(found.isKnown)
+        XCTAssertEqual(found.basis, .notStated)
         XCTAssertTrue(found.searchWords.isEmpty, "a search for SDR doesn't find it")
+        XCTAssertNil(picture("Film.2024.2160p.x265.mkv").label, "4K of an unknown kind can be either")
     }
 
-    /// What's likely, said as a guess with its reason: practical guidance, never passed off as fact.
-    func testLikelyFromTheKindOfRelease() {
-        let web = picture("Film.2020.2160p.WEB-DL.x265-GRP.mkv")
-        XCTAssertEqual(web.range, .sdr)
-        XCTAssertEqual(web.basis, .likely)
-        XCTAssertEqual(web.label, "Likely SDR")
-        XCTAssertTrue(web.reason.hasPrefix("A 4K release"))
-        XCTAssertEqual(picture("Film (2019) [WEBDL-2160p].mkv").label, "Likely SDR")
-        let disc = picture("Green.Book.2018.UHD.BluRay.2160p.TrueHD.Atmos.7.1.HEVC.HYBRID.REMUX-FraMeSToR.mkv")
-        XCTAssertEqual(disc.range, .hdr10)
-        XCTAssertEqual(disc.label, "Likely HDR10")
-        XCTAssertTrue(disc.isHDR)
-        XCTAssertEqual(picture("Ex Machina (2014) 1080p UHD BluRay 10bit HEVC x265.mkv").label, "Likely SDR", "a convention is a guess too")
-        XCTAssertNil(picture("2013. Furious 6 [Extended.Cut].mkv").label, "nothing to go on: no guess")
-    }
-
-    func testTraps() {
-        // HDRip is an old word for a rip of an HD source: SDR.
-        XCTAssertEqual(picture("Movie.2019.1080p.HDRip.x264-GRP.mkv").range, .sdr)
-        // A DVD is not Dolby Vision.
-        XCTAssertEqual(picture("Film.2001.DVD.mkv").range, .sdr)
-        XCTAssertEqual(picture("Film (1999) DVDRip XviD.avi").basis, .source)
-        // The uploader's site name isn't 4K.
-        XCTAssertEqual(picture("Film 2020 1080p BluRay x264 (4kHDHub).mkv").basis, .source)
-        // Dolby Vision written out, and tags in brackets.
-        XCTAssertEqual(picture("Dune.2021.2160p.WEB-DL.Dolby.Vision.HEVC-GRP.mkv").range, .dolbyVision)
-        XCTAssertEqual(picture("Dune (2021) [Bluray-2160p][DV HDR10][x265].mkv").fallback, .hdr10)
-        XCTAssertEqual(picture("Film [Bluray-1080p].mkv").basis, .source)
-        // Said outright.
-        XCTAssertEqual(picture("Film.2020.2160p.SDR.WEB-DL.mkv").basis, .named)
-        XCTAssertEqual(picture("Film.2020.2160p.SDR.WEB-DL.mkv").range, .sdr)
-        XCTAssertEqual(picture("Film.2018.720p.WEB.mkv").range, .sdr)
-    }
-
-    func testOneThousandEightyFromA4KSourceIsOnlyAConvention() {
-        let found = picture("Ex Machina (2014) 1080p UHD BluRay 10bit HEVC x265.mkv")
-        XCTAssertEqual(found.range, .sdr)
-        XCTAssertEqual(found.basis, .convention, "a 1080p copy of a 4K disc could have kept HDR: only the release name says SDR")
-        XCTAssertEqual(picture("Film.2022.1080p.WEB-DL.DDP5.1.H.264-GRP.mkv").basis, .convention)
-    }
+    // MARK: Folders
 
     func testTheFilmsOwnFolder() {
         let found = picture("dune.mkv", folder: "Dune (2021) 2160p DV HDR10")
-        XCTAssertEqual(found.range, .dolbyVision)
+        XCTAssertEqual(found.setting, .hdr)
+        XCTAssertEqual(found.format, .dolbyVisionHDR10)
         XCTAssertEqual(found.basis, .folder)
-        XCTAssertEqual(picture("dune.mkv").basis, .notStated, "no folder of its own: a collection folder isn't asked")
-        XCTAssertEqual(picture("Dune.2021.1080p.BluRay.x264.mkv", folder: "Dune 2160p DV").range, .sdr, "the file's own name comes first")
+        XCTAssertEqual(picture("dune.mkv").basis, .notStated, "no folder of its own")
+        XCTAssertEqual(picture("Dune.2021.1080p.BluRay.x264.mkv", folder: "Dune 2160p DV").setting, .sdr, "the file's own name comes first")
+        XCTAssertEqual(picture("Film.2020.1080p.mkv", folder: "Film (2020) 1080p HDR10").basis, .folder, "a folder that says beats a guess")
     }
 
-    /// A whole collection in one folder whose name says the picture (a real library's).
+    /// A whole collection in one folder whose name says the picture.
     func testACollectionFolderSpeaksForEachFilm() {
-        let folder = "The Fast and The Furious - Complete Collection (2001-2021) 1080p HEVC HDR10 DTS 7.1.x265 [BluRay] {djdezzie}"
+        let folder = "The Fast Saga - Complete Collection (2001-2021) 1080p HEVC HDR10 DTS 7.1.x265 [BluRay] {GRP}"
         let found = picture("2013. Furious 6 [Extended.Cut].mkv", folder: folder)
-        XCTAssertEqual(found.range, .hdr10)
+        XCTAssertEqual(found.setting, .hdr)
+        XCTAssertEqual(found.format, .hdr10)
         XCTAssertEqual(found.basis, .folder)
         XCTAssertTrue(FilePicture.isCollection(folder))
         XCTAssertTrue(FilePicture.isCollection("The Godfather Trilogy 2160p DV"))
@@ -134,17 +166,31 @@ final class PictureTests: XCTestCase {
         XCTAssertEqual(names.count, 4)
     }
 
+    // MARK: Yours
+
     func testYourSettingWins() {
-        let found = picture("Dune.2021.2160p.WEB-DL.DV.HEVC-GRP.mkv", yours: .sdr)
-        XCTAssertEqual(found.range, .sdr)
+        let found = picture("Film.2021.2160p.WEB-DL.DV.HDR.HEVC-GRP.mkv", yours: .sdr)
+        XCTAssertEqual(found.setting, .sdr)
         XCTAssertEqual(found.basis, .yours)
         XCTAssertEqual(picture("2013. Furious 6.mkv", yours: .hdr).label, "HDR")
-        XCTAssertEqual(picture("2013. Furious 6.mkv", yours: .dolbyVision).label, "HDR · Dolby Vision")
+        XCTAssertEqual(picture("2013. Furious 6.mkv", yours: .dolbyVision).label, "HDR", "an older Reel's Dolby Vision setting is HDR")
+        XCTAssertEqual(picture("Film.2021.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv", yours: .hdr).format, .dolbyVisionHDR10,
+                       "the name's format, when it agrees")
+        XCTAssertEqual(FilePicture.choices, [.hdr, .sdr], "all a Mac's display has")
     }
 
-    func testLabels() {
-        XCTAssertEqual(picture("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").label, "HDR · Dolby Vision + HDR10")
-        XCTAssertEqual(picture("Heat.1995.1080p.BluRay.x264-GRP.mkv").label, "SDR")
-        XCTAssertEqual(picture("Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").searchWords, ["HDR", "Dolby Vision", "HDR10"])
+    func testSearchWords() {
+        XCTAssertEqual(picture("Film.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv").searchWords, ["HDR", "Dolby Vision", "HDR10"])
+        XCTAssertEqual(picture("Film.1995.1080p.BluRay.x264-GRP.mkv").searchWords, ["SDR"])
+    }
+
+    func testPictureWordsAsWritten() {
+        XCTAssertEqual(PictureWords.read("Film.2160p.DV.HDR10+.mkv").written, "DV HDR10+")
+        XCTAssertEqual(PictureWords.read("Film 2160p DoVi HDR").written, "DV HDR")
+        XCTAssertEqual(PictureWords.read("Film.2160p.HLG").written, "HLG")
+        XCTAssertNil(PictureWords.read("Film.1080p.HDRip.DVDRip").written)
+        XCTAssertNil(PictureWords.read("Film.2020.DVD").dolbyVisionProfile)
+        XCTAssertEqual(PictureWords.read("Film.UHD.BluRay.DV.P8.HDR").dolbyVisionProfile, 8)
+        XCTAssertEqual(PictureWords.read("Film.UHD.BluRay.DV.FEL.HDR").dolbyVisionProfile, 7)
     }
 }

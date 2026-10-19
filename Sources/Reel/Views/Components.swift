@@ -531,9 +531,9 @@ struct NoticeBar: View {
         .padding(14)
     }
 }
-/// HDR or SDR at a glance, to set the TV before playing (see `FilePicture`): the copy Play opens
-/// first, and other copies only when they differ. When nothing proves it, it says so in grey,
-/// never SDR. Pointing at it says why.
+/// HDR or SDR at a glance, to set the Mac's display before playing (see `FilePicture`): the copy
+/// Play opens first, and other copies only when they differ. When nothing proves it, it says so
+/// in grey; a guess says "Likely". Pointing at it says why, and which HDR format it is.
 struct PictureRangeTag: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
@@ -546,8 +546,9 @@ struct PictureRangeTag: View {
         if !entries.isEmpty {
             let hdr = entries.contains { $0.picture.isHDR }
             let known = entries.contains { $0.picture.isKnown }
+            let dolbyVisionOnly = entries.contains { $0.picture.isDolbyVisionOnly }
             HStack(spacing: large ? 10 : 6) {
-                Image(systemName: hdr ? "sun.max.fill" : known ? "sun.min" : "questionmark.circle")
+                Image(systemName: dolbyVisionOnly ? "exclamationmark.triangle.fill" : hdr ? "sun.max.fill" : known ? "sun.min" : "questionmark.circle")
                 Text(entries.map(\.text).joined(separator: "   ·   "))
                     .lineLimit(1)
             }
@@ -564,14 +565,30 @@ struct PictureRangeTag: View {
 
     static func help(_ pictures: [FilePicture]) -> String {
         guard let first = pictures.first else { return "" }
-        let what = first.isGuess ? (first.isHDR ? "Most likely high dynamic range: set the TV to HDR." : "Most likely standard dynamic range: set the TV to SDR.")
-            : first.isHDR ? "High dynamic range: set the TV to HDR." : first.isKnown ? "Standard dynamic range: set the TV to SDR."
-            : "Reel doesn't know if this is HDR or SDR. Your player's video info shows it while it plays; set it in the film's … menu › Picture."
-        return what + " " + first.reason + "."
+        let setting = "System Settings › Displays › High Dynamic Range"
+        var said: String
+        switch (first.setting, first.isGuess) {
+        case (.hdr?, false):
+            said = "HDR: turn on High Dynamic Range on your Mac (\(setting)) before Play."
+        case (.hdr?, true):
+            said = "Most likely HDR: turn on High Dynamic Range on your Mac (\(setting)) before Play."
+        case (.sdr?, false):
+            said = "SDR: leave High Dynamic Range off on your Mac (with it on, SDR looks dim and grey)."
+        case (.sdr?, true):
+            said = "Most likely SDR: leave High Dynamic Range off on your Mac."
+        case (nil, _):
+            said = "Reel can't tell HDR from SDR by this name. Your player's video info shows it while it plays; set it in the film's … menu › Picture."
+        }
+        if let format = first.format, !first.isGuess {
+            said += " It's " + format.rawValue + (first.isDolbyVisionOnly
+                ? ", with no HDR10 layer: if the colours look purple and green, the player can't read Dolby Vision."
+                : "; a Mac sends any HDR to the TV the same way, so the one setting covers it.")
+        }
+        return said + " " + first.reason + "."
     }
 
-    /// "HDR · Dolby Vision + HDR10", "SDR · Open Matte", "HDR or SDR not stated"; with copies that
-    /// differ, each with its resolution.
+    /// "HDR · IMAX", "SDR · Open Matte", "HDR · Dolby Vision only", "HDR or SDR not stated"; with
+    /// copies that differ, each with its resolution.
     static func entries(_ copies: [(copy: FilmEntry, picture: FilePicture)], large: Bool = false) -> [(text: String, picture: FilePicture)] {
         func text(_ copy: FilmEntry, _ picture: FilePicture) -> String {
             let range = picture.label ?? (large ? "Picture not stated" : "HDR or SDR not stated")

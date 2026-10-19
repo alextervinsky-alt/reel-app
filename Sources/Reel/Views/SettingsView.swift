@@ -154,7 +154,7 @@ struct SettingsView: View {
             } header: {
                 Text("HDR or SDR")
             } footer: {
-                Text("How Reel knows each file's picture. It never guesses SDR: a file whose name doesn't say is “not stated”, and you can set it in the film's … menu › Picture.")
+                Text("How Reel knows whether to turn on HDR on your Mac for each file, from its name: what the name says, what the file is (a 1080p Blu-ray or an H.264 file can't be HDR), or what the kind of release makes likely, which the tag says as “Likely”. You can set any file in the film's … menu › Picture.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

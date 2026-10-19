@@ -48,6 +48,8 @@ public struct ParsedFilename: Equatable, Sendable {
     /// a DVD, a 4K source ("UHD", "4K", "2160p"), and the resolution and source as written.
     public var isDVD = false
     public var mentionsUHD = false
+    /// The picture words in the name, read in full (see `PictureWords`).
+    public var pictureWords = PictureWords()
     public var anyResolution: String?
     public var anySource: String?
 }
@@ -178,35 +180,15 @@ public enum FilenameParser {
             source = "REMUX"
         }
 
-        // HDR, also from [bracketed] tags ("Dune (2021) [Bluray-2160p][DV HDR10][x265]") and
-        // "Dolby Vision" written as two words.
+        // HDR, read from the whole name (also [bracketed] tags, "Dolby Vision" written out,
+        // "HDR10+REMUX" run together); see `PictureWords`.
         let tags = ex.squareGroups.flatMap { $0.lowercased().split { !($0.isLetter || $0.isNumber || $0 == "+") }.map(String.init) }
-        let named = lower + tags
-        let dolbyVision = zip(named, named.dropFirst()).contains { $0 == "dolby" && $1 == "vision" }
         func shows(_ names: [String]) -> Bool { has(names) || tags.contains(where: { names.contains($0) }) }
-        let isDV = dolbyVision || shows(["dv", "dovi", "dolbyvision"])
-        let isHDR10Plus = shows(["hdr10+", "hdr10plus"])
-        let isHDR10 = shows(["hdr", "hdr10"])
-        var hdrParts: [String] = []
-        if isDV { hdrParts.append("DV") }
-        if isHDR10Plus || isHDR10 { hdrParts.append("HDR") }
-        let hdr: String? = hdrParts.isEmpty ? nil : hdrParts.joined(separator: " ")
-        let range: DynamicRange?
-        if isDV {
-            range = .dolbyVision
-        } else if isHDR10Plus {
-            range = .hdr10Plus
-        } else if isHDR10 {
-            range = .hdr10
-        } else if shows(["hlg"]) {
-            range = .hlg
-        } else if shows(["sdr"]) {
-            range = .sdr
-        } else {
-            range = nil
-        }
-        // The HDR layer a Dolby Vision file also carries, for TVs without Dolby Vision.
-        let fallbackRange: DynamicRange? = !isDV ? nil : isHDR10Plus ? .hdr10Plus : isHDR10 ? .hdr10 : nil
+        let picture = PictureWords.read(base)
+        let hdr = picture.written
+        let range = picture.dynamicRange
+        // The HDR layer a Dolby Vision file also carries, for players and TVs without Dolby Vision.
+        let fallbackRange: DynamicRange? = !picture.dolbyVision ? nil : picture.hdr10Plus ? .hdr10Plus : picture.hdr10 ? .hdr10 : picture.hlg ? .hlg : nil
 
         // Editions: the whole frame the camera saw, or the IMAX version.
         let allNamed = words.map(String.init) + tags
@@ -218,12 +200,20 @@ public enum FilenameParser {
 
         // Video codec
         var codec: String? = nil
-        if has(["hevc", "x265", "h265"]) {
+        let lowerName = base.lowercased()
+        func named(_ pattern: String) -> Bool { lowerName.range(of: pattern, options: .regularExpression) != nil }
+        if has(["hevc", "x265", "h265"]) || named(#"(?<![a-z0-9])h\.265(?![0-9])"#) {
             codec = "HEVC"
-        } else if has(["x264", "h264", "avc"]) {
+        } else if has(["x264", "h264", "avc"]) || named(#"(?<![a-z0-9])h\.264(?![0-9])"#) {
             codec = "AVC"
         } else if has(["av1"]) {
             codec = "AV1"
+        } else if named(#"(?<![a-z0-9])vc-?1(?![0-9a-z])"#) {
+            codec = "VC-1"
+        } else if named(#"(?<![a-z0-9])mpeg-?2(?![0-9])"#) {
+            codec = "MPEG-2"
+        } else if has(["xvid", "divx"]) {
+            codec = "XviD"
         }
 
         // Audio
@@ -282,7 +272,11 @@ public enum FilenameParser {
         )
         // Outside brackets only: "[Hindi (Org DVD DD 5.1)]" is where an audio track came from.
         parsed.isDVD = !Set(pool).isDisjoint(with: ["dvd", "dvdrip", "dvd5", "dvd9", "dvdr", "ntsc", "pal"])
-        parsed.mentionsUHD = !everyToken.isDisjoint(with: ["uhd", "4k", "2160p"])
+        // "4K Remaster" and "RM4K" are about the master, not this file; "DS4K" is a copy made
+        // smaller from a 4K source.
+        let remaster = zip(pool, pool.dropFirst()).contains { $0 == "4k" && ($1.hasPrefix("remaster") || $1.hasPrefix("restor")) }
+        parsed.mentionsUHD = !everyToken.isDisjoint(with: ["uhd", "2160p", "ds4k"]) || (everyToken.contains("4k") && !remaster)
+        parsed.pictureWords = picture
         parsed.anyResolution = anyResolution
         parsed.anySource = anySource
         return parsed

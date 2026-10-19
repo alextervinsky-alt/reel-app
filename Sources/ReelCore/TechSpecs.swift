@@ -568,9 +568,10 @@ public struct TechSpecs: Equatable, Sendable {
     /// What the film was finished or shown on, said in the clause: not what it was shot on.
     static let finishing = #"\b(?:finish(?:ing|ed)?|film[- ]?out|filmed out|dcp|deliverables?|final outputs?|prints?|printed|restor(?:ation|ed|e)|remaster(?:ed|ing)?|digital intermediate|projected|projection|exhibition|screenings?)\b"#
 
-    /// Part of the film only: "for the flashbacks", "the battle scenes", "some sequences", "the rest".
+    /// Part of the film only: "for the flashbacks", "the battle scenes", "some sequences", "the
+    /// first IMAX 70 mm film camera shot" (one shot).
     static let partOfFilm = try! NSRegularExpression(
-        pattern: #"\b(?:flashbacks?|inserts?|simulated|segments?|portions?|parts? of the (?:film|movie)|(?:small )?bits of the (?:film|movie)|half of the|some of the|a handful of|storylines?|(?:some|certain|several|a few|select(?:ed)?|key|battle|night|underwater|action|aerial|opening|closing|dream|archival|flashback)\s+(?:\w+\s+)?(?:scenes|sequences|shots)|for (?:the |some )?(?:[\w-]+\s+){0,2}(?:scenes|sequences|shots))\b"#,
+        pattern: #"\b(?:flashbacks?|inserts?|simulated|segments?|portions?|parts? of the (?:film|movie)|(?:small )?bits of the (?:film|movie)|half of the|some of the|a handful of|storylines?|(?:some|certain|several|a few|select(?:ed)?|key|battle|night|underwater|action|aerial|opening|closing|dream|archival|flashback)\s+(?:\w+\s+)?(?:scenes|sequences|shots)|for (?:the |some )?(?:[\w-]+\s+){0,2}(?:scenes|sequences|shots)|(?:camera|effects?|vfx|single|lone|test) shots?)\b"#,
         options: [.caseInsensitive])
 
     /// "…his Super 16mm work on Carol": gear named for someone's work on another film (not this one).
