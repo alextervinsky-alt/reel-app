@@ -522,6 +522,11 @@ public struct TechSpecs: Equatable, Sendable {
         }
         let clause = String(before[clauseStart...]).replacingOccurrences(of: "not only", with: "")
         if clause.range(of: deniedBefore, options: .regularExpression) != nil { return true }
+        // Said of cameras in general, right before the name: "every digital camera is trying to
+        // emulate 35mm film" isn't this film's camera.
+        let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
+        let lead = String(chars[..<min(start, chars.count)]).suffix(40)
+        if lead.range(of: #"\b(?:every|any|all|most|many|other)(?:\s+[a-z\-]+)?\s*$"#, options: .regularExpression) != nil { return true }
         // The clause after it: "…cameras were not used".
         var clauseEnd = after.endIndex
         for mark in clauseBreaks {
@@ -531,7 +536,7 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     static let clauseBreaks = [",", ";", ":", " — ", " – ", "(", ")", ". ", " but ", " while ", " whereas ", " although ", " though "]
-    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|tests? of|testing|tested|versus|vs|compared (?:to|with))\b|n't\b"#
+    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|tests? of|testing|tested|versus|vs|compared (?:to|with)|lack(?:ed)? of|shortage of|short of|too (?:many|few) [a-z ]{0,40}enough|unable to (?:get|find|source)|couldn't (?:get|find|source))\b|n't\b"#
 
     /// What the film was finished or shown on, said in the clause: not what it was shot on.
     static let finishing = #"\b(?:finish(?:ing|ed)?|film[- ]out|filmed out|prints?|printed|restor(?:ation|ed|e)|remaster(?:ed|ing)?|digital intermediate|projected|projection|exhibition|screenings?)\b"#

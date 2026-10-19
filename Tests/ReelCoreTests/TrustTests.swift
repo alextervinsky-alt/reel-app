@@ -40,6 +40,16 @@ final class TrustTests: XCTestCase {
         XCTAssertFalse(TechSpecs.aboutOtherFilm("It was finished at 2048 x 858 and 1920p.", year: 2015, people: []), "not years")
     }
 
+    /// Found by reading the evidence for well-known films in CI.
+    func testNotEnoughAndCamerasInGeneral() {
+        XCTAssertFalse(craft(["I shot in Super 35 partially because I had too many cameras to come up with enough anamorphic lenses."],
+                             dp: ["Bill Pope"]).shotOn.contains(.anamorphic), "The Matrix wasn't anamorphic")
+        XCTAssertFalse(craft(["Every digital camera is trying hard to emulate 35mm film, and there's a reason for that."])
+            .shotOn.contains(.digital), "a remark about cameras in general")
+        XCTAssertTrue(craft(["Two cameras roll, one capturing the scene in anamorphic 35mm, the other recording the action in 65mm."])
+            .shotOn.contains(.film))
+    }
+
     /// True facts that look like the mistakes, kept.
     func testTrueSentencesThatLookLikeMistakes() {
         XCTAssertFalse(TechSpecs.aboutOtherFilm("It was the first 65 mm feature since Far and Away (1992).", year: 2012, people: []))
@@ -123,6 +133,6 @@ final class TrustTests: XCTestCase {
         XCTAssertTrue(FunFactExtractor.startsWithSomeone("He was inspired by a road sign he once saw in England."))
         XCTAssertFalse(FunFactExtractor.startsWithSomeone("Hesitant at first, the studio agreed to shoot in New York."))
         XCTAssertTrue(FunFactExtractor.startsWithSomeone("He's said the ending came to him in a dream."))
-        XCTAssertEqual(ReceptionAnalyzer.sentences(in: "It was released in the U.S. It grossed $50 million.").count, 2)
+        XCTAssertEqual(ReceptionAnalyzer.sentences(in: "It was released widely in the U.S. It grossed $50 million in its first month.").count, 2)
     }
 }
