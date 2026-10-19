@@ -477,13 +477,14 @@ public struct TechSpecs: Equatable, Sendable {
     /// his IMAX films", "the Alexa was not used". A clause of its own is not affected: "after testing
     /// several lenses, they chose C-series anamorphics" names anamorphics as used.
     public static func denied(_ sentence: String, at range: Range<String.Index>) -> Bool {
-        let lowered = sentence.lowercased()
-        // Same length and positions: lowercasing ASCII-like text keeps the indices usable via offsets.
-        let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
+        // Magazines write "didn’t": read as "didn't". Same length, so positions carry over.
+        let lowered = sentence.lowercased().replacingOccurrences(of: "’", with: "'")
         let end = sentence.distance(from: sentence.startIndex, to: range.upperBound)
         let chars = Array(lowered)
-        guard chars.count == sentence.count, start <= chars.count, end <= chars.count else { return false }
-        let before = String(chars[..<start])
+        guard chars.count == sentence.count, end <= chars.count else { return false }
+        // Up to the end of what was matched: a rule's words can come before the name ("shot
+        // digitally rather than in IMAX" is one match for IMAX).
+        let before = String(chars[..<end])
         let after = String(chars[end...])
         // The clause before it: from the last break.
         var clauseStart = before.startIndex

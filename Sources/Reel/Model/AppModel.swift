@@ -242,8 +242,10 @@ final class AppModel {
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
     /// What you set files' pictures to (HDR or SDR), by file key (Your Notes).
     var pictures: [String: DynamicRange] = [:]
-    /// Films that have a folder to themselves, by film id: the folder's name (see `FilePicture.ownFolders`).
-    @ObservationIgnored var ownFolders: [String: String] = [:]
+    /// Films that have a folder to themselves, by film id: the folder's name, read (see
+    /// `FilePicture.ownFolders`); `parsedFolders` keeps every folder name read so far.
+    @ObservationIgnored var ownFolders: [String: ParsedFilename] = [:]
+    @ObservationIgnored var parsedFolders: [String: ParsedFilename] = [:]
     @ObservationIgnored var scanning: Set<String> = []
     /// Drives to read again when their current scan ends (a reconnect or ⌘R arrived meanwhile),
     /// and whether that read announces new films.
@@ -559,7 +561,8 @@ final class AppModel {
                                       picture: ((FilmEntry) -> FilePicture)? = nil,
                                       moods: (FilmEntry) -> [Mood]) -> (items: [LibraryItem], built: Int) {
         // Without the library's settings at hand (Reel opening), the file names alone.
-        let folders = picture == nil ? FilePicture.ownFolders(films) : [:]
+        var parsed: [String: ParsedFilename] = [:]
+        let folders = picture == nil ? FilePicture.ownFolders(films, parsed: &parsed) : [:]
         let pictureOf = picture ?? { FilePicture.of($0, ownFolders: folders, yours: [:]) }
         var groups: [String: [FilmEntry]] = [:]
         var order: [String] = []
@@ -574,12 +577,14 @@ final class AppModel {
             let onlineCopy = copies.first { online.contains($0.driveID) }
             let main = onlineCopy ?? first
             // The main copy is one of the copies, so comparing the copies covers it.
-            if let cached = reuse[key], cached.isOnline == (onlineCopy != nil), cached.main.id == main.id, cached.copies == copies {
+            let picture = pictureOf(main)
+            if let cached = reuse[key], cached.isOnline == (onlineCopy != nil), cached.main.id == main.id, cached.copies == copies,
+               cached.pictureWords == picture.searchWords {
                 return cached
             }
             built += 1
             return LibraryItem(key: key, main: main, copies: copies, isOnline: onlineCopy != nil, moods: moods(main),
-                               picture: pictureOf(main))
+                               picture: picture)
         }
         return (items, built)
     }
@@ -599,7 +604,7 @@ final class AppModel {
         let online = Set(mounted.keys)
         let backups = Set(drives.filter { $0.isBackup }.map { $0.id })
         let ordered = films.filter { !backups.contains($0.driveID) } + films.filter { backups.contains($0.driveID) }
-        ownFolders = FilePicture.ownFolders(films)
+        ownFolders = FilePicture.ownFolders(films, parsed: &parsedFolders)
         let folders = ownFolders, yours = pictures
         let (fresh, newlyBuilt) = Self.makeItems(films: ordered, online: online, reuse: itemCache,
                                                  picture: { FilePicture.of($0, ownFolders: folders, yours: yours) }) { moodList(for: $0) }

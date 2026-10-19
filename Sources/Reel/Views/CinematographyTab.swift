@@ -97,8 +97,9 @@ struct CinematographyTab: View {
             async let more: Void = model.loadCameraReading(for: film)
             _ = await (article, more)
             // What the tab read is the film's Shot on and search summary too.
+            // The model's copy: its Wikipedia facts (the colour) arrived just now.
             if let id = film.tmdb?.id {
-                model.craftRead(for: film, article: model.articles[id], reading: model.cameraReadings[id])
+                model.craftRead(for: model.film(id: film.id) ?? film, article: model.articles[id], reading: model.cameraReadings[id])
             }
         }
     }
@@ -776,7 +777,7 @@ private final class ReadSpecs {
     /// sequence was lit…"), and no paragraph to read more that does.
     private static func withoutStory(_ read: TechSpecs) -> TechSpecs {
         func safe(_ text: String) -> Bool {
-            !Spoilers.mentionsPlot(text) && text.range(of: ending, options: [.regularExpression, .caseInsensitive]) == nil
+            !Spoilers.tellsTheStory(text)
         }
         func keep(_ notes: [TechSpecs.Note]) -> [TechSpecs.Note] {
             notes.filter { safe($0.text) }.map { note in
@@ -799,7 +800,6 @@ private final class ReadSpecs {
         return specs
     }
 
-    private static let ending = #"\b(?:final|closing|last|ending)\s+(?:\w+\s+)?(?:scenes?|shots?|sequences?|images?|moments?|frames?)\b"#
 }
 
 /// The film's camera, lighting and colour people from TMDB, grouped by what they did.

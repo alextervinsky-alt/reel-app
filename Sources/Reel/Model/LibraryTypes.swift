@@ -335,6 +335,8 @@ struct LibraryItem: Identifiable, Equatable {
     let shortGenre: String?
     /// Changes whenever anything a poster card shows changes; lets the grid skip redrawing cards.
     let stamp: Int
+    /// What search finds it by for its picture: an item is built again when your setting changes it.
+    let pictureWords: [String]
 
     init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: FilePicture) {
         self.id = key
@@ -365,6 +367,7 @@ struct LibraryItem: Identifiable, Equatable {
         self.score = main.score
         self.moods = moods
         self.search = SearchIndex(film: main, moods: moods, picture: picture)
+        self.pictureWords = picture.searchWords
         var hasher = Hasher()
         hasher.combine(main.id)
         hasher.combine(main.displayTitle)

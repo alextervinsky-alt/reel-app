@@ -21,6 +21,20 @@ final class CraftEvidenceTests: XCTestCase {
         XCTAssertFalse(shotOn(["IMAX cameras were not used for the night scenes because of their noise."]).contains(.imax))
     }
 
+    func testTheRulesOwnWordsAreReadToo() {
+        // One match for IMAX runs from "shot" to "IMAX": what's said inside it counts.
+        XCTAssertFalse(shotOn(["It was shot digitally rather than in IMAX, on the ARRI Alexa 65."]).contains(.imax))
+    }
+
+    func testCurlyApostrophes() {
+        XCTAssertFalse(shotOn(["We didn’t use anamorphic lenses on this one, and shot on the ARRI Alexa Mini."]).contains(.anamorphic))
+    }
+
+    func testTheStoryIsNeverShownAsEvidence() {
+        XCTAssertTrue(Spoilers.tellsTheStory("The closing sequence was shot on 65 mm film."))
+        XCTAssertFalse(Spoilers.tellsTheStory("The film was shot on 65 mm film."))
+    }
+
     func testOtherFilmsAndPlans() {
         XCTAssertFalse(shotOn(["Unlike his IMAX films, the director shot this one on the ARRI Alexa Mini LF."]).contains(.imax))
         XCTAssertFalse(shotOn(["They considered shooting on 65 mm film but chose the Alexa 65 for its sensitivity."]).contains(.film))

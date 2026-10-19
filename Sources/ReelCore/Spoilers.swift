@@ -19,6 +19,14 @@ public enum Spoilers {
         "closing scene", "closing shot", "the reveal",
     ]
 
+    /// What may not be shown before the film is watched: a sentence that gives away the story, or
+    /// tells how it ends ("the closing sequence was lit…").
+    public static func tellsTheStory(_ text: String) -> Bool {
+        mentionsPlot(text) || text.range(of: ending, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    static let ending = #"\b(?:final|closing|last|ending)\s+(?:\w+\s+)?(?:scenes?|shots?|sequences?|images?|moments?|frames?)\b"#
+
     /// Whether a sentence or paragraph may give away the story.
     public static func mentionsPlot(_ text: String) -> Bool {
         let lower = text.lowercased()

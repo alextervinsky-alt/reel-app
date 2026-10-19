@@ -515,7 +515,7 @@ struct FilmFactSheet: View {
         guard let craft = film.craft else { return "" }
         return craft.shotOn.compactMap { kind -> String? in
             guard let why = craft.evidence(for: kind) else { return nil }
-            let said = Spoilers.mentionsPlot(why.text) ? "" : ": “\(why.text)”"
+            let said = Spoilers.tellsTheStory(why.text) ? "" : ": “\(why.text)”"
             return "\(kind.title), from \(why.source)\(said)"
         }.joined(separator: "\n\n")
     }

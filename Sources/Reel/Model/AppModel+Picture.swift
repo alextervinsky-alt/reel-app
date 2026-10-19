@@ -27,8 +27,7 @@ extension AppModel {
         guard let copy = pictureCopies(of: film).first else { return }
         pictures[copy.fileKey] = range
         scheduleSave(.notes)
-        // Search finds it by its new picture.
-        itemCache[film.personalKey] = nil
+        // Search finds it by its new picture (the item is built again: its picture words changed).
         scheduleRebuild()
     }
 

@@ -100,7 +100,7 @@ extension FilePicture {
     /// The folder each film has to itself, by film id: its folder's name, when no other film on
     /// that drive shares the folder. A film at the top of a drive, or in a folder of several
     /// films (a collection, "4K HDR"), has none.
-    public static func ownFolders(_ films: [FilmEntry]) -> [String: String] {
+    public static func ownFolderNames(_ films: [FilmEntry]) -> [String: String] {
         func folder(_ film: FilmEntry) -> String? {
             let parent = (film.relativePath as NSString).deletingLastPathComponent
             return parent.isEmpty ? nil : parent
@@ -115,8 +115,24 @@ extension FilePicture {
         return result
     }
 
+    /// The films' own folders, read (see `ownFolderNames`), by film id. `parsed` keeps the folder
+    /// names already read, so a library is read once, not on every redraw.
+    public static func ownFolders(_ films: [FilmEntry], parsed: inout [String: ParsedFilename]) -> [String: ParsedFilename] {
+        var result: [String: ParsedFilename] = [:]
+        for (id, name) in ownFolderNames(films) {
+            if let known = parsed[name] {
+                result[id] = known
+            } else {
+                let read = FilenameParser.parse(name)
+                parsed[name] = read
+                result[id] = read
+            }
+        }
+        return result
+    }
+
     /// One file's picture in a library: your setting for it, its name, then its own folder.
-    public static func of(_ film: FilmEntry, ownFolders: [String: String], yours: [String: DynamicRange]) -> FilePicture {
-        of(film.parsed, ownFolder: ownFolders[film.id].map { FilenameParser.parse($0) }, yours: yours[film.fileKey])
+    public static func of(_ film: FilmEntry, ownFolders: [String: ParsedFilename], yours: [String: DynamicRange]) -> FilePicture {
+        of(film.parsed, ownFolder: ownFolders[film.id], yours: yours[film.fileKey])
     }
 }

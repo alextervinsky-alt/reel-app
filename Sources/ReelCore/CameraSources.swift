@@ -302,13 +302,16 @@ public struct CameraSourcesClient: Sendable {
         // An interview with the editor or the composer isn't read for the camera (still listed).
         // Kodak's and No Film School's stories come after the magazines.
         let storiesRead = await stories
-        let found = pages.compactMap { $0.1 }
-            .filter { !searched.contains($0.url) || CameraSources.namesFilm($0.paragraphs, people: cinematographers + directors, year: year) }
+        // Another film's article (same title) isn't read, nor offered as a link.
+        let otherFilm = Set(pages.compactMap { $0.1 }.filter {
+            searched.contains($0.url) && !CameraSources.namesFilm($0.paragraphs, people: cinematographers + directors, year: year)
+        }.map(\.url))
+        let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }
         let read = Array(found
             .filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
             .prefix(6))
-        let more = pages.filter { page in !read.contains { $0.url == page.2.url } }.map { $0.1 ?? $0.2 }
+        let more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
         return CameraReading(sources: read, more: more, cinematographer: await person)
     }
 
