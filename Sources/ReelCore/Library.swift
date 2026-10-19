@@ -771,14 +771,18 @@ public struct PersonalFile: Codable, Equatable, Sendable {
     public var wishlistArrivals: [WishlistArrival]
     /// Files the user regrouped by hand (an extra that is a film, a film that is an extra).
     public var groupingFixes: GroupingFixes
+    /// What you set a file's picture to (HDR or SDR), by file ("name|size"): it wins over the name.
+    public var pictures: [String: DynamicRange]
 
     enum CodingKeys: String, CodingKey {
-        case version, records, corrections, wishlist, wishlistArrivals, groupingFixes
+        case version, records, corrections, wishlist, wishlistArrivals, groupingFixes, pictures
     }
 
     public init(records: [String: PersonalRecord] = [:], corrections: [String: Int] = [:], wishlist: [WishlistFilm] = [],
-                wishlistArrivals: [WishlistArrival] = [], groupingFixes: GroupingFixes = GroupingFixes()) {
+                wishlistArrivals: [WishlistArrival] = [], groupingFixes: GroupingFixes = GroupingFixes(),
+                pictures: [String: DynamicRange] = [:]) {
         self.version = 4
+        self.pictures = pictures
         self.records = records
         self.corrections = corrections
         self.wishlist = wishlist
@@ -794,5 +798,19 @@ public struct PersonalFile: Codable, Equatable, Sendable {
         wishlist = try c.decodeIfPresent([WishlistFilm].self, forKey: .wishlist) ?? []
         wishlistArrivals = try c.decodeIfPresent([WishlistArrival].self, forKey: .wishlistArrivals) ?? []
         groupingFixes = try c.decodeIfPresent(GroupingFixes.self, forKey: .groupingFixes) ?? GroupingFixes()
+        // A value a newer Reel wrote that this one doesn't know is skipped, not a reason to fail.
+        let saved = (try? c.decodeIfPresent([String: String].self, forKey: .pictures)) ?? [:]
+        pictures = saved.compactMapValues { DynamicRange(rawValue: $0) }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(version, forKey: .version)
+        try c.encode(records, forKey: .records)
+        try c.encode(corrections, forKey: .corrections)
+        try c.encode(wishlist, forKey: .wishlist)
+        try c.encode(wishlistArrivals, forKey: .wishlistArrivals)
+        try c.encode(groupingFixes, forKey: .groupingFixes)
+        if !pictures.isEmpty { try c.encode(pictures.mapValues(\.rawValue), forKey: .pictures) }
     }
 }

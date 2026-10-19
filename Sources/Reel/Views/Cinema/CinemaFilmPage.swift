@@ -167,7 +167,7 @@ struct CinemaFilmPage: View {
                         .font(.system(size: Cinema.body))
                         .foregroundStyle(Theme.secondaryText)
                     // HDR or SDR, to set the TV before pressing Play.
-                    PictureRangeTag(copies: model.copies(of: film), large: true)
+                    PictureRangeTag(film: film, large: true)
                 }
                 HStack(spacing: 16) {
                     RatingStrip(film: film).environment(\.ratingScale, 1.6)

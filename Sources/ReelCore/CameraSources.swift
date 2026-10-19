@@ -129,6 +129,22 @@ public enum CameraSources {
         return !surnames.contains { heading.contains($0) }
     }
 
+    /// Whether a page found by searching for the title is about this film and not another of the
+    /// same name: it names the film's cinematographer or director (by surname) or the year it came out.
+    public static func namesFilm(_ paragraphs: [String], people: [String], year: Int?) -> Bool {
+        let text = paragraphs.joined(separator: "\n")
+        let surnames = people.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
+        for surname in surnames where text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: surname) + "\\b",
+                                                  options: .regularExpression) != nil {
+            return true
+        }
+        // Its year, or the one either side (a festival the year before, a release the year after).
+        if let year, ((year - 1)...(year + 1)).contains(where: { text.range(of: "\\b\($0)\\b", options: .regularExpression) != nil }) {
+            return true
+        }
+        return false
+    }
+
     /// Whether an American Cinematographer search result is about this film: its title names the
     /// film ("Universal Translator: Arrival"), or its address does ("arrival-cinematography-…").
     public static func isAbout(title: String, articleTitle: String, url: String) -> Bool {
@@ -252,7 +268,10 @@ public struct CameraSourcesClient: Sendable {
     /// At most three pages at a time, so a film page never floods anyone.
     static let gate = RequestGate(limit: 3)
 
-    public func read(articleTitle: String?, filmTitle: String, cinematographers: [String]) async -> CameraReading {
+    /// - Parameters: `directors` and `year` tell a magazine's article about this film from one about
+    ///   another film of the same name (a remake, "Heat" and "Heat Wave"): see `CameraSources.namesFilm`.
+    public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], directors: [String] = [],
+                     year: Int? = nil) async -> CameraReading {
         async let cited = citedLinks(articleTitle: articleTitle, cinematographers: cinematographers)
         async let asc = ascArticles(filmTitle: filmTitle)
         async let british = britishCinematographer(filmTitle: filmTitle)
@@ -263,6 +282,9 @@ public struct CameraSourcesClient: Sendable {
         var links = await asc
         let fromSites = await british
         let fromArticle = await cited
+        // Found by searching the magazines for the title (not cited by the film's own article):
+        // read only when the page names the film's people or year.
+        let searched = Set((links + fromSites).map(\.url)).subtracting(fromArticle.map(\.url))
         for link in fromSites + fromArticle where !links.contains(where: { $0.url.path == link.url.path && $0.url.host == link.url.host }) {
             links.append(link)
         }
@@ -281,6 +303,7 @@ public struct CameraSourcesClient: Sendable {
         // Kodak's and No Film School's stories come after the magazines.
         let storiesRead = await stories
         let found = pages.compactMap { $0.1 }
+            .filter { !searched.contains($0.url) || CameraSources.namesFilm($0.paragraphs, people: cinematographers + directors, year: year) }
             + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }
         let read = Array(found
             .filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }

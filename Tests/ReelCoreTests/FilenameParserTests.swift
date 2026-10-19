@@ -162,7 +162,7 @@ final class FilenameParserTests: XCTestCase {
         XCTAssertNil(FilenameParser.parse("Dune.2021.2160p.WEB-DL.Dolby.Vision.HEVC-GRP.mkv").fallbackRange)
         XCTAssertEqual(FilenameParser.parse("Arrival.2016.2160p.UHD.BluRay.HDR10+.HEVC-GRP.mkv").dynamicRange, .hdr10Plus)
         XCTAssertEqual(FilenameParser.parse("Heat 1995 2160p UHD BluRay HDR x265.mkv").dynamicRange, .hdr10)
-        XCTAssertEqual(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange, .sdr)
+        XCTAssertNil(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange, "the name says nothing: see Picture")
         XCTAssertFalse(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange.isHDR)
     }
 }

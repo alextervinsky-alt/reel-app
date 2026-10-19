@@ -96,6 +96,10 @@ struct CinematographyTab: View {
             async let article: Void = model.loadArticle(for: film)
             async let more: Void = model.loadCameraReading(for: film)
             _ = await (article, more)
+            // What the tab read is the film's Shot on and search summary too.
+            if let id = film.tmdb?.id {
+                model.craftRead(for: film, article: model.articles[id], reading: model.cameraReadings[id])
+            }
         }
     }
 
@@ -759,12 +763,8 @@ private final class ReadSpecs {
             + "\(reading?.sources.count ?? -1)|\(hiding)|\(cinematographers)|\(directors)"
         if now != stamp {
             stamp = now
-            var texts = reading?.texts(hiding: hiding) ?? []
-            if let article {
-                // The interviews first: the filmmakers' own words lead.
-                let sections = article.before + (hiding ? [] : article.after)
-                texts.insert(TechSpecs.Text(source: nil, sections: sections, isInterview: false), at: min(texts.count, reading?.sources.count ?? 0))
-            }
+            // Read as the Shot on filter and search read it (the interviews first).
+            let texts = CraftReader.texts(article: article, reading: reading, hiding: hiding)
             specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors)
             if hiding { specs = Self.withoutStory(specs) }
             notes = CraftNotes(specs)

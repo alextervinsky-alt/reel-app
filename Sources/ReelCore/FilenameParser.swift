@@ -12,11 +12,13 @@ public struct AudioTrack: Equatable, Sendable {
 }
 
 /// How the picture is mastered, as the file name says: what the TV has to be set for.
-public enum DynamicRange: String, Equatable, Sendable {
+public enum DynamicRange: String, Codable, Equatable, Sendable {
     case dolbyVision = "Dolby Vision"
     case hdr10Plus = "HDR10+"
     case hdr10 = "HDR10"
     case hlg = "HLG"
+    /// HDR of a kind not said (your own setting: "HDR").
+    case hdr = "HDR"
     case sdr = "SDR"
 
     public var isHDR: Bool { self != .sdr }
@@ -29,8 +31,9 @@ public struct ParsedFilename: Equatable, Sendable {
     public var resolution: String?
     public var source: String?
     public var hdr: String?
-    /// SDR unless the name says otherwise (an HDR file is always labelled so).
-    public var dynamicRange: DynamicRange = .sdr
+    /// What the name says the picture is ("DV", "HDR10", "SDR"); nil when it says nothing.
+    /// What Reel shows works this out further (see `Picture`).
+    public var dynamicRange: DynamicRange?
     /// For Dolby Vision, the HDR10 or HDR10+ layer it also carries (played where Dolby Vision isn't).
     public var fallbackRange: DynamicRange?
     public var videoCodec: String?
@@ -41,6 +44,12 @@ public struct ParsedFilename: Equatable, Sendable {
     public var badges: [String]
     /// What the picture is beyond its quality, from the name: "IMAX", "Open Matte".
     public var editions: [String] = []
+    /// What the name says about where it came from, also in [brackets], for `Picture`:
+    /// a DVD, a 4K source ("UHD", "4K", "2160p"), and the resolution and source as written.
+    public var isDVD = false
+    public var mentionsUHD = false
+    public var anyResolution: String?
+    public var anySource: String?
 }
 
 public enum FilenameParser {
@@ -182,7 +191,7 @@ public enum FilenameParser {
         if isDV { hdrParts.append("DV") }
         if isHDR10Plus || isHDR10 { hdrParts.append("HDR") }
         let hdr: String? = hdrParts.isEmpty ? nil : hdrParts.joined(separator: " ")
-        let range: DynamicRange
+        let range: DynamicRange?
         if isDV {
             range = .dolbyVision
         } else if isHDR10Plus {
@@ -191,8 +200,10 @@ public enum FilenameParser {
             range = .hdr10
         } else if shows(["hlg"]) {
             range = .hlg
-        } else {
+        } else if shows(["sdr"]) {
             range = .sdr
+        } else {
+            range = nil
         }
         // The HDR layer a Dolby Vision file also carries, for TVs without Dolby Vision.
         let fallbackRange: DynamicRange? = !isDV ? nil : isHDR10Plus ? .hdr10Plus : isHDR10 ? .hdr10 : nil
@@ -238,7 +249,22 @@ public enum FilenameParser {
         if let s = source, s.contains("REMUX") { badges.append("REMUX") }
         if tracks.contains(where: { $0.format.contains("Atmos") }) { badges.append("Atmos") }
 
-        return ParsedFilename(
+        // Also in brackets ("[Bluray-1080p]"), for what the picture can be.
+        let everyToken = Set(pool + tags)
+        let anyResolution = resolution ?? resolutions.first { everyToken.contains($0) }
+            ?? (everyToken.contains("4k") || everyToken.contains("uhd") ? "2160p" : nil)
+        var anySource = source
+        if anySource == nil {
+            if !everyToken.isDisjoint(with: ["bluray", "bdrip", "brrip", "bdremux", "remux"]) || zip(pool, pool.dropFirst()).contains(where: { $0 == "blu" && $1 == "ray" }) {
+                anySource = "BluRay"
+            } else if !everyToken.isDisjoint(with: ["web", "webdl", "webrip", "amzn", "nf", "dsnp", "atvp", "hmax"]) {
+                anySource = "WEB"
+            } else if everyToken.contains("hdtv") {
+                anySource = "HDTV"
+            }
+        }
+
+        var parsed = ParsedFilename(
             title: title,
             year: year,
             resolution: resolution,
@@ -254,6 +280,12 @@ public enum FilenameParser {
             badges: badges,
             editions: editions
         )
+        // Outside brackets only: "[Hindi (Org DVD DD 5.1)]" is where an audio track came from.
+        parsed.isDVD = !Set(pool).isDisjoint(with: ["dvd", "dvdrip", "dvd5", "dvd9", "dvdr", "ntsc", "pal"])
+        parsed.mentionsUHD = !everyToken.isDisjoint(with: ["uhd", "4k", "2160p"])
+        parsed.anyResolution = anyResolution
+        parsed.anySource = anySource
+        return parsed
     }
 
     // MARK: - Helpers

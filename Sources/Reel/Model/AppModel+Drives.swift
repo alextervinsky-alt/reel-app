@@ -290,12 +290,14 @@ extension AppModel {
         guard !moves.isEmpty else { return }
         var changed = false
         for move in moves {
+            let oldStillThere = films.contains(where: { $0.fileKey == move.from })
             if let fix = corrections[move.from], corrections[move.to] == nil {
                 corrections[move.to] = fix
                 // A copy elsewhere still at the old size keeps it too.
-                if !films.contains(where: { $0.fileKey == move.from }) { corrections[move.from] = nil }
+                if !oldStillThere { corrections[move.from] = nil }
                 changed = true
             }
+            // Not the picture: a new encode can be HDR where the old one was SDR.
             // Never into notes another file already has (two same-named files swapping sizes).
             let to = FileIdentity.unidentifiedPrefix + move.to
             if personal.records[to] == nil { migratePersonal(from: FileIdentity.unidentifiedPrefix + move.from, to: to) }

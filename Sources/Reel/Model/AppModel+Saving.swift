@@ -40,7 +40,7 @@ extension AppModel {
         case .notes:
             guard notesWritable else { return }
             let snapshot = PersonalFile(records: personal.records, corrections: corrections, wishlist: wishlist,
-                                        wishlistArrivals: wishlistArrivals, groupingFixes: groupingFixes)
+                                        wishlistArrivals: wishlistArrivals, groupingFixes: groupingFixes, pictures: pictures)
             let today = SafetyCopies.day(Date())
             let firstSaveToday = today != lastSafetyCopyDay
             lastSafetyCopyDay = today

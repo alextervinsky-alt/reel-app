@@ -130,7 +130,7 @@ struct FilmHero: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.secondaryText)
                     // HDR or SDR, to set the TV before pressing Play.
-                    PictureRangeTag(copies: model.copies(of: film))
+                    PictureRangeTag(film: film)
                 }
                 HStack(spacing: 16) {
                     RatingStrip(film: film)
@@ -239,6 +239,7 @@ struct FilmHero: View {
                 .disabled(onlineCopy == nil)
             Button("Copy File Path") { model.copyPath(onlineCopy ?? film) }
             Button("File Info…", action: onFile)
+            PictureMenu(film: film)
             Divider()
             Button("Fix Match…", action: onFix)
         } label: {
@@ -468,7 +469,7 @@ struct FilmFactSheet: View {
             people("Music", Array((d?.people(forJobs: TMDBMovieDetails.composerJobs) ?? []).prefix(2)))
             people("Editor", Array((d?.people(forJobs: ["Editor"]) ?? []).prefix(2)))
             people("Design", Array((d?.people(forJobs: ["Production Design"]) ?? []).prefix(2)))
-            if let shot = shotOn { row("Shot on", Text(shot)) }
+            if let shot = shotOn { row("Shot on", Text(shot).help(shotOnWhy)) }
             if let language = FilmLanguage.code(d?.originalLanguage) { row("Language", Text(FilmLanguage.name(language))) }
             if let file = fileLine(copies) { row("File", Text(file)) }
             if let subtitles = subtitlesLine { row("Subtitles", Text(subtitles)) }
@@ -509,6 +510,16 @@ struct FilmFactSheet: View {
         }
     }
 
+    /// Why each Shot on: the sentence and where it was read (not a sentence that tells the story).
+    private var shotOnWhy: String {
+        guard let craft = film.craft else { return "" }
+        return craft.shotOn.compactMap { kind -> String? in
+            guard let why = craft.evidence(for: kind) else { return nil }
+            let said = Spoilers.mentionsPlot(why.text) ? "" : ": “\(why.text)”"
+            return "\(kind.title), from \(why.source)\(said)"
+        }.joined(separator: "\n\n")
+    }
+
     /// "Film · Anamorphic · 2.39:1", from what's read about it and Wikidata.
     private var shotOn: String? {
         var parts = (film.craft?.shotOn ?? []).map(\.title)
@@ -522,7 +533,7 @@ struct FilmFactSheet: View {
         var parts: [String] = []
         if let quality = copy.qualityLabel { parts.append(quality) }
         // HLG and other HDR named only by its kind.
-        if copy.parsed.dynamicRange.isHDR, copy.parsed.hdr == nil { parts.append(copy.parsed.dynamicRange.rawValue) }
+        if let range = copy.parsed.dynamicRange, range.isHDR, copy.parsed.hdr == nil { parts.append(range.rawValue) }
         parts += copy.parsed.editions
         if copy.size > 0 { parts.append(Format.bytes(copy.size)) }
         let ext = (copy.fileName as NSString).pathExtension.uppercased()
@@ -1170,3 +1181,28 @@ struct MatchFixer: View {
     }
 }
 #endif
+
+/// Picture (in the film's "…" menu): what the file Play opens is, when the name doesn't say or
+/// says it wrong. Kept in Your Notes for that file.
+struct PictureMenu: View {
+    @Environment(AppModel.self) private var model
+    let film: FilmEntry
+
+    var body: some View {
+        let yours = model.yourPicture(for: film)
+        let fromName = model.pictureCopies(of: film).first.map { copy in
+            Picture.of(copy, ownFolders: model.ownFolders, yours: [:]).label ?? "Not Stated"
+        } ?? "Not Stated"
+        Menu("Picture") {
+            ForEach(Picture.choices, id: \.self) { range in
+                Toggle(range == .hdr ? "HDR (HDR10, HDR10+, HLG)" : range.rawValue, isOn: Binding(
+                    get: { yours == range },
+                    set: { if $0 { model.setPicture(range, for: film) } }))
+            }
+            Divider()
+            Toggle("As the File Name Says (\(fromName))", isOn: Binding(
+                get: { yours == nil },
+                set: { if $0 { model.setPicture(nil, for: film) } }))
+        }
+    }
+}

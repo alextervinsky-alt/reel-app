@@ -321,7 +321,8 @@ extension AppModel {
         if film.funFacts == nil { await loadFunFacts(for: film) }
         let current = self.film(id: film.id) ?? film
         let reading = await CameraSourcesClient().read(articleTitle: current.funFacts?.articleTitle, filmTitle: details.title,
-                                                       cinematographers: details.cinematographers)
+                                                       cinematographers: details.cinematographers,
+                                                       directors: details.directors, year: details.year)
         guard !reading.sources.isEmpty || !reading.more.isEmpty || reading.cinematographer != nil else { return }
         cameraReadings[details.id] = reading
     }

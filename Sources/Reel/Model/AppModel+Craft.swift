@@ -3,8 +3,8 @@ import Foundation
 import ReelCore
 
 /// Searching by craft: each film's Wikipedia article and the interviews and craft articles about
-/// it are read in the background, two films at a time, and only the names of the gear and
-/// techniques are kept (see `CraftIndex`).
+/// it are read in the background, two films at a time (see `CraftReader`), and the names of the
+/// gear and techniques are kept, with the sentence behind each Shot on (see `CraftIndex`).
 extension AppModel {
     /// Reads the films not read yet (or read long ago). Runs after film info is looked up; stops
     /// when offline, and carries on next time.
@@ -25,9 +25,7 @@ extension AppModel {
             let batch = read
             read = [:]
             lastWrite = Date()
-            mutateFilms { list in
-                for i in list.indices { if let id = list[i].tmdb?.id, let index = batch[id] { list[i].craft = index } }
-            }
+            storeCraft(batch)
         }
         defer { write() }
         while !Task.isCancelled {
@@ -47,14 +45,20 @@ extension AppModel {
                     guard let details = film.tmdb else { continue }
                     let title = film.funFacts?.articleTitle
                     let colour = film.funFacts?.quick?.colour
-                    group.addTask { (details.id, await Self.readCraft(of: details, articleTitle: title, colour: colour)) }
+                    group.addTask { (details.id, await CraftReader.read(details, articleTitle: title, colour: colour)) }
                 }
                 var all: [(Int, CraftIndex?)] = []
                 for await result in group { all.append(result) }
                 return all
             }
             for (id, index) in results {
-                if let index {
+                if let index, let old = films.first(where: { $0.tmdb?.id == id })?.craft, old.keeps(over: index) {
+                    // Read from fewer texts than last time (a site down): kept as it was, and tried
+                    // again in a week rather than in half a year.
+                    read[id] = CraftIndex(version: old.version, readAt: Date().addingTimeInterval(7 * 86_400 - CraftIndex.maxAge),
+                                          shotOn: old.shotOn, names: old.names, evidence: old.evidence, sources: old.sources)
+                    failedInARow = 0
+                } else if let index {
                     read[id] = index
                     failedInARow = 0
                 } else {
@@ -69,25 +73,44 @@ extension AppModel {
         }
     }
 
-    /// Nil when nothing could be reached (offline): tried again later.
-    nonisolated static func readCraft(of details: TMDBMovieDetails, articleTitle: String?, colour: [String]?) async -> CraftIndex? {
-        async let reading = CameraSourcesClient().read(articleTitle: articleTitle, filmTitle: details.title,
-                                                       cinematographers: details.cinematographers)
-        var reached = articleTitle == nil
-        var texts: [TechSpecs.Text] = []
-        if let articleTitle {
-            do {
-                if let article = try await WikipediaClient().article(title: articleTitle) {
-                    texts.append(TechSpecs.Text(source: nil, sections: article.before + article.after, isInterview: false))
+    /// Puts new readings in the library, noting each film whose Shot on changed (Settings ›
+    /// Performance lists them, so a change can be checked).
+    func storeCraft(_ batch: [Int: CraftIndex]) {
+        guard !batch.isEmpty else { return }
+        var changes: [CraftChange] = []
+        var noted = Set<Int>()
+        mutateFilms { list in
+            for i in list.indices {
+                guard let id = list[i].tmdb?.id, let index = batch[id] else { continue }
+                let before = list[i].craft?.shotOn
+                if let before, before != index.shotOn, noted.insert(id).inserted {
+                    changes.append(CraftChange(title: list[i].displayTitle, before: before, after: index.shotOn))
                 }
-                reached = true
-            } catch {}
+                list[i].craft = index
+            }
         }
-        let read = await reading
-        texts += read.texts(hiding: false)
-        guard reached || !read.sources.isEmpty || read.cinematographer != nil else { return nil }
-        let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors)
-        return CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames)
+        if !changes.isEmpty { craftChanges = Array((changes + craftChanges).prefix(200)) }
     }
+
+    /// What the Cinematography tab just read becomes the film's summary too, so the Shot on filter
+    /// and search say what the tab shows (unless it read fewer texts than the summary had).
+    func craftRead(for film: FilmEntry, article: FilmArticle?, reading: CameraReading?) {
+        guard let details = film.tmdb, article != nil || reading != nil else { return }
+        let index = CraftReader.index(of: details, article: article, reading: reading, colour: film.funFacts?.quick?.colour)
+        let current = films.first { $0.tmdb?.id == details.id }?.craft
+        if let current, current.keeps(over: index) { return }
+        // The same as already kept: nothing to write.
+        if let current, current.version == index.version, current.shotOn == index.shotOn, current.names == index.names,
+           current.evidence == index.evidence, !current.isStale() { return }
+        storeCraft([details.id: index])
+    }
+}
+
+/// A film whose Shot on changed when it was read again.
+struct CraftChange: Identifiable {
+    let id = UUID()
+    let title: String
+    let before: [ShotOn]
+    let after: [ShotOn]
 }
 #endif

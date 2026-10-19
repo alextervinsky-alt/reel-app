@@ -518,49 +518,58 @@ struct NoticeBar: View {
         .padding(14)
     }
 }
-/// HDR or SDR at a glance, to set the TV before playing: read from the file names of the
-/// film's copies (a copy whose name says nothing is SDR). Two copies that differ are both named.
+/// HDR or SDR at a glance, to set the TV before playing (see `Picture`): the copy Play opens
+/// first, and other copies only when they differ. When nothing proves it, it says so in grey,
+/// never SDR. Pointing at it says why.
 struct PictureRangeTag: View {
-    let copies: [FilmEntry]
+    @Environment(AppModel.self) private var model
+    let film: FilmEntry
     var large = false
 
     private static let gold = Color(red: 1, green: 0.8, blue: 0.32)
 
     var body: some View {
-        let entries = Self.entries(copies)
+        let entries = Self.entries(model.pictureCopies(of: film).map { ($0, model.picture(of: $0)) }, large: large)
         if !entries.isEmpty {
-            let hdr = entries.contains { $0.hdr }
+            let hdr = entries.contains { $0.picture.isHDR }
+            let known = entries.contains { $0.picture.isKnown }
             HStack(spacing: large ? 10 : 6) {
-                Image(systemName: hdr ? "sun.max.fill" : "sun.min")
+                Image(systemName: hdr ? "sun.max.fill" : known ? "sun.min" : "questionmark.circle")
                 Text(entries.map(\.text).joined(separator: "   ·   "))
                     .lineLimit(1)
             }
             .font(.system(size: large ? 22 : 12.5, weight: .semibold))
             .padding(.horizontal, large ? 18 : 11)
             .frame(height: large ? 46 : 26)
-            .foregroundStyle(hdr ? Self.gold : Color.white.opacity(0.85))
-            .background(Capsule().fill(hdr ? Self.gold.opacity(0.14) : Color.white.opacity(0.09)))
+            .foregroundStyle(hdr ? Self.gold : known ? Color.white.opacity(0.85) : Color.white.opacity(0.55))
+            .background(Capsule().fill(hdr ? Self.gold.opacity(0.14) : Color.white.opacity(known ? 0.09 : 0.05)))
             .overlay(Capsule().strokeBorder(hdr ? Self.gold.opacity(0.45) : Theme.hairline))
             .fixedSize()
-            .help(hdr ? "High dynamic range: set the TV to HDR" : "Standard dynamic range: set the TV to SDR")
+            .help(Self.help(entries.map(\.picture)))
         }
     }
 
-    /// "HDR · Dolby Vision + HDR10", "SDR · Open Matte", "HDR · HDR10 · IMAX"; with copies that
+    static func help(_ pictures: [Picture]) -> String {
+        guard let first = pictures.first else { return "" }
+        let what = first.isHDR ? "High dynamic range: set the TV to HDR." : first.isKnown ? "Standard dynamic range: set the TV to SDR."
+            : "Reel doesn't know if this is HDR or SDR. Your player's video info shows it while it plays; set it in the film's … menu › Picture."
+        return what + " " + first.reason + "."
+    }
+
+    /// "HDR · Dolby Vision + HDR10", "SDR · Open Matte", "HDR or SDR not stated"; with copies that
     /// differ, each with its resolution.
-    static func entries(_ copies: [FilmEntry]) -> [(text: String, hdr: Bool)] {
-        func range(_ copy: FilmEntry) -> String {
-            let range = copy.parsed.dynamicRange
-            let picture = range.isHDR ? "HDR · " + range.rawValue + (copy.parsed.fallbackRange.map { " + " + $0.rawValue } ?? "") : "SDR"
-            return ([picture] + copy.parsed.editions).joined(separator: " · ")
+    static func entries(_ copies: [(copy: FilmEntry, picture: Picture)], large: Bool = false) -> [(text: String, picture: Picture)] {
+        func text(_ copy: FilmEntry, _ picture: Picture) -> String {
+            let range = picture.label ?? (large ? "Picture not stated" : "HDR or SDR not stated")
+            return ([range] + copy.parsed.editions).joined(separator: " · ")
         }
-        let differ = Set(copies.map(range)).count > 1
+        let differ = Set(copies.map { text($0.copy, $0.picture) }).count > 1
         var seen = Set<String>()
-        return copies.compactMap { copy in
-            var text = range(copy)
-            if differ, let resolution = copy.parsed.resolution { text = (resolution == "2160p" ? "4K" : resolution) + " " + text }
-            guard seen.insert(text).inserted else { return nil }
-            return (text, copy.parsed.dynamicRange.isHDR)
+        return copies.compactMap { copy, picture in
+            var shown = text(copy, picture)
+            if differ, let resolution = copy.parsed.anyResolution { shown = (resolution == "2160p" ? "4K" : resolution) + " " + shown }
+            guard seen.insert(shown).inserted else { return nil }
+            return (shown, picture)
         }
     }
 }

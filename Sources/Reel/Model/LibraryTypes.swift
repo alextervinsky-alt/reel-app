@@ -217,7 +217,7 @@ struct SearchIndex: Equatable {
     let craft: String
     let words: [String]
 
-    init(film: FilmEntry, moods: [Mood]) {
+    init(film: FilmEntry, moods: [Mood], picture: Picture) {
         let n = TitleSimilarity.normalize
         let d = film.tmdb
         let titles = [film.displayTitle, d?.originalTitle ?? "", film.parsed.title].map(n)
@@ -225,7 +225,9 @@ struct SearchIndex: Equatable {
 
         var names: [String] = []
         var characters: [String] = []
-        var tagWords: [String] = moods.map { $0.title } + film.parsed.badges
+        // The file's quality, and its picture as Reel shows it ("HDR", "Dolby Vision", "SDR").
+        var tagWords: [String] = moods.map { $0.title } + film.parsed.badges.filter { $0 != "HDR" && $0 != "Dolby Vision" }
+            + picture.searchWords
         if let d {
             names += (d.credits?.crew ?? []).map { $0.name }
             names += (d.credits?.cast ?? []).map { $0.name }
@@ -334,7 +336,7 @@ struct LibraryItem: Identifiable, Equatable {
     /// Changes whenever anything a poster card shows changes; lets the grid skip redrawing cards.
     let stamp: Int
 
-    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood]) {
+    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: Picture) {
         self.id = key
         self.main = main
         self.copies = copies
@@ -362,7 +364,7 @@ struct LibraryItem: Identifiable, Equatable {
         self.runtime = d?.runtime
         self.score = main.score
         self.moods = moods
-        self.search = SearchIndex(film: main, moods: moods)
+        self.search = SearchIndex(film: main, moods: moods, picture: picture)
         var hasher = Hasher()
         hasher.combine(main.id)
         hasher.combine(main.displayTitle)

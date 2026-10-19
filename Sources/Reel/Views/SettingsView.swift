@@ -145,6 +145,36 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section {
+                ForEach(model.pictureCounts(), id: \.basis.title) { count in
+                    LabeledContent(count.basis.title) {
+                        Text(count.files.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("HDR or SDR")
+            } footer: {
+                Text("How Reel knows each file's picture. It never guesses SDR: a file whose name doesn't say is “not stated”, and you can set it in the film's … menu › Picture.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !model.craftChanges.isEmpty {
+                Section {
+                    ForEach(model.craftChanges.prefix(40)) { change in
+                        LabeledContent(change.title) {
+                            Text(Self.shotOn(change.before) + "  →  " + Self.shotOn(change.after)).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Shot On, Read Again")
+                } footer: {
+                    Text("Films whose Shot on changed when Reel read about them again, since it opened. Point at Shot on on a film's page to see the sentence behind it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if !timings.isEmpty {
                 Section {
                     ForEach(timings) { timing in
@@ -173,6 +203,11 @@ struct SettingsView: View {
     private struct Timing: Identifiable {
         let id: String
         let time: Duration
+    }
+
+    /// "Film · Anamorphic", or "nothing".
+    private static func shotOn(_ kinds: [ShotOn]) -> String {
+        kinds.isEmpty ? "nothing" : kinds.map(\.title).joined(separator: " · ")
     }
 
     /// "0.42 s", "12 ms"

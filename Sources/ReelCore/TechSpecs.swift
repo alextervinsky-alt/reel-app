@@ -21,6 +21,9 @@ public struct TechSpecs: Equatable, Sendable {
         public let name: String
         /// A word Reel chose ("Digital", "Natural light"), not the article's own (so not looked for in it).
         public var isFixedName = false
+        /// The first sentence that names it, and where it was read (nil: the film's Wikipedia article).
+        public var evidence: String? = nil
+        public var source: String? = nil
         public var id: String { kind.rawValue + "|" + name.lowercased() }
     }
 
@@ -156,10 +159,13 @@ public struct TechSpecs: Equatable, Sendable {
                             let aboutRelease = release.contains { lowered.contains($0) }
                             for rule in rules {
                                 if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
-                                for name in rule.matches(in: sentence) {
+                                for (name, at) in rule.found(in: sentence) {
+                                    // "shot digitally rather than on film": not film.
+                                    if denied(sentence, at: at) { continue }
                                     gearNamed += 1
                                     if !namedHere.contains(name) { namedHere.append(name) }
-                                    found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil))
+                                    found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
+                                                      evidence: String(sentence.prefix(400)), source: text.source))
                                 }
                             }
                         }
@@ -454,15 +460,49 @@ public struct TechSpecs: Equatable, Sendable {
             self.needsShooting = needsShooting
         }
 
-        func matches(in sentence: String) -> [String] {
+        /// Each name and where it is in the sentence.
+        func found(in sentence: String) -> [(name: String, at: Range<String.Index>)] {
             let range = NSRange(sentence.startIndex..., in: sentence)
             return regex.matches(in: sentence, range: range).compactMap { match in
-                if let fixedName { return fixedName }
                 guard let found = Range(match.range, in: sentence) else { return nil }
-                return TechSpecs.display(String(sentence[found]))
+                return (fixedName ?? TechSpecs.display(String(sentence[found])), found)
             }
         }
     }
+
+    // MARK: Said not to have been used
+
+    /// Whether the words at `range` are said not to have been used for this film, in their own
+    /// clause: "shot digitally rather than on film" (film), "they considered IMAX, but…", "unlike
+    /// his IMAX films", "the Alexa was not used". A clause of its own is not affected: "after testing
+    /// several lenses, they chose C-series anamorphics" names anamorphics as used.
+    public static func denied(_ sentence: String, at range: Range<String.Index>) -> Bool {
+        let lowered = sentence.lowercased()
+        // Same length and positions: lowercasing ASCII-like text keeps the indices usable via offsets.
+        let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
+        let end = sentence.distance(from: sentence.startIndex, to: range.upperBound)
+        let chars = Array(lowered)
+        guard chars.count == sentence.count, start <= chars.count, end <= chars.count else { return false }
+        let before = String(chars[..<start])
+        let after = String(chars[end...])
+        // The clause before it: from the last break.
+        var clauseStart = before.startIndex
+        for mark in clauseBreaks {
+            if let found = before.range(of: mark, options: .backwards), found.upperBound > clauseStart { clauseStart = found.upperBound }
+        }
+        let clause = String(before[clauseStart...]).replacingOccurrences(of: "not only", with: "")
+        if clause.range(of: deniedBefore, options: .regularExpression) != nil { return true }
+        // The clause after it: "…cameras were not used".
+        var clauseEnd = after.endIndex
+        for mark in clauseBreaks {
+            if let found = after.range(of: mark), found.lowerBound < clauseEnd { clauseEnd = found.lowerBound }
+        }
+        return String(after[..<clauseEnd]).range(of: deniedAfter, options: .regularExpression) != nil
+    }
+
+    static let clauseBreaks = [",", ";", ":", " — ", " – ", "(", ")", ". ", " but ", " while ", " whereas ", " although ", " though "]
+    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film)\b|n't\b"#
+    static let deniedAfter = #"\b(?:was|were|is|are|be)\s*(?:not|n't|never)\b|\bwasn't\b|\bweren't\b"#
 
     /// The words matched, tidied: single spaces, "35mm" and "35-millimetre" as "35 mm", no
     /// trailing "lenses" or "cameras" (the heading says what they are).

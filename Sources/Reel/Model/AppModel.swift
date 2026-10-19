@@ -127,6 +127,8 @@ final class AppModel {
     var articlesMissing: Set<Int> = []
     /// What the Cinematography tab read beyond the article (interviews, the cinematographer's article), per session.
     var cameraReadings: [Int: CameraReading] = [:]
+    /// Films whose Shot on changed when read again, newest first (Settings › Performance).
+    var craftChanges: [CraftChange] = []
     var cameraReadingsLoading: Set<Int> = []
 
     // MARK: Cinema mode and playing
@@ -238,6 +240,10 @@ final class AppModel {
     @ObservationIgnored var moodCache: [String: [Mood]] = [:]
     /// Last built items, reused when nothing about a film changed (building a search index costs time).
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
+    /// What you set files' pictures to (HDR or SDR), by file key (Your Notes).
+    var pictures: [String: DynamicRange] = [:]
+    /// Films that have a folder to themselves, by film id: the folder's name (see `Picture.ownFolders`).
+    @ObservationIgnored var ownFolders: [String: String] = [:]
     @ObservationIgnored var scanning: Set<String> = []
     /// Drives to read again when their current scan ends (a reconnect or ⌘R arrived meanwhile),
     /// and whether that read announces new films.
@@ -340,6 +346,7 @@ final class AppModel {
             wishlistArrivals = WishlistCleanup.record([], into: value.wishlistArrivals, now: Date())
             arrivedFromWishlist = Set(wishlistArrivals.map { $0.id })
             groupingFixes = value.groupingFixes
+            pictures = value.pictures
         }
     }
 
@@ -549,7 +556,11 @@ final class AppModel {
     /// The same film on several drives becomes one item; unchanged items are reused.
     /// Returns how many items had to be built anew (0: nothing about any film changed).
     nonisolated static func makeItems(films: [FilmEntry], online: Set<String>, reuse: [String: LibraryItem] = [:],
+                                      picture: ((FilmEntry) -> Picture)? = nil,
                                       moods: (FilmEntry) -> [Mood]) -> (items: [LibraryItem], built: Int) {
+        // Without the library's settings at hand (Reel opening), the file names alone.
+        let folders = picture == nil ? Picture.ownFolders(films) : [:]
+        let pictureOf = picture ?? { Picture.of($0, ownFolders: folders, yours: [:]) }
         var groups: [String: [FilmEntry]] = [:]
         var order: [String] = []
         for film in films {
@@ -567,7 +578,8 @@ final class AppModel {
                 return cached
             }
             built += 1
-            return LibraryItem(key: key, main: main, copies: copies, isOnline: onlineCopy != nil, moods: moods(main))
+            return LibraryItem(key: key, main: main, copies: copies, isOnline: onlineCopy != nil, moods: moods(main),
+                               picture: pictureOf(main))
         }
         return (items, built)
     }
@@ -587,7 +599,10 @@ final class AppModel {
         let online = Set(mounted.keys)
         let backups = Set(drives.filter { $0.isBackup }.map { $0.id })
         let ordered = films.filter { !backups.contains($0.driveID) } + films.filter { backups.contains($0.driveID) }
-        let (fresh, newlyBuilt) = Self.makeItems(films: ordered, online: online, reuse: itemCache) { moodList(for: $0) }
+        ownFolders = Picture.ownFolders(films)
+        let folders = ownFolders, yours = pictures
+        let (fresh, newlyBuilt) = Self.makeItems(films: ordered, online: online, reuse: itemCache,
+                                                 picture: { Picture.of($0, ownFolders: folders, yours: yours) }) { moodList(for: $0) }
         if newlyBuilt > 0 || fresh.count != items.count || !zip(fresh, items).allSatisfy({ $0.id == $1.id }) {
             items = fresh
             itemCache = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
