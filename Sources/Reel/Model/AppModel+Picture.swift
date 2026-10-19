@@ -2,11 +2,11 @@
 import Foundation
 import ReelCore
 
-/// HDR or SDR, to set the TV before Play (see `Picture`): your setting, else what the file name
+/// HDR or SDR, to set the TV before Play (see `FilePicture`): your setting, else what the file name
 /// or the film's own folder proves, else "not stated".
 extension AppModel {
-    func picture(of copy: FilmEntry) -> Picture {
-        Picture.of(copy, ownFolders: ownFolders, yours: pictures)
+    func picture(of copy: FilmEntry) -> FilePicture {
+        FilePicture.of(copy, ownFolders: ownFolders, yours: pictures)
     }
 
     /// The copies whose picture is shown: the one Play opens first, then the others.
@@ -33,18 +33,18 @@ extension AppModel {
     }
 
     /// How many files' pictures are known and why (Settings › Performance), each file once.
-    func pictureCounts() -> [(basis: Picture.Basis, files: Int)] {
+    func pictureCounts() -> [(basis: FilePicture.Basis, files: Int)] {
         var seen = Set<String>()
-        var counts: [Picture.Basis: Int] = [:]
+        var counts: [FilePicture.Basis: Int] = [:]
         for film in films where seen.insert(film.fileKey).inserted {
             counts[picture(of: film).basis, default: 0] += 1
         }
-        let order: [Picture.Basis] = [.yours, .named, .source, .convention, .folder, .notStated]
+        let order: [FilePicture.Basis] = [.yours, .named, .source, .convention, .folder, .notStated]
         return order.compactMap { basis in counts[basis].map { (basis, $0) } }
     }
 }
 
-extension Picture.Basis {
+extension FilePicture.Basis {
     /// For Settings › Performance.
     var title: String {
         switch self {

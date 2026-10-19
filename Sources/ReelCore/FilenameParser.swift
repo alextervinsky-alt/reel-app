@@ -32,7 +32,7 @@ public struct ParsedFilename: Equatable, Sendable {
     public var source: String?
     public var hdr: String?
     /// What the name says the picture is ("DV", "HDR10", "SDR"); nil when it says nothing.
-    /// What Reel shows works this out further (see `Picture`).
+    /// What Reel shows works this out further (see `FilePicture`).
     public var dynamicRange: DynamicRange?
     /// For Dolby Vision, the HDR10 or HDR10+ layer it also carries (played where Dolby Vision isn't).
     public var fallbackRange: DynamicRange?
@@ -44,7 +44,7 @@ public struct ParsedFilename: Equatable, Sendable {
     public var badges: [String]
     /// What the picture is beyond its quality, from the name: "IMAX", "Open Matte".
     public var editions: [String] = []
-    /// What the name says about where it came from, also in [brackets], for `Picture`:
+    /// What the name says about where it came from, also in [brackets], for `FilePicture`:
     /// a DVD, a 4K source ("UHD", "4K", "2160p"), and the resolution and source as written.
     public var isDVD = false
     public var mentionsUHD = false

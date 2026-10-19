@@ -245,8 +245,8 @@ enum ScreenRenderer {
             for film in films {
                 guard let details = film.tmdb else { continue }
                 group.addTask {
-                    (details.id, await AppModel.readCraft(of: details, articleTitle: film.funFacts?.articleTitle,
-                                                          colour: film.funFacts?.quick?.colour))
+                    (details.id, await CraftReader.read(details, articleTitle: film.funFacts?.articleTitle,
+                                                        colour: film.funFacts?.quick?.colour))
                 }
             }
             var found: [Int: CraftIndex] = [:]

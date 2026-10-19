@@ -3,13 +3,13 @@ import XCTest
 
 /// HDR or SDR, so the TV can be set before Play: only what the name proves, never a guess.
 final class PictureTests: XCTestCase {
-    private func picture(_ name: String, folder: String? = nil, yours: DynamicRange? = nil) -> Picture {
-        Picture.of(FilenameParser.parse(name), ownFolder: folder.map { FilenameParser.parse($0) }, yours: yours)
+    private func picture(_ name: String, folder: String? = nil, yours: DynamicRange? = nil) -> FilePicture {
+        FilePicture.of(FilenameParser.parse(name), ownFolder: folder.map { FilenameParser.parse($0) }, yours: yours)
     }
 
     /// The real file names of a library (Reel 1.8.8's fixes), each with what the TV must be set to.
     func testRealNames() {
-        let expected: [(String, DynamicRange?, DynamicRange?, Picture.Basis)] = [
+        let expected: [(String, DynamicRange?, DynamicRange?, FilePicture.Basis)] = [
             ("2001. The Fast and the Furious.mkv", nil, nil, .notStated),
             ("2003. 2 Fast 2 Furious.mkv", nil, nil, .notStated),
             ("2009, Fast & Furious.mkv", nil, nil, .notStated),

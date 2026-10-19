@@ -518,7 +518,7 @@ struct NoticeBar: View {
         .padding(14)
     }
 }
-/// HDR or SDR at a glance, to set the TV before playing (see `Picture`): the copy Play opens
+/// HDR or SDR at a glance, to set the TV before playing (see `FilePicture`): the copy Play opens
 /// first, and other copies only when they differ. When nothing proves it, it says so in grey,
 /// never SDR. Pointing at it says why.
 struct PictureRangeTag: View {
@@ -549,7 +549,7 @@ struct PictureRangeTag: View {
         }
     }
 
-    static func help(_ pictures: [Picture]) -> String {
+    static func help(_ pictures: [FilePicture]) -> String {
         guard let first = pictures.first else { return "" }
         let what = first.isHDR ? "High dynamic range: set the TV to HDR." : first.isKnown ? "Standard dynamic range: set the TV to SDR."
             : "Reel doesn't know if this is HDR or SDR. Your player's video info shows it while it plays; set it in the film's … menu › Picture."
@@ -558,8 +558,8 @@ struct PictureRangeTag: View {
 
     /// "HDR · Dolby Vision + HDR10", "SDR · Open Matte", "HDR or SDR not stated"; with copies that
     /// differ, each with its resolution.
-    static func entries(_ copies: [(copy: FilmEntry, picture: Picture)], large: Bool = false) -> [(text: String, picture: Picture)] {
-        func text(_ copy: FilmEntry, _ picture: Picture) -> String {
+    static func entries(_ copies: [(copy: FilmEntry, picture: FilePicture)], large: Bool = false) -> [(text: String, picture: FilePicture)] {
+        func text(_ copy: FilmEntry, _ picture: FilePicture) -> String {
             let range = picture.label ?? (large ? "Picture not stated" : "HDR or SDR not stated")
             return ([range] + copy.parsed.editions).joined(separator: " · ")
         }

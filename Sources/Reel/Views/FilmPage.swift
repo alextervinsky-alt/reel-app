@@ -1180,7 +1180,6 @@ struct MatchFixer: View {
         }
     }
 }
-#endif
 
 /// Picture (in the film's "…" menu): what the file Play opens is, when the name doesn't say or
 /// says it wrong. Kept in Your Notes for that file.
@@ -1191,10 +1190,10 @@ struct PictureMenu: View {
     var body: some View {
         let yours = model.yourPicture(for: film)
         let fromName = model.pictureCopies(of: film).first.map { copy in
-            Picture.of(copy, ownFolders: model.ownFolders, yours: [:]).label ?? "Not Stated"
+            FilePicture.of(copy, ownFolders: model.ownFolders, yours: [:]).label ?? "Not Stated"
         } ?? "Not Stated"
         Menu("Picture") {
-            ForEach(Picture.choices, id: \.self) { range in
+            ForEach(FilePicture.choices, id: \.self) { range in
                 Toggle(range == .hdr ? "HDR (HDR10, HDR10+, HLG)" : range.rawValue, isOn: Binding(
                     get: { yours == range },
                     set: { if $0 { model.setPicture(range, for: film) } }))
@@ -1206,3 +1205,4 @@ struct PictureMenu: View {
         }
     }
 }
+#endif

@@ -242,7 +242,7 @@ final class AppModel {
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
     /// What you set files' pictures to (HDR or SDR), by file key (Your Notes).
     var pictures: [String: DynamicRange] = [:]
-    /// Films that have a folder to themselves, by film id: the folder's name (see `Picture.ownFolders`).
+    /// Films that have a folder to themselves, by film id: the folder's name (see `FilePicture.ownFolders`).
     @ObservationIgnored var ownFolders: [String: String] = [:]
     @ObservationIgnored var scanning: Set<String> = []
     /// Drives to read again when their current scan ends (a reconnect or ⌘R arrived meanwhile),
@@ -556,11 +556,11 @@ final class AppModel {
     /// The same film on several drives becomes one item; unchanged items are reused.
     /// Returns how many items had to be built anew (0: nothing about any film changed).
     nonisolated static func makeItems(films: [FilmEntry], online: Set<String>, reuse: [String: LibraryItem] = [:],
-                                      picture: ((FilmEntry) -> Picture)? = nil,
+                                      picture: ((FilmEntry) -> FilePicture)? = nil,
                                       moods: (FilmEntry) -> [Mood]) -> (items: [LibraryItem], built: Int) {
         // Without the library's settings at hand (Reel opening), the file names alone.
-        let folders = picture == nil ? Picture.ownFolders(films) : [:]
-        let pictureOf = picture ?? { Picture.of($0, ownFolders: folders, yours: [:]) }
+        let folders = picture == nil ? FilePicture.ownFolders(films) : [:]
+        let pictureOf = picture ?? { FilePicture.of($0, ownFolders: folders, yours: [:]) }
         var groups: [String: [FilmEntry]] = [:]
         var order: [String] = []
         for film in films {
@@ -599,10 +599,10 @@ final class AppModel {
         let online = Set(mounted.keys)
         let backups = Set(drives.filter { $0.isBackup }.map { $0.id })
         let ordered = films.filter { !backups.contains($0.driveID) } + films.filter { backups.contains($0.driveID) }
-        ownFolders = Picture.ownFolders(films)
+        ownFolders = FilePicture.ownFolders(films)
         let folders = ownFolders, yours = pictures
         let (fresh, newlyBuilt) = Self.makeItems(films: ordered, online: online, reuse: itemCache,
-                                                 picture: { Picture.of($0, ownFolders: folders, yours: yours) }) { moodList(for: $0) }
+                                                 picture: { FilePicture.of($0, ownFolders: folders, yours: yours) }) { moodList(for: $0) }
         if newlyBuilt > 0 || fresh.count != items.count || !zip(fresh, items).allSatisfy({ $0.id == $1.id }) {
             items = fresh
             itemCache = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

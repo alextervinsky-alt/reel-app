@@ -217,7 +217,7 @@ struct SearchIndex: Equatable {
     let craft: String
     let words: [String]
 
-    init(film: FilmEntry, moods: [Mood], picture: Picture) {
+    init(film: FilmEntry, moods: [Mood], picture: FilePicture) {
         let n = TitleSimilarity.normalize
         let d = film.tmdb
         let titles = [film.displayTitle, d?.originalTitle ?? "", film.parsed.title].map(n)
@@ -336,7 +336,7 @@ struct LibraryItem: Identifiable, Equatable {
     /// Changes whenever anything a poster card shows changes; lets the grid skip redrawing cards.
     let stamp: Int
 
-    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: Picture) {
+    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: FilePicture) {
         self.id = key
         self.main = main
         self.copies = copies
