@@ -26,10 +26,12 @@ public struct PictureWords: Equatable, Sendable {
         var words = PictureWords()
         words.toneMapped = has(#"tone[ ._-]?map|(?<![a-z0-9])hdr[ ._-]?(?:to|2)[ ._-]?sdr(?![a-z])"#)
         words.dolbyVision = has(#"(?<![a-z0-9])(?:dovi|dolby[ ._-]?vision|dv(?=hdr|[^a-z0-9]|$))"#)
-        words.hdr10Plus = has(#"(?<![a-z0-9])hdr10(?:\+|p(?![a-z0-9])|plus(?![a-z])|[ ._-]plus(?![a-z]))|(?<![a-z0-9])hdr\+"#)
+        // "DVHDR10", "4KHDR": run together after DV or 4K.
+        let start = #"(?:(?<=dv)|(?<=4k)|(?<![a-z0-9]))"#
+        words.hdr10Plus = has(start + #"hdr10(?:\+|p(?![a-z0-9])|plus(?![a-z])|[ ._-]plus(?![a-z]))|"# + start + #"hdr\+"#)
         // "HDRip" is a rip of an HD source, not HDR.
-        words.saysHDR = has(#"(?<![a-z0-9])hdr(?![a-z]|10)"#)
-        words.hdr10 = words.saysHDR || has(#"(?<![a-z0-9])hdr10(?![0-9])"#)
+        words.saysHDR = has(start + #"hdr(?![a-z]|10)"#)
+        words.hdr10 = words.saysHDR || has(start + #"hdr10(?![0-9])"#)
         words.hlg = has(#"(?<![a-z0-9])hlg(?![a-z0-9])"#)
         words.sdr = has(#"(?<![a-z0-9])sdr(?![a-z0-9])"#)
         if words.dolbyVision {
@@ -39,12 +41,21 @@ public struct PictureWords: Equatable, Sendable {
             } else if has(#"(?<![a-z0-9])(?:fel|mel)(?![a-z0-9])"#) {
                 words.dolbyVisionProfile = 7
             }
+            // Profile 8.4 sits on HLG (phones).
+            if words.dolbyVisionProfile == 8, has(#"(?<![0-9])8\.4(?![0-9])"#) { words.hlg = true }
+        }
+        // Converted to SDR: its HDR words are what it was made from, not what it is.
+        if words.toneMapped {
+            words = PictureWords()
+            words.toneMapped = true
+            words.sdr = true
         }
         return words
     }
 
     /// As a name writes it, short: "DV HDR10+", "DV HDR", "DV", "HDR10", "HLG"; nil for none.
     public var written: String? {
+        if toneMapped { return "SDR" }
         var parts: [String] = []
         if dolbyVision { parts.append("DV") }
         if hdr10Plus {
@@ -137,6 +148,9 @@ public struct FilePicture: Equatable, Sendable {
     public let basis: Basis
     /// Why, for the tag's help: "the file name says DV HDR10", "a 1080p Blu-ray: HDR is only on 4K Blu-rays".
     public let reason: String
+    /// How sure: 5 a name's own words, 4 what the file can't be, 3 a folder's words, 2 a 1080p
+    /// Blu-ray, 1 likely (the file's name over its folder's on a tie).
+    var strength = 0
 
     public var isHDR: Bool { setting == .hdr }
     public var isKnown: Bool { setting != nil }
@@ -172,9 +186,12 @@ public struct FilePicture: Equatable, Sendable {
         // same order (a folder that says "HDR10" beats a guess from the file's name).
         let byName = read(name, what: "the file name")
         let byFolder = ownFolder.flatMap { read($0, what: "the film's folder") }.map {
-            $0.basis == .named ? FilePicture(setting: $0.setting, format: $0.format, basis: .folder, reason: $0.reason) : $0
+            $0.basis == .named ? FilePicture(setting: $0.setting, format: $0.format, basis: .folder, reason: $0.reason, strength: 3) : $0
         }
-        let found = [byName, byFolder].compactMap { $0 }.first { !$0.isGuess } ?? byName ?? byFolder
+        // The strongest says it: a name's own words, then what the file can't be (a DVD, H.264…),
+        // then its folder's words (a 1080p "BluRay" in a folder that says HDR10 is a copy of a 4K
+        // disc), then a 1080p Blu-ray, then what's likely.
+        let found = [byName, byFolder].compactMap { $0 }.max { $0.strength < $1.strength }
         if let yours {
             let setting: Setting = yours.isHDR ? .hdr : .sdr
             // The format the name says, when it agrees.
@@ -197,46 +214,46 @@ public struct FilePicture: Equatable, Sendable {
         let subject = what.prefix(1).uppercased() + what.dropFirst()
         // Said outright.
         if words.toneMapped {
-            return FilePicture(setting: .sdr, format: nil, basis: .named, reason: "\(subject) says it was converted from HDR to SDR")
+            return FilePicture(setting: .sdr, format: nil, basis: .named, reason: "\(subject) says it was converted from HDR to SDR", strength: 5)
         }
         if words.sdr, !words.dolbyVision, !words.hdr10, !words.hdr10Plus, !words.hlg {
-            return FilePicture(setting: .sdr, format: nil, basis: .named, reason: "\(subject) says SDR")
+            return FilePicture(setting: .sdr, format: nil, basis: .named, reason: "\(subject) says SDR", strength: 5)
         }
         if words.dynamicRange?.isHDR == true {
             let (kind, why) = Self.format(of: words, disc: disc, web: web)
             let said = words.written ?? "HDR"
-            return FilePicture(setting: .hdr, format: kind, basis: .named, reason: "\(subject) says \(said)" + (why.map { ": " + $0 } ?? ""))
+            return FilePicture(setting: .hdr, format: kind, basis: .named, reason: "\(subject) says \(said)" + (why.map { ": " + $0 } ?? ""), strength: 5)
         }
         // What the file is can't carry HDR.
         if parsed.isDVD {
-            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A DVD: always SDR")
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A DVD: always SDR", strength: 4)
         }
         let resolution = parsed.anyResolution
         if let resolution, ["720p", "576p", "480p"].contains(resolution) {
-            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "\(resolution): HDR releases are 1080p or 4K")
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "\(resolution): HDR releases are 1080p or 4K", strength: 4)
         }
         // HDR Blu-rays are 4K discs only; a 1080p copy of one says "UHD".
         if resolution == "1080p", disc, !parsed.mentionsUHD {
-            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A 1080p Blu-ray: HDR is only on 4K Blu-rays")
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A 1080p Blu-ray: HDR is only on 4K Blu-rays", strength: 2)
         }
         if let codec = parsed.videoCodec, ["AVC", "VC-1", "MPEG-2", "XviD"].contains(codec) {
             return FilePicture(setting: .sdr, format: nil, basis: .source,
-                               reason: "\(codec == "AVC" ? "H.264 (AVC)" : codec) video: HDR releases are made in HEVC or AV1")
+                               reason: "\(codec == "AVC" ? "H.264 (AVC)" : codec) video: HDR releases are made in HEVC or AV1", strength: 4)
         }
         // Likely, from the kind of release.
         switch resolution {
         case "2160p" where disc:
             return FilePicture(setting: .hdr, format: .hdr10, basis: .likely,
-                               reason: "A 4K Blu-ray whose name doesn't say: 4K Blu-rays are HDR10 as standard")
+                               reason: "A 4K Blu-ray whose name doesn't say: 4K Blu-rays are HDR10 as standard", strength: 1)
         case "2160p" where web:
             return FilePicture(setting: .sdr, format: nil, basis: .likely,
-                               reason: "A 4K web release whose name doesn't say HDR: web releases name HDR and Dolby Vision when they have them")
+                               reason: "A 4K web release whose name doesn't say HDR: web releases name HDR and Dolby Vision when they have them", strength: 1)
         case "1080p" where parsed.mentionsUHD:
             return FilePicture(setting: .sdr, format: nil, basis: .likely,
-                               reason: "A 1080p copy of a 4K disc whose name doesn't say HDR: copies that keep HDR say so")
+                               reason: "A 1080p copy of a 4K disc whose name doesn't say HDR: copies that keep HDR say so", strength: 1)
         case "1080p":
             return FilePicture(setting: .sdr, format: nil, basis: .likely,
-                               reason: "A 1080p file whose name doesn't say HDR: 1080p releases are almost always SDR")
+                               reason: "A 1080p file whose name doesn't say HDR: 1080p releases are almost always SDR", strength: 1)
         default:
             return nil
         }

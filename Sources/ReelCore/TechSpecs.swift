@@ -463,9 +463,10 @@ public struct TechSpecs: Equatable, Sendable {
         pattern: #"\b(?:handheld|hand-held|Steadicam|long takes?|single takes?|one take|oners?|one-shot|continuous (?:shots?|takes?)|tracking shots?|dolly|dollies|crane shots?|drones?|static (?:shots?|camera)|locked-off|wide shots?|wide-angle|close-ups?|point[- ]of[- ]view|POV|shot compositions?|symmetr\w*|depth of field|shallow focus|deep focus|split diopter|split-screen|zoom(?:s|ed|ing)? (?:in|out|lens\w*|shots?)|crash zooms?|whip pans?|panning|slow[- ]motion|camera movements?|camera moves?|the camera (?:moves?|follows?|stays?|tracks?|pushes|pulls|glides|lingers|never|always|rarely|is)|camerawork|camera work|visual style|visual language|visual approach|lensing|focal lengths?|storyboard\w*|shot lists?|traditional coverage|blocking|aspect ratio|anamorphic|negative space|low[- ]angle|high[- ]angle|Dutch angle|overhead shots?|aerial shots?|360-degree|Snorricam|underwater (?:camera|photography))\b"#,
         options: [.caseInsensitive])
 
-    /// Each name once (the first spelling), and a name left out when a longer one of the same
-    /// kind contains it ("ARRI Alexa" when there's "ARRI Alexa 65"). Each keeps its best sentence:
-    /// one that says this film was shot with it, about the whole film, before any other.
+    /// Each name once, in the order first read, and a name left out when a longer one of the same
+    /// kind contains it ("ARRI Alexa" when there's "ARRI Alexa 65"). Each keeps its best reading
+    /// (its spelling and sentence): one that says this film was shot with it, about the whole film,
+    /// before any other.
     static func tidy(_ specs: [Spec]) -> [Spec] {
         func rank(_ spec: Spec) -> Int { (spec.capture ? 2 : 0) + (spec.partial ? 0 : 1) }
         var best: [String: Spec] = [:]
@@ -632,10 +633,19 @@ public struct TechSpecs: Equatable, Sendable {
     static func saysCaptured(_ sentence: String, at range: Range<String.Index>, title: String?, otherTitles: [String],
                              people: [String]) -> Bool {
         if isSpecList(sentence) { return true }
-        let part = segment(of: sentence, around: range)
-        guard matches(captureCue, part), !matches(otherWork, part), !matches(lookMade, part) else { return false }
+        let whole = segmentRange(of: sentence, around: range)
+        let part = String(sentence[whole])
+        // Other work and remarks in general: before the words in their part of the sentence, or in
+        // their own clause ("Although I shoot a lot of commercials using digital cameras", "he
+        // shot several of his films with IMAX cameras"), not a clause after them ("We shot on
+        // 5219, which tends to hold the highlights").
+        let lead = String(sentence[whole.lowerBound..<range.lowerBound]) + " " + (clause(of: sentence, around: range) ?? "")
+        // A look made in the grade, right by the words: "the Ektachrome LUT", "the three-strip Technicolor look".
+        let near = String(sentence[sentence.index(range.lowerBound, offsetBy: -min(12, sentence.distance(from: sentence.startIndex, to: range.lowerBound)))
+                                   ..< sentence.index(range.upperBound, offsetBy: min(12, sentence.distance(from: range.upperBound, to: sentence.endIndex)))])
+        guard matches(captureCue, part), !matches(otherWork, lead), !matches(lookMade, near) else { return false }
         return !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
-            && !namesAnotherPart(scope(of: sentence, around: range), title: title)
+            && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
     }
 
     /// The part of the sentence the words at `range` are in, split only where the sentence turns
@@ -643,6 +653,10 @@ public struct TechSpecs: Equatable, Sendable {
     /// inside one statement don't split it ("We shot the film with Mitchell cameras, which were
     /// modified to accept anamorphic lenses").
     static func segment(of sentence: String, around range: Range<String.Index>) -> String {
+        String(sentence[segmentRange(of: sentence, around: range)])
+    }
+
+    static func segmentRange(of sentence: String, around range: Range<String.Index>) -> Range<String.Index> {
         var lower = sentence.startIndex, upper = sentence.endIndex
         for mark in turns {
             if let found = sentence.range(of: mark, options: [.caseInsensitive, .backwards], range: sentence.startIndex..<range.lowerBound),
@@ -658,7 +672,7 @@ public struct TechSpecs: Equatable, Sendable {
                 upper = opening.upperBound
             }
         }
-        return String(sentence[lower..<upper])
+        return lower..<upper
     }
 
     static let brackets = try! NSRegularExpression(pattern: #"\([^()]*\)"#)
@@ -680,7 +694,8 @@ public struct TechSpecs: Equatable, Sendable {
     /// A spec list, as magazines print them under an article: "Cameras | Arri Alexa Mini LF",
     /// "Lenses: Cooke Anamorphic/i", "2.39:1 Anamorphic and Spherical 35mm Kodak Vision3 5219…".
     static func isSpecList(_ sentence: String) -> Bool {
-        if sentence.contains(" | ") { return true }
+        // "Cameras | Arri Alexa Mini LF Lenses | …": a label and its value, twice or more.
+        if sentence.components(separatedBy: " | ").count > 2 { return true }
         if sentence.range(of: #"^(?:Cameras?|Lenses|Lens|Format|Film stocks?|Stocks?|Capture|Aspect ratio)\s*:"#, options: .regularExpression) != nil {
             return true
         }
@@ -715,7 +730,9 @@ public struct TechSpecs: Equatable, Sendable {
         let short = own.split(separator: ":").first.map(String.init) ?? own
         func isOwn(_ text: String) -> Bool {
             let named = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-            return !own.isEmpty && (named == own || named == short)
+            // "Dune: Part One" for Dune, unless that's another film of the collection.
+            let subtitled = named.hasPrefix(own + ":") && !otherTitles.contains { $0.lowercased() == named }
+            return !own.isEmpty && (named == own || named == short || subtitled)
         }
         let range = NSRange(part.startIndex..., in: part)
         // “Alien”, “Jurassic World Rebirth,”: a title (most words capitalised), not a quote, and not a
@@ -752,6 +769,8 @@ public struct TechSpecs: Equatable, Sendable {
                 continue
             }
             if gearWords.contains(where: { named.lowercased().hasPrefix($0) }) { continue }
+            // "London's Shepperton Studios", "Budapest's Origo Studios": a place.
+            if let last = named.split(separator: " ").last?.lowercased(), placeWords.contains(last) { continue }
             if !own.isEmpty, own.hasPrefix(named.lowercased()) || isOwn(named) { continue }
             return true
         }
@@ -771,12 +790,17 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     /// "In Part One, we shot…" while reading Part Two: another part of the series.
-    static func namesAnotherPart(_ scope: String, title: String?) -> Bool {
+    /// Another part counts when this film is a part with another number, or that part is a film of
+    /// its collection ("Part Two" while reading Dune): "Part One" for Dune is Dune itself.
+    static func namesAnotherPart(_ scope: String, title: String?, otherTitles: [String] = []) -> Bool {
         let own = (title ?? "").lowercased()
+        let ownPart = own.range(of: #"\bpart (?:one|two|three|four|i{1,3}|iv|[1-4])\b"#, options: .regularExpression) != nil
         let range = NSRange(scope.startIndex..., in: scope)
         for match in partName.matches(in: scope, range: range) {
             guard let found = Range(match.range, in: scope) else { continue }
-            if !own.contains(scope[found].lowercased()) { return true }
+            let part = scope[found].lowercased()
+            if own.contains(part) { continue }
+            if ownPart || otherTitles.contains(where: { $0.lowercased().contains(part) }) { return true }
         }
         return false
     }
@@ -786,10 +810,10 @@ public struct TechSpecs: Equatable, Sendable {
     static let captureCue = try! NSRegularExpression(
         pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|use|employed|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
         options: [.caseInsensitive])
-    /// Other work, or gear in general: commercials, a TV series, "his films", "I had shot…", "in
-    /// general", "you have to", "especially when".
+    /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
+    /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|used|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|whenever|every film|any film|most films|all films)\b"#,
+        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".
@@ -800,6 +824,11 @@ public struct TechSpecs: Equatable, Sendable {
     static let quotedTitle = try! NSRegularExpression(pattern: #"[“"]([^”"]{1,60})[”"]"#)
     /// Someone's film by their name: "Chazelle’s La La Land".
     static let possessiveName = try! NSRegularExpression(pattern: #"\b([A-Z][a-z\-]+)['’]s ([A-Z][a-z][\w\-]*(?: [A-Z][\w\-]*)*)"#)
+    /// The last word of a place's name after a possessive ("London's Shepperton Studios").
+    static let placeWords: Set<String> = ["studios", "studio", "stages", "stage", "lot", "backlot", "desert", "island", "islands",
+                                          "mountains", "forest", "street", "avenue", "park", "coast", "beach", "river", "lake", "house",
+                                          "hotel", "palace", "castle", "museum", "airport", "station", "cathedral", "church", "square",
+                                          "bridge", "centre", "center", "hall", "theatre", "theater", "valley", "canyon", "harbour", "harbor"]
     /// A part of a series: "Part One", "Part II".
     static let partName = try! NSRegularExpression(pattern: #"\bPart (?:One|Two|Three|Four|I{1,3}|IV|[1-4])\b"#)
     /// Gear and makers named after a possessive ("Panavision’s Dan Sasaki" is a person, but "Kodak’s

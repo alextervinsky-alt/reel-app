@@ -161,7 +161,10 @@ public enum FilenameParser {
             resolution = t
             break
         }
-        if resolution == nil, has(["4k", "uhd"]) { resolution = "2160p" }
+        // "4K Remaster", "Remastered 4K", "RM4K": about the master, not this file.
+        let fourKMaster = base.lowercased().range(of: #"4k[ ._-]?(?:remaster|restor)|(?:remaster(?:ed)?|restored|restoration)[ ._-]?(?:in[ ._-])?4k|(?<![a-z0-9])rm4k"#,
+                                                  options: .regularExpression) != nil
+        if resolution == nil, has(["uhd"]) || (has(["4k"]) && !fourKMaster) { resolution = "2160p" }
 
         // Source
         let hasRemux = has(["remux", "bdremux"])
@@ -242,7 +245,7 @@ public enum FilenameParser {
         // Also in brackets ("[Bluray-1080p]"), for what the picture can be.
         let everyToken = Set(pool + tags)
         let anyResolution = resolution ?? resolutions.first { everyToken.contains($0) }
-            ?? (everyToken.contains("4k") || everyToken.contains("uhd") ? "2160p" : nil)
+            ?? ((everyToken.contains("4k") && !fourKMaster) || everyToken.contains("uhd") ? "2160p" : nil)
         var anySource = source
         if anySource == nil {
             if !everyToken.isDisjoint(with: ["bluray", "bdrip", "brrip", "bdremux", "remux"]) || zip(pool, pool.dropFirst()).contains(where: { $0 == "blu" && $1 == "ray" }) {
@@ -272,10 +275,8 @@ public enum FilenameParser {
         )
         // Outside brackets only: "[Hindi (Org DVD DD 5.1)]" is where an audio track came from.
         parsed.isDVD = !Set(pool).isDisjoint(with: ["dvd", "dvdrip", "dvd5", "dvd9", "dvdr", "ntsc", "pal"])
-        // "4K Remaster" and "RM4K" are about the master, not this file; "DS4K" is a copy made
-        // smaller from a 4K source.
-        let remaster = zip(pool, pool.dropFirst()).contains { $0 == "4k" && ($1.hasPrefix("remaster") || $1.hasPrefix("restor")) }
-        parsed.mentionsUHD = !everyToken.isDisjoint(with: ["uhd", "2160p", "ds4k"]) || (everyToken.contains("4k") && !remaster)
+        // "DS4K" is a copy made smaller from a 4K source.
+        parsed.mentionsUHD = !everyToken.isDisjoint(with: ["uhd", "2160p", "ds4k"]) || (everyToken.contains("4k") && !fourKMaster)
         parsed.pictureWords = picture
         parsed.anyResolution = anyResolution
         parsed.anySource = anySource

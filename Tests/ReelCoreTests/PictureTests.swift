@@ -120,6 +120,18 @@ final class PictureTests: XCTestCase {
         XCTAssertNil(picture("Film.2024.2160p.x265.mkv").label, "4K of an unknown kind can be either")
     }
 
+    /// Found by the independent review.
+    func testReviewedCases() {
+        XCTAssertEqual(FilenameParser.parse("Film.2020.2160p.HDR.to.SDR.x265-GRP.mkv").hdr, "SDR", "made from HDR, but SDR")
+        XCTAssertEqual(picture("Film.2160p.WEB-DL.DVHDR10.H265-GRP.mkv").format, .dolbyVisionHDR10, "run together")
+        XCTAssertEqual(picture("Film.2020.4KHDR.WEB-DL.H265-GRP.mkv").setting, .hdr)
+        let remaster = FilenameParser.parse("Film.1976.4K.Remaster.BluRay.x265-GRP.mkv")
+        XCTAssertNil(remaster.resolution, "a 4K remaster isn't a 4K file")
+        XCTAssertNotEqual(picture("Film.1976.4K.Remaster.BluRay.x265-GRP.mkv").label, "Likely HDR")
+        XCTAssertNil(FilenameParser.parse("Film.1999.Remastered.4K.1080p.BluRay.x265-GRP.mkv").pictureWords.written)
+        XCTAssertEqual(picture("Film.2023.iPhone.DV.P8.4.HEVC.mov").format, .dolbyVisionHLG)
+    }
+
     // MARK: Folders
 
     func testTheFilmsOwnFolder() {
@@ -130,6 +142,10 @@ final class PictureTests: XCTestCase {
         XCTAssertEqual(picture("dune.mkv").basis, .notStated, "no folder of its own")
         XCTAssertEqual(picture("Dune.2021.1080p.BluRay.x264.mkv", folder: "Dune 2160p DV").setting, .sdr, "the file's own name comes first")
         XCTAssertEqual(picture("Film.2020.1080p.mkv", folder: "Film (2020) 1080p HDR10").basis, .folder, "a folder that says beats a guess")
+        let collection = "Saga - Complete Collection (2001-2021) 1080p HEVC HDR10 [BluRay]"
+        XCTAssertEqual(picture("Fast.Five.2011.1080p.BluRay.x265.mkv", folder: collection).setting, .hdr,
+                       "a 1080p 'BluRay' in a folder that says HDR10 is a copy of a 4K disc")
+        XCTAssertEqual(picture("Fast.Five.2011.1080p.BluRay.x264.mkv", folder: collection).setting, .sdr, "H.264 can't be HDR, whatever the folder says")
     }
 
     /// A whole collection in one folder whose name says the picture.

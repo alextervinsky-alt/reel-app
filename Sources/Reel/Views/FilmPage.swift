@@ -543,7 +543,8 @@ struct FilmFactSheet: View {
         var parts: [String] = []
         if let resolution = copy.parsed.resolution { parts.append(resolution == "2160p" ? "4K" : resolution) }
         let picture = model.picture(of: copy)
-        if let format = picture.isGuess ? nil : picture.format?.rawValue ?? copy.parsed.hdr { parts.append(format) }
+        // The name's own HDR words only while it's HDR (you may have set a misnamed file to SDR).
+        if picture.isHDR, !picture.isGuess, let format = picture.format?.rawValue ?? copy.parsed.hdr { parts.append(format) }
         parts += copy.parsed.editions
         if copy.size > 0 { parts.append(Format.bytes(copy.size)) }
         let ext = (copy.fileName as NSString).pathExtension.uppercased()

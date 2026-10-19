@@ -50,6 +50,7 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("Let’s say on movies in general, when you do a wide shot in anamorphic, maybe you’ll use a 40mm or a 35mm."), [])
         XCTAssertEqual(tags("He is behind the TV series, which is made on the ARRI Alexa digital camera, and was keen to use it again."), [])
         XCTAssertEqual(tags("I love seeing closeups of texts and books, especially when shot on film."), [])
+        XCTAssertEqual(tags("A beautifully shot film on film, and a triumph."), [], "praise, as a critic writes it")
         XCTAssertTrue(tags("Deakins used the ARRI Alexa XT for his work on Sicario.", dp: ["Roger Deakins"], title: "Sicario").contains(.digital),
                       "his work on this film counts")
     }
@@ -70,6 +71,20 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("Lensed by Emmanuel “Chivo” Lubezki, the production was shot using natural light on the new Alexa 65."), [.digital],
                        "a nickname isn't a title")
         XCTAssertEqual(tags("Shot on Arri’s Alexa XT with Kodak’s help, the look stayed clean."), [.digital], "a maker's gear")
+    }
+
+    /// Found by the independent review: what's said after the words, a place and Part One of the
+    /// film itself don't take a tag away.
+    func testWhatDoesntTakeATagAway() {
+        XCTAssertEqual(tags("The film was shot on 35 mm film at London's Shepperton Studios."), [.film])
+        XCTAssertEqual(tags("We shot on Kodak Vision3 5219, which tends to hold the highlights."), [.film])
+        XCTAssertEqual(tags("We shot on 35mm film, which you can push two stops."), [.film])
+        XCTAssertEqual(tags("We shot on the ARRI Alexa 65 and built a LUT with our colourist."), [.digital])
+        XCTAssertEqual(tags("Fraser shot the film on the ARRI Alexa LF, generally with Panavision anamorphic lenses."), [.digital, .anamorphic])
+        XCTAssertEqual(tags("Fraser shot Part One on the ARRI Alexa LF.", title: "Dune", otherTitles: ["Dune: Part Two"]), [.digital])
+        XCTAssertEqual(tags("Fraser shot “Dune: Part One” on the ARRI Alexa LF.", title: "Dune", otherTitles: ["Dune: Part Two"]), [.digital])
+        XCTAssertEqual(tags("Fraser shot Part Two on the ARRI Alexa 65.", title: "Dune", otherTitles: ["Dune: Part Two"]), [])
+        XCTAssertEqual(tags("I love shooting on 35mm film."), [], "an opinion, with a verb")
     }
 
     // MARK: Lenses and sensors

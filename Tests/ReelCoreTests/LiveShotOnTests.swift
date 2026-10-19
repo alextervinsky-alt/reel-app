@@ -23,7 +23,7 @@ final class LiveShotOnTests: XCTestCase {
         Known(title: "Interstellar", year: 2014, has: [.film, .imax, .anamorphic], hasNot: [.digital]),
         Known(title: "The Prestige", year: 2006, has: [.film], hasNot: [.digital], partOnly: [.imax]),
         Known(title: "The Dark Knight", year: 2008, has: [.film, .imax], hasNot: [.digital]),
-        Known(title: "Inception", year: 2010, has: [.film, .anamorphic], hasNot: []),
+        Known(title: "Inception", year: 2010, has: [.film, .anamorphic], hasNot: [.imax]),
         Known(title: "The Matrix", year: 1999, has: [.film], hasNot: [.digital, .anamorphic]),
         Known(title: "No Country for Old Men", year: 2007, has: [.film], hasNot: [.digital]),
         Known(title: "La La Land", year: 2016, has: [.film, .anamorphic], hasNot: [.digital]),
@@ -91,6 +91,17 @@ final class LiveShotOnTests: XCTestCase {
                 // What named it without saying it was shot that way.
                 for spec in specs.specs where !spec.capture && CraftIndex.shotOn(spec).contains(tag) {
                     say("Shot on not counted: \(known.title) \(tag.title): \(spec.source ?? "Wikipedia"): \((spec.evidence ?? spec.name).prefix(200))")
+                }
+                // Sentences that name it at all, when none was read as a name (left out entirely).
+                if !specs.specs.contains(where: { CraftIndex.shotOn($0).contains(tag) }) {
+                    let words = tag == .digital ? #"(?i)\balexa|\bred\b|\bvenice\b|\bdigital"#
+                        : tag == .film ? #"(?i)\b(?:35|65|16)\s?mm|film stock|kodak|celluloid|panavision|\bon film\b"#
+                        : tag == .anamorphic ? #"(?i)anamorphic"# : tag == .imax ? #"(?i)imax"# : #"(?i)black[- ]and[- ]white"#
+                    let named = texts.flatMap { text in text.sections.flatMap(\.paragraphs).flatMap { Digest.sentences(in: $0) }.map { (text.source ?? "Wikipedia", $0) } }
+                        .filter { $0.1.range(of: words, options: .regularExpression) != nil }
+                    for (source, sentence) in named.prefix(3) {
+                        say("Shot on not counted: \(known.title) \(tag.title) (left out): \(source): \(sentence.prefix(200))")
+                    }
                 }
             }
             say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(texts.count) texts | known \(known.has.count + known.hasNot.count)"
