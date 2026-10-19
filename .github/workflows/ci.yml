@@ -43,11 +43,20 @@ jobs:
       - name: Match the sample films against TMDB (token is never printed)
         run: |
           set +e
-          swift test --filter "LiveTMDBTests|LiveCraftSourcesTests" 2>&1 | tee live.log
+          swift test --filter LiveTMDBTests 2>&1 | tee live.log
           code=${PIPESTATUS[0]}
-          grep -E "Craft sources: [0-9]+ of" live.log | while read -r l; do echo "::notice::${l}"; done
           if [ $code -ne 0 ]; then
             grep -E "error:|failed" live.log | head -25 | while read -r l; do echo "::error::${l}"; done
+          fi
+          exit $code
+      - name: Find interviews for well-known films (American and British Cinematographer)
+        run: |
+          set +e
+          swift test --filter LiveCraftSourcesTests 2>&1 | tee craft.log
+          code=${PIPESTATUS[0]}
+          grep -E "Craft sources: [0-9]+ of" craft.log | while read -r l; do echo "::notice::${l}"; done
+          if [ $code -ne 0 ]; then
+            grep -E "error:|failed" craft.log | head -10 | while read -r l; do echo "::error::${l}"; done
           fi
           exit $code
 
