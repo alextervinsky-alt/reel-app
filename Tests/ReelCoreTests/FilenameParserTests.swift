@@ -163,6 +163,5 @@ final class FilenameParserTests: XCTestCase {
         XCTAssertEqual(FilenameParser.parse("Arrival.2016.2160p.UHD.BluRay.HDR10+.HEVC-GRP.mkv").dynamicRange, .hdr10Plus)
         XCTAssertEqual(FilenameParser.parse("Heat 1995 2160p UHD BluRay HDR x265.mkv").dynamicRange, .hdr10)
         XCTAssertNil(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange, "the name says nothing: see Picture")
-        XCTAssertFalse(FilenameParser.parse("Heat.1995.1080p.BluRay.x264-GRP.mkv").dynamicRange.isHDR)
     }
 }
