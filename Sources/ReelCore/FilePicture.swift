@@ -67,11 +67,16 @@ public struct FilePicture: Equatable, Sendable {
         if let yours {
             return FilePicture(range: yours, fallback: nil, basis: .yours, reason: "You set this")
         }
-        if let found = proven(by: name, what: "the file name") { return found }
-        if let folder = ownFolder, let found = proven(by: folder, what: "the film's folder") {
-            return FilePicture(range: found.range, fallback: found.fallback, basis: found.isGuess ? .convention : .folder,
-                               reason: found.reason)
+        // What proves it first, the file's name then its folder; only then what's likely, the
+        // same order (a folder that says "HDR10" beats a guess from the file's name).
+        let byName = proven(by: name, what: "the file name")
+        if let byName, !byName.isGuess { return byName }
+        let byFolder = ownFolder.flatMap { proven(by: $0, what: "the film's folder") }
+        if let byFolder, !byFolder.isGuess {
+            return FilePicture(range: byFolder.range, fallback: byFolder.fallback, basis: .folder, reason: byFolder.reason)
         }
+        if let byName { return byName }
+        if let byFolder { return byFolder }
         if let guess = likely(name) { return guess }
         let why = name.anyResolution == "2160p"
             ? "4K, and the file name doesn't say HDR or SDR"
@@ -119,7 +124,7 @@ public struct FilePicture: Equatable, Sendable {
         }
         if parsed.anySource != nil || parsed.videoCodec != nil {
             return FilePicture(range: .sdr, fallback: nil, basis: .convention,
-                           reason: "A 1080p release name without HDR: release names always say HDR")
+                           reason: "A 1080p release name without HDR: release names usually say HDR when it is, so likely SDR")
         }
         return nil
     }

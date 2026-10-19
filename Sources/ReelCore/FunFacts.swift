@@ -249,7 +249,9 @@ public enum FunFactExtractor {
     /// which a fact on its own doesn't have.
     static func startsWithSomeone(_ sentence: String) -> Bool {
         guard let first = sentence.split(separator: " ").first else { return false }
-        return ["He", "She", "His", "Her", "Him", "They", "Their", "Them"].contains(String(first))
+        // "He's", "They’re", "Her,": the word itself.
+        let word = first.prefix { $0.isLetter }
+        return ["He", "She", "His", "Her", "Him", "They", "Their", "Them"].contains(String(word))
     }
 
     /// Sentences critics wrote about the film (for likes and dislikes), at most 40.

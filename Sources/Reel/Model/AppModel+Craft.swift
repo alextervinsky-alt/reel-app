@@ -111,7 +111,9 @@ extension AppModel {
     /// Shot on as shown for a film: what was read, less what you said is wrong.
     func shownShotOn(_ film: FilmEntry) -> [ShotOn] {
         let removed = film.tmdb.flatMap { removedShotOn[$0.id] } ?? []
-        return (film.craft?.shotOn ?? []).filter { !removed.contains($0) }
+        // Before its craft is read, what Wikidata or TMDB already say (black and white).
+        let read = film.craft?.shotOn ?? ShotOn.allCases.filter { LibraryItem.shotOnKnown(film).contains($0) }
+        return read.filter { !removed.contains($0) }
     }
 
     /// You said a Shot on tag is wrong for this film: it's no longer shown, filtered or searched

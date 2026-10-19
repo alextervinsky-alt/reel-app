@@ -111,6 +111,7 @@ public enum ReceptionAnalyzer {
         "too violent", "not enough", "convoluted", "lost me",
         "weak", "fails", "failed", "falls short", "fell flat", "overrated", "unconvincing", "clunky", "not as good",
         "doesn't work", "didn't work", "disjointed", "repetitive", "overstuffed", "underdeveloped",
+        "sluggish", "plodding", "meandering", "stilted", "muddled", "derivative", "formulaic", "a mess", "slog",
     ]
 
     /// What a clause with no aspect word is about, from the way it complains ("it's a bit
@@ -302,7 +303,7 @@ public enum ReceptionAnalyzer {
     }
 
     static let praiseWords = #"\b(?:prais\w*|laud\w*|applaud\w*|acclaim\w*|admired|admires|admiring|admiration|commend\w*|hail\w*|complimen\w*|favou?rabl\w*|enjoy\w*|loved|impressed|impressive\w*|raved?|highlight\w*|singled out|delight\w*|triumph\w*)\b"#
-    static let faultWords = #"\b(?:critici[sz]\w*|fault\w*|panned|derid\w*|dismiss\w*|complain\w*|dislik\w*|took issue|unimpress\w*|less enthusiastic|unfavou?rabl\w*|negative|lament\w*|bemoan\w*|weakness\w*|flaws?|flawed|marred|disappoint(?:ed|ing|ment|s)?)\b"#
+    static let faultWords = #"\b(?:critici[sz]\w*|critical of|fault\w*|panned|derid\w*|dismiss\w*|complain\w*|dislik\w*|took issue|unimpress\w*|less enthusiastic|unfavou?rabl\w*|negative|lament\w*|bemoan\w*|weakness\w*|flaws?|flawed|marred|disappoint(?:ed|ing|ment|s)?)\b"#
 
     /// What a critic is said to have done: praised (1), faulted (-1), or neither (0). The first
     /// such word decides; denied ("not impressed", "never disappoints") it turns around.
@@ -398,8 +399,10 @@ public enum ReceptionAnalyzer {
             }
             current.append(ch)
             if ch == "." || ch == "!" || ch == "?" {
-                // "listed at No. 5", "St. Louis", "the U.S. release" carry on.
-                if ch == ".", let word = current.split(separator: " ").last, Digest.isAbbreviation(String(word)) { continue }
+                // "listed at No. 5", "St. Louis", "the U.S. release" carry on; "released in the
+                // U.S. It grossed…" ends there.
+                if ch == ".", let word = current.split(separator: " ").last, Digest.isAbbreviation(String(word)),
+                   !startsSentence(after: i, in: chars) { continue }
                 var next: Character = i < chars.count ? chars[i] : " "
                 // A closing quote stays with its sentence (not at the start of the next one).
                 if next == "\"" || next == "”" {
@@ -414,6 +417,16 @@ public enum ReceptionAnalyzer {
         }
         flush(&current, into: &result)
         return result
+    }
+
+    /// Whether the next word starts a sentence of its own ("It", "The", "In"…), so a stop after
+    /// "U.S." or an initial ends one.
+    static func startsSentence(after index: Int, in chars: [Character]) -> Bool {
+        var i = index
+        while i < chars.count, chars[i] == " " { i += 1 }
+        var word = ""
+        while i < chars.count, chars[i].isLetter { word.append(chars[i]); i += 1 }
+        return ["It", "The", "He", "She", "They", "This", "These", "In", "A", "An", "But", "However", "After", "When", "Its", "His", "Her"].contains(word)
     }
 
     /// Quotation marks that open or close nothing are taken off the ends ("" Orlando…" →

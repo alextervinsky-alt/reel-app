@@ -40,9 +40,23 @@ final class TrustTests: XCTestCase {
         XCTAssertFalse(TechSpecs.aboutOtherFilm("It was finished at 2048 x 858 and 1920p.", year: 2015, people: []), "not years")
     }
 
-    func testCareerPhrases() {
-        XCTAssertFalse(craft(["I had shot Every Secret Thing in New York using the RED Epic, which I liked very much."],
-                             year: 2014).shotOn.contains(.digital))
+    /// True facts that look like the mistakes, kept.
+    func testTrueSentencesThatLookLikeMistakes() {
+        XCTAssertFalse(TechSpecs.aboutOtherFilm("It was the first 65 mm feature since Far and Away (1992).", year: 2012, people: []))
+        XCTAssertFalse(TechSpecs.aboutOtherFilm("Filming began in 2002 on 35 mm and lasted twelve years.", year: 2014, people: []))
+        XCTAssertFalse(TechSpecs.aboutOtherFilm("He used Cooke lenses from 1965 for the interiors.", year: 2020, people: []))
+        XCTAssertFalse(TechSpecs.aboutOtherFilm("Fraser shot Frank Herbert's Dune on the Alexa LF.", year: 2021, people: ["Greig Fraser"], title: "Dune"),
+                       "the author of what this film is")
+        XCTAssertFalse(TechSpecs.aboutOtherFilm("Hong framed Bong Joon Ho's Parasite in 2.39:1.", year: 2019, people: ["Bong Joon-ho"]),
+                       "a name written without its hyphen")
+        XCTAssertTrue(craft(["They shot against blue screen on the ARRI Alexa 65."]).shotOn.contains(.digital))
+        XCTAssertTrue(craft(["Camera tests confirmed the ARRI Alexa 65 for the shoot."]).shotOn.contains(.digital))
+        XCTAssertTrue(craft(["In his work on Sicario Deakins shot with the ARRI Alexa XT."], dp: ["Roger Deakins"], title: "Sicario")
+            .shotOn.contains(.digital))
+        XCTAssertTrue(craft(["The camera work for the film was shot with Panavision anamorphic lenses."]).shotOn.contains(.anamorphic))
+        XCTAssertTrue(craft(["Principal photography with 35 mm film cameras finished in May."]).shotOn.contains(.film))
+        let anamorphic = craft(["They shot with Panavision anamorphic lenses (IMAX for key action sequences)."])
+        XCTAssertEqual(anamorphic.label(for: .anamorphic), "Anamorphic", "the brackets are a clause of their own")
     }
 
     // MARK: Decisions and tests
@@ -90,11 +104,25 @@ final class TrustTests: XCTestCase {
 
     // MARK: Did You Know?
 
+    func testAFolderThatSaysBeatsAGuessFromTheName() {
+        let found = FilePicture.of(FilenameParser.parse("Film.2019.1080p.WEB-DL.x265-GRP.mkv"),
+                                   ownFolder: FilenameParser.parse("Film (2019) 1080p DV HDR10"))
+        XCTAssertEqual(found.range, .dolbyVision)
+        XCTAssertEqual(found.basis, .folder)
+    }
+
+    func testCriticsFaultInMoreWords() {
+        let critics = [ReviewText(text: "Several critics found the second half sluggish and the story derivative.", rating: nil, isCritic: true)]
+        XCTAssertFalse((ReceptionAnalyzer.summarize(critics, sentiment: { _ in -0.6 })?.disliked ?? []).isEmpty)
+    }
+
     func testFactsAreWholeSentences() {
         let sentences = ReceptionAnalyzer.sentences(in: "Time Out listed Léon at No. 5 among action films. It was filmed in St. Louis and Paris.")
         XCTAssertEqual(sentences.count, 2)
         XCTAssertTrue(sentences[0].hasSuffix("action films."))
         XCTAssertTrue(FunFactExtractor.startsWithSomeone("He was inspired by a road sign he once saw in England."))
         XCTAssertFalse(FunFactExtractor.startsWithSomeone("Hesitant at first, the studio agreed to shoot in New York."))
+        XCTAssertTrue(FunFactExtractor.startsWithSomeone("He's said the ending came to him in a dream."))
+        XCTAssertEqual(ReceptionAnalyzer.sentences(in: "It was released in the U.S. It grossed $50 million.").count, 2)
     }
 }

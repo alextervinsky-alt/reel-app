@@ -162,7 +162,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // About another film ("his Super 16mm work on Carol", "Christopher Nolan's
                         // Oppenheimer", "in 1993, employing a Sony F900"): no gear is read from it,
                         // and it's kept only as how the cinematographer and the director met.
-                        let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames)
+                        let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title)
                         if !otherFilm, triggers.contains(where: { lowered.contains($0) }) {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
@@ -458,11 +458,16 @@ public struct TechSpecs: Equatable, Sendable {
         var whole: [String: Spec] = [:]
         for spec in specs where !spec.partial && whole[spec.id] == nil { whole[spec.id] = spec }
         let unique = specs.filter { seen.insert($0.id).inserted }.map { whole[$0.id] ?? $0 }
-        return unique.filter { spec in
-            let name = spec.name.lowercased()
-            return !unique.contains { other in
-                other.kind == spec.kind && other.name.count > spec.name.count && other.name.lowercased().contains(name)
+        func covers(_ other: Spec, _ spec: Spec) -> Bool {
+            other.kind == spec.kind && other.name.count > spec.name.count && other.name.lowercased().contains(spec.name.lowercased())
+        }
+        return unique.filter { spec in !unique.contains { covers($0, spec) } }.map { kept in
+            // "IMAX 70 mm" for the battle scenes and "IMAX" for the whole film: the whole film.
+            var spec = kept
+            if spec.partial, unique.contains(where: { covers(spec, $0) && !$0.partial }) {
+                spec.partial = false
             }
+            return spec
         }
     }
 
@@ -526,29 +531,35 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     static let clauseBreaks = [",", ";", ":", " — ", " – ", "(", ")", ". ", " but ", " while ", " whereas ", " although ", " though "]
-    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|against|tests?|tested|testing|versus|vs|compared|work on|had shot|had used|had filmed)\b|n't\b"#
+    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|tests? of|testing|tested|versus|vs|compared (?:to|with))\b|n't\b"#
 
     /// What the film was finished or shown on, said in the clause: not what it was shot on.
     static let finishing = #"\b(?:finish(?:ing|ed)?|film[- ]out|filmed out|prints?|printed|restor(?:ation|ed|e)|remaster(?:ed|ing)?|digital intermediate|projected|projection|exhibition|screenings?)\b"#
 
     /// Part of the film only: "for the flashbacks", "the battle scenes", "some sequences", "the rest".
     static let partOfFilm = try! NSRegularExpression(
-        pattern: #"\b(?:flashbacks?|inserts?|simulated|segments?|portions?|parts? of the film|the rest|a handful of|storylines?|also (?:shot|used|filmed)|(?:some|certain|several|a few|select(?:ed)?|key|battle|night|underwater|action|aerial|opening|closing|dream|archival|flashback)\s+(?:\w+\s+)?(?:scenes|sequences|shots))\b"#,
+        pattern: #"\b(?:flashbacks?|inserts?|simulated|segments?|portions?|parts? of the film|a handful of|storylines?|(?:some|certain|several|a few|select(?:ed)?|key|battle|night|underwater|action|aerial|opening|closing|dream|archival|flashback)\s+(?:\w+\s+)?(?:scenes|sequences|shots))\b"#,
         options: [.caseInsensitive])
 
     /// "…his Super 16mm work on Carol": gear named for someone's work on another film (not this one).
     static func workOnAnother(_ sentence: String, at range: Range<String.Index>, title: String?) -> Bool {
         guard let clause = clause(of: sentence, around: range),
               let work = clause.range(of: #"\bwork (?:on|for)\b"#, options: .regularExpression) else { return false }
+        let after = clause[work.upperBound...].trimmingCharacters(in: .whitespaces)
+        // "The camera work for the film", "his work on this picture".
+        if after.range(of: #"^(?:the|this) (?:film|picture|movie|production|project)\b"#, options: .regularExpression) != nil { return false }
         guard let title, !title.isEmpty else { return true }
-        return !clause[work.upperBound...].contains(title.lowercased())
+        // A title with a colon is often written without its subtitle ("Dune" for "Dune: Part One").
+        let short = title.split(separator: ":").first.map(String.init) ?? title
+        return !after.hasPrefix(title.lowercased()) && !after.hasPrefix(short.lowercased())
     }
 
     /// Whether the clause around `range` is about finishing, printing or showing the film.
     /// "Shot on 35mm and finished photochemically" still says what it was shot on.
     static func aboutFinishing(_ sentence: String, at range: Range<String.Index>) -> Bool {
         guard let clause = clause(of: sentence, around: range), clause.range(of: finishing, options: .regularExpression) != nil else { return false }
-        return clause.range(of: #"\b(?:shot|shoot|shooting|filmed|captured|photographed)\b"#, options: .regularExpression) == nil
+        return clause.range(of: #"\b(?:shot|shoot|shooting|filmed|filming|captured|photographed|photography|lensed)\b"#,
+                            options: .regularExpression) == nil
     }
 
     /// The clause the words at `range` are in, lowercased: from the break before them to the one
@@ -565,7 +576,7 @@ public struct TechSpecs: Equatable, Sendable {
             if let found = before.range(of: mark, options: .backwards), found.upperBound > clauseStart { clauseStart = found.upperBound }
         }
         var clauseEnd = after.endIndex
-        for mark in clauseBreaks where mark != "(" && mark != ")" {
+        for mark in clauseBreaks {
             if let found = after.range(of: mark), found.lowerBound < clauseEnd { clauseEnd = found.lowerBound }
         }
         return String(before[clauseStart...]) + String(chars[start..<end]) + String(after[..<clauseEnd])
@@ -574,22 +585,33 @@ public struct TechSpecs: Equatable, Sendable {
     /// Whether a sentence is about another film: one years apart from this one ("in 1993"), or one
     /// made by someone who didn't make this ("Christopher Nolan's Oppenheimer"). `people` are this
     /// film's cinematographers and directors, as written.
-    public static func aboutOtherFilm(_ sentence: String, year: Int?, people: [String]) -> Bool {
+    public static func aboutOtherFilm(_ sentence: String, year: Int?, people: [String], title: String? = nil) -> Bool {
         let range = NSRange(sentence.startIndex..., in: sentence)
         if let year {
-            let years = yearPattern.matches(in: sentence, range: range).compactMap { match in
-                Range(match.range(at: 1), in: sentence).flatMap { Int(sentence[$0]) }
+            for match in yearPattern.matches(in: sentence, range: range) {
+                guard let found = Range(match.range(at: 1), in: sentence), let said = Int(sentence[found]), said < year - 3 else { continue }
+                // An earlier year is the cinematographer's or director's earlier work, unless it
+                // dates something about this film: "the first 65 mm feature since Far and Away
+                // (1992)", "filming began in 2002", "lenses from 1965". (A later year is often an
+                // interview looking back, or a restoration, which the finishing rule handles.)
+                let before = sentence[..<found.lowerBound].suffix(45).lowercased()
+                if before.range(of: #"\b(?:since|from|began|begun|started|starting|beginning|filming|shooting|production|photography|vintage|dating|built|made in|manufactured)\b"#,
+                                options: .regularExpression) != nil { continue }
+                return true
             }
-            // An earlier year: the cinematographer's or director's earlier work. (A later one is
-            // often an interview looking back, or a restoration, which the finishing rule handles.)
-            if years.contains(where: { $0 < year - 3 }) { return true }
         }
-        // "Christopher Nolan's Oppenheimer": a person's film, by its title.
+        // "Christopher Nolan's Oppenheimer": a person's film, by its title (not "Frank Herbert's
+        // Dune" when reading Dune: the author of what this film is).
+        let own = (title ?? "").lowercased()
         for match in possessiveTitle.matches(in: sentence, range: range) {
-            guard let found = Range(match.range(at: 1), in: sentence) else { continue }
+            guard let found = Range(match.range(at: 1), in: sentence), let named = Range(match.range(at: 2), in: sentence) else { continue }
             let surname = sentence[found].lowercased()
             if companies.contains(surname) { continue }
-            if !people.contains(where: { $0.split(separator: " ").contains { $0.lowercased() == surname } }) { return true }
+            if !own.isEmpty, own.hasPrefix(sentence[named].lowercased()) { continue }
+            let known = people.contains { person in
+                person.lowercased().split(whereSeparator: { $0 == " " || $0 == "-" }).contains { $0 == surname }
+            }
+            if !known { return true }
         }
         return false
     }
@@ -601,7 +623,7 @@ public struct TechSpecs: Equatable, Sendable {
                                          "angenieux", "angénieux", "leica", "arri", "netflix", "warner", "universal", "paramount",
                                          "disney", "pictures", "studios", "films", "entertainment", "imax", "dolby", "blackmagic"]
     /// A first and last name, possessive, then a capitalised word: "Christopher Nolan's Oppenheimer".
-    static let possessiveTitle = try! NSRegularExpression(pattern: #"\b[A-Z][a-z]+(?: [A-Z][a-z]+)? ([A-Z][a-z\-]+)['’]s [A-Z][\w\-]+"#)
+    static let possessiveTitle = try! NSRegularExpression(pattern: #"\b[A-Z][a-z]+(?: [A-Z][a-z]+)? ([A-Z][a-z\-]+)['’]s ([A-Z][\w\-]+)"#)
     static let deniedAfter = #"\b(?:was|were|is|are|be)\s*(?:not|n't|never)\b|\bwasn't\b|\bweren't\b"#
 
     /// The words matched, tidied: single spaces, "35mm" and "35-millimetre" as "35 mm", no
