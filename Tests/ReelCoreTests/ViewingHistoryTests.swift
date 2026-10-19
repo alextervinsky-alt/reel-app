@@ -62,6 +62,21 @@ final class ViewingHistoryTests: XCTestCase {
         XCTAssertNil(json?["watchedOn"])
     }
 
+    /// The one date an older Reel can change: if it isn't among the viewings, it's added.
+    func testDateFromAnOlderReelIsKept() throws {
+        let record = try decode(#"{"favorite":false,"note":"","watched":true,"watchedOn":"2026-02-01T21:00:00Z","watchlist":false,"viewings":["2025-01-01T21:00:00Z"]}"#)
+        XCTAssertEqual(record.viewings.count, 2)
+        XCTAssertEqual(record.watchedOn, ISO8601DateFormatter().date(from: "2026-02-01T21:00:00Z"))
+    }
+
+    func testOneViewingPerDay() {
+        XCTAssertEqual(PersonalRecord.tidy([date(2026, 1, 1, hour: 23), date(2026, 1, 1, hour: 9), date(2025, 1, 1)], calendar: calendar),
+                       [date(2025, 1, 1), date(2026, 1, 1, hour: 9)])
+        let a = PersonalRecord(watched: true, watchedOn: date(2026, 1, 1, hour: 9))
+        let b = PersonalRecord(watched: true, watchedOn: date(2026, 1, 1, hour: 22))
+        XCTAssertEqual(a.merged(with: b).viewings.count, 1, "two copies of one evening are one viewing")
+    }
+
     // MARK: Viewing actions
 
     func testWatchingAgainAddsAViewing() {

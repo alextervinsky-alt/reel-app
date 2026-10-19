@@ -239,6 +239,10 @@ final class AppModel {
     /// Last built items, reused when nothing about a film changed (building a search index costs time).
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
     @ObservationIgnored var scanning: Set<String> = []
+    /// Drives to read again when their current scan ends (a reconnect or ⌘R arrived meanwhile).
+    @ObservationIgnored var rescanWanted: Set<String> = []
+    /// Removals you confirmed, by drive: the next complete scan may remove up to this many films.
+    @ObservationIgnored var removalConfirmed: [String: Int] = [:]
     /// Counts each time a drive is connected, so a scan can tell its drive was disconnected
     /// and connected again while it read (its listing is then not trusted).
     @ObservationIgnored var mountCount: [String: Int] = [:]

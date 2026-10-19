@@ -275,9 +275,11 @@ extension AppModel {
     /// "Yes, I finished it": a viewing today (another one for a film watched before), without
     /// asking again (the open sheet asks for stars).
     func markFinished(_ prompt: RatingPrompt) {
-        var r = personal.stored(prompt.id)
+        // The film may have been identified since the prompt opened: its notes are under its key now.
+        let key = film(id: prompt.filmID)?.personalKey ?? prompt.id
+        var r = personal.stored(key)
         r.addViewing(Date())
-        setRecord(r, forKey: prompt.id)
+        setRecord(r, forKey: key)
     }
 
     // MARK: - Timings

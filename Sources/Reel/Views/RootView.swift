@@ -153,8 +153,8 @@ struct RootView: View {
                 model.pendingRemoval.map { "\($0.count) films are no longer on \($0.driveName)" } ?? "",
                 isPresented: Binding(get: { model.pendingRemoval != nil }, set: { if !$0 { model.keepPendingRemoval() } }),
                 presenting: model.pendingRemoval
-            ) { _ in
-                Button("Remove Them from Reel", role: .destructive) { model.confirmPendingRemoval() }
+            ) { pending in
+                Button("Remove Them from Reel", role: .destructive) { model.confirmPendingRemoval(pending) }
                 Button("Keep Them", role: .cancel) { model.keepPendingRemoval() }
             } message: { pending in
                 Text("Reel read all of \(pending.driveName) but didn't find them. If you deleted them, remove them. If the drive "

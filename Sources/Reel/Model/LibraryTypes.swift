@@ -50,18 +50,16 @@ struct DiscoverRoute: Hashable {
     var mood: Mood? = nil
 }
 
-/// One list of the Lists hub (IMDb Top 100 of a year, an award…).
 /// A complete scan that would remove many films from a drive, kept until you say they're gone.
 struct PendingRemoval: Identifiable {
     let driveID: String
     let driveName: String
     let count: Int
-    /// What the scan found; applied as it is when you confirm.
-    let scan: [ScannedFile]
 
     var id: String { driveID }
 }
 
+/// One list of the Lists hub (IMDb Top 100 of a year, an award…).
 struct ListRoute: Hashable {
     let kind: FilmListKind
 }

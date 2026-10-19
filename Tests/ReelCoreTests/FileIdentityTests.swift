@@ -53,21 +53,36 @@ final class FileIdentityTests: XCTestCase {
         XCTAssertFalse(FileIdentity.hasSize("Ends with bar|"))
     }
 
+    func testReplacedFileOfAnotherSizeCarriesItsKey() {
+        let before = [file("Heat/title_t00.mkv", size: 3_000), file("Ran/Ran (1985).mkv", size: 2_000)]
+        let scan = [ScannedFile(relativePath: "Heat/title_t00.mkv", fileName: "title_t00.mkv", size: 3_500, modified: nil),
+                    ScannedFile(relativePath: "Ran/Ran (1985).mkv", fileName: "Ran (1985).mkv", size: 2_000, modified: nil)]
+        let after = LibraryMerge.apply(scan: scan, driveID: "Main", to: before, now: Date())
+        let moves = LibraryMerge.resized(before: before, after: after)
+        XCTAssertEqual(moves.map(\.from), ["title_t00.mkv|3000"])
+        XCTAssertEqual(moves.map(\.to), ["title_t00.mkv|3500"])
+    }
+
+    func testSizesByName() {
+        let sizes = FileIdentity.sizesByName([file("A/x.mkv", size: 1), file("B/x.mkv", size: 2), file("C/x.mkv", size: 1, drive: "Backup")])
+        XCTAssertEqual(sizes, ["x.mkv": [1, 2]])
+    }
+
     // MARK: Fixes
 
     func testFixSavedWithSizeAppliesToThatFileOnly() {
         let heat = file("Heat/title_t00.mkv", size: 3_000)
         let ran = file("Ran/title_t00.mkv", size: 2_000)
         let fixes = [heat.fileKey: 949]
-        XCTAssertEqual(FileIdentity.fix(for: heat, corrections: fixes, library: [heat, ran]), .film(949))
-        XCTAssertEqual(FileIdentity.fix(for: ran, corrections: fixes, library: [heat, ran]), FileIdentity.Fix.none)
+        XCTAssertEqual(FileIdentity.fix(for: heat, corrections: fixes, sizes: FileIdentity.sizesByName([heat, ran])), .film(949))
+        XCTAssertEqual(FileIdentity.fix(for: ran, corrections: fixes, sizes: FileIdentity.sizesByName([heat, ran])), FileIdentity.Fix.none)
     }
 
     func testOldFixForOneFileStillApplies() {
         let main = file("Heat (1995).mkv", size: 30_000)
         let backup = file("Heat (1995).mkv", size: 30_000, drive: "Backup")
         let fixes = ["Heat (1995).mkv": 949]
-        XCTAssertEqual(FileIdentity.fix(for: main, corrections: fixes, library: [main, backup]), .film(949),
+        XCTAssertEqual(FileIdentity.fix(for: main, corrections: fixes, sizes: FileIdentity.sizesByName([main, backup])), .film(949),
                        "one size (a file and its copy): the old fix can only mean this file")
     }
 
@@ -75,14 +90,14 @@ final class FileIdentityTests: XCTestCase {
         let heat = file("Heat/title_t00.mkv", size: 3_000)
         let ran = file("Ran/title_t00.mkv", size: 2_000)
         let fixes = ["title_t00.mkv": 949]
-        XCTAssertEqual(FileIdentity.fix(for: heat, corrections: fixes, library: [heat, ran]), .ambiguous)
-        XCTAssertEqual(FileIdentity.fix(for: ran, corrections: fixes, library: [heat, ran]), .ambiguous)
+        XCTAssertEqual(FileIdentity.fix(for: heat, corrections: fixes, sizes: FileIdentity.sizesByName([heat, ran])), .ambiguous)
+        XCTAssertEqual(FileIdentity.fix(for: ran, corrections: fixes, sizes: FileIdentity.sizesByName([heat, ran])), .ambiguous)
     }
 
     func testFixWithSizeWinsOverOldOne() {
         let heat = file("Heat/title_t00.mkv", size: 3_000)
         let fixes = ["title_t00.mkv": 1, heat.fileKey: 949]
-        XCTAssertEqual(FileIdentity.fix(for: heat, corrections: fixes, library: [heat]), .film(949))
+        XCTAssertEqual(FileIdentity.fix(for: heat, corrections: fixes, sizes: FileIdentity.sizesByName([heat])), .film(949))
     }
 
     // MARK: Upgrading what was saved before

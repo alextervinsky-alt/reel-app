@@ -477,10 +477,18 @@ public enum FileIdentity {
         case ambiguous
     }
 
-    public static func fix(for file: FilmEntry, corrections: [String: Int], library films: [FilmEntry]) -> Fix {
+    /// - Parameter sizes: the sizes of the library's files by name (`sizesByName`), worked out once.
+    public static func fix(for file: FilmEntry, corrections: [String: Int], sizes: [String: Set<Int64>]) -> Fix {
         if let id = corrections[file.fileKey] { return .film(id) }
         guard let id = corrections[file.fileName] else { return .none }
-        return sizes(of: file.fileName, in: films).count <= 1 ? .film(id) : .ambiguous
+        return (sizes[file.fileName]?.count ?? 0) <= 1 ? .film(id) : .ambiguous
+    }
+
+    /// Each file name in the library with the sizes it has.
+    public static func sizesByName(_ films: [FilmEntry]) -> [String: Set<Int64>] {
+        var result: [String: Set<Int64>] = [:]
+        for film in films { result[film.fileName, default: []].insert(film.size) }
+        return result
     }
 
     /// What `upgrade` changed and left alone.
@@ -504,8 +512,9 @@ public enum FileIdentity {
     public static func upgrade(corrections: [String: Int], noteKeys: [String], library films: [FilmEntry]) -> Upgrade {
         var result = corrections
         var ambiguous = Set<String>()
+        let byName = sizesByName(films)
         for (name, id) in corrections where !hasSize(name) {
-            let found = sizes(of: name, in: films)
+            let found = byName[name] ?? []
             if found.count > 1 { ambiguous.insert(name) }
             guard found.count == 1, let size = found.first else { continue }
             let newKey = key(name: name, size: size)
@@ -517,7 +526,7 @@ public enum FileIdentity {
         for old in noteKeys where old.hasPrefix(unidentifiedPrefix) {
             let name = String(old.dropFirst(unidentifiedPrefix.count))
             guard !hasSize(name) else { continue }
-            let found = sizes(of: name, in: films)
+            let found = byName[name] ?? []
             if found.count > 1 { ambiguous.insert(name) }
             guard found.count == 1, let size = found.first else { continue }
             notes.append((old, unidentifiedPrefix + key(name: name, size: size)))
@@ -525,9 +534,6 @@ public enum FileIdentity {
         return Upgrade(corrections: result, notes: notes.sorted { $0.from < $1.from }, ambiguous: ambiguous.sorted())
     }
 
-    private static func sizes(of name: String, in films: [FilmEntry]) -> Set<Int64> {
-        Set(films.filter { $0.fileName == name }.map(\.size))
-    }
 }
 
 public struct LibraryFile: Codable, Equatable, Sendable {
@@ -560,6 +566,18 @@ public enum LibraryMerge {
     /// moved to another folder).
     public static func unseen(scan: [ScannedFile], driveID: String, in existing: [FilmEntry]) -> [FilmEntry] {
         merge(scan: scan, driveID: driveID, to: existing, now: Date()).unseen
+    }
+
+    /// Files that are still at the same place but changed size (replaced by a new encode, say), as
+    /// their old and new file keys: what was saved under the old key belongs to the new one.
+    public static func resized(before: [FilmEntry], after: [FilmEntry]) -> [(from: String, to: String)] {
+        var old: [String: String] = [:]
+        for film in before { old[film.id] = film.fileKey }
+        var seen = Set<String>()
+        return after.compactMap { film in
+            guard let from = old[film.id], from != film.fileKey, seen.insert(from + "\n" + film.fileKey).inserted else { return nil }
+            return (from, film.fileKey)
+        }
     }
 
     private static func merge(scan: [ScannedFile], driveID: String, to existing: [FilmEntry], now: Date)
@@ -697,9 +715,13 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
         return result
     }
 
-    /// Oldest first, each moment once.
-    static func tidy(_ dates: [Date]) -> [Date] {
-        Array(Set(dates)).sorted()
+    /// Oldest first, one per day (the first that day).
+    static func tidy(_ dates: [Date], calendar: Calendar = .current) -> [Date] {
+        var result: [Date] = []
+        for date in dates.sorted() where !result.contains(where: { calendar.isDate($0, inSameDayAs: date) }) {
+            result.append(date)
+        }
+        return result
     }
 
     // Saved as before plus the viewings: "watchedOn" (the last viewing) stays, so Reel 1.8.7
@@ -715,10 +737,12 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
         watchlist = try c.decodeIfPresent(Bool.self, forKey: .watchlist) ?? false
         rating = try c.decodeIfPresent(Int.self, forKey: .rating)
         note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        let last = try c.decodeIfPresent(Date.self, forKey: .watchedOn)
         if let saved = try c.decodeIfPresent([Date].self, forKey: .viewings) {
-            viewings = Self.tidy(saved)
+            // A date changed by an older Reel (which only knows "watchedOn") is kept too.
+            viewings = Self.tidy(saved + (last.map { [$0] } ?? []))
         } else {
-            viewings = try c.decodeIfPresent(Date.self, forKey: .watchedOn).map { [$0] } ?? []
+            viewings = last.map { [$0] } ?? []
         }
     }
 
