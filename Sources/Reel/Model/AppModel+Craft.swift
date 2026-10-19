@@ -32,7 +32,7 @@ extension AppModel {
             // Films whose info and Wikipedia facts are in (the article's title comes with the facts).
             var seen = Set<Int>()
             let due = films.filter { film in
-                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil, film.craft?.isStale() ?? true else { return false }
+                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil, needsReading(film) else { return false }
                 return seen.insert(id).inserted
             }
             if craftPending != due.count + read.count { craftPending = due.count + read.count }
@@ -40,12 +40,15 @@ extension AppModel {
             let batch = Array(due.prefix(2))
             guard !batch.isEmpty else { return }
             for film in batch { if let id = film.tmdb?.id { attempted.insert(id) } }
+            // Their collections first (cached for two weeks), so a sequel's articles aren't read.
+            for film in batch { if let details = film.tmdb { await loadCollection(of: details) } }
             let results = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
                 for film in batch {
                     guard let details = film.tmdb else { continue }
                     let title = film.funFacts?.articleTitle
                     let colour = film.funFacts?.quick?.colour
-                    group.addTask { (details.id, await CraftReader.read(details, articleTitle: title, colour: colour)) }
+                    let others = otherTitles(of: details)
+                    group.addTask { (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others)) }
                 }
                 var all: [(Int, CraftIndex?)] = []
                 for await result in group { all.append(result) }
@@ -72,6 +75,26 @@ extension AppModel {
             // A short pause between batches, whatever the size of the library.
             try? await Task.sleep(for: .seconds(2))
         }
+    }
+
+    /// Not read yet, read long ago or by older rules, or read before a sequel's articles were told
+    /// apart from its own (a film of a collection, read before discovery 2).
+    func needsReading(_ film: FilmEntry) -> Bool {
+        guard let craft = film.craft else { return true }
+        return craft.isStale() || (craft.discovery < CraftIndex.currentDiscovery && film.tmdb?.collection != nil)
+    }
+
+    /// Fetches the film's collection from TMDB when it isn't kept yet (two weeks; see `ListsStore`).
+    func loadCollection(of details: TMDBMovieDetails) async {
+        guard let collection = details.collection, hasToken else { return }
+        _ = await lists.loadFranchise(collection.id, using: TMDBClient(token: token))
+    }
+
+    /// The other films of its collection, whose articles aren't read for it: The Matrix
+    /// Resurrections' for The Matrix.
+    func otherTitles(of details: TMDBMovieDetails) -> [String] {
+        guard let collection = details.collection, let set = lists.sets[FilmSet.id(.franchise, collection.id)] else { return [] }
+        return set.films.filter { $0.id != details.id }.map(\.title)
     }
 
     /// How much of the library Shot on covers (Settings › Performance): live-action films, each

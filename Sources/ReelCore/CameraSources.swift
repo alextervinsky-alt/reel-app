@@ -129,25 +129,42 @@ public enum CameraSources {
         return !surnames.contains { heading.contains($0) }
     }
 
-    /// Search results whose title (or address) names the film, each once, at most `limit`.
+    /// Search results whose title (or address) names the film, and no other film of its collection,
+    /// each once, at most `limit`.
     static func about(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
-                      limit: Int) -> [(url: URL, site: String, title: String?)] {
+                      limit: Int, otherTitles: [String] = []) -> [(url: URL, site: String, title: String?)] {
         var found: [(url: URL, site: String, title: String?)] = []
-        for hit in hits where isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link) {
+        for hit in hits where isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link)
+            && !namesOtherFilm(hit.title, film: filmTitle, otherTitles: otherTitles) {
             guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
             found.append((link, site, HTMLText.plain(hit.title)))
         }
         return Array(found.prefix(limit))
     }
 
+    /// Whether a search result's title names another film of the collection ("The Matrix
+    /// Resurrections" when reading about The Matrix). A title that's part of this film's own
+    /// ("Sicario" for "Sicario: Day of the Soldado") doesn't count.
+    public static func namesOtherFilm(_ heading: String, film: String, otherTitles: [String]) -> Bool {
+        let own = " " + TitleSimilarity.normalize(film) + " "
+        let padded = " " + TitleSimilarity.normalize(HTMLText.plain(heading)) + " "
+        return otherTitles.contains { other in
+            let name = TitleSimilarity.normalize(other)
+            return !name.isEmpty && !own.contains(" " + name + " ") && padded.contains(" " + name + " ")
+        }
+    }
+
     /// Whether a page found by searching for the title is about this film and not another of the
-    /// same name: it names the film's cinematographer or director (by surname) or the year it came out.
-    public static func namesFilm(_ paragraphs: [String], people: [String], year: Int?) -> Bool {
+    /// same name: it names the film's cinematographer (by surname). Not the director, or the year
+    /// alone: a sequel's article names both ("The Matrix Resurrections" names the Wachowskis and
+    /// 1999). Only when the cinematographer isn't known does the year, or one either side, do.
+    public static func namesFilm(_ paragraphs: [String], cinematographers: [String], year: Int?) -> Bool {
         let text = paragraphs.joined(separator: "\n")
-        let surnames = people.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
-        for surname in surnames where text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: surname) + "\\b",
-                                                  options: .regularExpression) != nil {
-            return true
+        let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
+        if !surnames.isEmpty {
+            return surnames.contains { surname in
+                text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: surname) + "\\b", options: .regularExpression) != nil
+            }
         }
         // Its year, or the one either side (a festival the year before, a release the year after).
         if let year, ((year - 1)...(year + 1)).contains(where: { text.range(of: "\\b\($0)\\b", options: .regularExpression) != nil }) {
@@ -279,13 +296,14 @@ public struct CameraSourcesClient: Sendable {
     /// At most three pages at a time, so a film page never floods anyone.
     static let gate = RequestGate(limit: 3)
 
-    /// - Parameters: `directors` and `year` tell a magazine's article about this film from one about
-    ///   another film of the same name (a remake, "Heat" and "Heat Wave"): see `CameraSources.namesFilm`.
-    public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], directors: [String] = [],
-                     year: Int? = nil) async -> CameraReading {
+    /// - Parameters: `year` and `otherTitles` (the other films of its collection) tell a magazine's
+    ///   article about this film from one about another (a remake, a sequel, "Heat" and "Heat Wave"):
+    ///   see `CameraSources.namesFilm` and `CameraSources.namesOtherFilm`.
+    public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], year: Int? = nil,
+                     otherTitles: [String] = []) async -> CameraReading {
         async let cited = citedLinks(articleTitle: articleTitle, cinematographers: cinematographers)
-        async let asc = ascArticles(filmTitle: filmTitle)
-        async let british = britishCinematographer(filmTitle: filmTitle)
+        async let asc = ascArticles(filmTitle: filmTitle, otherTitles: otherTitles)
+        async let british = britishCinematographer(filmTitle: filmTitle, otherTitles: otherTitles)
         async let stories = storyPages(filmTitle: filmTitle, cinematographers: cinematographers)
         async let person = cinematographer(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
@@ -315,7 +333,7 @@ public struct CameraSourcesClient: Sendable {
         let storiesRead = await stories
         // Another film's article (same title) isn't read, nor offered as a link.
         let otherFilm = Set(pages.compactMap { $0.1 }.filter {
-            searched.contains($0.url) && !CameraSources.namesFilm($0.paragraphs, people: cinematographers + directors, year: year)
+            searched.contains($0.url) && !CameraSources.namesFilm($0.paragraphs, cinematographers: cinematographers, year: year)
         }.map(\.url))
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }
@@ -353,7 +371,7 @@ public struct CameraSourcesClient: Sendable {
     }
 
     /// American Cinematographer's articles about the film (its site has a free WordPress API).
-    func ascArticles(filmTitle: String) async -> [(url: URL, site: String, title: String?)] {
+    func ascArticles(filmTitle: String, otherTitles: [String] = []) async -> [(url: URL, site: String, title: String?)] {
         struct Hit: Decodable {
             let title: String
             let url: String
@@ -367,11 +385,11 @@ public struct CameraSourcesClient: Sendable {
         guard let url = components.url, let data = await fetch(url, accept: "application/json"),
               let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
         return CameraSources.about(filmTitle, in: hits.filter { ["article", "post", "news"].contains($0.subtype ?? "") }
-            .map { (title: $0.title, link: $0.url) }, site: "American Cinematographer", limit: 3)
+            .map { (title: $0.title, link: $0.url) }, site: "American Cinematographer", limit: 3, otherTitles: otherTitles)
     }
 
     /// British Cinematographer's articles about the film (its site has a free WordPress API).
-    func britishCinematographer(filmTitle: String) async -> [(url: URL, site: String, title: String?)] {
+    func britishCinematographer(filmTitle: String, otherTitles: [String] = []) async -> [(url: URL, site: String, title: String?)] {
         struct Hit: Decodable {
             struct Rendered: Decodable { let rendered: String }
             let title: Rendered
@@ -384,7 +402,7 @@ public struct CameraSourcesClient: Sendable {
         guard let url = components.url, let data = await fetch(url, accept: "application/json"),
               let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
         return CameraSources.about(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
-                                   site: "British Cinematographer", limit: 2)
+                                   site: "British Cinematographer", limit: 2, otherTitles: otherTitles)
     }
 
     /// Kodak's stories of films shot on its stock and No Film School's pieces on a film's

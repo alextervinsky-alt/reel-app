@@ -241,12 +241,14 @@ enum ScreenRenderer {
         // Their Wikipedia facts first: they say which article is the film's.
         for film in sample { await model.loadFunFacts(for: film) }
         let films = sample.map { model.film(id: $0.id) ?? $0 }
+        for film in films { if let details = film.tmdb { await model.loadCollection(of: details) } }
         let read = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
             for film in films {
                 guard let details = film.tmdb else { continue }
+                let others = model.otherTitles(of: details)
                 group.addTask {
                     (details.id, await CraftReader.read(details, articleTitle: film.funFacts?.articleTitle,
-                                                        colour: film.funFacts?.quick?.colour))
+                                                        colour: film.funFacts?.quick?.colour, otherTitles: others))
                 }
             }
             var found: [Int: CraftIndex] = [:]

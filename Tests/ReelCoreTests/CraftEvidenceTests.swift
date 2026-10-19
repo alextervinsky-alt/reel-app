@@ -131,13 +131,27 @@ final class CraftEvidenceTests: XCTestCase {
 
     func testAMagazineArticleMustBeAboutThisFilm() {
         let heatWave = ["Our cover story follows a summer heat wave shot by Jane Doe on the Sony Venice in 2019."]
-        XCTAssertFalse(CameraSources.namesFilm(heatWave, people: ["Dante Spinotti", "Michael Mann"], year: 1995))
+        XCTAssertFalse(CameraSources.namesFilm(heatWave, cinematographers: ["Dante Spinotti"], year: 1995))
         let heat = ["Spinotti lit the downtown shootout with practicals and shot on 35 mm."]
-        XCTAssertTrue(CameraSources.namesFilm(heat, people: ["Dante Spinotti", "Michael Mann"], year: 1995))
-        XCTAssertTrue(CameraSources.namesFilm(["The 2024 release was shot on 35 mm film."], people: [], year: 2024))
-        XCTAssertTrue(CameraSources.namesFilm(["It premiered in 2023 at Venice."], people: [], year: 2024), "a festival the year before")
-        XCTAssertFalse(CameraSources.namesFilm(["The 1922 silent classic was shot on orthochromatic film."], people: ["Jarin Blaschke"], year: 2024),
+        XCTAssertTrue(CameraSources.namesFilm(heat, cinematographers: ["Dante Spinotti"], year: 1995))
+        XCTAssertTrue(CameraSources.namesFilm(["The 2024 release was shot on 35 mm film."], cinematographers: [], year: 2024))
+        XCTAssertTrue(CameraSources.namesFilm(["It premiered in 2023 at Venice."], cinematographers: [], year: 2024), "a festival the year before")
+        XCTAssertFalse(CameraSources.namesFilm(["The 1922 silent classic was shot on orthochromatic film."], cinematographers: ["Jarin Blaschke"], year: 2024),
                        "a remake isn't the original")
+    }
+
+    /// A sequel's article names the director and the original's year: not enough.
+    func testASequelIsNotTheFilm() {
+        let resurrections = ["Lana Wachowski returned to the world she created in 1999, with cinematographers Daniele Massaccesi and John Toll shooting on RED cameras."]
+        XCTAssertFalse(CameraSources.namesFilm(resurrections, cinematographers: ["Bill Pope"], year: 1999))
+        let others = ["The Matrix Reloaded", "The Matrix Revolutions", "The Matrix Resurrections"]
+        XCTAssertTrue(CameraSources.namesOtherFilm("The Matrix Resurrections: Back to the Source", film: "The Matrix", otherTitles: others))
+        XCTAssertFalse(CameraSources.namesOtherFilm("Bill Pope, ASC: Revisiting The Matrix", film: "The Matrix", otherTitles: others))
+        XCTAssertFalse(CameraSources.namesOtherFilm("Dariusz Wolski / Sicario: Day of the Soldado", film: "Sicario: Day of the Soldado",
+                                                    otherTitles: ["Sicario"]), "the first film's title is part of this one's")
+        XCTAssertTrue(CameraSources.namesOtherFilm("Expanding the View for Dune: Part Two", film: "Dune", otherTitles: ["Dune: Part Two"]))
+        let hits = [(title: "The Matrix Resurrections: Back to the Source", link: "https://theasc.com/article/matrix-resurrections/")]
+        XCTAssertTrue(CameraSources.about("The Matrix", in: hits, site: "AC", limit: 3, otherTitles: others).isEmpty)
     }
 
     // MARK: One reading

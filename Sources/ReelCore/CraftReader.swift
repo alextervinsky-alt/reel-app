@@ -28,10 +28,12 @@ public enum CraftReader {
 
     /// Fetches the film's article and what's written about how it was shot, and reads them. Nil when
     /// nothing could be reached (offline): tried again later.
-    public static func read(_ details: TMDBMovieDetails, articleTitle: String?, colour: [String]?) async -> CraftIndex? {
+    /// `otherTitles`: the other films of its collection, so their articles aren't read for it.
+    public static func read(_ details: TMDBMovieDetails, articleTitle: String?, colour: [String]?,
+                            otherTitles: [String] = []) async -> CraftIndex? {
         async let fetched = CameraSourcesClient().read(articleTitle: articleTitle, filmTitle: details.title,
                                                        cinematographers: details.cinematographers,
-                                                       directors: details.directors, year: details.year)
+                                                       year: details.year, otherTitles: otherTitles)
         var reached = articleTitle == nil
         var article: FilmArticle?
         if let articleTitle {
