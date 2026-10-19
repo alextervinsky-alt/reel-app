@@ -115,7 +115,7 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("He photographed it with Arricam LT cameras in 3-perf 35mm on Kodak Vision3 500T 5219."), [.film])
         XCTAssertEqual(tags("So Richardson decided to shoot on Kodak Vision3 35 mm with Panavision cameras."), [.film])
         XCTAssertEqual(tags("It was filmed on Super 16mm with a Red Epic."), [.film, .digital])
-        XCTAssertEqual(tags("Two cameras roll, one capturing the scene in anamorphic 35mm, the other recording the action in 65mm."), [.film])
+        XCTAssertEqual(tags("Two cameras roll, one capturing the scene in anamorphic 35mm, the other recording the action in 65mm."), [.film, .anamorphic], "anamorphic 35mm is anamorphic too")
         XCTAssertEqual(tags("Van Hoytema shot it on 35 mm film in the Panavision anamorphic format and IMAX 70 mm."), [.film, .anamorphic, .imax])
     }
 
