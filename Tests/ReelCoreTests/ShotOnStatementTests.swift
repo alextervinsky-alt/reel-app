@@ -50,7 +50,6 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("Let’s say on movies in general, when you do a wide shot in anamorphic, maybe you’ll use a 40mm or a 35mm."), [])
         XCTAssertEqual(tags("He is behind the TV series, which is made on the ARRI Alexa digital camera, and was keen to use it again."), [])
         XCTAssertEqual(tags("I love seeing closeups of texts and books, especially when shot on film."), [])
-        XCTAssertEqual(tags("A beautifully shot film on film, and a triumph."), [], "praise, as a critic writes it")
         XCTAssertTrue(tags("Deakins used the ARRI Alexa XT for his work on Sicario.", dp: ["Roger Deakins"], title: "Sicario").contains(.digital),
                       "his work on this film counts")
     }
@@ -85,6 +84,17 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("Fraser shot “Dune: Part One” on the ARRI Alexa LF.", title: "Dune", otherTitles: ["Dune: Part Two"]), [.digital])
         XCTAssertEqual(tags("Fraser shot Part Two on the ARRI Alexa 65.", title: "Dune", otherTitles: ["Dune: Part Two"]), [])
         XCTAssertEqual(tags("I love shooting on 35mm film."), [], "an opinion, with a verb")
+    }
+
+    /// Found by the live check of films on record.
+    func testFoundLive() {
+        XCTAssertEqual(tags("The film was shot primarily in the anamorphic format on 35 mm film, with key sequences filmed on 65 mm."),
+                       [.film, .anamorphic])
+        XCTAssertEqual(tags("Nolan: We shot the film with a mixture of mostly the predominant bulk of the film is anamorphic 35mm, the best format by far."), [.film, .anamorphic])
+        XCTAssertEqual(tags("They also talked about what kind of cameras he shot with (IMAX, anamorphic 35mm, 65mm, and VistaVision)."), [],
+                       "a list of what an interview covered")
+        XCTAssertFalse(tags("Though Scott initially wanted to film in anamorphic, the Super 35 format was chosen.").contains(.anamorphic))
+        XCTAssertEqual(tags("A beautifully shot film on film, and a triumph."), [])
     }
 
     // MARK: Lenses and sensors

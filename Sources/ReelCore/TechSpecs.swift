@@ -564,7 +564,7 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     static let clauseBreaks = [",", ";", ":", " — ", " – ", "(", ")", ". ", " but ", " while ", " whereas ", " although ", " though "]
-    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|tests? of|testing|tested|versus|vs|compared (?:to|with)|lack(?:ed)? of|shortage of|short of|too (?:many|few) [a-z ]{0,40}enough|unable to (?:get|find|source)|couldn't (?:get|find|source)|prefer(?:s|red)?\s+(?!to\b)[^,;]{1,60}?\s+to|(?:better |best )?suited to|inspired by|influenced by|reminiscent of|evocative of|akin to|similar to)\b|n't\b"#
+    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|(?:initially|originally|at first) (?:wanted|planned|intended|hoped)|tests? of|testing|tested|versus|vs|compared (?:to|with)|lack(?:ed)? of|shortage of|short of|too (?:many|few) [a-z ]{0,40}enough|unable to (?:get|find|source)|couldn't (?:get|find|source)|prefer(?:s|red)?\s+(?!to\b)[^,;]{1,60}?\s+to|(?:better |best )?suited to|inspired by|influenced by|reminiscent of|evocative of|akin to|similar to)\b|n't\b"#
 
     /// What the film was finished or shown on, said in the clause: not what it was shot on.
     static let finishing = #"\b(?:finish(?:ing|ed)?|film[- ]?out|filmed out|dcp|deliverables?|final outputs?|prints?|printed|restor(?:ation|ed|e)|remaster(?:ed|ing)?|digital intermediate|projected|projection|exhibition|screenings?)\b"#
@@ -813,7 +813,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".
@@ -1008,6 +1008,9 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.lens, #"\bIronglass\b"#),
         Rule(.lens, #"\bLensbaby\b"#),
         Rule(.lens, #"\banamorphic\s+(?:lenses|lens|glass|optics)\b"#, name: "Anamorphic"),
+        // "shot primarily in the anamorphic format", "anamorphic 35mm", "shot in anamorphic".
+        Rule(.lens, #"\banamorphic\s+(?:format|35\s?mm|widescreen|process|photography)\b|\b(?:shot|filmed|photographed|film|shoot|shooting)\s+(?:\w+\s+){0,2}in\s+anamorphic\b(?!\s+(?:lenses|lens|glass|optics|format))"#,
+             name: "Anamorphic"),
         Rule(.lens, #"\bspherical\s+(?:lenses|lens)\b"#, name: "Spherical"),
         Rule(.lens, #"\bvintage\s+(?:[\w-]+\s+){0,2}(?:lenses|lens)\b"#),
         Rule(.lens, #"\b(?:wide-angle|fisheye|fish-eye|tilt-shift|macro|probe|periscope|swing-and-tilt|zoom)\s+(?:lenses|lens)\b"#),

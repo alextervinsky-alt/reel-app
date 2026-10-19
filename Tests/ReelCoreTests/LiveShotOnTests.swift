@@ -90,7 +90,7 @@ final class LiveShotOnTests: XCTestCase {
                 missing.append(tag.title)
                 // What named it without saying it was shot that way.
                 for spec in specs.specs where !spec.capture && CraftIndex.shotOn(spec).contains(tag) {
-                    say("Shot on not counted: \(known.title) \(tag.title): \(spec.source ?? "Wikipedia"): \((spec.evidence ?? spec.name).prefix(200))")
+                    say("Shot on not counted: \(known.title) \(tag.title): \(spec.source ?? "Wikipedia"): \((spec.evidence ?? spec.name).prefix(140))")
                 }
                 // Sentences that name it at all, when none was read as a name (left out entirely).
                 if !specs.specs.contains(where: { CraftIndex.shotOn($0).contains(tag) }) {
@@ -99,8 +99,8 @@ final class LiveShotOnTests: XCTestCase {
                         : tag == .anamorphic ? #"(?i)anamorphic"# : tag == .imax ? #"(?i)imax"# : #"(?i)black[- ]and[- ]white"#
                     let named = texts.flatMap { text in text.sections.flatMap(\.paragraphs).flatMap { Digest.sentences(in: $0) }.map { (text.source ?? "Wikipedia", $0) } }
                         .filter { $0.1.range(of: words, options: .regularExpression) != nil }
-                    for (source, sentence) in named.prefix(3) {
-                        say("Shot on not counted: \(known.title) \(tag.title) (left out): \(source): \(sentence.prefix(200))")
+                    for (source, sentence) in named.prefix(2) {
+                        say("Shot on not counted: \(known.title) \(tag.title) (left out): \(source): \(sentence.prefix(140))")
                     }
                 }
             }
