@@ -117,7 +117,7 @@ final class TrustTests: XCTestCase {
     func testAFolderThatSaysBeatsAGuessFromTheName() {
         let found = FilePicture.of(FilenameParser.parse("Film.2019.1080p.WEB-DL.x265-GRP.mkv"),
                                    ownFolder: FilenameParser.parse("Film (2019) 1080p DV HDR10"))
-        XCTAssertEqual(found.range, .dolbyVision)
+        XCTAssertEqual(found.format, .dolbyVisionHDR10)
         XCTAssertEqual(found.basis, .folder)
     }
 
