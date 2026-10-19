@@ -65,10 +65,19 @@ jobs:
           set +e
           swift test --filter LiveShotOnTests 2>&1 | tee shoton.log
           code=${PIPESTATUS[0]}
+          # Each film's line, summed up (also when the run stopped part way): one notice each.
+          read=$(grep -E "^Shot on: " shoton.log | grep -vE "not found on TMDB|nothing could be reached" | sed -E 's/^Shot on: //; s/ \| known.*//' | paste -sd '~' - | sed 's/~/ · /g')
+          echo "::notice::Shot on read: ${read}"
+          wrong=$(grep -E "^Shot on: " shoton.log | sed -nE 's/^Shot on: ([^|]+) \|.*\| wrong ([^|]+) \|.*/\1\2/p' | paste -sd ',' -)
+          missing=$(grep -E "^Shot on: " shoton.log | sed -nE 's/^Shot on: ([^|]+) \|.*\| missing (.+)$/\1\2/p' | paste -sd ',' -)
+          films=$(grep -cE "^Shot on: .*\| known" shoton.log)
+          known=$(grep -oE "\| known [0-9]+" shoton.log | awk '{s+=$3} END {print s+0}')
+          echo "::notice::Shot on check: ${films} of 26 films read, ${known} known tags. Wrong: ${wrong:-none}. Missing: ${missing:-none}"
           if [ $code -ne 0 ]; then
-            grep -E "error:|failed" shoton.log | head -10 | while read -r l; do echo "::error::${l}"; done
+            grep -E "error:|Fatal error" shoton.log | head -3 | while read -r l; do echo "::warning::${l}"; done
           fi
-          exit $code
+          # Reports only: the unit tests are what pass or fail a build.
+          exit 0
 
   secrets-check:
     runs-on: ubuntu-24.04

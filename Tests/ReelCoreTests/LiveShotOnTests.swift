@@ -48,12 +48,14 @@ final class LiveShotOnTests: XCTestCase {
             throw XCTSkip("TMDB_TOKEN not set")
         }
         let client = TMDBClient(token: token)
-        var read = 0, expected = 0
-        var lines: [String] = [], wrong: [String] = [], missing: [String] = []
+        var read = 0
+        // Each film's line is written as soon as it's read (unbuffered): CI sums them up even if
+        // Linux's networking stops the run part way.
+        func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
         for known in films {
             guard let id = try? await client.searchMovies(query: known.title, year: known.year).first?.id,
                   let details = try? await client.movieDetails(id: id) else {
-                print("Shot on: \(known.title): not found on TMDB")
+                say("Shot on: \(known.title) | not found on TMDB")
                 continue
             }
             let facts = try? await WikipediaClient().findings(imdbID: details.imdbID, title: details.title, year: details.year).funFacts
@@ -63,25 +65,23 @@ final class LiveShotOnTests: XCTestCase {
             }
             guard let craft = await CraftReader.read(details, articleTitle: facts?.articleTitle, colour: facts?.quick?.colour,
                                                      otherTitles: others) else {
-                print("Shot on: \(known.title): nothing could be reached")
+                say("Shot on: \(known.title) | nothing could be reached")
                 continue
             }
             read += 1
-            expected += known.has.count + known.hasNot.count
             let tags = craft.shotOn.map { craft.label(for: $0) }.joined(separator: ", ")
-            lines.append("\(known.title): \(tags.isEmpty ? "nothing" : tags) (\(craft.sources) texts)")
+            var wrong: [String] = [], missing: [String] = []
             for tag in ShotOn.allCases where craft.shotOn.contains(tag) && known.hasNot.contains(tag) {
-                wrong.append("\(known.title) \(tag.title)")
+                wrong.append(tag.title)
                 let why = craft.evidence(for: tag).map { "\($0.source): \($0.text.prefix(220))" } ?? ""
-                print("::warning::Shot on wrong: \(known.title) is not \(tag.title): \(why)")
+                say("::warning::Shot on wrong: \(known.title) is not \(tag.title): \(why)")
             }
             for tag in ShotOn.allCases where known.has.contains(tag) && !craft.shotOn.contains(tag) {
-                missing.append("\(known.title) \(tag.title)")
+                missing.append(tag.title)
             }
+            say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(craft.sources) texts | known \(known.has.count + known.hasNot.count)"
+                + " | wrong \(wrong.joined(separator: "+")) | missing \(missing.joined(separator: "+"))")
         }
-        // One line each (a step shows ten notices at most).
-        print("::notice::Shot on read: " + lines.joined(separator: " · "))
-        print("::notice::Shot on check: \(wrong.count) wrong, \(missing.count) missing, of \(expected) known tags across \(read) of \(films.count) films read. Wrong: \(wrong.joined(separator: ", ")). Missing: \(missing.joined(separator: ", "))")
         try XCTSkipIf(read == 0, "no film could be read: the sources may be refusing for now")
     }
 }
