@@ -180,6 +180,28 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if !model.removedShotOn.isEmpty {
+                Section {
+                    ForEach(model.removedShotOn.sorted { $0.key < $1.key }, id: \.key) { id, kinds in
+                        let title = model.films.first { $0.tmdb?.id == id }?.displayTitle ?? "A film no longer in the library"
+                        ForEach(kinds.sorted { $0.rawValue < $1.rawValue }, id: \.self) { kind in
+                            LabeledContent(title) {
+                                HStack(spacing: 10) {
+                                    Text(kind.title).foregroundStyle(.secondary)
+                                    Button("Put Back") { model.restoreShotOn(kind, for: id) }
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Shot On You Removed")
+                } footer: {
+                    Text("Tags you said were wrong (right-click Shot on on a film's page). They aren't shown, filtered or searched for that film.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if !model.craftChanges.isEmpty {
                 Section {
                     ForEach(model.craftChanges.prefix(40)) { change in

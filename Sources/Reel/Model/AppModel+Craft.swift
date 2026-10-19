@@ -108,6 +108,28 @@ extension AppModel {
         return set.films.filter { $0.id != details.id }.map(\.title)
     }
 
+    /// Shot on as shown for a film: what was read, less what you said is wrong.
+    func shownShotOn(_ film: FilmEntry) -> [ShotOn] {
+        let removed = film.tmdb.flatMap { removedShotOn[$0.id] } ?? []
+        return (film.craft?.shotOn ?? []).filter { !removed.contains($0) }
+    }
+
+    /// You said a Shot on tag is wrong for this film: it's no longer shown, filtered or searched
+    /// for it (kept in Your Notes; Settings lists it to put back).
+    func removeShotOn(_ kind: ShotOn, from film: FilmEntry) {
+        guard let id = film.tmdb?.id else { return }
+        removedShotOn[id, default: []].insert(kind)
+        scheduleSave(.notes)
+        scheduleRebuild()
+    }
+
+    func restoreShotOn(_ kind: ShotOn, for id: Int) {
+        removedShotOn[id]?.remove(kind)
+        if removedShotOn[id]?.isEmpty == true { removedShotOn[id] = nil }
+        scheduleSave(.notes)
+        scheduleRebuild()
+    }
+
     /// How much of the library Shot on covers (Settings › Performance): live-action films, each
     /// once, tagged out of those read; those read from their Wikipedia article alone; and how many
     /// are still to be read. Animated films aren't counted: they weren't shot on anything.
@@ -122,7 +144,7 @@ extension AppModel {
                 continue
             }
             read += 1
-            if !craft.shotOn.isEmpty { tagged += 1 }
+            if !Set(craft.shotOn).subtracting(removedShotOn[details.id] ?? []).isEmpty { tagged += 1 }
             if craft.sources <= 1 { articleOnly += 1 }
         }
         return (tagged, read, articleOnly, waiting)

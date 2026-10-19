@@ -263,7 +263,9 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// 7: trailer sizes, so HD uploads are played first.
     /// (Reel 1.8.3 saved 8 for a while: the next bump is to 9.)
     /// 9: likes and dislikes read again (critics by what they did, figures and prizes left out).
-    public static let currentInfoVersion = 9
+    /// 10: dislikes only when said in words (not a sentence's tone); Did You Know? not cut at
+    ///     "No." or "St.", and no fact that starts with a "he" or "she" it can't say who is.
+    public static let currentInfoVersion = 10
 
     public init(
         driveID: String, relativePath: String, fileName: String, size: Int64, modified: Date?,
@@ -773,16 +775,19 @@ public struct PersonalFile: Codable, Equatable, Sendable {
     public var groupingFixes: GroupingFixes
     /// What you set a file's picture to (HDR or SDR), by file ("name|size"): it wins over the name.
     public var pictures: [String: DynamicRange]
+    /// Shot on tags you said are wrong, by TMDB id: never shown or searched for that film.
+    public var removedShotOn: [Int: Set<ShotOn>]
 
     enum CodingKeys: String, CodingKey {
-        case version, records, corrections, wishlist, wishlistArrivals, groupingFixes, pictures
+        case version, records, corrections, wishlist, wishlistArrivals, groupingFixes, pictures, removedShotOn
     }
 
     public init(records: [String: PersonalRecord] = [:], corrections: [String: Int] = [:], wishlist: [WishlistFilm] = [],
                 wishlistArrivals: [WishlistArrival] = [], groupingFixes: GroupingFixes = GroupingFixes(),
-                pictures: [String: DynamicRange] = [:]) {
+                pictures: [String: DynamicRange] = [:], removedShotOn: [Int: Set<ShotOn>] = [:]) {
         self.version = 4
         self.pictures = pictures
+        self.removedShotOn = removedShotOn
         self.records = records
         self.corrections = corrections
         self.wishlist = wishlist
@@ -801,6 +806,14 @@ public struct PersonalFile: Codable, Equatable, Sendable {
         // A value a newer Reel wrote that this one doesn't know is skipped, not a reason to fail.
         let saved = (try? c.decodeIfPresent([String: String].self, forKey: .pictures)) ?? [:]
         pictures = saved.compactMapValues { DynamicRange(rawValue: $0) }
+        let removed = (try? c.decodeIfPresent([String: [String]].self, forKey: .removedShotOn)) ?? [:]
+        var byFilm: [Int: Set<ShotOn>] = [:]
+        for (key, kinds) in removed {
+            guard let id = Int(key) else { continue }
+            let known = Set(kinds.compactMap { ShotOn(rawValue: $0) })
+            if !known.isEmpty { byFilm[id] = known }
+        }
+        removedShotOn = byFilm
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -812,5 +825,9 @@ public struct PersonalFile: Codable, Equatable, Sendable {
         try c.encode(wishlistArrivals, forKey: .wishlistArrivals)
         try c.encode(groupingFixes, forKey: .groupingFixes)
         if !pictures.isEmpty { try c.encode(pictures.mapValues(\.rawValue), forKey: .pictures) }
+        if !removedShotOn.isEmpty {
+            let saved = Dictionary(uniqueKeysWithValues: removedShotOn.map { (String($0.key), $0.value.map(\.rawValue).sorted()) })
+            try c.encode(saved, forKey: .removedShotOn)
+        }
     }
 }

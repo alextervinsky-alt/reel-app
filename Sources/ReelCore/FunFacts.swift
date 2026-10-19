@@ -223,7 +223,7 @@ public enum FunFactExtractor {
             guard let category = category(for: section.path) else { continue }
             for sentence in ReceptionAnalyzer.sentences(in: section.text) {
                 position += 1
-                guard sentence.count >= 60, sentence.count <= 320, !sentence.contains("[") else { continue }
+                guard sentence.count >= 60, sentence.count <= 320, !sentence.contains("["), !startsWithSomeone(sentence) else { continue }
                 let s = score(sentence)
                 if s >= 1.5 { candidates.append(Candidate(category: category, text: sentence, score: s, position: position)) }
             }
@@ -243,6 +243,13 @@ public enum FunFactExtractor {
             .sorted { rank($0.category) != rank($1.category) ? rank($0.category) < rank($1.category) : $0.position < $1.position }
             .map { FunFact(category: $0.category, text: $0.text) }
         return ordered
+    }
+
+    /// A fact that starts "He…", "Her…" or "They…" was about someone named in the sentence before,
+    /// which a fact on its own doesn't have.
+    static func startsWithSomeone(_ sentence: String) -> Bool {
+        guard let first = sentence.split(separator: " ").first else { return false }
+        return ["He", "She", "His", "Her", "Him", "They", "Their", "Them"].contains(String(first))
     }
 
     /// Sentences critics wrote about the film (for likes and dislikes), at most 40.

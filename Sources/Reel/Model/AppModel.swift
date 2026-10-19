@@ -242,6 +242,8 @@ final class AppModel {
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
     /// What you set files' pictures to (HDR or SDR), by file key (Your Notes).
     var pictures: [String: DynamicRange] = [:]
+    /// Shot on tags you said are wrong, by TMDB id (Your Notes).
+    var removedShotOn: [Int: Set<ShotOn>] = [:]
     /// Films that have a folder to themselves, by film id: the folder's name, read (see
     /// `FilePicture.ownFolders`); `parsedFolders` keeps every folder name read so far.
     @ObservationIgnored var ownFolders: [String: ParsedFilename] = [:]
@@ -349,6 +351,7 @@ final class AppModel {
             arrivedFromWishlist = Set(wishlistArrivals.map { $0.id })
             groupingFixes = value.groupingFixes
             pictures = value.pictures
+            removedShotOn = value.removedShotOn
         }
     }
 
@@ -559,6 +562,7 @@ final class AppModel {
     /// Returns how many items had to be built anew (0: nothing about any film changed).
     nonisolated static func makeItems(films: [FilmEntry], online: Set<String>, reuse: [String: LibraryItem] = [:],
                                       picture: ((FilmEntry) -> FilePicture)? = nil,
+                                      removedShotOn: (FilmEntry) -> Set<ShotOn> = { _ in [] },
                                       moods: (FilmEntry) -> [Mood]) -> (items: [LibraryItem], built: Int) {
         // Without the library's settings at hand (Reel opening), the file names alone.
         var parsed: [String: ParsedFilename] = [:]
@@ -578,13 +582,14 @@ final class AppModel {
             let main = onlineCopy ?? first
             // The main copy is one of the copies, so comparing the copies covers it.
             let picture = pictureOf(main)
+            let removed = removedShotOn(main)
             if let cached = reuse[key], cached.isOnline == (onlineCopy != nil), cached.main.id == main.id, cached.copies == copies,
-               cached.pictureWords == picture.searchWords {
+               cached.pictureWords == picture.searchWords, cached.removedShotOn == removed {
                 return cached
             }
             built += 1
             return LibraryItem(key: key, main: main, copies: copies, isOnline: onlineCopy != nil, moods: moods(main),
-                               picture: picture)
+                               picture: picture, removedShotOn: removed)
         }
         return (items, built)
     }
@@ -605,9 +610,10 @@ final class AppModel {
         let backups = Set(drives.filter { $0.isBackup }.map { $0.id })
         let ordered = films.filter { !backups.contains($0.driveID) } + films.filter { backups.contains($0.driveID) }
         ownFolders = FilePicture.ownFolders(films, parsed: &parsedFolders)
-        let folders = ownFolders, yours = pictures
+        let folders = ownFolders, yours = pictures, removed = removedShotOn
         let (fresh, newlyBuilt) = Self.makeItems(films: ordered, online: online, reuse: itemCache,
-                                                 picture: { FilePicture.of($0, ownFolders: folders, yours: yours) }) { moodList(for: $0) }
+                                                 picture: { FilePicture.of($0, ownFolders: folders, yours: yours) },
+                                                 removedShotOn: { $0.tmdb.flatMap { removed[$0.id] } ?? [] }) { moodList(for: $0) }
         if newlyBuilt > 0 || fresh.count != items.count || !zip(fresh, items).allSatisfy({ $0.id == $1.id }) {
             items = fresh
             itemCache = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

@@ -22,7 +22,8 @@ public enum CraftReader {
     public static func index(of details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?,
                              colour: [String]?, now: Date = Date()) -> CraftIndex {
         let texts = texts(article: article, reading: reading, hiding: false)
-        let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors)
+        let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
+                                   year: details.year, title: details.title)
         return CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
     }
 

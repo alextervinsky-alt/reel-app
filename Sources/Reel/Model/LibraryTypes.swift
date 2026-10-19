@@ -217,7 +217,7 @@ struct SearchIndex: Equatable {
     let craft: String
     let words: [String]
 
-    init(film: FilmEntry, moods: [Mood], picture: FilePicture) {
+    init(film: FilmEntry, moods: [Mood], picture: FilePicture, removedShotOn: Set<ShotOn> = []) {
         let n = TitleSimilarity.normalize
         let d = film.tmdb
         let titles = [film.displayTitle, d?.originalTitle ?? "", film.parsed.title].map(n)
@@ -263,10 +263,10 @@ struct SearchIndex: Equatable {
         people = peopleNames + " , " + n(characters.joined(separator: " , "))
         tags = n(tagWords.joined(separator: " , "))
         plot = n([d?.tagline ?? "", d?.overview ?? ""].joined(separator: " "))
-        craft = film.craft.map { n($0.searchText) } ?? ""
+        craft = film.craft.map { n($0.searchText(removing: removedShotOn)) } ?? ""
         // Slips are forgiven against titles, real names and the words you'd filter by (genres,
         // moods, how it was shot), never characters or plots ("cartoon" isn't "Carson").
-        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title) + (film.craft?.shotOn ?? []).map(\.title)).joined(separator: " "))
+        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title) + (film.craft?.shotOn ?? []).filter { !removedShotOn.contains($0) }.map(\.title)).joined(separator: " "))
         words = Array(Set((title + " " + peopleNames + " " + vocabulary).split(separator: " ").map { String($0) }.filter { $0.count >= 4 }))
     }
 
@@ -337,8 +337,11 @@ struct LibraryItem: Identifiable, Equatable {
     let stamp: Int
     /// What search finds it by for its picture: an item is built again when your setting changes it.
     let pictureWords: [String]
+    /// Shot on tags you said are wrong for it.
+    let removedShotOn: Set<ShotOn>
 
-    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: FilePicture) {
+    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: FilePicture,
+         removedShotOn: Set<ShotOn> = []) {
         self.id = key
         self.main = main
         self.copies = copies
@@ -354,7 +357,8 @@ struct LibraryItem: Identifiable, Equatable {
         let d = main.tmdb
         self.genres = Set(d?.genreNames ?? [])
         self.keywords = Set(d?.keywordNames ?? [])
-        self.shotOn = Set(main.craft?.shotOn ?? []).union(LibraryItem.shotOnKnown(main))
+        self.shotOn = Set(main.craft?.shotOn ?? []).union(LibraryItem.shotOnKnown(main)).subtracting(removedShotOn)
+        self.removedShotOn = removedShotOn
         self.likeness = LikenessFeatures(
             tmdbID: d?.id, directors: d?.directors ?? [], writers: d?.writers ?? [],
             cinematographers: d?.cinematographers ?? [], cast: d.map { $0.topCast.prefix(5).map { $0.name } } ?? [],
@@ -366,7 +370,7 @@ struct LibraryItem: Identifiable, Equatable {
         self.runtime = d?.runtime
         self.score = main.score
         self.moods = moods
-        self.search = SearchIndex(film: main, moods: moods, picture: picture)
+        self.search = SearchIndex(film: main, moods: moods, picture: picture, removedShotOn: removedShotOn)
         self.pictureWords = picture.searchWords
         var hasher = Hasher()
         hasher.combine(main.id)

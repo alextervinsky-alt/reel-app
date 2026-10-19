@@ -109,6 +109,8 @@ public enum ReceptionAnalyzer {
         "complaint", "complaints", "gripe", "nitpick", "downside", "drawback", "weakest",
         "would have liked", "a bit too", "a little too", "too slow", "too dark", "too scary", "too intense",
         "too violent", "not enough", "convoluted", "lost me",
+        "weak", "fails", "failed", "falls short", "fell flat", "overrated", "unconvincing", "clunky", "not as good",
+        "doesn't work", "didn't work", "disjointed", "repetitive", "overstuffed", "underdeveloped",
     ]
 
     /// What a clause with no aspect word is about, from the way it complains ("it's a bit
@@ -202,6 +204,10 @@ public enum ReceptionAnalyzer {
                     let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
                     if !words.isDisjoint(with: positiveCues) { score += 0.2 }
                     guard abs(score) >= 0.25 else { continue }
+                    // A dislike is said in words: a complaint, a critic said to have faulted it, or a
+                    // viewer who rated it low. The tone of a sentence alone isn't one: "a disquieting
+                    // chiller" and "a performance of grim determination" are praise.
+                    if score < 0, !complains, said >= 0, review.isCritic || (review.rating ?? 10) > 5 { continue }
 
                     let quality = abs(score) - lengthPenalty(sentence.count)
                     for aspect in matched {
@@ -392,6 +398,8 @@ public enum ReceptionAnalyzer {
             }
             current.append(ch)
             if ch == "." || ch == "!" || ch == "?" {
+                // "listed at No. 5", "St. Louis", "the U.S. release" carry on.
+                if ch == ".", let word = current.split(separator: " ").last, Digest.isAbbreviation(String(word)) { continue }
                 var next: Character = i < chars.count ? chars[i] : " "
                 // A closing quote stays with its sentence (not at the start of the next one).
                 if next == "\"" || next == "”" {

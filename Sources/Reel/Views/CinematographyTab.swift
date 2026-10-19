@@ -33,7 +33,7 @@ struct CinematographyTab: View {
         let lead = crew.first { $0.isLead }?.names ?? []
         let hiding = model.hidesSpoilers(for: film)
         let specs = read.specs(article: article, reading: reading, hiding: hiding, cinematographers: lead,
-                               directors: film.tmdb?.directors ?? [])
+                               directors: film.tmdb?.directors ?? [], year: film.tmdb?.year, title: film.tmdb?.title)
         let bold = specs.specs.filter { !$0.isFixedName }.map(\.name)
         let sheet = SpecSheet(specs: specs, quick: film.funFacts?.quick)
         let loading = model.cameraReadingsLoading.contains(id) || model.articlesLoading.contains(id)
@@ -755,7 +755,7 @@ private final class ReadSpecs {
     private(set) var notes = CraftNotes(TechSpecs.read([]))
 
     func specs(article: FilmArticle?, reading: CameraReading?, hiding: Bool, cinematographers: [String],
-               directors: [String]) -> TechSpecs {
+               directors: [String], year: Int?, title: String?) -> TechSpecs {
         guard article != nil || reading != nil else {
             // Nothing read yet (another film opened): nothing from the last one shows.
             stamp = ""
@@ -768,7 +768,7 @@ private final class ReadSpecs {
             stamp = now
             // Read as the Shot on filter and search read it (the interviews first).
             let texts = CraftReader.texts(article: article, reading: reading, hiding: hiding)
-            specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors)
+            specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors, year: year, title: title)
             if hiding { specs = Self.withoutStory(specs) }
             notes = CraftNotes(specs)
         }

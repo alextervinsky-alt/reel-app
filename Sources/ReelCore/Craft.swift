@@ -36,7 +36,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// Bump when the reading improves, so every film is read again.
     /// 2: the sentence behind each Shot on, "not / instead of / unlike" in a clause, magazine
     /// articles only when they're about this film, TMDB keywords only where Wikidata is silent.
-    public static let currentVersion = 2
+    /// 3: sentences about another film, tests and decisions against, finishing and prints left out;
+    /// what's said of part of the film marked so.
+    public static let currentVersion = 3
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
@@ -51,6 +53,23 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         public let text: String
         /// "American Cinematographer", "Wikipedia" (the film's article), "Wikidata", "TMDB".
         public let source: String
+        /// Every sentence behind it says part of the film only ("Black & white, in part").
+        public var partial: Bool
+
+        public init(shotOn: ShotOn, text: String, source: String, partial: Bool = false) {
+            self.shotOn = shotOn
+            self.text = text
+            self.source = source
+            self.partial = partial
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            shotOn = try c.decode(ShotOn.self, forKey: .shotOn)
+            text = try c.decode(String.self, forKey: .text)
+            source = try c.decode(String.self, forKey: .source)
+            partial = try c.decodeIfPresent(Bool.self, forKey: .partial) ?? false
+        }
     }
 
     public var version: Int
@@ -106,6 +125,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         version == newer.version && discovery >= newer.discovery && newer.sources < sources
     }
 
+    /// "Black & white", or "Black & white (in part)".
+    public func label(for shotOn: ShotOn) -> String {
+        evidence(for: shotOn)?.partial == true ? shotOn.title + " (in part)" : shotOn.title
+    }
+
     /// The sentence behind one Shot on, for "why".
     public func evidence(for shotOn: ShotOn) -> Evidence? {
         evidence.first { $0.shotOn == shotOn }
@@ -123,8 +147,13 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         }
         var evidence: [ShotOn: Evidence] = [:]
         for spec in specs.specs {
-            for found in Self.shotOn(spec) where evidence[found] == nil {
-                evidence[found] = Evidence(shotOn: found, text: spec.evidence ?? spec.name, source: spec.source ?? "Wikipedia")
+            for found in Self.shotOn(spec) {
+                // Film and Digital both show when a film mixes them; "in part" is for the rest.
+                let partial = spec.partial && ![.film, .digital].contains(found)
+                let said = Evidence(shotOn: found, text: spec.evidence ?? spec.name, source: spec.source ?? "Wikipedia", partial: partial)
+                // One sentence about the whole film outweighs any number about part of it.
+                if let known = evidence[found], !(known.partial && !said.partial) { continue }
+                evidence[found] = said
             }
         }
         let colours = (colour ?? []).map { $0.lowercased() }
@@ -182,13 +211,16 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     }
 
     /// What a search can find it by: the names, and the words for what it was shot on.
-    public var searchText: String {
+    public var searchText: String { searchText(removing: []) }
+
+    /// Without the Shot on you said is wrong.
+    public func searchText(removing removed: Set<ShotOn>) -> String {
         // "16 mm" is searched as "16mm" too.
         let joined = names.filter { $0.range(of: #"\d mm\b"#, options: .regularExpression) != nil }
             .map { $0.replacingOccurrences(of: " mm", with: "mm") }
             + names.filter { $0.range(of: #"^Super \d+$"#, options: .regularExpression) != nil }
             .map { String($0.dropFirst(6)) + "mm" }
-        return (names + joined + shotOn.flatMap(\.searchWords)).joined(separator: " , ")
+        return (names + joined + shotOn.filter { !removed.contains($0) }.flatMap(\.searchWords)).joined(separator: " , ")
     }
 }
 

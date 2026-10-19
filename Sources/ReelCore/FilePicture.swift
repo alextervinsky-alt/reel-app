@@ -18,7 +18,10 @@ public struct FilePicture: Equatable, Sendable {
         /// The film's own folder says it ("Dune (2021) 2160p DV/dune.mkv"), or the folder of the
         /// collection it's part of ("The Fast and the Furious - Complete Collection 1080p HDR10/…").
         case folder
-        /// Nothing says.
+        /// Nothing proves it, but the kind of release makes it likely: a 4K Blu-ray is HDR10 as
+        /// standard; a 4K web release or a 1080p file whose name doesn't say HDR is most likely SDR.
+        case likely
+        /// Nothing to go on (a file renamed by hand, "2013. Furious 6.mkv").
         case notStated
     }
 
@@ -32,10 +35,13 @@ public struct FilePicture: Equatable, Sendable {
 
     public var isHDR: Bool { range?.isHDR ?? false }
     public var isKnown: Bool { range != nil }
+    /// An inference, said as one ("Likely SDR").
+    public var isGuess: Bool { basis == .likely || basis == .convention }
 
     /// "HDR · Dolby Vision + HDR10", "SDR", or nil when not stated.
     public var label: String? {
         guard let range else { return nil }
+        if isGuess { return "Likely " + (range.isHDR ? range.rawValue : "SDR") }
         guard range.isHDR else { return "SDR" }
         if range == .hdr { return "HDR" }
         return "HDR · " + range.rawValue + (fallback.map { " + " + $0.rawValue } ?? "")
@@ -63,12 +69,33 @@ public struct FilePicture: Equatable, Sendable {
         }
         if let found = proven(by: name, what: "the file name") { return found }
         if let folder = ownFolder, let found = proven(by: folder, what: "the film's folder") {
-            return FilePicture(range: found.range, fallback: found.fallback, basis: .folder, reason: found.reason)
+            return FilePicture(range: found.range, fallback: found.fallback, basis: found.isGuess ? .convention : .folder,
+                               reason: found.reason)
         }
+        if let guess = likely(name) { return guess }
         let why = name.anyResolution == "2160p"
             ? "4K, and the file name doesn't say HDR or SDR"
             : "The file name doesn't say HDR or SDR"
         return FilePicture(range: nil, fallback: nil, basis: .notStated, reason: why)
+    }
+
+    /// What the kind of release makes likely, when nothing proves it; nil when the name says
+    /// nothing about the release at all.
+    static func likely(_ parsed: ParsedFilename) -> FilePicture? {
+        let bluRay = parsed.anySource.map { $0.hasPrefix("BluRay") || $0 == "REMUX" } ?? false
+        switch parsed.anyResolution {
+        case "2160p" where bluRay:
+            return FilePicture(range: .hdr10, fallback: nil, basis: .likely,
+                               reason: "A 4K Blu-ray whose name doesn't say: 4K Blu-rays are HDR10 as standard, so likely HDR10")
+        case "2160p":
+            return FilePicture(range: .sdr, fallback: nil, basis: .likely,
+                               reason: "A 4K release whose name doesn't say HDR: release names usually say it when it is, so likely SDR")
+        case "1080p":
+            return FilePicture(range: .sdr, fallback: nil, basis: .likely,
+                               reason: "A 1080p file whose name doesn't say HDR: likely SDR")
+        default:
+            return nil
+        }
     }
 
     /// What one name proves, or nil.

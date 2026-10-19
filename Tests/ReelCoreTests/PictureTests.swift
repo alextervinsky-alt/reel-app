@@ -23,7 +23,7 @@ final class PictureTests: XCTestCase {
             ("F1 - The Movie 2025 2160p UHD BluRay REMUX DV HDR 10bit HEVC [Hindi-Tamil-Telugu DDP 5.1 + English TrueHD Atmos 7.1] x265 CiNPEHiLES-LUMiX.mkv", .dolbyVision, .hdr10, .named),
             ("Flow.AKA.Straume.2024.2160p.UHD.BluRay.HDR10.DTS-HD.MA.5.1.x265.10bit-StOiC-4kHDHub.com.mkv", .hdr10, nil, .named),
             ("Good Luck, Have Fun, Dont Die (2025) 2160p 10bit HDR10+ DV BluRay HEVC x265 [Hindi AMZN DDP 5.1 640kbps + English TrueHD Atmos 7.1] ESub-(SPHD-4kHdHub).mkv", .dolbyVision, .hdr10Plus, .named),
-            ("Leon.the.Professional.Extended.1994.Dual.1080p.mkv", nil, nil, .notStated),
+            ("Leon.the.Professional.Extended.1994.Dual.1080p.mkv", .sdr, nil, .likely),
             ("Nomadland (2020) 1080p BluRay REMUX AVC [English DTS-HD MA 5.1] (FraMeSToR-Ionicboy).mkv", .sdr, nil, .source),
             ("Obsession (2025) 2160p UHD BluRay REMUX DV HDR 10bit HEVC [Hindi AMZN DDP 5.1 + English TrueHD Atmos 7.1] x265 (CiNEPHiLES-LUMiX).mkv", .dolbyVision, .hdr10, .named),
             ("Society.of.the.Snow.2024.1080p.NF.WEB-DL.DUAL.AAC5.1.HDR.AV1-AV1Core.mkv", .hdr10, nil, .named),
@@ -52,10 +52,20 @@ final class PictureTests: XCTestCase {
         XCTAssertTrue(found.searchWords.isEmpty, "a search for SDR doesn't find it")
     }
 
-    func testFourKWithoutHDRIsNotStated() {
-        XCTAssertEqual(picture("Film.2020.2160p.WEB-DL.x265-GRP.mkv").basis, .notStated)
-        XCTAssertEqual(picture("Film (2019) [WEBDL-2160p].mkv").basis, .notStated)
-        XCTAssertTrue(picture("Film.2020.2160p.WEB-DL.x265-GRP.mkv").reason.hasPrefix("4K"))
+    /// What's likely, said as a guess with its reason: practical guidance, never passed off as fact.
+    func testLikelyFromTheKindOfRelease() {
+        let web = picture("Film.2020.2160p.WEB-DL.x265-GRP.mkv")
+        XCTAssertEqual(web.range, .sdr)
+        XCTAssertEqual(web.basis, .likely)
+        XCTAssertEqual(web.label, "Likely SDR")
+        XCTAssertTrue(web.reason.hasPrefix("A 4K release"))
+        XCTAssertEqual(picture("Film (2019) [WEBDL-2160p].mkv").label, "Likely SDR")
+        let disc = picture("Green.Book.2018.UHD.BluRay.2160p.TrueHD.Atmos.7.1.HEVC.HYBRID.REMUX-FraMeSToR.mkv")
+        XCTAssertEqual(disc.range, .hdr10)
+        XCTAssertEqual(disc.label, "Likely HDR10")
+        XCTAssertTrue(disc.isHDR)
+        XCTAssertEqual(picture("Ex Machina (2014) 1080p UHD BluRay 10bit HEVC x265.mkv").label, "Likely SDR", "a convention is a guess too")
+        XCTAssertNil(picture("2013. Furious 6 [Extended.Cut].mkv").label, "nothing to go on: no guess")
     }
 
     func testTraps() {

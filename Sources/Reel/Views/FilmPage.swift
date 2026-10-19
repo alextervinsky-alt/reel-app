@@ -469,7 +469,14 @@ struct FilmFactSheet: View {
             people("Music", Array((d?.people(forJobs: TMDBMovieDetails.composerJobs) ?? []).prefix(2)))
             people("Editor", Array((d?.people(forJobs: ["Editor"]) ?? []).prefix(2)))
             people("Design", Array((d?.people(forJobs: ["Production Design"]) ?? []).prefix(2)))
-            if let shot = shotOn { row("Shot on", Text(shot).help(shotOnWhy)) }
+            if let shot = shotOn {
+                row("Shot on", Text(shot).help(shotOnWhy).contextMenu {
+                    // You know better: a tag that's wrong for this film goes (Settings puts it back).
+                    ForEach(model.shownShotOn(film), id: \.self) { kind in
+                        Button("Not Right: Remove “\(kind.title)”") { model.removeShotOn(kind, from: film) }
+                    }
+                })
+            }
             if let language = FilmLanguage.code(d?.originalLanguage) { row("Language", Text(FilmLanguage.name(language))) }
             if let file = fileLine(copies) { row("File", Text(file)) }
             if let subtitles = subtitlesLine { row("Subtitles", Text(subtitles)) }
@@ -513,16 +520,16 @@ struct FilmFactSheet: View {
     /// Why each Shot on: the sentence and where it was read (not a sentence that tells the story).
     private var shotOnWhy: String {
         guard let craft = film.craft else { return "" }
-        return craft.shotOn.compactMap { kind -> String? in
+        return model.shownShotOn(film).compactMap { kind -> String? in
             guard let why = craft.evidence(for: kind) else { return nil }
             let said = Spoilers.tellsTheStory(why.text) ? "" : ": “\(why.text)”"
-            return "\(kind.title), from \(why.source)\(said)"
+            return "\(craft.label(for: kind)), from \(why.source)\(said)"
         }.joined(separator: "\n\n")
     }
 
     /// "Film · Anamorphic · 2.39:1", from what's read about it and Wikidata.
     private var shotOn: String? {
-        var parts = (film.craft?.shotOn ?? []).map(\.title)
+        var parts = model.shownShotOn(film).map { film.craft?.label(for: $0) ?? $0.title }
         // Drawn, not shot: said, rather than left looking like nothing was found.
         if parts.isEmpty, film.tmdb?.genreNames.contains("Animation") == true { parts.append("Animated") }
         if let ratio = film.funFacts?.quick?.aspectRatios?.first { parts.append(ratio) }

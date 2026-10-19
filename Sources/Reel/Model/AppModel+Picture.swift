@@ -38,7 +38,7 @@ extension AppModel {
         for film in films where seen.insert(film.fileKey).inserted {
             counts[picture(of: film).basis, default: 0] += 1
         }
-        let order: [FilePicture.Basis] = [.yours, .named, .source, .convention, .folder, .notStated]
+        let order: [FilePicture.Basis] = [.yours, .named, .source, .folder, .convention, .likely, .notStated]
         return order.compactMap { basis in counts[basis].map { (basis, $0) } }
     }
 }
@@ -50,7 +50,8 @@ extension FilePicture.Basis {
         case .yours: "Set by you"
         case .named: "The file name says"
         case .source: "SDR by its source (DVD, 720p, 1080p Blu-ray)"
-        case .convention: "SDR by release-name convention"
+        case .convention: "Likely SDR, by release-name convention"
+        case .likely: "Likely, from the kind of release"
         case .folder: "The film's own folder says"
         case .notStated: "Not stated"
         }

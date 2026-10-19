@@ -551,7 +551,8 @@ struct PictureRangeTag: View {
 
     static func help(_ pictures: [FilePicture]) -> String {
         guard let first = pictures.first else { return "" }
-        let what = first.isHDR ? "High dynamic range: set the TV to HDR." : first.isKnown ? "Standard dynamic range: set the TV to SDR."
+        let what = first.isGuess ? (first.isHDR ? "Most likely high dynamic range: set the TV to HDR." : "Most likely standard dynamic range: set the TV to SDR.")
+            : first.isHDR ? "High dynamic range: set the TV to HDR." : first.isKnown ? "Standard dynamic range: set the TV to SDR."
             : "Reel doesn't know if this is HDR or SDR. Your player's video info shows it while it plays; set it in the film's … menu › Picture."
         return what + " " + first.reason + "."
     }
