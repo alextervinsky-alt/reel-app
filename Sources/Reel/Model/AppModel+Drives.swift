@@ -170,16 +170,12 @@ extension AppModel {
         guard isLoaded, let url = mounted[drive.id] else { return }
         guard !scanning.contains(drive.id) else {
             // Already reading it: read it again afterwards, so what changed meanwhile isn't missed.
-            rescanWanted.insert(drive.id)
+            rescanWanted[drive.id] = (rescanWanted[drive.id] ?? true) && announcing
             return
         }
         scanning.insert(drive.id)
-        defer {
-            scanning.remove(drive.id)
-            if rescanWanted.remove(drive.id) != nil, let again = drives.first(where: { $0.id == drive.id }) {
-                Task { await scan(again, announcing: announcing) }
-            }
-        }
+        var ended = false
+        defer { if !ended { endScan(drive.id) } }
 
         let name = drive.name
         let id = drive.id
@@ -209,11 +205,14 @@ extension AppModel {
             && drives.contains { $0.id == id }
         var verdict = ScanVerdict.of(Task.isCancelled ? DriveScan(files: [], cancelled: true) : result,
                                      driveID: id, known: films, driveStillThere: stillThere)
-        // A removal you confirmed goes ahead on this complete read, unless even more films are missing now.
-        if case .confirmRemovals(let count) = verdict, let confirmed = removalConfirmed[id], count <= confirmed {
-            verdict = .apply
+        // A removal you confirmed goes ahead on this complete read, if the films missing are ones you
+        // confirmed. The answer is used once, whatever this read found.
+        let confirmed = removalConfirmed.removeValue(forKey: id)
+        var missing: Set<String> = []
+        if case .confirmRemovals = verdict {
+            missing = Set(LibraryMerge.unseen(scan: result.files, driveID: id, in: films).map(\.id))
+            if let confirmed, missing.isSubset(of: confirmed) { verdict = .apply }
         }
-        if case .discard = verdict {} else { removalConfirmed[id] = nil }
         // A question about this drive is answered by this scan (asked again below if still true).
         if pendingRemoval?.driveID == id { pendingRemoval = nil }
         switch verdict {
@@ -228,7 +227,7 @@ extension AppModel {
             let more = unreadable.count > 1 ? " and \(unreadable.count - 1) more" : ""
             notice = "Reel couldn't read \(first)\(more) on \(name), so no films were removed. Press ⌘R to try again."
         case .confirmRemovals(let count):
-            pendingRemoval = PendingRemoval(driveID: id, driveName: name, count: count)
+            pendingRemoval = PendingRemoval(driveID: id, driveName: name, count: count, films: missing)
         case .apply:
             break
         }
@@ -263,7 +262,17 @@ extension AppModel {
                 announce(added == 1 ? "1 new film on \(name)" : "\(added) new films on \(name)")
             }
         }
+        // The drive is free for another read (a confirmed removal, ⌘R) while film info is looked up.
+        ended = true
+        endScan(id)
         await lookUpPending()
+    }
+
+    private func endScan(_ id: String) {
+        scanning.remove(id)
+        if let announcing = rescanWanted.removeValue(forKey: id), let again = drives.first(where: { $0.id == id }) {
+            Task { await scan(again, announcing: announcing) }
+        }
     }
 
     /// You confirmed that the films a scan didn't find are gone. The drive is read again, and that
@@ -272,7 +281,7 @@ extension AppModel {
     func confirmPendingRemoval(_ pending: PendingRemoval) {
         if pendingRemoval?.driveID == pending.driveID { pendingRemoval = nil }
         guard mounted[pending.driveID] != nil, let drive = drives.first(where: { $0.id == pending.driveID }) else { return }
-        removalConfirmed[pending.driveID] = pending.count
+        removalConfirmed[pending.driveID] = pending.films
         Task { await scan(drive, announcing: false) }
     }
 
@@ -287,7 +296,9 @@ extension AppModel {
                 if !films.contains(where: { $0.fileKey == move.from }) { corrections[move.from] = nil }
                 changed = true
             }
-            migratePersonal(from: FileIdentity.unidentifiedPrefix + move.from, to: FileIdentity.unidentifiedPrefix + move.to)
+            // Never into notes another file already has (two same-named files swapping sizes).
+            let to = FileIdentity.unidentifiedPrefix + move.to
+            if personal.records[to] == nil { migratePersonal(from: FileIdentity.unidentifiedPrefix + move.from, to: to) }
         }
         if changed { scheduleSave(.notes) }
     }

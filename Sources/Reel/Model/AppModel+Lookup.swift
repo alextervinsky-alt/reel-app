@@ -48,10 +48,10 @@ extension AppModel {
                 guard !unique.isEmpty else { break }
 
                 let lookedUp = beginWork("Finding film info", done: done, total: done + unique.count)
-                let library = films
+                let sizes = FileIdentity.sizesByName(films)
                 let fixes = corrections
                 let jobs = unique.prefix(6).map { film -> LookupJob in
-                    let fix = FileIdentity.fix(for: film, corrections: fixes, library: library)
+                    let fix = FileIdentity.fix(for: film, corrections: fixes, sizes: sizes)
                     var corrected: Int?
                     if case .film(let id) = fix { corrected = id }
                     return LookupJob(id: film.id, fileKey: film.fileKey, titles: film.lookupTitles, year: film.lookupYear,

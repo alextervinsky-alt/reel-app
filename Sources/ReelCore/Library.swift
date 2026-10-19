@@ -715,10 +715,11 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
         return result
     }
 
-    /// Oldest first, one per day (the first that day).
-    static func tidy(_ dates: [Date], calendar: Calendar = .current) -> [Date] {
+    /// Oldest first; dates less than 12 hours apart are one viewing (the same evening saved twice).
+    /// Counted in hours, not calendar days, so a change of time zone never merges two evenings.
+    static func tidy(_ dates: [Date]) -> [Date] {
         var result: [Date] = []
-        for date in dates.sorted() where !result.contains(where: { calendar.isDate($0, inSameDayAs: date) }) {
+        for date in dates.sorted() where result.last.map({ date.timeIntervalSince($0) >= 12 * 3_600 }) ?? true {
             result.append(date)
         }
         return result

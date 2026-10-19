@@ -55,6 +55,8 @@ struct PendingRemoval: Identifiable {
     let driveID: String
     let driveName: String
     let count: Int
+    /// The films that weren't found: confirming removes these and no others.
+    let films: Set<String>
 
     var id: String { driveID }
 }

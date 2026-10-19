@@ -69,10 +69,11 @@ final class ViewingHistoryTests: XCTestCase {
         XCTAssertEqual(record.watchedOn, ISO8601DateFormatter().date(from: "2026-02-01T21:00:00Z"))
     }
 
-    func testOneViewingPerDay() {
-        XCTAssertEqual(PersonalRecord.tidy([date(2026, 1, 1, hour: 23), date(2026, 1, 1, hour: 9), date(2025, 1, 1)], calendar: calendar),
-                       [date(2025, 1, 1), date(2026, 1, 1, hour: 9)])
-        let a = PersonalRecord(watched: true, watchedOn: date(2026, 1, 1, hour: 9))
+    func testOneEveningIsOneViewing() {
+        XCTAssertEqual(PersonalRecord.tidy([date(2026, 1, 1, hour: 23), date(2026, 1, 1, hour: 20), date(2025, 1, 1)]),
+                       [date(2025, 1, 1), date(2026, 1, 1, hour: 20)])
+        XCTAssertEqual(PersonalRecord.tidy([date(2026, 1, 1, hour: 20), date(2026, 1, 2, hour: 21)]).count, 2, "two evenings in a row")
+        let a = PersonalRecord(watched: true, watchedOn: date(2026, 1, 1, hour: 20))
         let b = PersonalRecord(watched: true, watchedOn: date(2026, 1, 1, hour: 22))
         XCTAssertEqual(a.merged(with: b).viewings.count, 1, "two copies of one evening are one viewing")
     }
