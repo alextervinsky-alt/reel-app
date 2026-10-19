@@ -673,7 +673,9 @@ struct NotesEditor: View {
                 }
             }
             if let watchedOn = record.watchedOn, record.watched {
-                Text("Watched \(watchedOn.formatted(date: .long, time: .omitted))")
+                Text(record.viewings.count > 1
+                     ? "Watched \(record.viewings.count) times, last on \(watchedOn.formatted(date: .long, time: .omitted))"
+                     : "Watched \(watchedOn.formatted(date: .long, time: .omitted))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

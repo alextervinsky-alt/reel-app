@@ -93,7 +93,7 @@ final class RecommenderTests: XCTestCase {
         }
         let films = [film("a", 2019, 3), film("b", 2026, 12), film("c", 2027, 1), film("d", 2024, 6)]
         XCTAssertEqual(YearInFilm.years(in: films, calendar: calendar), [2027, 2026, 2024, 2019])
-        XCTAssertEqual(YearInFilm(year: 2026, from: films, calendar: calendar).films.map(\.id), ["b"])
+        XCTAssertEqual(YearInFilm(year: 2026, from: films, calendar: calendar).films.map(\.key), ["b"])
         XCTAssertEqual(YearInFilm(year: 2027, from: films, calendar: calendar).months, [1] + Array(repeating: 0, count: 11))
     }
 
@@ -115,14 +115,14 @@ final class RecommenderTests: XCTestCase {
             seen("Old", date(2025, 12, 31), runtime: 90, genres: ["Horror"], director: "Shyamalan", released: 2021),
         ]
         let year = YearInFilm(year: 2026, from: films, calendar: calendar)
-        XCTAssertEqual(year.films.map { $0.id }, ["Stalker", "Solaris", "Her"])
+        XCTAssertEqual(year.films.map { $0.key }, ["Stalker", "Solaris", "Her"])
         XCTAssertEqual(year.minutes, 455)
         XCTAssertEqual(Array(year.months.prefix(3)), [2, 0, 1])
         XCTAssertEqual(year.topGenres.first, Tally(name: "Drama", count: 3))
         XCTAssertEqual(year.topDirectors, [Tally(name: "Tarkovsky", count: 2)])
-        XCTAssertEqual(year.favourite?.id, "Stalker")
-        XCTAssertEqual(year.longest?.id, "Solaris")
-        XCTAssertEqual(year.oldest?.id, "Solaris")
+        XCTAssertEqual(year.favourite?.key, "Stalker")
+        XCTAssertEqual(year.longest?.key, "Solaris")
+        XCTAssertEqual(year.oldest?.key, "Solaris")
         XCTAssertEqual(year.decades.map { $0.name }, ["1970s", "2010s"])
         XCTAssertEqual(YearInFilm.years(in: films, calendar: calendar), [2026, 2025])
     }

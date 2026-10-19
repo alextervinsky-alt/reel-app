@@ -121,23 +121,23 @@ private struct YearSummary: View {
     /// Opens a film of the year: its page when it's in the library, otherwise its preview.
     @ViewBuilder
     private func opening<Label: View>(_ film: YearFilm, @ViewBuilder label: () -> Label) -> some View {
-        if let item = model.item(forKey: film.id) {
+        if let item = model.item(forKey: film.key) {
             NavigationLink(value: FilmRoute(id: item.main.id)) { label() }
                 .buttonStyle(.plain)
-        } else if let id = PersonalStore.tmdbID(film.id), let seen = model.lists.briefs[id] {
+        } else if let id = PersonalStore.tmdbID(film.key), let seen = model.lists.briefs[id] {
             Button { preview(PreviewFilm(id: id, seen: seen)) } label: { label() }
                 .buttonStyle(.plain)
         }
     }
 
     private func posterPath(_ film: YearFilm) -> String? {
-        if let item = model.item(forKey: film.id) { return item.main.tmdb?.posterPath }
-        return PersonalStore.tmdbID(film.id).flatMap { model.lists.briefs[$0]?.posterPath }
+        if let item = model.item(forKey: film.key) { return item.main.tmdb?.posterPath }
+        return PersonalStore.tmdbID(film.key).flatMap { model.lists.briefs[$0]?.posterPath }
     }
 
     private func backdropPath(_ film: YearFilm) -> String? {
-        if let item = model.item(forKey: film.id) { return item.main.tmdb?.backdropPath }
-        return PersonalStore.tmdbID(film.id).flatMap { model.lists.briefs[$0]?.backdropPath }
+        if let item = model.item(forKey: film.key) { return item.main.tmdb?.backdropPath }
+        return PersonalStore.tmdbID(film.key).flatMap { model.lists.briefs[$0]?.backdropPath }
     }
 
     // MARK: Numbers
@@ -145,7 +145,7 @@ private struct YearSummary: View {
     private var numbers: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
-            BigNumber(value: "\(summary.films.count)", label: summary.films.count == 1 ? "film" : "films")
+            BigNumber(value: "\(summary.uniqueFilms.count)", label: summary.uniqueFilms.count == 1 ? "film" : "films")
             BigNumber(value: hours, label: "hours of film")
             if let genre = summary.topGenres.first {
                 BigNumber(value: genre.name, label: "most watched genre")
@@ -160,7 +160,7 @@ private struct YearSummary: View {
 
     /// "4 more films and 9 more hours than in 2025"
     private func comparison(with previous: YearInFilm) -> some View {
-        let films = summary.films.count - previous.films.count
+        let films = summary.uniqueFilms.count - previous.uniqueFilms.count
         let hours = Int((Double(summary.minutes - previous.minutes) / 60).rounded())
         func part(_ n: Int, _ one: String, _ many: String) -> String? {
             n == 0 ? nil : "\(abs(n)) \(n > 0 ? "more" : "fewer") \(abs(n) == 1 ? one : many)"
@@ -172,7 +172,7 @@ private struct YearSummary: View {
         return Label(text, systemImage: films >= 0 ? "arrow.up.right" : "arrow.down.right")
             .font(.system(size: 13))
             .foregroundStyle(.secondary)
-            .help("\(String(previous.year))\(soFar ? " to this date" : ""): \(previous.films.count) films, \(Int((Double(previous.minutes) / 60).rounded())) hours")
+            .help("\(String(previous.year))\(soFar ? " to this date" : ""): \(previous.uniqueFilms.count) films, \(Int((Double(previous.minutes) / 60).rounded())) hours")
     }
 
     private var hours: String {
@@ -222,7 +222,10 @@ private struct YearSummary: View {
             figures.append((age == 1 ? "1 year" : "\(age) years", "how old a film was, on average, when you saw it"))
         }
         let rated = summary.starCounts.reduce(0, +)
-        if rated > 0 { figures.append(("\(rated) of \(summary.films.count)", "films you gave stars")) }
+        if rated > 0 { figures.append(("\(rated) of \(summary.uniqueFilms.count)", "films you gave stars")) }
+        if summary.rewatches > 0 {
+            figures.append((summary.rewatches == 1 ? "1 rewatch" : "\(summary.rewatches) rewatches", "films you watched again"))
+        }
         return figures
     }
 
@@ -282,7 +285,7 @@ private struct YearSummary: View {
     private var highlightPicks: [Highlight] {
         var picks: [Highlight] = []
         func add(_ pick: Highlight) {
-            if !picks.contains(where: { $0.film.id == pick.film.id }) { picks.append(pick) }
+            if !picks.contains(where: { $0.film.key == pick.film.key }) { picks.append(pick) }
         }
         if let film = summary.favourite {
             add(film.yourRating.map { Highlight(label: "Your favourite", film: film, detail: String(repeating: "★", count: $0)) }
@@ -300,7 +303,7 @@ private struct YearSummary: View {
         if let film = summary.newest {
             add(Highlight(label: "Newest", film: film, detail: film.releaseYear.map(String.init) ?? ""))
         }
-        if let film = summary.films.first(where: { !$0.elsewhere }) {
+        if let film = summary.uniqueFilms.first(where: { !$0.elsewhere }) {
             add(Highlight(label: "First of the year", film: film, detail: film.watchedOn.formatted(.dateTime.day().month(.wide))))
         }
         return picks
@@ -375,8 +378,8 @@ private struct YearSummary: View {
     /// The great lists your films of the year are on (from your drives: winners and members only).
     private var onTheLists: [Tally] {
         var names: [String] = []
-        for film in summary.films {
-            guard let item = model.item(forKey: film.id) else { continue }
+        for film in summary.uniqueFilms {
+            guard let item = model.item(forKey: film.key) else { continue }
             names += Set(model.badges(for: item.main).filter(\.isWin).map { $0.kind.title })
         }
         var counts: [String: Int] = [:]
@@ -429,7 +432,7 @@ private struct YearSummary: View {
                             Poster(path: posterPath(film), title: film.title, cornerRadius: 8)
                                 .overlay(alignment: .topTrailing) {
                                     // Seen elsewhere, not on a drive.
-                                    if model.item(forKey: film.id) == nil {
+                                    if model.item(forKey: film.key) == nil {
                                         Image(systemName: "eye.fill")
                                             .font(.system(size: 10, weight: .bold))
                                             .padding(6)

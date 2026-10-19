@@ -58,8 +58,10 @@ final class PersonalStore {
     private(set) var watchedKeys: Set<String> = []
     private(set) var watchlistKeys: Set<String> = []
     private(set) var favoriteKeys: Set<String> = []
-    /// When each watched film was watched (for the diary and Year in Film).
+    /// When each watched film was last watched (the Watched shelf's months).
     private(set) var watchedDates: [String: Date] = [:]
+    /// Every viewing of each watched film, oldest first (Year in Film).
+    private(set) var viewings: [String: [Date]] = [:]
     /// TMDB ids of films watched, on a drive or elsewhere.
     private(set) var watchedIDs: Set<Int> = []
     /// Goes up whenever a rating or a heart changes (what Watch Again and your taste follow).
@@ -90,7 +92,7 @@ final class PersonalStore {
         boxes[key]?.record = record
         if old.rating != record.rating || old.favorite != record.favorite { ratingsVersion += 1 }
         if old.watched != record.watched || old.watchlist != record.watchlist || old.favorite != record.favorite
-            || old.watchedOn != record.watchedOn {
+            || old.viewings != record.viewings {
             update(key, from: old, to: record)
         }
         return old
@@ -118,6 +120,8 @@ final class PersonalStore {
         if old.favorite != new.favorite { Self.toggle(&favoriteKeys, key, new.favorite) }
         let date = new.watched ? new.watchedOn : nil
         if watchedDates[key] != date { watchedDates[key] = date }
+        let all = new.watched && !new.viewings.isEmpty ? new.viewings : nil
+        if viewings[key] != all { viewings[key] = all }
         if old.watched != new.watched, let id = Self.tmdbID(key) {
             if new.watched { watchedIDs.insert(id) } else { watchedIDs.remove(id) }
         }
@@ -126,11 +130,13 @@ final class PersonalStore {
     private func rederive() {
         var watched = Set<String>(), watchlist = Set<String>(), favorites = Set<String>()
         var dates: [String: Date] = [:]
+        var all: [String: [Date]] = [:]
         var ids = Set<Int>()
         for (key, record) in records {
             if record.watched {
                 watched.insert(key)
                 if let date = record.watchedOn { dates[key] = date }
+                if !record.viewings.isEmpty { all[key] = record.viewings }
                 if let id = Self.tmdbID(key) { ids.insert(id) }
             }
             if record.watchlist { watchlist.insert(key) }
@@ -140,6 +146,7 @@ final class PersonalStore {
         watchlistKeys = watchlist
         favoriteKeys = favorites
         watchedDates = dates
+        viewings = all
         watchedIDs = ids
         ratingsVersion += 1
     }

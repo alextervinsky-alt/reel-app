@@ -645,7 +645,9 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
     public var watchlist: Bool
     public var rating: Int?
     public var note: String
-    public var watchedOn: Date?
+    /// Every time you watched it, oldest first (one per day at most). A film marked watched
+    /// without a date ("Seen It?") has none.
+    public var viewings: [Date]
 
     public init(watched: Bool = false, favorite: Bool = false, watchlist: Bool = false,
                 rating: Int? = nil, note: String = "", watchedOn: Date? = nil) {
@@ -654,7 +656,30 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
         self.watchlist = watchlist
         self.rating = rating
         self.note = note
-        self.watchedOn = watchedOn
+        self.viewings = watchedOn.map { [$0] } ?? []
+    }
+
+    /// The last time you watched it. Setting it corrects that date (the first one when there
+    /// is none); nil forgets every viewing (unwatched).
+    public var watchedOn: Date? {
+        get { viewings.last }
+        set {
+            guard let date = newValue else {
+                viewings = []
+                return
+            }
+            if viewings.isEmpty { viewings = [date] } else { viewings[viewings.count - 1] = date }
+            viewings = Self.tidy(viewings)
+        }
+    }
+
+    /// Watched again (or for the first time) on `date`. A second viewing on the same day isn't
+    /// counted twice.
+    public mutating func addViewing(_ date: Date, calendar: Calendar = .current) {
+        watched = true
+        watchlist = false
+        guard !viewings.contains(where: { calendar.isDate($0, inSameDayAs: date) }) else { return }
+        viewings = Self.tidy(viewings + [date])
     }
 
     public var isEmpty: Bool { self == PersonalRecord() }
@@ -666,10 +691,46 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
         result.favorite = favorite || other.favorite
         result.watchlist = (watchlist || other.watchlist) && !result.watched
         result.rating = rating ?? other.rating
-        result.watchedOn = watchedOn ?? other.watchedOn
+        result.viewings = Self.tidy(viewings + other.viewings)
         let notes = [note, other.note].filter { !$0.isEmpty }
         result.note = notes.count == 2 && notes[0] == notes[1] ? notes[0] : notes.joined(separator: "\n\n")
         return result
+    }
+
+    /// Oldest first, each moment once.
+    static func tidy(_ dates: [Date]) -> [Date] {
+        Array(Set(dates)).sorted()
+    }
+
+    // Saved as before plus the viewings: "watchedOn" (the last viewing) stays, so Reel 1.8.7
+    // and older still read the date; a record from them (no "viewings") becomes one viewing.
+    enum CodingKeys: String, CodingKey {
+        case watched, favorite, watchlist, rating, note, watchedOn, viewings
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        watched = try c.decodeIfPresent(Bool.self, forKey: .watched) ?? false
+        favorite = try c.decodeIfPresent(Bool.self, forKey: .favorite) ?? false
+        watchlist = try c.decodeIfPresent(Bool.self, forKey: .watchlist) ?? false
+        rating = try c.decodeIfPresent(Int.self, forKey: .rating)
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        if let saved = try c.decodeIfPresent([Date].self, forKey: .viewings) {
+            viewings = Self.tidy(saved)
+        } else {
+            viewings = try c.decodeIfPresent(Date.self, forKey: .watchedOn).map { [$0] } ?? []
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(watched, forKey: .watched)
+        try c.encode(favorite, forKey: .favorite)
+        try c.encode(watchlist, forKey: .watchlist)
+        try c.encodeIfPresent(rating, forKey: .rating)
+        try c.encode(note, forKey: .note)
+        try c.encodeIfPresent(watchedOn, forKey: .watchedOn)
+        if !viewings.isEmpty { try c.encode(viewings, forKey: .viewings) }
     }
 }
 

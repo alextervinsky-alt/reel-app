@@ -252,21 +252,24 @@ extension AppModel {
 
     // MARK: - Year in Film
 
-    /// Every film watched on a known date: the library's, and those seen elsewhere when Year in
-    /// Film counts them (read by Year in Film, which then follows your ratings and dates).
+    /// Every viewing with a known date: the library's films, and those seen elsewhere when Year in
+    /// Film counts them (read by Year in Film, which then follows your ratings and dates). A film
+    /// watched three times gives three.
     func yearFilms() -> [YearFilm] {
-        let library: [YearFilm] = personal.watchedDates.compactMap { key, date in
-            guard let item = itemCache[key] else { return nil }
+        let library: [YearFilm] = personal.viewings.flatMap { key, dates -> [YearFilm] in
+            guard let item = itemCache[key] else { return [] }
             let d = item.main.tmdb
-            return YearFilm(id: key, title: item.main.displayTitle, releaseYear: item.main.displayYear, watchedOn: date,
+            return dates.map { date in YearFilm(id: key, title: item.main.displayTitle, releaseYear: item.main.displayYear, watchedOn: date,
                             runtime: d?.runtime, genres: d?.genreNames ?? [], directors: d?.directors ?? [],
                             yourRating: personal.record(forKey: key).rating, score: item.score, language: d?.originalLanguage,
                             cast: YearFilm.leads(d), cinematographers: d?.cinematographers ?? [],
-                            composers: d?.people(forJobs: TMDBMovieDetails.composerJobs).map(\.name) ?? [])
+                            composers: d?.people(forJobs: TMDBMovieDetails.composerJobs).map(\.name) ?? []) }
         }
         guard yearCountsElsewhere else { return library }
-        return library + seenElsewhereFilms.compactMap { entry in
-            entry.film?.yearFilm(id: entry.key, watchedOn: entry.date, yourRating: personal.record(forKey: entry.key).rating)
+        return library + seenElsewhereFilms.flatMap { entry -> [YearFilm] in
+            guard let film = entry.film else { return [] }
+            let record = personal.record(forKey: entry.key)
+            return record.viewings.map { film.yearFilm(id: entry.key, watchedOn: $0, yourRating: record.rating) }
         }
     }
 

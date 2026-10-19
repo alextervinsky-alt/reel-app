@@ -1,8 +1,11 @@
 import Foundation
 
-/// One watched film, as Year in Film needs it.
+/// One viewing of a film, as Year in Film needs it (a film watched twice is two of these).
 public struct YearFilm: Equatable, Sendable, Identifiable {
-    public let id: String
+    /// The film (its personal key, "tmdb:…"): the same for each of its viewings.
+    public let key: String
+    /// This viewing: the film and when.
+    public var id: String { key + "@" + String(watchedOn.timeIntervalSince1970) }
     public let title: String
     public let releaseYear: Int?
     public let watchedOn: Date
@@ -27,7 +30,7 @@ public struct YearFilm: Equatable, Sendable, Identifiable {
                 cast: [String] = [], elsewhere: Bool = false, cinematographers: [String] = [], composers: [String] = []) {
         self.cinematographers = cinematographers
         self.composers = composers
-        self.id = id
+        self.key = id
         self.title = title
         self.releaseYear = releaseYear
         self.watchedOn = watchedOn
@@ -133,7 +136,7 @@ public struct RatingGap: Equatable, Sendable, Identifiable {
     public let film: YearFilm
     public let stars: Int
     public let score: Double
-    public var id: String { film.id }
+    public var id: String { film.key }
     /// Your stars on a 10-point scale minus the score: positive, you liked it more.
     public var difference: Double { Double(stars * 2) - score }
 }
@@ -148,8 +151,13 @@ public struct FilmRun: Equatable, Sendable {
 /// A year of watching, worked out from the films you marked as watched (with the date).
 public struct YearInFilm: Equatable, Sendable {
     public let year: Int
-    /// Oldest viewing first.
+    /// Every viewing of the year, oldest first (a film watched twice is here twice).
     public let films: [YearFilm]
+    /// Each film once, in the order first watched that year: what the year's kinds, people,
+    /// stars and highlights are counted from.
+    public let uniqueFilms: [YearFilm]
+    /// Viewings of films you had watched before (earlier that year or in an earlier year).
+    public let rewatches: Int
     public let minutes: Int
     /// Films per month, January first.
     public let months: [Int]
@@ -197,13 +205,25 @@ public struct YearInFilm: Equatable, Sendable {
     public let warmerThanMost: [RatingGap]
     public let coolerThanMost: [RatingGap]
 
+    /// - Parameter all: every viewing of every film, any year (earlier years tell which viewings
+    ///   are rewatches).
     public init(year: Int, from all: [YearFilm], calendar: Calendar = .current) {
         self.year = year
-        films = all.filter { calendar.component(.year, from: $0.watchedOn) == year }.sorted { $0.watchedOn < $1.watchedOn }
-        minutes = films.reduce(0) { $0 + ($1.runtime ?? 0) }
+        // Every viewing of the year, in order: they count time, months, nights and runs.
+        let viewings = all.filter { calendar.component(.year, from: $0.watchedOn) == year }.sorted { $0.watchedOn < $1.watchedOn }
+        self.films = viewings
+        minutes = viewings.reduce(0) { $0 + ($1.runtime ?? 0) }
+        // Each film once (its first viewing of the year): what you watched, its kinds and people.
+        var seenKeys = Set<String>()
+        let unique = viewings.filter { seenKeys.insert($0.key).inserted }
+        uniqueFilms = unique
+        rewatches = viewings.filter { viewing in
+            all.contains { $0.key == viewing.key && $0.watchedOn < viewing.watchedOn }
+        }.count
+        let films = unique
 
         var months = Array(repeating: 0, count: 12)
-        for film in films { months[calendar.component(.month, from: film.watchedOn) - 1] += 1 }
+        for film in viewings { months[calendar.component(.month, from: film.watchedOn) - 1] += 1 }
         self.months = months
 
         topGenres = Self.tally(films.flatMap { $0.genres }, minimum: 1, limit: 4)
@@ -226,7 +246,7 @@ public struct YearInFilm: Equatable, Sendable {
         let busiest = months.enumerated().max { $0.element < $1.element }
         busiestMonth = busiest.flatMap { top in months.filter { $0 == top.element }.count == 1 && top.element >= 2 ? top.offset : nil }
         var nights = Array(repeating: 0, count: 8)
-        for film in films where !film.elsewhere { nights[calendar.component(.weekday, from: film.watchedOn)] += 1 }
+        for film in viewings where !film.elsewhere { nights[calendar.component(.weekday, from: film.watchedOn)] += 1 }
         let night = nights.enumerated().max { $0.element < $1.element }
         favouriteWeekday = night.flatMap { top in nights.filter { $0 == top.element }.count == 1 && top.element >= 3 ? top.offset : nil }
         let spoken = films.compactMap { $0.language.flatMap { $0.isEmpty ? nil : FilmLanguage.name($0) } }
@@ -244,7 +264,7 @@ public struct YearInFilm: Equatable, Sendable {
         // Films seen elsewhere have a guessed date: left out.
         let ages = films.filter { !$0.elsewhere }.compactMap { film in film.releaseYear.map { max(0, calendar.component(.year, from: film.watchedOn) - $0) } }
         averageAge = ages.count < 3 ? nil : Int((Double(ages.reduce(0, +)) / Double(ages.count)).rounded())
-        longestRun = Self.longestRun(films.filter { !$0.elsewhere }.map(\.watchedOn), calendar: calendar)
+        longestRun = Self.longestRun(viewings.filter { !$0.elsewhere }.map(\.watchedOn), calendar: calendar)
         weekdays = Array(nights[1...7])
         let gaps = films.compactMap { film -> RatingGap? in
             guard let stars = film.yourRating, let score = film.score, score > 0 else { return nil }

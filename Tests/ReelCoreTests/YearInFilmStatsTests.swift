@@ -26,13 +26,13 @@ final class YearInFilmStatsTests: XCTestCase {
         XCTAssertEqual(year.languages.first, Tally(name: "Korean", count: 2))
         XCTAssertEqual(year.languageCount, 3)
         XCTAssertEqual(year.topActors, [Tally(name: "Song Kang-ho", count: 2)])
-        XCTAssertEqual(year.shortest?.id, "a")
-        XCTAssertEqual(year.newest?.id, "a", "the first of the newest releases")
+        XCTAssertEqual(year.shortest?.key, "a")
+        XCTAssertEqual(year.newest?.key, "a", "the first of the newest releases")
         XCTAssertEqual(year.starCounts, [0, 0, 1, 1, 1])
         XCTAssertEqual(year.averageAge, 11, "0, 7 and 27 years old (D was seen elsewhere)")
         XCTAssertNil(year.longestRun, "a week apart")
         XCTAssertEqual(year.weekdays[5], 3, "three Fridays")
-        XCTAssertEqual(year.warmerThanMost.map(\.film.id), ["a"], "5★ is 10 against 8: two points is enough (D has no score)")
+        XCTAssertEqual(year.warmerThanMost.map(\.film.key), ["a"], "5★ is 10 against 8: two points is enough (D has no score)")
     }
 
     func testRunsGapsAndCrew() {
@@ -54,8 +54,8 @@ final class YearInFilmStatsTests: XCTestCase {
         let year = YearInFilm(year: 2026, from: films, calendar: calendar)
         XCTAssertEqual(year.longestRun?.nights, 3, "3, 4 and 5 January (a film seen elsewhere isn't a night)")
         XCTAssertEqual(year.longestRun?.start, calendar.startOfDay(for: day(3)))
-        XCTAssertEqual(year.warmerThanMost.map(\.film.id), ["a"])
-        XCTAssertEqual(year.coolerThanMost.map(\.film.id), ["b"])
+        XCTAssertEqual(year.warmerThanMost.map(\.film.key), ["a"])
+        XCTAssertEqual(year.coolerThanMost.map(\.film.key), ["b"])
         XCTAssertEqual(year.topCinematographers, [Tally(name: "Roger Deakins", count: 2)])
     }
 }

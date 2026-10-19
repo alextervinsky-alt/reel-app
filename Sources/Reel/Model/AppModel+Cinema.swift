@@ -263,7 +263,8 @@ extension AppModel {
     func askIfFinished() {
         guard let playing = nowPlaying, ratingPrompt == nil else { return }
         let elapsed = Date().timeIntervalSince(playing.startedAt)
-        if elapsed > 12 * 3600 || isWatched(playing.key) {
+        // Watched films are asked too: finishing one again is another viewing.
+        if elapsed > 12 * 3600 {
             nowPlaying = nil
         } else if elapsed >= playing.minimumWatch, itemCache[playing.key] != nil {
             nowPlaying = nil
@@ -271,13 +272,11 @@ extension AppModel {
         }
     }
 
-    /// "Yes, I finished it": watched today, without asking again (the open sheet asks for stars).
+    /// "Yes, I finished it": a viewing today (another one for a film watched before), without
+    /// asking again (the open sheet asks for stars).
     func markFinished(_ prompt: RatingPrompt) {
-        guard !isWatched(prompt.id) else { return }
         var r = personal.stored(prompt.id)
-        r.watched = true
-        r.watchlist = false
-        r.watchedOn = Date()
+        r.addViewing(Date())
         setRecord(r, forKey: prompt.id)
     }
 
