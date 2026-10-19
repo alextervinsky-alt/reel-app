@@ -182,14 +182,16 @@ enum ScreenRenderer {
                 .background(Theme.background)
                 .environment(ScrollState()),
                model: model, scale: 2, to: output.appendingPathComponent("desk-posters.png"))
-        // Under the pointer at the smallest, the usual and a large poster size: all three ratings.
-        if let rated = model.items.first(where: { $0.main.ratings?.imdb != nil && $0.main.ratings?.rottenTomatoes != nil
-                                                  && $0.main.ratings?.metacritic != nil }) {
+        // Under the pointer at the smallest, the usual and a large poster size: all three ratings
+        // (the sample has no OMDb key, so a film is given three).
+        if let sample = model.items.first {
+            var rated = sample.main
+            rated.ratings = ExternalRatings(imdb: 8.1, rottenTomatoes: 93, metacritic: 81)
             render(HStack(alignment: .bottom, spacing: 22) {
                         ForEach([130.0, 168.0, 205.0], id: \.self) { width in
-                            Poster(path: rated.main.tmdb?.posterPath, title: rated.main.displayTitle, cornerRadius: 12)
+                            Poster(path: rated.tmdb?.posterPath, title: rated.displayTitle, cornerRadius: 12)
                                 .frame(width: width, height: width * 1.5)
-                                .overlay(alignment: .bottom) { PosterHoverRatings(item: rated) }
+                                .overlay(alignment: .bottom) { PosterHoverRatings(film: rated, runtime: sample.runtime) }
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                     }

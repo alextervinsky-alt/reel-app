@@ -852,15 +852,16 @@ struct CardNote: Equatable {
 /// when a small poster can't fit them on one) and when it would end (with subtitles). Only built
 /// while the pointer is on it.
 struct PosterHoverRatings: View {
-    let item: LibraryItem
+    let film: FilmEntry
+    let runtime: Int?
 
     var body: some View {
-        let ends = Format.endsLine(item.main, runtime: item.runtime, quality: false)
-        let hasRatings = PosterRatings.has(item.main)
+        let ends = Format.endsLine(film, runtime: runtime, quality: false)
+        let hasRatings = PosterRatings.has(film)
         if hasRatings || ends != nil {
             VStack(alignment: .leading, spacing: 7) {
                 if hasRatings {
-                    PosterRatings(film: item.main, spacing: 7, keepsAll: true)
+                    PosterRatings(film: film, spacing: 7, keepsAll: true)
                         .environment(\.ratingScale, 0.85)
                 }
                 if let ends {
@@ -987,7 +988,7 @@ struct PosterCard: View, Equatable {
     private var poster: some View {
         Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12)
             .overlay(alignment: .bottom) {
-                if lifted { PosterHoverRatings(item: item).transition(.opacity) }
+                if lifted { PosterHoverRatings(film: item.main, runtime: item.runtime).transition(.opacity) }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .topTrailing) {
