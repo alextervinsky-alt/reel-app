@@ -234,7 +234,10 @@ public struct FilePicture: Equatable, Sendable {
         }
         // HDR Blu-rays are 4K discs only; a 1080p copy of one says "UHD".
         if resolution == "1080p", disc, !parsed.mentionsUHD {
-            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A 1080p Blu-ray: HDR is only on 4K Blu-rays", strength: 2)
+            // With H.264 or VC-1 too it's certain; alone, a folder that names HDR can outweigh it.
+            let codecProves = parsed.videoCodec.map { ["AVC", "VC-1", "MPEG-2", "XviD"].contains($0) } ?? false
+            return FilePicture(setting: .sdr, format: nil, basis: .source, reason: "A 1080p Blu-ray: HDR is only on 4K Blu-rays",
+                               strength: codecProves ? 4 : 2)
         }
         if let codec = parsed.videoCodec, ["AVC", "VC-1", "MPEG-2", "XviD"].contains(codec) {
             return FilePicture(setting: .sdr, format: nil, basis: .source,
