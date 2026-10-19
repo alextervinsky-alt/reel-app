@@ -239,6 +239,11 @@ final class AppModel {
     /// Last built items, reused when nothing about a film changed (building a search index costs time).
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
     @ObservationIgnored var scanning: Set<String> = []
+    /// Counts each time a drive is connected, so a scan can tell its drive was disconnected
+    /// and connected again while it read (its listing is then not trusted).
+    @ObservationIgnored var mountCount: [String: Int] = [:]
+    /// A complete scan that would remove many films, waiting for you to confirm (see `ScanVerdict`).
+    var pendingRemoval: PendingRemoval?
     @ObservationIgnored var mountRefresh: Task<Void, Never>?
     @ObservationIgnored var workSerial = 0
     /// A rebuild waiting to run (background changes are gathered, see `setFilms`).

@@ -134,6 +134,7 @@ extension AppModel {
         // Drives removed while the check was running are ignored.
         let now = now.filter { entry in drives.contains { $0.id == entry.key } }
         let newlyMounted = Set(now.keys).subtracting(mounted.keys)
+        for id in newlyMounted { mountCount[id, default: 0] += 1 }
         if now != mounted {
             mounted = now
             rebuild()
@@ -162,7 +163,8 @@ extension AppModel {
         await lookUpPending()
     }
 
-    /// Reads the drive's folder listing (names, sizes, dates only) and updates the library.
+    /// Reads the drive's folder listing (names, sizes, dates only) and updates the library. Only a
+    /// scan that read the whole drive while it stayed connected removes films (see `ScanVerdict`).
     /// - Parameter announcing: says how many films are new when done (not after a regrouping).
     func scan(_ drive: Drive, announcing: Bool = true) async {
         guard isLoaded, let url = mounted[drive.id], !scanning.contains(drive.id) else { return }
@@ -171,6 +173,7 @@ extension AppModel {
 
         let name = drive.name
         let id = drive.id
+        let connection = mountCount[id]
         reading[id] = "Reading \(name)…"
         // The folder listing reports how many files it has read so far.
         let counted: @Sendable (Int) -> Void = { [weak self] files in
@@ -180,44 +183,80 @@ extension AppModel {
             }
         }
         let fixes = groupingFixes
-        let (found, stillThere) = await measure("Scan", label: "Reading \(name)") {
-            await Task.detached(priority: .userInitiated) {
-                (DriveScanner.scan(root: url, fixes: fixes, progress: counted), DriveLocator.isFolder(url))
-            }.value
+        let result = await measure("Scan", label: "Reading \(name)") {
+            // Cancelling this scan stops the listing too.
+            let listing = Task.detached(priority: .userInitiated) {
+                DriveScanner.scan(root: url, fixes: fixes, progress: counted, isCancelled: { Task.isCancelled })
+            }
+            return await withTaskCancellationHandler { await listing.value } onCancel: { listing.cancel() }
         }
         reading[id] = nil
 
-        // Ejected or removed from Reel during the scan: the list may be incomplete, so don't use it.
-        guard stillThere, let index = drives.firstIndex(where: { $0.id == drive.id }), mounted[drive.id] != nil else { return }
-        let known = films.filter { $0.driveID == drive.id }
-        if found.isEmpty && !known.isEmpty {
-            notice = "Reel couldn't see any films on \(drive.name) just now, so nothing was changed. If macOS asked for permission, allow it and press ⌘R."
+        // The same drive, at the same place, connected the whole time; and still in Reel.
+        let stillThere = DriveLocator.isFolder(url) && mounted[id] == url && mountCount[id] == connection
+            && drives.contains { $0.id == id }
+        let verdict = ScanVerdict.of(Task.isCancelled ? DriveScan(files: [], cancelled: true) : result,
+                                     driveID: id, known: films, driveStillThere: stillThere)
+        switch verdict {
+        case .discard(.nothingSeen):
+            notice = "Reel couldn't see any films on \(name) just now, so nothing was changed. If macOS asked for permission, allow it and press ⌘R."
             return
+        case .discard:
+            // Disconnected or stopped: the listing may be incomplete, so it isn't used.
+            return
+        case .keepUnseen(let unreadable):
+            let first = unreadable.first.map { $0.isEmpty ? name : "“\($0)”" } ?? name
+            let more = unreadable.count > 1 ? " and \(unreadable.count - 1) more" : ""
+            notice = "Reel couldn't read \(first)\(more) on \(name), so no films were removed. Press ⌘R to try again."
+        case .confirmRemovals(let count):
+            pendingRemoval = PendingRemoval(driveID: id, driveName: name, count: count, scan: result.files)
+        case .apply:
+            break
         }
+        guard let index = drives.firstIndex(where: { $0.id == id }) else { return }
 
         let now = Date()
+        let known = films.filter { $0.driveID == id }
         // A drive Reel knows nothing about yet (new, or Library.json was lost) starts counting
         // arrivals after this scan, so its films don't all show up as new.
         let firstScan = drives[index].arrivalsSince == nil || known.isEmpty
         if firstScan { drives[index].arrivalsSince = now }
-        drives[index].lastScanned = now
+        // "Last read in full" (the Backup's checklist): only when it was.
+        if verdict == .apply { drives[index].lastScanned = now }
         scheduleSave(.settings)
         readFreeSpace()
 
         // Files that appear because of a regrouping by hand aren't arrivals: they're dated back.
         let stamp = announcing ? now : (drives[index].arrivalsSince ?? now)
-        setFilms(LibraryMerge.apply(scan: found, driveID: drive.id, to: films, now: stamp))
+        setFilms(LibraryMerge.apply(scan: result.files, driveID: id, to: films, now: stamp, keepingUnseen: verdict != .apply))
         // Regrouping by hand is a rescan too, but nothing arrived.
         if announcing {
             // New entries are the ones stamped with this scan's time (moved files keep theirs).
-            let added = films.filter { $0.driveID == drive.id && $0.addedAt == now }.count
+            let added = films.filter { $0.driveID == id && $0.addedAt == now }.count
             if firstScan {
-                announce(added == 1 ? "Found 1 film on \(drive.name)" : "Found \(added) films on \(drive.name)")
+                announce(added == 1 ? "Found 1 film on \(name)" : "Found \(added) films on \(name)")
             } else if added > 0 {
-                announce(added == 1 ? "1 new film on \(drive.name)" : "\(added) new films on \(drive.name)")
+                announce(added == 1 ? "1 new film on \(name)" : "\(added) new films on \(name)")
             }
         }
         await lookUpPending()
+    }
+
+    /// You confirmed that the films a scan didn't find are gone: they leave the library, as long
+    /// as the drive is still connected (its films may have changed since; the scan is applied to
+    /// the library as it is now).
+    func confirmPendingRemoval() {
+        guard let pending = pendingRemoval else { return }
+        pendingRemoval = nil
+        guard mounted[pending.driveID] != nil, let index = drives.firstIndex(where: { $0.id == pending.driveID }) else { return }
+        setFilms(LibraryMerge.apply(scan: pending.scan, driveID: pending.driveID, to: films, now: Date()))
+        drives[index].lastScanned = Date()
+        scheduleSave(.settings)
+    }
+
+    /// You kept them: nothing is removed, and the next scan asks again if they're still missing.
+    func keepPendingRemoval() {
+        pendingRemoval = nil
     }
 
     // MARK: - Backup

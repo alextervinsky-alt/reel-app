@@ -31,7 +31,7 @@ final class LibraryTests: XCTestCase {
         try makeFile("Extras/Making of.mkv")
         try makeFile("$RECYCLE.BIN/Old (1999).mkv")
 
-        let files = DriveScanner.scan(root: dir, minimumSize: 0)
+        let files = DriveScanner.scan(root: dir, minimumSize: 0).files
         XCTAssertEqual(files.map { $0.relativePath }, ["A (2001) 1080p.mkv", "C (2003).mkv.part", "sub/B 2002 720p.mp4"])
         XCTAssertEqual(files.first?.size, 42)
         XCTAssertEqual(files.last?.fileName, "B 2002 720p.mp4")
@@ -47,7 +47,7 @@ final class LibraryTests: XCTestCase {
     func testScannerSkipsSmallFiles() throws {
         try makeFile("Big (2001).mkv", bytes: 2_000)
         try makeFile("Trailer (2001).mkv", bytes: 10)
-        let files = DriveScanner.scan(root: dir, minimumSize: 1_000)
+        let files = DriveScanner.scan(root: dir, minimumSize: 1_000).files
         XCTAssertEqual(files.map { $0.fileName }, ["Big (2001).mkv"])
     }
 

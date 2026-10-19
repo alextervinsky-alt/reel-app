@@ -148,6 +148,18 @@ struct RootView: View {
                     NoticeBar(text: notice) { model.notice = nil }
                 }
             }
+            // A scan that would remove many films asks first (a drive half-read looks like this too).
+            .confirmationDialog(
+                model.pendingRemoval.map { "\($0.count) films are no longer on \($0.driveName)" } ?? "",
+                isPresented: Binding(get: { model.pendingRemoval != nil }, set: { if !$0 { model.keepPendingRemoval() } }),
+                presenting: model.pendingRemoval
+            ) { _ in
+                Button("Remove Them from Reel", role: .destructive) { model.confirmPendingRemoval() }
+                Button("Keep Them", role: .cancel) { model.keepPendingRemoval() }
+            } message: { pending in
+                Text("Reel read all of \(pending.driveName) but didn't find them. If you deleted them, remove them. If the drive "
+                     + "had a problem, keep them and press ⌘R later. Nothing on the drive is touched, and your notes are kept.")
+            }
             // ⌘[ goes back too (not while Cinema mode or a trailer covers the desk).
             .background {
                 Button("") { if !path.isEmpty { path.removeLast() } }

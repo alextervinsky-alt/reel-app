@@ -19,6 +19,24 @@ public struct ScannedFile: Codable, Equatable, Sendable {
     }
 }
 
+/// What one scan of a drive found, and whether it saw everything there.
+public struct DriveScan: Equatable, Sendable {
+    public var files: [ScannedFile]
+    /// Folders and files that couldn't be read (paths relative to the drive's folder).
+    public var unreadable: [String]
+    /// Stopped before the end (Reel quitting, the drive removed from Reel during the scan).
+    public var cancelled: Bool
+
+    public init(files: [ScannedFile], unreadable: [String] = [], cancelled: Bool = false) {
+        self.files = files
+        self.unreadable = unreadable
+        self.cancelled = cancelled
+    }
+
+    /// Everything on the drive was read: only then can a film that wasn't seen count as gone.
+    public var isComplete: Bool { unreadable.isEmpty && !cancelled }
+}
+
 public enum DriveScanner {
     /// System folders of Mac and Windows drives.
     public static let ignoredFolders: Set<String> = [
@@ -28,47 +46,106 @@ public enum DriveScanner {
     /// Smaller video files are trailers, samples or leftovers, not films.
     public static let defaultMinimumSize: Int64 = 30_000_000
 
+    /// One thing the folder listing met: a file, or a folder or file it couldn't read.
+    enum Entry {
+        case file(FilmGrouping.File)
+        /// Path relative to the drive's folder ("" for the folder itself).
+        case unreadable(String)
+    }
+
     /// Lists the films under `root`, each with its extras (see `FilmGrouping`), with the user's
-    /// grouping fixes applied. Reads names, sizes and dates from the folder listing only: no file
-    /// is ever opened, read or changed, and nothing is written to the drive.
-    /// - Parameter progress: told how many files have been read so far (every 250 files).
+    /// grouping fixes applied, and says what it couldn't read. Reads names, sizes and dates from
+    /// the folder listing only: no file is ever opened, read or changed, and nothing is written to
+    /// the drive.
+    /// - Parameters:
+    ///   - progress: told how many files have been read so far (every 250 files).
+    ///   - isCancelled: asked as the listing goes; true stops it (the result is then cancelled).
     public static func scan(root: URL, fixes: GroupingFixes = GroupingFixes(),
-                            minimumSize: Int64 = defaultMinimumSize, progress: ((Int) -> Void)? = nil) -> [ScannedFile] {
+                            minimumSize: Int64 = defaultMinimumSize, progress: ((Int) -> Void)? = nil,
+                            isCancelled: () -> Bool = { false }) -> DriveScan {
         let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
+        let rootPrefix = folderPrefix(root.standardizedFileURL.path)
+        let resolvedPrefix = folderPrefix(root.resolvingSymlinksInPath().path)
+        // The enumerator builds paths from `root`, so a plain prefix check works; resolving
+        // links (a disk access) is only the fallback.
+        func relative(_ url: URL) -> String {
+            let path = url.standardizedFileURL.path
+            if path.hasPrefix(rootPrefix) { return String(path.dropFirst(rootPrefix.count)) }
+            let resolved = url.resolvingSymlinksInPath().path
+            if resolved.hasPrefix(resolvedPrefix) { return String(resolved.dropFirst(resolvedPrefix.count)) }
+            return path == root.standardizedFileURL.path ? "" : url.lastPathComponent
+        }
+        // Folders the listing couldn't open are reported here as it goes, instead of being skipped
+        // without a word (their films would then look deleted).
+        let failures = Failures()
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles, .skipsPackageDescendants],
-            errorHandler: { _, _ in true }
-        ) else { return [] }
-
-        let rootPrefix = folderPrefix(root.standardizedFileURL.path)
-        let resolvedPrefix = folderPrefix(root.resolvingSymlinksInPath().path)
-        let keySet = Set(keys)
-        var files: [FilmGrouping.File] = []
-        for case let url as URL in enumerator {
-            guard let values = try? url.resourceValues(forKeys: keySet) else { continue }
-            if values.isDirectory == true {
-                if ignoredFolders.contains(url.lastPathComponent.lowercased()) { enumerator.skipDescendants() }
-                continue
+            errorHandler: { url, _ in
+                failures.add(relative(url))
+                return true
             }
-            guard values.isRegularFile == true else { continue }
-
-            // The enumerator builds paths from `root`, so a plain prefix check works; resolving
-            // links (a disk access) is only the fallback.
-            var relative = url.lastPathComponent
-            let path = url.standardizedFileURL.path
-            if path.hasPrefix(rootPrefix) {
-                relative = String(path.dropFirst(rootPrefix.count))
-            } else {
-                let resolved = url.resolvingSymlinksInPath().path
-                if resolved.hasPrefix(resolvedPrefix) { relative = String(resolved.dropFirst(resolvedPrefix.count)) }
-            }
-            files.append(FilmGrouping.File(relativePath: relative, size: Int64(values.fileSize ?? 0),
-                                           modified: values.contentModificationDate))
-            if files.count % 250 == 0 { progress?(files.count) }
+        ) else {
+            return DriveScan(files: [], unreadable: [""], cancelled: false)
         }
-        return fixes.apply(to: FilmGrouping.group(files, minimumSize: minimumSize))
+
+        let keySet = Set(keys)
+        let entries = AnySequence<Entry> {
+            AnyIterator {
+                while true {
+                    if let path = failures.next() { return .unreadable(path) }
+                    guard let url = enumerator.nextObject() as? URL else { return failures.next().map { .unreadable($0) } }
+                    guard let values = try? url.resourceValues(forKeys: keySet) else { return .unreadable(relative(url)) }
+                    if values.isDirectory == true {
+                        if ignoredFolders.contains(url.lastPathComponent.lowercased()) { enumerator.skipDescendants() }
+                        continue
+                    }
+                    guard values.isRegularFile == true else { continue }
+                    return .file(FilmGrouping.File(relativePath: relative(url), size: Int64(values.fileSize ?? 0),
+                                                   modified: values.contentModificationDate))
+                }
+            }
+        }
+        return collect(entries, fixes: fixes, minimumSize: minimumSize, progress: progress, isCancelled: isCancelled)
+    }
+
+    /// Turns what the listing met into the scan's result: the films with their extras, what
+    /// couldn't be read, and whether it was stopped.
+    static func collect(_ entries: some Sequence<Entry>, fixes: GroupingFixes = GroupingFixes(),
+                        minimumSize: Int64 = defaultMinimumSize, progress: ((Int) -> Void)? = nil,
+                        isCancelled: () -> Bool = { false }) -> DriveScan {
+        var files: [FilmGrouping.File] = []
+        var unreadable: [String] = []
+        var cancelled = false
+        for entry in entries {
+            if isCancelled() {
+                cancelled = true
+                break
+            }
+            switch entry {
+            case .file(let file):
+                files.append(file)
+                if files.count % 250 == 0 { progress?(files.count) }
+            case .unreadable(let path):
+                unreadable.append(path)
+            }
+        }
+        return DriveScan(files: fixes.apply(to: FilmGrouping.group(files, minimumSize: minimumSize)),
+                         unreadable: unreadable, cancelled: cancelled)
+    }
+
+    /// Paths the listing couldn't open, handed over in order (the enumerator reports them from
+    /// its own calls, so they're collected here first).
+    private final class Failures {
+        private var paths: [String] = []
+        private var read = 0
+        func add(_ path: String) { paths.append(path) }
+        func next() -> String? {
+            guard read < paths.count else { return nil }
+            defer { read += 1 }
+            return paths[read]
+        }
     }
 
     private static func folderPrefix(_ path: String) -> String {
@@ -385,8 +462,22 @@ public enum LibraryMerge {
     /// - Known files keep their match.
     /// - A file moved to another folder (same name and size) keeps its match.
     /// - New files are added as pending.
-    /// - Files no longer on the scanned drive are dropped. Other drives are untouched.
-    public static func apply(scan: [ScannedFile], driveID: String, to existing: [FilmEntry], now: Date) -> [FilmEntry] {
+    /// - Files no longer on the scanned drive are dropped, unless `keepingUnseen` (a scan that
+    ///   didn't read everything): then they stay exactly as they were. Other drives are untouched.
+    public static func apply(scan: [ScannedFile], driveID: String, to existing: [FilmEntry], now: Date,
+                             keepingUnseen: Bool = false) -> [FilmEntry] {
+        let merged = merge(scan: scan, driveID: driveID, to: existing, now: now)
+        return keepingUnseen ? merged.films + merged.unseen : merged.films
+    }
+
+    /// The films of the scanned drive that a complete scan would drop (not seen, and not found
+    /// moved to another folder).
+    public static func unseen(scan: [ScannedFile], driveID: String, in existing: [FilmEntry]) -> [FilmEntry] {
+        merge(scan: scan, driveID: driveID, to: existing, now: Date()).unseen
+    }
+
+    private static func merge(scan: [ScannedFile], driveID: String, to existing: [FilmEntry], now: Date)
+        -> (films: [FilmEntry], unseen: [FilmEntry]) {
         let others = existing.filter { $0.driveID != driveID }
         let mine = existing.filter { $0.driveID == driveID }
 
@@ -416,7 +507,47 @@ public enum LibraryMerge {
                 ))
             }
         }
-        return others + result
+        return (others + result, missing)
+    }
+}
+
+/// What a finished scan may change in the library. Only a scan that read the whole drive, while
+/// the drive stayed connected, can remove films; one that would remove a large share of a drive
+/// asks first.
+public enum ScanVerdict: Equatable, Sendable {
+    /// Everything: new, moved, updated and removed films.
+    case apply
+    /// New, moved and updated films; nothing removed (some of the drive couldn't be read).
+    case keepUnseen(unreadable: [String])
+    /// A complete read that would remove many films: they're kept until you confirm.
+    case confirmRemovals(count: Int)
+    /// Nothing is used.
+    case discard(Reason)
+
+    public enum Reason: Equatable, Sendable {
+        /// The drive was disconnected (or remounted) during the scan.
+        case driveGone
+        /// The scan was stopped before the end.
+        case cancelled
+        /// No films at all where there were some (a permission prompt, a drive still waking).
+        case nothingSeen
+    }
+
+    /// Removing at least this many films, and at least this share of the drive's films, asks first.
+    public static let askAtCount = 10
+    public static let askAtShare = 0.25
+
+    public static func of(_ scan: DriveScan, driveID: String, known films: [FilmEntry], driveStillThere: Bool) -> ScanVerdict {
+        guard driveStillThere else { return .discard(.driveGone) }
+        guard !scan.cancelled else { return .discard(.cancelled) }
+        let known = films.filter { $0.driveID == driveID }
+        if scan.files.isEmpty && !known.isEmpty { return .discard(.nothingSeen) }
+        guard scan.unreadable.isEmpty else { return .keepUnseen(unreadable: scan.unreadable) }
+        let removed = LibraryMerge.unseen(scan: scan.files, driveID: driveID, in: films).count
+        if removed >= askAtCount && Double(removed) >= Double(known.count) * askAtShare {
+            return .confirmRemovals(count: removed)
+        }
+        return .apply
     }
 }
 
