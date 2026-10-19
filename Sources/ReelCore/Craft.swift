@@ -99,9 +99,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     public var isThin: Bool { sources <= 1 || shotOn.isEmpty }
 
     /// Whether this reading stays instead of a `newer` one: when they're read by the same rules and
-    /// the newer one read fewer texts (a site down, offline for part of it). It's tried again later.
+    /// found the same way, and the newer one read fewer texts (a site down, offline for part of it).
+    /// It's tried again later. A reading found a better way always replaces it, even from fewer
+    /// texts: the ones it no longer reads were about another film.
     public func keeps(over newer: CraftIndex) -> Bool {
-        version == newer.version && newer.sources < sources
+        version == newer.version && discovery >= newer.discovery && newer.sources < sources
     }
 
     /// The sentence behind one Shot on, for "why".

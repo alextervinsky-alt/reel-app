@@ -110,20 +110,29 @@ extension FilePicture {
     }
 
     /// The folder that speaks for each film, by film id: its folder's name, when no other film on
-    /// that drive shares the folder, or when the folder is named as one collection. A film at the
-    /// top of a drive, or in a folder of assorted films ("4K HDR"), has none.
+    /// that drive shares the folder, or when the folder is named as one collection and at least two
+    /// thirds of its films are of one TMDB collection (so "Criterion Collection DV" holding
+    /// assorted films says nothing). A film at the top of a drive, or in a folder of assorted
+    /// films ("4K HDR"), has none.
     public static func ownFolderNames(_ films: [FilmEntry]) -> [String: String] {
         func folder(_ film: FilmEntry) -> String? {
             let parent = (film.relativePath as NSString).deletingLastPathComponent
             return parent.isEmpty ? nil : parent
         }
         var count: [String: Int] = [:]
-        for film in films { if let parent = folder(film) { count[film.driveID + "/" + parent, default: 0] += 1 } }
+        var collections: [String: [Int: Int]] = [:]
+        for film in films {
+            guard let parent = folder(film) else { continue }
+            let key = film.driveID + "/" + parent
+            count[key, default: 0] += 1
+            if let collection = film.tmdb?.collection?.id { collections[key, default: [:]][collection, default: 0] += 1 }
+        }
         var result: [String: String] = [:]
         for film in films {
             guard let parent = folder(film), let shared = count[film.driveID + "/" + parent] else { continue }
             let name = (parent as NSString).lastPathComponent
-            if shared == 1 || isCollection(name) { result[film.id] = name }
+            let together = collections[film.driveID + "/" + parent]?.values.max() ?? 0
+            if shared == 1 || (isCollection(name) && together * 3 >= shared * 2) { result[film.id] = name }
         }
         return result
     }

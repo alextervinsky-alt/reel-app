@@ -135,42 +135,69 @@ public enum CameraSources {
                       limit: Int, otherTitles: [String] = []) -> [(url: URL, site: String, title: String?)] {
         var found: [(url: URL, site: String, title: String?)] = []
         for hit in hits where isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link)
-            && !namesOtherFilm(hit.title, film: filmTitle, otherTitles: otherTitles) {
+            && !namesOtherFilm(hit.title, link: hit.link, film: filmTitle, otherTitles: otherTitles) {
             guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
             found.append((link, site, HTMLText.plain(hit.title)))
         }
         return Array(found.prefix(limit))
     }
 
-    /// Whether a search result's title names another film of the collection ("The Matrix
-    /// Resurrections" when reading about The Matrix). A title that's part of this film's own
-    /// ("Sicario" for "Sicario: Day of the Soldado") doesn't count.
-    public static func namesOtherFilm(_ heading: String, film: String, otherTitles: [String]) -> Bool {
-        let own = " " + TitleSimilarity.normalize(film) + " "
+    /// Whether a search result is about another film of the collection, by its title or its
+    /// address ("The Matrix Resurrections" when reading about The Matrix, ".../blade-runner-2049-…"
+    /// when reading about Blade Runner). Another title that this film's own continues ("The Matrix
+    /// Resurrections") always counts; one that doesn't (the franchise's first title, "Star Wars: The
+    /// Empire Strikes Back") counts only when this film isn't named too. A title that's part of
+    /// this film's own ("Sicario" for "Sicario: Day of the Soldado") never counts.
+    public static func namesOtherFilm(_ heading: String, link: String = "", film: String, otherTitles: [String]) -> Bool {
+        let own = TitleSimilarity.normalize(film)
         let padded = " " + TitleSimilarity.normalize(HTMLText.plain(heading)) + " "
+        let ownNamed = padded.contains(" " + own + " ")
+        let path = "/" + (URL(string: link)?.path ?? "").lowercased().split(separator: "/").joined(separator: "/") + "/"
         return otherTitles.contains { other in
             let name = TitleSimilarity.normalize(other)
-            return !name.isEmpty && !own.contains(" " + name + " ") && padded.contains(" " + name + " ")
+            guard !name.isEmpty, !(" " + own + " ").contains(" " + name + " ") else { return false }
+            let otherSlug = slug(other)
+            let named = padded.contains(" " + name + " ")
+                || (!otherSlug.isEmpty && (path.contains("/" + otherSlug + "-") || path.contains("/" + otherSlug + "/")
+                                           || path.contains("-" + otherSlug + "-") || path.contains("-" + otherSlug + "/")))
+            guard named else { return false }
+            let continuesOwn = (" " + name + " ").contains(" " + own + " ")
+            return continuesOwn || !ownNamed
         }
     }
 
     /// Whether a page found by searching for the title is about this film and not another of the
-    /// same name: it names the film's cinematographer (by surname). Not the director, or the year
-    /// alone: a sequel's article names both ("The Matrix Resurrections" names the Wachowskis and
-    /// 1999). Only when the cinematographer isn't known does the year, or one either side, do.
-    public static func namesFilm(_ paragraphs: [String], cinematographers: [String], year: Int?) -> Bool {
-        let text = paragraphs.joined(separator: "\n")
-        let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
-        if !surnames.isEmpty {
-            return surnames.contains { surname in
-                text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: surname) + "\\b", options: .regularExpression) != nil
+    /// same name: it names the film's cinematographer. Not the director, or the year alone: a
+    /// sequel's article names both ("The Matrix Resurrections" names the Wachowskis and 1999).
+    /// Only when the cinematographer isn't known do the director and the year (or one either side)
+    /// together do. Names are matched without regard to case, accents or hyphens ("Erdély",
+    /// "Kyung-pyo"), by surname ("Deakins"), or by the first name too when it comes first in the
+    /// family-name-first way ("Hong Kyung-pyo").
+    public static func namesFilm(_ paragraphs: [String], cinematographers: [String], directors: [String] = [], year: Int?) -> Bool {
+        let text = " " + fold(paragraphs.joined(separator: " ")) + " "
+        func named(_ people: [String]) -> Bool {
+            people.contains { person in
+                // Each written word of the name, folded ("Kyung-pyo" → "kyung pyo"), without "Jr.".
+                let words = person.split(separator: " ").map { fold(String($0)) }
+                    .filter { !$0.isEmpty && !["jr", "sr", "ii", "iii", "iv"].contains($0) }
+                guard let last = words.last else { return false }
+                var names = [words.joined(separator: " "), last]
+                // "Hong Kyung-pyo": the family name first.
+                if words.count == 2, last.contains(" ") { names.append(words[0]) }
+                return names.contains { $0.count >= 3 && text.contains(" " + $0 + " ") }
             }
         }
+        if !cinematographers.isEmpty { return named(cinematographers) }
+        guard let year, named(directors) else { return false }
         // Its year, or the one either side (a festival the year before, a release the year after).
-        if let year, ((year - 1)...(year + 1)).contains(where: { text.range(of: "\\b\($0)\\b", options: .regularExpression) != nil }) {
-            return true
-        }
-        return false
+        return ((year - 1)...(year + 1)).contains { text.contains(" \($0) ") }
+    }
+
+    /// Lowercase, no accents, words only: "Łukasz Żal" → "lukasz zal", "Kyung-Pyo" → "kyung pyo".
+    static func fold(_ text: String) -> String {
+        let plain = text.lowercased().folding(options: [.diacriticInsensitive], locale: Locale(identifier: "en_US"))
+            .replacingOccurrences(of: "ł", with: "l").replacingOccurrences(of: "ø", with: "o").replacingOccurrences(of: "ß", with: "ss")
+        return plain.split { !$0.isLetter && !$0.isNumber }.joined(separator: " ")
     }
 
     /// Whether an American Cinematographer search result is about this film: its title names the
@@ -299,8 +326,8 @@ public struct CameraSourcesClient: Sendable {
     /// - Parameters: `year` and `otherTitles` (the other films of its collection) tell a magazine's
     ///   article about this film from one about another (a remake, a sequel, "Heat" and "Heat Wave"):
     ///   see `CameraSources.namesFilm` and `CameraSources.namesOtherFilm`.
-    public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], year: Int? = nil,
-                     otherTitles: [String] = []) async -> CameraReading {
+    public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], directors: [String] = [],
+                     year: Int? = nil, otherTitles: [String] = []) async -> CameraReading {
         async let cited = citedLinks(articleTitle: articleTitle, cinematographers: cinematographers)
         async let asc = ascArticles(filmTitle: filmTitle, otherTitles: otherTitles)
         async let british = britishCinematographer(filmTitle: filmTitle, otherTitles: otherTitles)
@@ -333,7 +360,8 @@ public struct CameraSourcesClient: Sendable {
         let storiesRead = await stories
         // Another film's article (same title) isn't read, nor offered as a link.
         let otherFilm = Set(pages.compactMap { $0.1 }.filter {
-            searched.contains($0.url) && !CameraSources.namesFilm($0.paragraphs, cinematographers: cinematographers, year: year)
+            searched.contains($0.url) && !CameraSources.namesFilm($0.paragraphs, cinematographers: cinematographers,
+                                                                  directors: directors, year: year)
         }.map(\.url))
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }

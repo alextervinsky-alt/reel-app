@@ -48,7 +48,13 @@ extension AppModel {
                     let title = film.funFacts?.articleTitle
                     let colour = film.funFacts?.quick?.colour
                     let others = otherTitles(of: details)
-                    group.addTask { (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others)) }
+                    // Its collection couldn't be read (offline, no token): read again later with it.
+                    let collectionKnown = details.collection == nil || collectionLoaded(of: details)
+                    group.addTask {
+                        var index = await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others)
+                        if !collectionKnown { index?.discovery = CraftIndex.currentDiscovery - 1 }
+                        return (details.id, index)
+                    }
                 }
                 var all: [(Int, CraftIndex?)] = []
                 for await result in group { all.append(result) }
@@ -60,7 +66,7 @@ extension AppModel {
                     // again in a week rather than in half a year.
                     read[id] = CraftIndex(version: old.version, readAt: Date().addingTimeInterval(7 * 86_400 - CraftIndex.maxAge),
                                           shotOn: old.shotOn, names: old.names, evidence: old.evidence, sources: old.sources,
-                                          discovery: CraftIndex.currentDiscovery)
+                                          discovery: old.discovery)
                     failedInARow = 0
                 } else if let index {
                     read[id] = index
@@ -90,6 +96,11 @@ extension AppModel {
         _ = await lists.loadFranchise(collection.id, using: TMDBClient(token: token))
     }
 
+    func collectionLoaded(of details: TMDBMovieDetails) -> Bool {
+        guard let collection = details.collection else { return true }
+        return lists.sets[FilmSet.id(.franchise, collection.id)] != nil
+    }
+
     /// The other films of its collection, whose articles aren't read for it: The Matrix
     /// Resurrections' for The Matrix.
     func otherTitles(of details: TMDBMovieDetails) -> [String] {
@@ -105,8 +116,9 @@ extension AppModel {
         var tagged = 0, read = 0, articleOnly = 0, waiting = 0
         for film in films {
             guard let details = film.tmdb, seen.insert(details.id).inserted, !details.genreNames.contains("Animation") else { continue }
-            guard let craft = film.craft, !craft.isStale() else {
-                waiting += 1
+            guard let craft = film.craft, !needsReading(film) else {
+                // Films whose Wikipedia facts aren't in yet aren't read either: not counted.
+                if film.funFacts != nil { waiting += 1 }
                 continue
             }
             read += 1

@@ -33,7 +33,7 @@ public enum CraftReader {
                             otherTitles: [String] = []) async -> CraftIndex? {
         async let fetched = CameraSourcesClient().read(articleTitle: articleTitle, filmTitle: details.title,
                                                        cinematographers: details.cinematographers,
-                                                       year: details.year, otherTitles: otherTitles)
+                                                       directors: details.directors, year: details.year, otherTitles: otherTitles)
         var reached = articleTitle == nil
         var article: FilmArticle?
         if let articleTitle {

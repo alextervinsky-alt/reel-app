@@ -164,7 +164,7 @@ struct SettingsView: View {
                 LabeledContent("Live-action films with Shot on") {
                     Text("\(coverage.tagged) of \(coverage.read)").monospacedDigit().foregroundStyle(.secondary)
                 }
-                LabeledContent("Read from their Wikipedia article alone") {
+                LabeledContent("Read from one text alone (usually Wikipedia)") {
                     Text(coverage.articleOnly.formatted()).monospacedDigit().foregroundStyle(.secondary)
                 }
                 if coverage.waiting > 0 {

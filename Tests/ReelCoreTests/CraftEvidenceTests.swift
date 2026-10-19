@@ -134,8 +134,11 @@ final class CraftEvidenceTests: XCTestCase {
         XCTAssertFalse(CameraSources.namesFilm(heatWave, cinematographers: ["Dante Spinotti"], year: 1995))
         let heat = ["Spinotti lit the downtown shootout with practicals and shot on 35 mm."]
         XCTAssertTrue(CameraSources.namesFilm(heat, cinematographers: ["Dante Spinotti"], year: 1995))
-        XCTAssertTrue(CameraSources.namesFilm(["The 2024 release was shot on 35 mm film."], cinematographers: [], year: 2024))
-        XCTAssertTrue(CameraSources.namesFilm(["It premiered in 2023 at Venice."], cinematographers: [], year: 2024), "a festival the year before")
+        XCTAssertTrue(CameraSources.namesFilm(["Eggers' 2024 release was shot on 35 mm film."], cinematographers: [], directors: ["Robert Eggers"], year: 2024))
+        XCTAssertTrue(CameraSources.namesFilm(["Eggers premiered it in 2023 at Venice."], cinematographers: [], directors: ["Robert Eggers"], year: 2024),
+                      "a festival the year before")
+        XCTAssertFalse(CameraSources.namesFilm(["Member Spotlight, 2015: our news."], cinematographers: [], directors: ["Tom McCarthy"], year: 2015),
+                       "without a cinematographer, the year alone isn't enough")
         XCTAssertFalse(CameraSources.namesFilm(["The 1922 silent classic was shot on orthochromatic film."], cinematographers: ["Jarin Blaschke"], year: 2024),
                        "a remake isn't the original")
     }
@@ -152,6 +155,33 @@ final class CraftEvidenceTests: XCTestCase {
         XCTAssertTrue(CameraSources.namesOtherFilm("Expanding the View for Dune: Part Two", film: "Dune", otherTitles: ["Dune: Part Two"]))
         let hits = [(title: "The Matrix Resurrections: Back to the Source", link: "https://theasc.com/article/matrix-resurrections/")]
         XCTAssertTrue(CameraSources.about("The Matrix", in: hits, site: "AC", limit: 3, otherTitles: others).isEmpty)
+    }
+
+    func testNamesAreMatchedAsWritten() {
+        XCTAssertTrue(CameraSources.namesFilm(["Lukasz Zal shot it on the Alexa."], cinematographers: ["Łukasz Żal"], year: nil))
+        XCTAssertTrue(CameraSources.namesFilm(["Mátyás Erdely lit it with candles."], cinematographers: ["Mátyás Erdély"], year: nil))
+        XCTAssertTrue(CameraSources.namesFilm(["Hong framed every shot."], cinematographers: ["Hong Kyung-pyo"], year: nil), "family name first")
+        XCTAssertTrue(CameraSources.namesFilm(["Kyung-Pyo Hong framed every shot."], cinematographers: ["Hong Kyung-pyo"], year: nil))
+        XCTAssertTrue(CameraSources.namesFilm(["Brown shot the series."], cinematographers: ["Robert Brown Jr."], year: nil), "Jr. isn't a surname")
+    }
+
+    func testSequelsByAddressAndFirstTitles() {
+        XCTAssertTrue(CameraSources.namesOtherFilm("Sher Returns to Gotham", link: "https://theasc.com/articles/joker-folie-a-deux-sher/",
+                                                   film: "Joker", otherTitles: ["Joker: Folie à Deux"]))
+        XCTAssertTrue(CameraSources.namesOtherFilm("Deakins: Future Noir", link: "https://theasc.com/article/blade-runner-2049-deakins/",
+                                                   film: "Blade Runner", otherTitles: ["Blade Runner 2049"]))
+        XCTAssertFalse(CameraSources.namesOtherFilm("Star Wars: The Empire Strikes Back — A Colder World", link: "https://theasc.com/article/empire/",
+                                                    film: "The Empire Strikes Back", otherTitles: ["Star Wars", "Return of the Jedi"]),
+                       "the franchise's first title in front of this film's own")
+        XCTAssertTrue(CameraSources.namesOtherFilm("Star Wars: A New Hope Revisited", link: "https://theasc.com/article/new-hope/",
+                                                   film: "The Empire Strikes Back", otherTitles: ["Star Wars"]))
+    }
+
+    func testAFullerReadingFoundTheOldWayDoesNotStay() {
+        let old = CraftIndex(shotOn: [.film, .digital], names: [], sources: 4, discovery: 1)
+        XCTAssertFalse(old.keeps(over: CraftIndex(shotOn: [.film], names: [], sources: 3)),
+                       "the sequel's article it read isn't read any more: the new reading replaces it")
+        XCTAssertTrue(CraftIndex(shotOn: [.film], names: [], sources: 4).keeps(over: CraftIndex(shotOn: [], names: [], sources: 1)))
     }
 
     // MARK: One reading

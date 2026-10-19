@@ -106,14 +106,22 @@ final class PictureTests: XCTestCase {
     }
 
     func testWhichFoldersSpeak() {
-        func entry(_ path: String) -> FilmEntry {
-            FilmEntry(driveID: "D", relativePath: path, fileName: (path as NSString).lastPathComponent, size: 1, modified: nil, addedAt: Date())
+        func entry(_ path: String, collection: Int? = nil, id: Int = 1) -> FilmEntry {
+            var film = FilmEntry(driveID: "D", relativePath: path, fileName: (path as NSString).lastPathComponent, size: 1, modified: nil, addedAt: Date())
+            var details = TMDBMovieDetails(id: id, title: path)
+            details.collection = collection.map { TMDBCollectionRef(id: $0, name: "Set") }
+            film.tmdb = details
+            return film
         }
-        let films = [entry("Fast Collection (2001-2021) HDR10/a.mkv"), entry("Fast Collection (2001-2021) HDR10/b.mkv"),
+        let films = [entry("Fast Collection (2001-2021) HDR10/a.mkv", collection: 9), entry("Fast Collection (2001-2021) HDR10/b.mkv", collection: 9),
+                     entry("Fast Collection (2001-2021) HDR10/spinoff.mkv", collection: 10),
+                     entry("Criterion Collection DV/x.mkv", collection: 1), entry("Criterion Collection DV/y.mkv", collection: 2),
+                     entry("Criterion Collection DV/z.mkv"),
                      entry("4K HDR Films/c.mkv"), entry("4K HDR Films/d.mkv"), entry("Dune 2160p DV/dune.mkv"), entry("top.mkv")]
         let names = FilePicture.ownFolderNames(films)
-        XCTAssertEqual(Set(names.values), ["Fast Collection (2001-2021) HDR10", "Dune 2160p DV"])
-        XCTAssertEqual(names.count, 3)
+        XCTAssertEqual(Set(names.values), ["Fast Collection (2001-2021) HDR10", "Dune 2160p DV"],
+                       "a collection's folder (two of three films of one collection) speaks; assorted films' doesn't")
+        XCTAssertEqual(names.count, 4)
     }
 
     func testYourSettingWins() {
