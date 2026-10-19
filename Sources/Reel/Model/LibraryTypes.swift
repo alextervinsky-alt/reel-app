@@ -437,12 +437,16 @@ enum FilmTab: String, CaseIterable, Identifiable {
 
 struct LookupJob: Sendable {
     let id: String
-    let fileName: String
+    /// The file's name and size (see `FileIdentity`).
+    let fileKey: String
     /// File name title, folder title… (see `FilmEntry.lookupTitles`).
     let titles: [String]
     let year: Int?
     /// A match the user fixed earlier; skips the search.
     let correctedID: Int?
+    /// A fix saved under the name alone, which now names files of different sizes: the match
+    /// found is marked to check instead of trusted.
+    let fixIsAmbiguous: Bool
 }
 
 enum LookupOutcome: Sendable {

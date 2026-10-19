@@ -11,8 +11,8 @@ extension AppModel {
     static let offlineMessage = "Reel is offline. Film info will be fetched next time Reel opens or when you press ⌘R."
     static let tokenMessage = "TMDB didn't accept the token. You can replace it in Settings (⌘,)."
 
-    /// Looks up every pending film, six at a time (each file name once, even when it is on two
-    /// drives), then refreshes films whose stored info is from an older version of Reel.
+    /// Looks up every pending film, six at a time (each file once, even when it is on two drives:
+    /// the same name and size), then refreshes films whose stored info is from an older version of Reel.
     /// Called again while running, it finishes the current run and then goes round once more.
     func lookUpPending() async {
         guard hasToken else { return }
@@ -44,13 +44,18 @@ extension AppModel {
             while stopMessage == nil {
                 reuseTwins()
                 var seen = Set<String>()
-                let unique = films.filter { $0.matchState == .pending && seen.insert($0.fileName).inserted }
+                let unique = films.filter { $0.matchState == .pending && seen.insert($0.fileKey).inserted }
                 guard !unique.isEmpty else { break }
 
                 let lookedUp = beginWork("Finding film info", done: done, total: done + unique.count)
-                let jobs = unique.prefix(6).map {
-                    LookupJob(id: $0.id, fileName: $0.fileName, titles: $0.lookupTitles, year: $0.lookupYear,
-                              correctedID: corrections[$0.fileName])
+                let library = films
+                let fixes = corrections
+                let jobs = unique.prefix(6).map { film -> LookupJob in
+                    let fix = FileIdentity.fix(for: film, corrections: fixes, library: library)
+                    var corrected: Int?
+                    if case .film(let id) = fix { corrected = id }
+                    return LookupJob(id: film.id, fileKey: film.fileKey, titles: film.lookupTitles, year: film.lookupYear,
+                                     correctedID: corrected, fixIsAmbiguous: fix == .ambiguous)
                 }
                 let ratingsClient = omdb
                 let outcomes = await withTaskGroup(of: (LookupJob, LookupOutcome).self, returning: [(LookupJob, LookupOutcome)].self) { group in
@@ -81,13 +86,16 @@ extension AppModel {
                             list[i].matchScore = result.best?.score
                             list[i].lastError = nil
                             list[i].lastLookup = now
-                            switch result.confidence {
+                            // An old fix that can't tell which same-named file it meant: whatever
+                            // was found is for you to check.
+                            let confidence = job.fixIsAmbiguous && result.confidence == .auto ? .review : result.confidence
+                            switch confidence {
                             case .auto: list[i].matchState = .auto
                             case .review: list[i].matchState = .review
                             case .manual: list[i].matchState = .manual
                             }
                             // Alternatives are only kept while the user may still need them.
-                            list[i].candidates = result.confidence == .auto ? [] : result.candidates
+                            list[i].candidates = confidence == .auto ? [] : result.candidates
                         case .corrected(let info):
                             info.store(in: &list[i])
                             if info.ratingsRefused { omdb = nil }
@@ -104,7 +112,7 @@ extension AppModel {
                         case .unauthorized:
                             stopMessage = AppModel.tokenMessage
                         }
-                        if let id = list[i].tmdb?.id { newKeys.append(("file:\(job.fileName)", "tmdb:\(id)")) }
+                        if let id = list[i].tmdb?.id { newKeys.append((FileIdentity.unidentifiedPrefix + job.fileKey, "tmdb:\(id)")) }
                     }
                 }
                 for (old, new) in newKeys { migratePersonal(from: old, to: new) }
@@ -301,17 +309,18 @@ extension AppModel {
         return offlineCodes.contains(error.code)
     }
 
-    /// The same file on the other drive was already looked up: reuse it instead of asking TMDB again.
+    /// The same file on the other drive (the same name and size) was already looked up: reuse it
+    /// instead of asking TMDB again.
     private func reuseTwins() {
         var resolved: [String: FilmEntry] = [:]
         for film in films where film.matchState != .pending && film.matchState != .failed {
-            resolved[film.fileName] = film
+            resolved[film.fileKey] = film
         }
-        guard films.contains(where: { $0.matchState == .pending && resolved[$0.fileName] != nil }) else { return }
+        guard films.contains(where: { $0.matchState == .pending && resolved[$0.fileKey] != nil }) else { return }
         var newKeys: [(String, String)] = []
         mutateFilms { list in
             for i in list.indices where list[i].matchState == .pending {
-                guard let twin = resolved[list[i].fileName] else { continue }
+                guard let twin = resolved[list[i].fileKey] else { continue }
                 list[i].tmdb = twin.tmdb
                 list[i].ratings = twin.ratings
                 list[i].reception = twin.reception
@@ -322,10 +331,26 @@ extension AppModel {
                 list[i].candidates = twin.candidates
                 list[i].matchScore = twin.matchScore
                 list[i].matchState = twin.matchState
-                newKeys.append(("file:\(list[i].fileName)", twin.personalKey))
+                newKeys.append((FileIdentity.unidentifiedPrefix + list[i].fileKey, twin.personalKey))
             }
         }
         for (old, new) in newKeys { migratePersonal(from: old, to: new) }
+    }
+
+    /// Fixes and notes saved before Reel 1.8.8 under a file name alone move to "name|size" when
+    /// that name now means files of one size (see `FileIdentity.upgrade`). Run when the library is
+    /// read and after each scan; it does nothing once there's nothing left to move.
+    func upgradeFileIdentities() {
+        let noteKeys = personal.records.keys.filter { $0.hasPrefix(FileIdentity.unidentifiedPrefix) }
+        guard corrections.keys.contains(where: { !FileIdentity.hasSize($0) }) || noteKeys.contains(where: {
+            !FileIdentity.hasSize(String($0.dropFirst(FileIdentity.unidentifiedPrefix.count)))
+        }) else { return }
+        let upgrade = FileIdentity.upgrade(corrections: corrections, noteKeys: Array(noteKeys), library: films)
+        if upgrade.corrections != corrections {
+            corrections = upgrade.corrections
+            scheduleSave(.notes)
+        }
+        for move in upgrade.notes { migratePersonal(from: move.from, to: move.to) }
     }
 
     /// Manual search. "Dune 2021" searches for Dune from 2021.
@@ -340,7 +365,7 @@ extension AppModel {
         return (try? await client.searchMovies(query: trimmed, year: nil)) ?? []
     }
 
-    /// The user picked the right film for this file (all its copies). Stored in Your Notes, so it
+    /// The user picked the right film for this file (all its copies: the same name and size). Stored in Your Notes, so it
     /// always wins over automatic matching and survives a rebuilt library.
     func choose(_ movie: TMDBMovieSummary, for film: FilmEntry) async {
         guard hasToken else { return }
@@ -350,7 +375,7 @@ extension AppModel {
             let info = try await AppModel.fetchInfo(id: movie.id, client: TMDBClient(token: token), omdb: ratingsClient,
                                                     ratingsWanted: ratingsClient != nil)
             mutateFilms(urgent: true) { list in
-                for i in list.indices where list[i].fileName == film.fileName {
+                for i in list.indices where list[i].fileKey == film.fileKey {
                     info.store(in: &list[i])
                     list[i].matchState = .confirmed
                     list[i].matchScore = 1
@@ -358,7 +383,7 @@ extension AppModel {
                     list[i].lastError = nil
                 }
             }
-            corrections[film.fileName] = info.details.id
+            corrections[film.fileKey] = info.details.id
             scheduleSave(.notes)
             migratePersonal(from: oldKey, to: "tmdb:\(info.details.id)")
         } catch {
@@ -375,7 +400,7 @@ extension AppModel {
             }
         }
         if let id = film.tmdb?.id {
-            for copy in films where copy.personalKey == key { corrections[copy.fileName] = id }
+            for copy in films where copy.personalKey == key { corrections[copy.fileKey] = id }
             scheduleSave(.notes)
         }
     }

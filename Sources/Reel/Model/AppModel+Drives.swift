@@ -229,6 +229,8 @@ extension AppModel {
         // Files that appear because of a regrouping by hand aren't arrivals: they're dated back.
         let stamp = announcing ? now : (drives[index].arrivalsSince ?? now)
         setFilms(LibraryMerge.apply(scan: result.files, driveID: id, to: films, now: stamp, keepingUnseen: verdict != .apply))
+        // Files that just appeared may settle fixes and notes saved under a file name alone.
+        upgradeFileIdentities()
         // Regrouping by hand is a rescan too, but nothing arrived.
         if announcing {
             // New entries are the ones stamped with this scan's time (moved files keep theirs).

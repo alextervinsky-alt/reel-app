@@ -367,6 +367,7 @@ final class AppModel {
         }
         films = loaded
         itemCache = Dictionary(prebuilt.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        upgradeFileIdentities()
 
         if drives.isEmpty, let older = library?.drives, !older.isEmpty {
             drives = older

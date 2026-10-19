@@ -437,10 +437,96 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// The year from the file name, else from the folder name.
     public var lookupYear: Int? { parsed.year ?? folderParsed?.year }
 
-    /// Key for personal data. Uses the TMDB id, so notes survive renames, moves and rescans.
+    /// Key for personal data. Uses the TMDB id, so notes survive renames, moves and rescans; a
+    /// file not identified yet is known by its name and size (see `FileIdentity`).
     public var personalKey: String {
         if let id = tmdb?.id { return "tmdb:\(id)" }
-        return "file:\(fileName)"
+        return FileIdentity.unidentifiedPrefix + fileKey
+    }
+
+    /// The file's identity: its name and size. The same name and size is the same file (a copy on
+    /// the Backup, or moved); the same name with another size is a different file.
+    public var fileKey: String { FileIdentity.key(name: fileName, size: size) }
+}
+
+/// Which files are the same file, and the fixes and notes Reel keeps for one. A file is its name
+/// plus its size: generic names ("title_t00.mkv", "movie.mkv") then never pass one film's match,
+/// fix or notes to another. Fixes and notes saved before Reel 1.8.8 are keyed by the name alone;
+/// they're used, and moved to the new key, only when every file with that name has one size.
+public enum FileIdentity {
+    /// Personal notes of a file that isn't identified yet: "file:" and its file key.
+    public static let unidentifiedPrefix = "file:"
+
+    public static func key(name: String, size: Int64) -> String { "\(name)|\(size)" }
+
+    /// A key that already has the size ("name|1234"); anything else is from before 1.8.8.
+    public static func hasSize(_ key: String) -> Bool {
+        guard let bar = key.lastIndex(of: "|") else { return false }
+        let digits = key[key.index(after: bar)...]
+        return !digits.isEmpty && digits.allSatisfy(\.isNumber)
+    }
+
+    /// The fix you made for a file.
+    public enum Fix: Equatable, Sendable {
+        case none
+        /// The film you chose for this file (or one saved under its name alone, when that can only
+        /// mean this file).
+        case film(Int)
+        /// Saved under its name alone, which now names files of different sizes: not applied to
+        /// any of them (each is matched and marked to check instead).
+        case ambiguous
+    }
+
+    public static func fix(for file: FilmEntry, corrections: [String: Int], library films: [FilmEntry]) -> Fix {
+        if let id = corrections[file.fileKey] { return .film(id) }
+        guard let id = corrections[file.fileName] else { return .none }
+        return sizes(of: file.fileName, in: films).count <= 1 ? .film(id) : .ambiguous
+    }
+
+    /// What `upgrade` changed and left alone.
+    public struct Upgrade: Equatable, Sendable {
+        public var corrections: [String: Int]
+        /// Old note keys and their new ones, to move.
+        public var notes: [(from: String, to: String)]
+        /// Names whose fixes or notes were left as they are: files of different sizes share them.
+        public var ambiguous: [String]
+
+        public static func == (a: Upgrade, b: Upgrade) -> Bool {
+            a.corrections == b.corrections && a.ambiguous == b.ambiguous
+                && a.notes.map { [$0.from, $0.to] } == b.notes.map { [$0.from, $0.to] }
+        }
+    }
+
+    /// Moves fixes and notes saved under a name alone to "name|size", when the library has files
+    /// of that name in exactly one size. Names with no file now are left alone (the file may come
+    /// back); names with files of several sizes too (it can't be known which one was meant).
+    /// Running it again changes nothing.
+    public static func upgrade(corrections: [String: Int], noteKeys: [String], library films: [FilmEntry]) -> Upgrade {
+        var result = corrections
+        var ambiguous = Set<String>()
+        for (name, id) in corrections where !hasSize(name) {
+            let found = sizes(of: name, in: films)
+            if found.count > 1 { ambiguous.insert(name) }
+            guard found.count == 1, let size = found.first else { continue }
+            let newKey = key(name: name, size: size)
+            // A fix already saved with the size is newer and wins.
+            if result[newKey] == nil { result[newKey] = id }
+            result[name] = nil
+        }
+        var notes: [(from: String, to: String)] = []
+        for old in noteKeys where old.hasPrefix(unidentifiedPrefix) {
+            let name = String(old.dropFirst(unidentifiedPrefix.count))
+            guard !hasSize(name) else { continue }
+            let found = sizes(of: name, in: films)
+            if found.count > 1 { ambiguous.insert(name) }
+            guard found.count == 1, let size = found.first else { continue }
+            notes.append((old, unidentifiedPrefix + key(name: name, size: size)))
+        }
+        return Upgrade(corrections: result, notes: notes.sorted { $0.from < $1.from }, ambiguous: ambiguous.sorted())
+    }
+
+    private static func sizes(of name: String, in films: [FilmEntry]) -> Set<Int64> {
+        Set(films.filter { $0.fileName == name }.map(\.size))
     }
 }
 
