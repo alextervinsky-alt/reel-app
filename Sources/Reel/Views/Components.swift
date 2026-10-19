@@ -224,10 +224,13 @@ struct RatingBadge: View {
 
 /// IMDb, Rotten Tomatoes and Metacritic on one line over or under a poster (TMDB when there
 /// are none of them). When they don't all fit, Metacritic and then Rotten Tomatoes step aside,
-/// so the line never breaks in two.
+/// so the line never breaks in two; with `keepsAll` (under the pointer in the library) all three
+/// stay: a little smaller, or on two rows on the smallest posters.
 struct PosterRatings: View {
+    @Environment(\.ratingScale) private var scale
     let film: FilmEntry
     var spacing: CGFloat = 8
+    var keepsAll = false
 
     private struct Score: Identifiable {
         let tag: String
@@ -247,14 +250,24 @@ struct PosterRatings: View {
         if !all.isEmpty {
             ViewThatFits(in: .horizontal) {
                 line(all)
-                if all.count > 2 { line(Array(all.prefix(2))) }
-                if all.count > 1 { line(Array(all.prefix(1))) }
+                if keepsAll {
+                    line(all, spacing: spacing * 0.7).environment(\.ratingScale, scale * 0.86)
+                    if all.count > 2 {
+                        VStack(alignment: .leading, spacing: 5 * scale) {
+                            line(Array(all.prefix(2)))
+                            line(Array(all.dropFirst(2)))
+                        }
+                    }
+                } else {
+                    if all.count > 2 { line(Array(all.prefix(2))) }
+                    if all.count > 1 { line(Array(all.prefix(1))) }
+                }
             }
         }
     }
 
-    private func line(_ scores: [Score]) -> some View {
-        HStack(spacing: spacing) {
+    private func line(_ scores: [Score], spacing: CGFloat? = nil) -> some View {
+        HStack(spacing: spacing ?? self.spacing) {
             ForEach(scores) { RatingBadge(tag: $0.tag, value: $0.value, background: $0.background, foreground: $0.foreground) }
         }
     }

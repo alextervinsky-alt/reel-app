@@ -182,6 +182,21 @@ enum ScreenRenderer {
                 .background(Theme.background)
                 .environment(ScrollState()),
                model: model, scale: 2, to: output.appendingPathComponent("desk-posters.png"))
+        // Under the pointer at the smallest, the usual and a large poster size: all three ratings.
+        if let rated = model.items.first(where: { $0.main.ratings?.imdb != nil && $0.main.ratings?.rottenTomatoes != nil
+                                                  && $0.main.ratings?.metacritic != nil }) {
+            render(HStack(alignment: .bottom, spacing: 22) {
+                        ForEach([130.0, 168.0, 205.0], id: \.self) { width in
+                            Poster(path: rated.main.tmdb?.posterPath, title: rated.main.displayTitle, cornerRadius: 12)
+                                .frame(width: width, height: width * 1.5)
+                                .overlay(alignment: .bottom) { PosterHoverRatings(item: rated) }
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
+                    .padding(32)
+                    .background(Theme.background),
+                   model: model, scale: 2, to: output.appendingPathComponent("desk-hover-ratings.png"))
+        }
         render(FilmList(items: Array(model.items.prefix(10)), sort: .constant(.rating), sortable: true)
                 .padding(32)
                 .frame(width: 1240)

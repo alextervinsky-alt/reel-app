@@ -848,6 +848,40 @@ struct CardNote: Equatable {
     let tint: Color?
 }
 
+/// Under the pointer: IMDb, Rotten Tomatoes and Metacritic (all three, smaller or on two rows
+/// when a small poster can't fit them on one) and when it would end (with subtitles). Only built
+/// while the pointer is on it.
+struct PosterHoverRatings: View {
+    let item: LibraryItem
+
+    var body: some View {
+        let ends = Format.endsLine(item.main, runtime: item.runtime, quality: false)
+        let hasRatings = PosterRatings.has(item.main)
+        if hasRatings || ends != nil {
+            VStack(alignment: .leading, spacing: 7) {
+                if hasRatings {
+                    PosterRatings(film: item.main, spacing: 7, keepsAll: true)
+                        .environment(\.ratingScale, 0.85)
+                }
+                if let ends {
+                    Text(ends)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.top, 34)
+            .padding(.bottom, 10)
+            .background(
+                LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+            )
+        }
+    }
+}
+
 struct PosterCard: View, Equatable {
     @Environment(AppModel.self) private var model
     @Environment(ScrollState.self) private var scroll
@@ -953,7 +987,7 @@ struct PosterCard: View, Equatable {
     private var poster: some View {
         Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12)
             .overlay(alignment: .bottom) {
-                if lifted { hoverRatings.transition(.opacity) }
+                if lifted { PosterHoverRatings(item: item).transition(.opacity) }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .topTrailing) {
@@ -995,36 +1029,6 @@ struct PosterCard: View, Equatable {
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
             Text(item.isOnline ? line : (line.isEmpty ? "Drive not connected" : line + " · Offline"))
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Under the pointer: the ratings on one line and when it would end (with subtitles). Only
-    /// built while the pointer is on it.
-    @ViewBuilder
-    private var hoverRatings: some View {
-        let ends = Format.endsLine(item.main, runtime: item.runtime, quality: false)
-        let hasRatings = PosterRatings.has(item.main)
-        if hasRatings || ends != nil {
-            VStack(alignment: .leading, spacing: 7) {
-                if hasRatings {
-                    PosterRatings(film: item.main, spacing: 7)
-                        .environment(\.ratingScale, 0.85)
-                }
-                if let ends {
-                    Text(ends)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .lineLimit(1)
-                }
-            }
-            .foregroundStyle(Color.white)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.top, 34)
-            .padding(.bottom, 10)
-            .background(
-                LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
-            )
         }
     }
 

@@ -19,11 +19,12 @@ public enum CraftReader {
 
     /// The search and Shot on summary of what was read (the whole of it: nothing is shown from it
     /// but its "why" sentences, which are checked for the story when shown).
+    /// `otherTitles`: the other films of its collection, so what's said of them isn't this one's.
     public static func index(of details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?,
-                             colour: [String]?, now: Date = Date()) -> CraftIndex {
+                             colour: [String]?, otherTitles: [String] = [], now: Date = Date()) -> CraftIndex {
         let texts = texts(article: article, reading: reading, hiding: false)
         let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
-                                   year: details.year, title: details.title)
+                                   year: details.year, title: details.title, otherTitles: otherTitles)
         return CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
     }
 
@@ -45,6 +46,6 @@ public enum CraftReader {
         }
         let reading = await fetched
         guard reached || !reading.sources.isEmpty || reading.cinematographer != nil else { return nil }
-        return index(of: details, article: article, reading: reading, colour: colour)
+        return index(of: details, article: article, reading: reading, colour: colour, otherTitles: otherTitles)
     }
 }

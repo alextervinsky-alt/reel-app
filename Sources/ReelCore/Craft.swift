@@ -38,7 +38,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// articles only when they're about this film, TMDB keywords only where Wikidata is silent.
     /// 3: sentences about another film, tests and decisions against, finishing and prints left out;
     /// what's said of part of the film marked so.
-    public static let currentVersion = 3
+    /// 4: a tag needs a sentence saying this film was shot that way (not an opinion, other work, a
+    /// look made in the grade); a focal length or a sensor isn't film; black and white read from a
+    /// film stock is in part unless Wikidata says the whole film is.
+    public static let currentVersion = 4
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
@@ -146,10 +149,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             }
         }
         var evidence: [ShotOn: Evidence] = [:]
-        for spec in specs.specs {
+        // Only what's said to have been shot with: the names alone are for the notes and search.
+        for spec in specs.specs where spec.capture {
             for found in Self.shotOn(spec) {
                 // Film and Digital both show when a film mixes them; "in part" is for the rest.
-                let partial = spec.partial && ![.film, .digital].contains(found)
+                var partial = spec.partial && ![.film, .digital].contains(found)
+                // A black-and-white stock (Double-X) is often for some scenes: in part, unless
+                // Wikidata says the whole film is black and white (below).
+                if found == .blackAndWhite, spec.name != "Black and white" { partial = true }
                 let said = Evidence(shotOn: found, text: spec.evidence ?? spec.name, source: spec.source ?? "Wikipedia", partial: partial)
                 // One sentence about the whole film outweighs any number about part of it.
                 if let known = evidence[found], !(known.partial && !said.partial) { continue }
@@ -157,10 +164,18 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             }
         }
         let colours = (colour ?? []).map { $0.lowercased() }
-        // Wikidata says black and white (and not colour too: partly in colour isn't).
-        if evidence[.blackAndWhite] == nil, colours.contains(where: { $0.contains("black") }),
-           !colours.contains(where: { $0.contains("colo") && !$0.contains("black") }) {
-            evidence[.blackAndWhite] = Evidence(shotOn: .blackAndWhite, text: "Colour: " + (colour ?? []).joined(separator: ", "), source: "Wikidata")
+        let black = colours.contains(where: { $0.contains("black") })
+        let colourToo = colours.contains(where: { $0.contains("colo") && !$0.contains("black") })
+        if black, !colourToo {
+            // Wikidata says black and white (and not colour too: partly in colour isn't): the whole film.
+            if evidence[.blackAndWhite] == nil {
+                evidence[.blackAndWhite] = Evidence(shotOn: .blackAndWhite, text: "Colour: " + (colour ?? []).joined(separator: ", "), source: "Wikidata")
+            } else {
+                evidence[.blackAndWhite]?.partial = false
+            }
+        } else if colourToo {
+            // In colour, by Wikidata: any black and white read is part of it.
+            evidence[.blackAndWhite]?.partial = true
         }
         // TMDB's keyword only where Wikidata says nothing about colour (a film partly in black and
         // white has the keyword too). Its "imax" keyword isn't used: it marks IMAX releases as well.

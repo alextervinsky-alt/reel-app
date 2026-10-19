@@ -20,7 +20,7 @@ jobs:
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests --skip LiveCraftSourcesTests 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveCraftSourcesTests --skip LiveShotOnTests 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
@@ -57,6 +57,16 @@ jobs:
           grep -E "Craft sources: [0-9]+ of" craft.log | while read -r l; do echo "::notice::${l}"; done
           if [ $code -ne 0 ]; then
             grep -E "error:|failed" craft.log | head -10 | while read -r l; do echo "::error::${l}"; done
+          fi
+          exit $code
+
+      - name: Shot on for well-known films on record (wrong tags are warnings, missing ones notices)
+        run: |
+          set +e
+          swift test --filter LiveShotOnTests 2>&1 | tee shoton.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            grep -E "error:|failed" shoton.log | head -10 | while read -r l; do echo "::error::${l}"; done
           fi
           exit $code
 

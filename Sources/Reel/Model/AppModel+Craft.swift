@@ -175,7 +175,8 @@ extension AppModel {
     /// and search say what the tab shows (unless it read fewer texts than the summary had).
     func craftRead(for film: FilmEntry, article: FilmArticle?, reading: CameraReading?) {
         guard let details = film.tmdb, article != nil || reading != nil else { return }
-        let index = CraftReader.index(of: details, article: article, reading: reading, colour: film.funFacts?.quick?.colour)
+        let index = CraftReader.index(of: details, article: article, reading: reading, colour: film.funFacts?.quick?.colour,
+                                      otherTitles: otherTitles(of: details))
         let current = films.first { $0.tmdb?.id == details.id }?.craft
         if let current, current.keeps(over: index) { return }
         // The same as already kept: nothing to write.
