@@ -261,6 +261,11 @@ enum ScreenRenderer {
         for film in films {
             guard let index = film.tmdb.flatMap({ read[$0.id] }) else { continue }
             log("craft of \(film.displayTitle): \(index.shotOn.map(\.title).joined(separator: ", ")); \(index.names.prefix(8).joined(separator: ", "))")
+            // The sentence behind each tag, so a build shows why (and a wrong one can be caught).
+            for kind in index.shotOn {
+                guard let why = index.evidence(for: kind) else { continue }
+                log("why \(film.displayTitle) is \(index.label(for: kind)): \(why.source): \(why.text.prefix(200))")
+            }
         }
         for query in ["anamorphic", "imax", "steadicam", "cartoon", "sci-fi"] {
             let found = model.shelfItems(.all, matching: query, sortedBy: .title).prefix(4).map(\.main.displayTitle)
