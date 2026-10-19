@@ -15,7 +15,8 @@ public struct FilePicture: Equatable, Sendable {
         /// A full release name (resolution and source or codec) with no HDR word: release names
         /// always say HDR, so it's SDR.
         case convention
-        /// The film's own folder says it ("Dune (2021) 2160p DV/dune.mkv").
+        /// The film's own folder says it ("Dune (2021) 2160p DV/dune.mkv"), or the folder of the
+        /// collection it's part of ("The Fast and the Furious - Complete Collection 1080p HDR10/…").
         case folder
         /// Nothing says.
         case notStated
@@ -52,8 +53,9 @@ public struct FilePicture: Equatable, Sendable {
 
     /// - Parameters:
     ///   - name: the file name, parsed.
-    ///   - ownFolder: the film's own folder name, parsed: only when the folder holds this film alone
-    ///     (a collection folder, "4K HDR Films", says nothing about each film in it).
+    ///   - ownFolder: the film's folder name, parsed: only when the folder holds this film alone, or
+    ///     is named as one collection (see `isCollection`). A folder of assorted films ("4K HDR
+    ///     Films") says nothing about each film in it.
     ///   - yours: what you set, which always wins.
     public static func of(_ name: ParsedFilename, ownFolder: ParsedFilename? = nil, yours: DynamicRange? = nil) -> FilePicture {
         if let yours {
@@ -97,9 +99,19 @@ public struct FilePicture: Equatable, Sendable {
 }
 
 extension FilePicture {
-    /// The folder each film has to itself, by film id: its folder's name, when no other film on
-    /// that drive shares the folder. A film at the top of a drive, or in a folder of several
-    /// films (a collection, "4K HDR"), has none.
+    /// Whether a folder of several films is named as one release of them all: "Complete
+    /// Collection", "Trilogy", "Saga", "Box Set", or a span of years ("(2001-2021)"). What its name
+    /// says about the picture is then said of every film in it.
+    public static func isCollection(_ folderName: String) -> Bool {
+        let lower = folderName.lowercased()
+        if lower.range(of: #"\b(?:collection|trilogy|duology|quadrilogy|pentalogy|hexalogy|anthology|saga|box ?set|boxset|complete series)\b"#,
+                       options: .regularExpression) != nil { return true }
+        return lower.range(of: #"\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b"#, options: .regularExpression) != nil
+    }
+
+    /// The folder that speaks for each film, by film id: its folder's name, when no other film on
+    /// that drive shares the folder, or when the folder is named as one collection. A film at the
+    /// top of a drive, or in a folder of assorted films ("4K HDR"), has none.
     public static func ownFolderNames(_ films: [FilmEntry]) -> [String: String] {
         func folder(_ film: FilmEntry) -> String? {
             let parent = (film.relativePath as NSString).deletingLastPathComponent
@@ -109,8 +121,9 @@ extension FilePicture {
         for film in films { if let parent = folder(film) { count[film.driveID + "/" + parent, default: 0] += 1 } }
         var result: [String: String] = [:]
         for film in films {
-            guard let parent = folder(film), count[film.driveID + "/" + parent] == 1 else { continue }
-            result[film.id] = (parent as NSString).lastPathComponent
+            guard let parent = folder(film), let shared = count[film.driveID + "/" + parent] else { continue }
+            let name = (parent as NSString).lastPathComponent
+            if shared == 1 || isCollection(name) { result[film.id] = name }
         }
         return result
     }

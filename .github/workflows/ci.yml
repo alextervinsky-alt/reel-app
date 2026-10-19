@@ -20,7 +20,7 @@ jobs:
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveCraftSourcesTests 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
@@ -43,8 +43,9 @@ jobs:
       - name: Match the sample films against TMDB (token is never printed)
         run: |
           set +e
-          swift test --filter LiveTMDBTests 2>&1 | tee live.log
+          swift test --filter "LiveTMDBTests|LiveCraftSourcesTests" 2>&1 | tee live.log
           code=${PIPESTATUS[0]}
+          grep -E "Craft sources: [0-9]+ of" live.log | while read -r l; do echo "::notice::${l}"; done
           if [ $code -ne 0 ]; then
             grep -E "error:|failed" live.log | head -25 | while read -r l; do echo "::error::${l}"; done
           fi

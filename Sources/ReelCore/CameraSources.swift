@@ -129,6 +129,17 @@ public enum CameraSources {
         return !surnames.contains { heading.contains($0) }
     }
 
+    /// Search results whose title (or address) names the film, each once, at most `limit`.
+    static func about(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
+                      limit: Int) -> [(url: URL, site: String, title: String?)] {
+        var found: [(url: URL, site: String, title: String?)] = []
+        for hit in hits where isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link) {
+            guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
+            found.append((link, site, HTMLText.plain(hit.title)))
+        }
+        return Array(found.prefix(limit))
+    }
+
     /// Whether a page found by searching for the title is about this film and not another of the
     /// same name: it names the film's cinematographer or director (by surname) or the year it came out.
     public static func namesFilm(_ paragraphs: [String], people: [String], year: Int?) -> Bool {
@@ -344,22 +355,19 @@ public struct CameraSourcesClient: Sendable {
     /// American Cinematographer's articles about the film (its site has a free WordPress API).
     func ascArticles(filmTitle: String) async -> [(url: URL, site: String, title: String?)] {
         struct Hit: Decodable {
-            struct Rendered: Decodable { let rendered: String }
-            let title: Rendered
-            let link: String
+            let title: String
+            let url: String
+            let subtype: String?
         }
-        // Magazine articles only: the site's blog posts are about the society, not the films.
-        var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/article")!
-        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
-                                 URLQueryItem(name: "_fields", value: "title,link")]
+        // The site's own search, most relevant first, over everything it publishes: the magazine's
+        // articles, and the posts and news where its interviews also appear ("Roger Deakins, ASC,
+        // BSC: Lighting Sicario" is a post). Not its pages or videos, which have little to read.
+        var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
+        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
         guard let url = components.url, let data = await fetch(url, accept: "application/json"),
               let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
-        var found: [(url: URL, site: String, title: String?)] = []
-        for hit in hits where CameraSources.isAbout(title: filmTitle, articleTitle: hit.title.rendered, url: hit.link) {
-            guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
-            found.append((link, "American Cinematographer", HTMLText.plain(hit.title.rendered)))
-        }
-        return Array(found.prefix(3))
+        return CameraSources.about(filmTitle, in: hits.filter { ["article", "post", "news"].contains($0.subtype ?? "") }
+            .map { (title: $0.title, link: $0.url) }, site: "American Cinematographer", limit: 3)
     }
 
     /// British Cinematographer's articles about the film (its site has a free WordPress API).
@@ -369,17 +377,14 @@ public struct CameraSourcesClient: Sendable {
             let title: Rendered
             let link: String
         }
+        // Most relevant first (by date, the newest posts that merely mention the title came first).
         var components = URLComponents(string: "https://britishcinematographer.co.uk/wp-json/wp/v2/posts")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
-                                 URLQueryItem(name: "_fields", value: "title,link")]
+                                 URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
         guard let url = components.url, let data = await fetch(url, accept: "application/json"),
               let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
-        var found: [(url: URL, site: String, title: String?)] = []
-        for hit in hits where CameraSources.isAbout(title: filmTitle, articleTitle: hit.title.rendered, url: hit.link) {
-            guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
-            found.append((link, "British Cinematographer", HTMLText.plain(hit.title.rendered)))
-        }
-        return Array(found.prefix(2))
+        return CameraSources.about(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
+                                   site: "British Cinematographer", limit: 2)
     }
 
     /// Kodak's stories of films shot on its stock and No Film School's pieces on a film's

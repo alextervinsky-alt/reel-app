@@ -214,7 +214,9 @@ struct CinematographyTab: View {
             if article == nil, film.funFacts == nil {
                 Text("This needs an internet connection the first time.").foregroundStyle(.secondary)
             } else {
-                Text("Nothing read about this film names its cameras or lenses. IMDb's technical specifications, below, usually list them.")
+                Text(film.tmdb?.genreNames.contains("Animation") == true
+                     ? "An animated film: what's written about it doesn't name cameras or lenses."
+                     : "None of what Reel reads (the film's Wikipedia article, American Cinematographer, British Cinematographer, Kodak, No Film School and the articles Wikipedia cites) says what it was shot on. IMDb's technical specifications, below, usually list it.")
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }

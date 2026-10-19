@@ -37,6 +37,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 2: the sentence behind each Shot on, "not / instead of / unlike" in a clause, magazine
     /// articles only when they're about this film, TMDB keywords only where Wikidata is silent.
     public static let currentVersion = 2
+    /// Bump when finding what to read improves: films read from too little (their article alone,
+    /// or nothing on what they were shot on) are read again; the rest keep their reading.
+    /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
+    public static let currentDiscovery = 2
     /// Read again after half a year (new interviews appear).
     public static let maxAge: TimeInterval = 182 * 86_400
 
@@ -60,9 +64,12 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// How many texts it was read from (the article, interviews, the cinematographer's article):
     /// a later reading from fewer, while a site is down, doesn't replace it (see `keeps`).
     public var sources: Int
+    /// How it was found (see `currentDiscovery`); 1 for readings before 1.9.0.
+    public var discovery: Int
 
     public init(version: Int = CraftIndex.currentVersion, readAt: Date = Date(), shotOn: [ShotOn], names: [String],
-                evidence: [Evidence] = [], sources: Int = 0) {
+                evidence: [Evidence] = [], sources: Int = 0, discovery: Int = CraftIndex.currentDiscovery) {
+        self.discovery = discovery
         self.version = version
         self.readAt = readAt
         self.shotOn = shotOn
@@ -79,11 +86,17 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         names = try c.decode([String].self, forKey: .names)
         evidence = try c.decodeIfPresent([Evidence].self, forKey: .evidence) ?? []
         sources = try c.decodeIfPresent(Int.self, forKey: .sources) ?? 0
+        discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 1
     }
 
     public func isStale(now: Date = Date()) -> Bool {
         version < CraftIndex.currentVersion || readAt < now.addingTimeInterval(-CraftIndex.maxAge)
+            || (discovery < CraftIndex.currentDiscovery && isThin)
     }
+
+    /// Read from the film's article alone (or nothing), or nothing found on what it was shot on:
+    /// worth reading again when finding improves.
+    public var isThin: Bool { sources <= 1 || shotOn.isEmpty }
 
     /// Whether this reading stays instead of a `newer` one: when they're read by the same rules and
     /// the newer one read fewer texts (a site down, offline for part of it). It's tried again later.

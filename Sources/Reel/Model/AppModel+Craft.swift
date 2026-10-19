@@ -56,7 +56,8 @@ extension AppModel {
                     // Read from fewer texts than last time (a site down): kept as it was, and tried
                     // again in a week rather than in half a year.
                     read[id] = CraftIndex(version: old.version, readAt: Date().addingTimeInterval(7 * 86_400 - CraftIndex.maxAge),
-                                          shotOn: old.shotOn, names: old.names, evidence: old.evidence, sources: old.sources)
+                                          shotOn: old.shotOn, names: old.names, evidence: old.evidence, sources: old.sources,
+                                          discovery: CraftIndex.currentDiscovery)
                     failedInARow = 0
                 } else if let index {
                     read[id] = index
@@ -71,6 +72,25 @@ extension AppModel {
             // A short pause between batches, whatever the size of the library.
             try? await Task.sleep(for: .seconds(2))
         }
+    }
+
+    /// How much of the library Shot on covers (Settings › Performance): live-action films, each
+    /// once, tagged out of those read; those read from their Wikipedia article alone; and how many
+    /// are still to be read. Animated films aren't counted: they weren't shot on anything.
+    func craftCoverage() -> (tagged: Int, read: Int, articleOnly: Int, waiting: Int) {
+        var seen = Set<Int>()
+        var tagged = 0, read = 0, articleOnly = 0, waiting = 0
+        for film in films {
+            guard let details = film.tmdb, seen.insert(details.id).inserted, !details.genreNames.contains("Animation") else { continue }
+            guard let craft = film.craft, !craft.isStale() else {
+                waiting += 1
+                continue
+            }
+            read += 1
+            if !craft.shotOn.isEmpty { tagged += 1 }
+            if craft.sources <= 1 { articleOnly += 1 }
+        }
+        return (tagged, read, articleOnly, waiting)
     }
 
     /// Puts new readings in the library, noting each film whose Shot on changed (Settings ›

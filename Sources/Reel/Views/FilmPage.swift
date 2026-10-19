@@ -523,6 +523,8 @@ struct FilmFactSheet: View {
     /// "Film · Anamorphic · 2.39:1", from what's read about it and Wikidata.
     private var shotOn: String? {
         var parts = (film.craft?.shotOn ?? []).map(\.title)
+        // Drawn, not shot: said, rather than left looking like nothing was found.
+        if parts.isEmpty, film.tmdb?.genreNames.contains("Animation") == true { parts.append("Animated") }
         if let ratio = film.funFacts?.quick?.aspectRatios?.first { parts.append(ratio) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

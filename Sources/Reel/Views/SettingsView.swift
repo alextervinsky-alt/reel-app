@@ -159,6 +159,27 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section {
+                let coverage = model.craftCoverage()
+                LabeledContent("Live-action films with Shot on") {
+                    Text("\(coverage.tagged) of \(coverage.read)").monospacedDigit().foregroundStyle(.secondary)
+                }
+                LabeledContent("Read from their Wikipedia article alone") {
+                    Text(coverage.articleOnly.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                }
+                if coverage.waiting > 0 {
+                    LabeledContent("Still to read") {
+                        Text(coverage.waiting.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Shot On")
+            } footer: {
+                Text("A film gets Shot on only when something Reel reads says how it was shot: its Wikipedia article, American Cinematographer, British Cinematographer, Kodak, No Film School or an article Wikipedia cites. For many films none of them does. Animated films aren't counted.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if !model.craftChanges.isEmpty {
                 Section {
                     ForEach(model.craftChanges.prefix(40)) { change in

@@ -91,6 +91,31 @@ final class PictureTests: XCTestCase {
         XCTAssertEqual(picture("Dune.2021.1080p.BluRay.x264.mkv", folder: "Dune 2160p DV").range, .sdr, "the file's own name comes first")
     }
 
+    /// A whole collection in one folder whose name says the picture (a real library's).
+    func testACollectionFolderSpeaksForEachFilm() {
+        let folder = "The Fast and The Furious - Complete Collection (2001-2021) 1080p HEVC HDR10 DTS 7.1.x265 [BluRay] {djdezzie}"
+        let found = picture("2013. Furious 6 [Extended.Cut].mkv", folder: folder)
+        XCTAssertEqual(found.range, .hdr10)
+        XCTAssertEqual(found.basis, .folder)
+        XCTAssertTrue(FilePicture.isCollection(folder))
+        XCTAssertTrue(FilePicture.isCollection("The Godfather Trilogy 2160p DV"))
+        XCTAssertTrue(FilePicture.isCollection("Alien Anthology 1979-1997 1080p"))
+        XCTAssertFalse(FilePicture.isCollection("4K HDR Films"), "assorted films: their folder says nothing about each")
+        XCTAssertFalse(FilePicture.isCollection("Movies 2160p"))
+        XCTAssertFalse(FilePicture.isCollection("Blade Runner 2049 (2017) 2160p"), "a title with a number isn't a span of years")
+    }
+
+    func testWhichFoldersSpeak() {
+        func entry(_ path: String) -> FilmEntry {
+            FilmEntry(driveID: "D", relativePath: path, fileName: (path as NSString).lastPathComponent, size: 1, modified: nil, addedAt: Date())
+        }
+        let films = [entry("Fast Collection (2001-2021) HDR10/a.mkv"), entry("Fast Collection (2001-2021) HDR10/b.mkv"),
+                     entry("4K HDR Films/c.mkv"), entry("4K HDR Films/d.mkv"), entry("Dune 2160p DV/dune.mkv"), entry("top.mkv")]
+        let names = FilePicture.ownFolderNames(films)
+        XCTAssertEqual(Set(names.values), ["Fast Collection (2001-2021) HDR10", "Dune 2160p DV"])
+        XCTAssertEqual(names.count, 3)
+    }
+
     func testYourSettingWins() {
         let found = picture("Dune.2021.2160p.WEB-DL.DV.HEVC-GRP.mkv", yours: .sdr)
         XCTAssertEqual(found.range, .sdr)

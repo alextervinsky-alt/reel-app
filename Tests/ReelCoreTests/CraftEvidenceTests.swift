@@ -107,6 +107,26 @@ final class CraftEvidenceTests: XCTestCase {
                        "new rules always replace the old reading")
     }
 
+    // MARK: Reading again when finding improves
+
+    func testOnlyThinReadingsAreReadAgain() throws {
+        let saved = #"{"version":2,"readAt":"\#(ISO8601DateFormatter().string(from: Date()))","shotOn":[],"names":[],"sources":1}"#
+        let thin = try JSONStore.decode(CraftIndex.self, from: Data(saved.utf8))
+        XCTAssertEqual(thin.discovery, 1, "read before 1.9.0")
+        XCTAssertTrue(thin.isStale(), "its article alone: read again with the better search")
+        let full = CraftIndex(shotOn: [.film], names: [], sources: 4, discovery: 1)
+        XCTAssertFalse(full.isStale(), "a full reading is kept")
+        XCTAssertFalse(CraftIndex(shotOn: [], names: [], sources: 1).isStale(), "already read with the better search")
+    }
+
+    func testSearchResultsMustNameTheFilm() {
+        let hits = [(title: "Roger Deakins, ASC, BSC: Lighting Sicario", link: "https://theasc.com/blog/lighting-sicario/"),
+                    (title: "Picture Shop, Sony Collaborate on Signature LUT", link: "https://theasc.com/article/lut/"),
+                    (title: "Roger Deakins, ASC, BSC: Lighting Sicario", link: "https://theasc.com/blog/lighting-sicario/")]
+        let found = CameraSources.about("Sicario", in: hits, site: "American Cinematographer", limit: 3)
+        XCTAssertEqual(found.map(\.url.absoluteString), ["https://theasc.com/blog/lighting-sicario/"])
+    }
+
     // MARK: The right article
 
     func testAMagazineArticleMustBeAboutThisFilm() {
