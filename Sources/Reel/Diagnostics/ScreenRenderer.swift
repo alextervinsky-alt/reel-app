@@ -249,7 +249,44 @@ enum ScreenRenderer {
                model: model, scale: 2, to: output.appendingPathComponent("explore-mood.png"))
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
         speedCheck(model.films)
+        await scrollCheck(model, first: first, output: output)
         finish()
+    }
+
+    /// How smoothly the pages scroll (see `ScrollTiming`): a film page, a person's page, Explore,
+    /// Lists, then All Films with 500 films. Written to scroll.txt beside the screens.
+    private static func scrollCheck(_ model: AppModel, first: FilmEntry, output: URL) async {
+        var pages = [ScrollTiming.Page(name: "Film page", view: AnyView(NavigationStack { FilmPage(filmID: first.id) }))]
+        if let director = first.tmdb?.credits?.crew.first(where: { $0.job == "Director" }), let id = director.id {
+            pages.append(ScrollTiming.Page(name: "Person page", view: AnyView(NavigationStack { PersonPage(route: PersonRoute(id: id, name: director.name)) })))
+        }
+        pages.append(ScrollTiming.Page(name: "Explore", view: AnyView(NavigationStack { ExploreView(path: .constant(NavigationPath())) })))
+        pages.append(ScrollTiming.Page(name: "Lists", view: AnyView(NavigationStack { ListsView() })))
+        var lines = await ScrollTiming.run(pages, model: model, log: log)
+        // All Films as it opens, in the whole window, with 500 films on the drive.
+        if let drive = model.drives.first {
+            model.setFilms(copies(of: model.films, count: 500, drives: [drive.id]), urgent: true)
+            for path in model.films.compactMap({ $0.tmdb?.posterPath }) { _ = await ImageStore.shared.image(path, .poster) }
+            lines += await ScrollTiming.run([ScrollTiming.Page(name: "All Films, 500 films", view: AnyView(RootView()))], model: model, log: log)
+        }
+        try? (lines.joined(separator: "\n") + "\n").write(to: output.appendingPathComponent("scroll.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// The sample, copied under other TMDB ids up to `count` films, on the given drives (every tenth
+    /// copy missing from the second, as a Backup with gaps).
+    private static func copies(of sample: [FilmEntry], count: Int, drives: [String]) -> [FilmEntry] {
+        var films: [FilmEntry] = []
+        for index in 0..<count {
+            var source = sample[index % sample.count]
+            if var details = source.tmdb { details.id = 1_000_000 + index; source.tmdb = details }
+            let name = "Copy \(index) \(source.displayTitle)"
+            for (number, drive) in drives.enumerated() where number == 0 || index % 10 != 0 {
+                films.append(FilmEntry(driveID: drive, relativePath: "\(name)/\(name).mkv", fileName: "\(name).mkv",
+                                       size: 18_000_000_000, modified: Date(), addedAt: Date(), matchState: .confirmed,
+                                       tmdb: source.tmdb))
+            }
+        }
+        return films
     }
 
     /// Reads how these films were shot, as `AppModel.readCraft` does in the background, and logs
@@ -295,18 +332,7 @@ enum ScreenRenderer {
     /// More Like This and the Backup comparison. Written to the log, for keeping Reel quick.
     private static func speedCheck(_ sample: [FilmEntry]) {
         guard !sample.isEmpty else { return }
-        let count = 500
-        var films: [FilmEntry] = []
-        for index in 0..<count {
-            var source = sample[index % sample.count]
-            if var details = source.tmdb { details.id = 1_000_000 + index; source.tmdb = details }
-            let name = "Copy \(index) \(source.displayTitle)"
-            for drive in ["Main", "Backup"] where drive == "Main" || index % 10 != 0 {
-                films.append(FilmEntry(driveID: drive, relativePath: "\(name)/\(name).mkv", fileName: "\(name).mkv",
-                                       size: 18_000_000_000, modified: Date(), addedAt: Date(), matchState: .confirmed,
-                                       tmdb: source.tmdb))
-            }
-        }
+        let films = copies(of: sample, count: 500, drives: ["Main", "Backup"])
         func time(_ work: () -> Void) -> Int {
             let start = ContinuousClock.now
             work()
@@ -391,7 +417,7 @@ enum ScreenRenderer {
     private nonisolated static let started = ContinuousClock.now
 
     /// Callable from any thread: the watchdog writes while the main thread may be stuck.
-    private nonisolated static func log(_ message: String) {
+    nonisolated static func log(_ message: String) {
         let seconds = (ContinuousClock.now - started).components.seconds
         let line = "Screens: \(message) (\(seconds) s)\n"
         FileHandle.standardOutput.write(Data(("::notice::" + line).utf8))
