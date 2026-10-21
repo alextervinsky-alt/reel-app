@@ -34,10 +34,15 @@ public struct CameraReading: Equatable, Sendable {
         public let url: URL
     }
 
-    public init(sources: [Source], more: [Source], cinematographer: Cinematographer?) {
+    /// Sites that didn't answer, or asked Reel to wait (a captcha, "too many requests"): what was
+    /// read is kept, and the film is read again later.
+    public var unanswered: [String] = []
+
+    public init(sources: [Source], more: [Source], cinematographer: Cinematographer?, unanswered: [String] = []) {
         self.sources = sources
         self.more = more
         self.cinematographer = cinematographer
+        self.unanswered = unanswered
     }
 
     /// Everything to read for `TechSpecs`, interviews first (the filmmakers' own words).
@@ -54,7 +59,49 @@ public struct CameraReading: Equatable, Sendable {
     }
 }
 
+/// The sites that didn't answer while one film was read.
+public actor UnansweredSites {
+    private var sites: [String] = []
+
+    public init() {}
+
+    func add(_ site: String) {
+        if !site.isEmpty, !sites.contains(site) { sites.append(site) }
+    }
+
+    public func all() -> [String] { sites }
+}
+
+/// One request at a time to each site, a second apart, and a site that asked Reel to wait left
+/// alone for twenty minutes: magazines answer a library being read slowly, not all at once.
+public actor HostPacer {
+    private var next: [String: Date] = [:]
+    private var pausedUntil: [String: Date] = [:]
+    static let spacing: TimeInterval = 1.0
+    static let pause: TimeInterval = 20 * 60
+
+    func isPaused(_ host: String) -> Bool { (pausedUntil[host] ?? .distantPast) > Date() }
+
+    func pause(_ host: String) { pausedUntil[host] = Date().addingTimeInterval(Self.pause) }
+
+    /// Waits for this site's next turn (taken before waiting, so turns stay a second apart).
+    func turn(_ host: String) async {
+        let now = Date()
+        let at = max(now, next[host] ?? now)
+        next[host] = at.addingTimeInterval(Self.spacing)
+        let wait = at.timeIntervalSince(now)
+        if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+    }
+}
+
 public enum CameraSources {
+    /// A page asking for proof that a person is reading (SiteGround's "sgcaptcha", Cloudflare's
+    /// challenge), not the page.
+    public static func isChallenge(_ data: Data) -> Bool {
+        let head = String(decoding: data.prefix(4096), as: UTF8.self).lowercased()
+        return ["sgcaptcha", "cf-chl", "challenge-platform", "<title>just a moment", "attention required"].contains { head.contains($0) }
+    }
+
     /// Sites that write about how films are shot, and their names.
     static let craftSites: [(host: String, name: String)] = [
         ("theasc.com", "American Cinematographer"), ("ascmag.com", "American Cinematographer"),
@@ -328,9 +375,10 @@ public struct CameraSourcesClient: Sendable {
     ///   see `CameraSources.namesFilm` and `CameraSources.namesOtherFilm`.
     public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], directors: [String] = [],
                      year: Int? = nil, otherTitles: [String] = []) async -> CameraReading {
+        let unanswered = UnansweredSites()
         async let cited = citedLinks(articleTitle: articleTitle, cinematographers: cinematographers)
-        async let asc = ascArticles(filmTitle: filmTitle, otherTitles: otherTitles)
-        async let british = britishCinematographer(filmTitle: filmTitle, otherTitles: otherTitles)
+        async let asc = ascArticles(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
+        async let british = britishCinematographer(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
         async let stories = storyPages(filmTitle: filmTitle, cinematographers: cinematographers)
         async let person = cinematographer(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
@@ -348,7 +396,7 @@ public struct CameraSourcesClient: Sendable {
             for (index, link) in links.prefix(8).enumerated() {
                 group.addTask {
                     let fallback = CameraReading.Source(title: link.title ?? link.site, site: link.site, url: link.url, paragraphs: [])
-                    return (index, await page(link.url, site: link.site, title: link.title), fallback)
+                    return (index, await page(link.url, site: link.site, title: link.title, noting: unanswered), fallback)
                 }
             }
             var results: [(Int, CameraReading.Source?, CameraReading.Source)] = []
@@ -369,7 +417,7 @@ public struct CameraSourcesClient: Sendable {
             .filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
             .prefix(6))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
-        return CameraReading(sources: read, more: more, cinematographer: await person)
+        return CameraReading(sources: read, more: more, cinematographer: await person, unanswered: await unanswered.all())
     }
 
     /// The external links of the film's Wikipedia article (its references), picked for the craft.
@@ -399,7 +447,7 @@ public struct CameraSourcesClient: Sendable {
     }
 
     /// American Cinematographer's articles about the film (its site has a free WordPress API).
-    func ascArticles(filmTitle: String, otherTitles: [String] = []) async -> [(url: URL, site: String, title: String?)] {
+    func ascArticles(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async -> [(url: URL, site: String, title: String?)] {
         struct Hit: Decodable {
             let title: String
             let url: String
@@ -410,14 +458,15 @@ public struct CameraSourcesClient: Sendable {
         // BSC: Lighting Sicario" is a post). Not its pages or videos, which have little to read.
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
-        guard let url = components.url, let data = await fetch(url, accept: "application/json"),
+        guard let url = components.url,
+              let data = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting, search: true),
               let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
         return CameraSources.about(filmTitle, in: hits.filter { ["article", "post", "news"].contains($0.subtype ?? "") }
             .map { (title: $0.title, link: $0.url) }, site: "American Cinematographer", limit: 3, otherTitles: otherTitles)
     }
 
     /// British Cinematographer's articles about the film (its site has a free WordPress API).
-    func britishCinematographer(filmTitle: String, otherTitles: [String] = []) async -> [(url: URL, site: String, title: String?)] {
+    func britishCinematographer(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async -> [(url: URL, site: String, title: String?)] {
         struct Hit: Decodable {
             struct Rendered: Decodable { let rendered: String }
             let title: Rendered
@@ -427,7 +476,8 @@ public struct CameraSourcesClient: Sendable {
         var components = URLComponents(string: "https://britishcinematographer.co.uk/wp-json/wp/v2/posts")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
                                  URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
-        guard let url = components.url, let data = await fetch(url, accept: "application/json"),
+        guard let url = components.url,
+              let data = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting, search: true),
               let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
         return CameraSources.about(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
                                    site: "British Cinematographer", limit: 2, otherTitles: otherTitles)
@@ -461,8 +511,8 @@ public struct CameraSourcesClient: Sendable {
     }
 
     /// One page's title and paragraphs; nil when it can't be read.
-    func page(_ url: URL, site: String, title: String?) async -> CameraReading.Source? {
-        guard let data = await fetch(url, accept: "text/html"),
+    func page(_ url: URL, site: String, title: String?, noting: UnansweredSites? = nil) async -> CameraReading.Source? {
+        guard let data = await fetch(url, accept: "text/html", site: site, noting: noting),
               let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else { return nil }
         let paragraphs = HTMLText.paragraphs(html)
         return CameraReading.Source(title: title ?? HTMLText.title(html) ?? site, site: site, url: url, paragraphs: paragraphs)
@@ -483,7 +533,20 @@ public struct CameraSourcesClient: Sendable {
         return CameraReading.Cinematographer(name: name, lead: Digest.lead(of: [lead], limit: 360), aboutThisFilm: Array(about.prefix(4)), url: url)
     }
 
-    private func fetch(_ url: URL, accept: String) async -> Data? {
+    /// Spaces the requests to each site and pauses a site that asks Reel to wait.
+    static let pacer = HostPacer()
+
+    /// The page, or nil. A site that asks Reel to wait (a captcha page, "too many requests",
+    /// "accepted" with nothing in it) is paused for a while and noted, so the film is read again
+    /// later rather than kept as if nothing were written about it; so is a magazine's search that
+    /// doesn't answer (`search`). A page that's gone or paywalled is just not read.
+    private func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil, search: Bool = false) async -> Data? {
+        let host = url.host ?? ""
+        if await Self.pacer.isPaused(host) {
+            await noting?.add(site)
+            return nil
+        }
+        await Self.pacer.turn(host)
         var request = URLRequest(url: url)
         // Reel says who it is; a site that turns it away is only linked.
         request.setValue(Wikimedia.userAgent, forHTTPHeaderField: "User-Agent")
@@ -497,7 +560,20 @@ public struct CameraSourcesClient: Sendable {
             }.resume()
         }
         await Self.gate.release()
-        guard let (data, status) = result, (200..<300).contains(status), data.count < 6_000_000 else { return nil }
+        guard let (data, status) = result else {
+            if search { await noting?.add(site) }
+            return nil
+        }
+        if status == 429 || status == 202 || CameraSources.isChallenge(data) {
+            await Self.pacer.pause(host)
+            await noting?.add(site)
+            return nil
+        }
+        if status >= 500 {
+            if search { await noting?.add(site) }
+            return nil
+        }
+        guard (200..<300).contains(status), data.count < 6_000_000 else { return nil }
         return data
     }
 }

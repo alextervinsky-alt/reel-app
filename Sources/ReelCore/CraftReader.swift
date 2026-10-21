@@ -25,7 +25,9 @@ public enum CraftReader {
         let texts = texts(article: article, reading: reading, hiding: false)
         let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
                                    year: details.year, title: details.title, otherTitles: otherTitles)
-        return CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
+        var index = CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
+        index.unanswered = reading?.unanswered ?? []
+        return index
     }
 
     /// Fetches the film's article and what's written about how it was shot, and reads them. Nil when
@@ -46,6 +48,9 @@ public enum CraftReader {
         }
         let reading = await fetched
         guard reached || !reading.sources.isEmpty || reading.cinematographer != nil else { return nil }
-        return index(of: details, article: article, reading: reading, colour: colour, otherTitles: otherTitles)
+        var read = index(of: details, article: article, reading: reading, colour: colour, otherTitles: otherTitles)
+        // The film's own article didn't come: read again later too.
+        if articleTitle != nil, article == nil, !read.unanswered.contains("Wikipedia") { read.unanswered.append("Wikipedia") }
+        return read
     }
 }

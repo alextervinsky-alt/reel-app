@@ -97,6 +97,17 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("A beautifully shot film on film, and a triumph."), [])
     }
 
+    /// Found by the 1.9.2 audit of a real library.
+    func testFoundInTheAudit() {
+        XCTAssertEqual(tags("This was chosen to balance Alien, which was shot using anamorphic lenses, and Aliens, which was filmed using spherical lenses.",
+                            title: "Alien: Romulus"), [], "the first film, though TMDB keeps them apart")
+        XCTAssertEqual(tags("Alien: Romulus was shot using anamorphic lenses.", title: "Alien: Romulus"), [.anamorphic])
+        XCTAssertEqual(tags("We shot on the Sony Venice 2 and paired it with a Canon 8-64mm Super 16 zoom lens for its servo zoom."), [.digital])
+        XCTAssertEqual(tags("2.39:1 Cameras | Arri Rental Alexa 65; Arri Alexa LF Lenses | Arri Rental Moviecam (Olympus OM), Prime DNA"), [.digital])
+        XCTAssertEqual(tags("In my opinion, ARRI has achieved more complex colors that are closer to the skin shot on film."), [])
+        XCTAssertEqual(tags("Kodak inked fresh deals, guaranteeing film's continued use of celluloid for the foreseeable future."), [])
+    }
+
     // MARK: Lenses and sensors
 
     func testALensOrASensorIsNotFilm() {
@@ -166,10 +177,14 @@ final class ShotOnStatementTests: XCTestCase {
         XCTAssertEqual(tags("Lenses: Cooke Anamorphic/i, Zeiss Master Primes."), [.anamorphic])
     }
 
-    /// A name read for the notes and search is kept even where it isn't a Shot on tag.
-    func testTheNamesStayForSearch() {
-        let read = craft(["The Alexa 65 is very clean and sharp, and has an impressive image range."])
+    /// Reel 1.9.3: a camera only remarked on isn't on the sheet or in search either (it's the
+    /// sheet's word that this film was shot with it); light and grip only need to be this film's.
+    func testTheNamesAreThisFilmsToo() {
+        let read = craft(["The Alexa 65 is very clean and sharp, and has an impressive image range.",
+                          "Much of it was handheld, and the interiors were lit with natural light."])
         XCTAssertEqual(read.shotOn, [])
-        XCTAssertTrue(read.names.contains("Alexa 65"), "\(read.names)")
+        XCTAssertFalse(read.names.contains("Alexa 65"), "\(read.names)")
+        XCTAssertTrue(read.names.contains("Handheld"))
+        XCTAssertTrue(read.names.contains("Natural light"))
     }
 }

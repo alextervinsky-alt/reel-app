@@ -41,7 +41,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 4: a tag needs a sentence saying this film was shot that way (not an opinion, other work, a
     /// look made in the grade); a focal length or a sensor isn't film; black and white read from a
     /// film stock is in part unless Wikidata says the whole film is.
-    public static let currentVersion = 4
+    /// 5: the names too (the specification sheet, search, a cinematographer's habits) only this
+    /// film's: a camera, lens or what it was shot on said to have been used, the rest said of this
+    /// film; round-ups of many films read only where they name it.
+    public static let currentVersion = 5
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
@@ -88,10 +91,17 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     public var sources: Int
     /// How it was found (see `currentDiscovery`); 1 for readings before 1.9.0.
     public var discovery: Int
+    /// Sites that didn't answer or asked Reel to wait while it was read: read again in a few hours.
+    public var unanswered: [String] = []
+    /// Readings in a row with a site unanswered (after four, what was read stands for half a year).
+    public var retries = 0
 
     public init(version: Int = CraftIndex.currentVersion, readAt: Date = Date(), shotOn: [ShotOn], names: [String],
-                evidence: [Evidence] = [], sources: Int = 0, discovery: Int = CraftIndex.currentDiscovery) {
+                evidence: [Evidence] = [], sources: Int = 0, discovery: Int = CraftIndex.currentDiscovery,
+                unanswered: [String] = [], retries: Int = 0) {
         self.discovery = discovery
+        self.unanswered = unanswered
+        self.retries = retries
         self.version = version
         self.readAt = readAt
         self.shotOn = shotOn
@@ -109,11 +119,18 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         evidence = try c.decodeIfPresent([Evidence].self, forKey: .evidence) ?? []
         sources = try c.decodeIfPresent(Int.self, forKey: .sources) ?? 0
         discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 1
+        unanswered = try c.decodeIfPresent([String].self, forKey: .unanswered) ?? []
+        retries = try c.decodeIfPresent(Int.self, forKey: .retries) ?? 0
     }
+
+    /// How long after a site didn't answer it's tried again.
+    public static let retryAfter: TimeInterval = 6 * 3600
+    public static let maxRetries = 4
 
     public func isStale(now: Date = Date()) -> Bool {
         version < CraftIndex.currentVersion || readAt < now.addingTimeInterval(-CraftIndex.maxAge)
             || (discovery < CraftIndex.currentDiscovery && isThin)
+            || (!unanswered.isEmpty && retries < CraftIndex.maxRetries && readAt < now.addingTimeInterval(-CraftIndex.retryAfter))
     }
 
     /// Read from the film's article alone (or nothing), or nothing found on what it was shot on:

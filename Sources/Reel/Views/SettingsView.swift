@@ -172,10 +172,15 @@ struct SettingsView: View {
                         Text(coverage.waiting.formatted()).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
+                if coverage.unanswered > 0 {
+                    LabeledContent("To read again (a site didn't answer, or asked Reel to wait)") {
+                        Text(coverage.unanswered.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
             } header: {
                 Text("Shot On")
             } footer: {
-                Text("A film gets Shot on only when something Reel reads says how it was shot: its Wikipedia article, American Cinematographer, British Cinematographer, Kodak, No Film School or an article Wikipedia cites. For many films none of them does. Animated films aren't counted.")
+                Text("A film gets Shot on only when something Reel reads says how it was shot: its Wikipedia article, American Cinematographer, British Cinematographer, Kodak, No Film School or an article Wikipedia cites. For many films none of them does. Reel asks each magazine one page at a time, and when a site asks it to wait, it leaves the site alone for a while and reads those films again a few hours later. Animated films aren't counted.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

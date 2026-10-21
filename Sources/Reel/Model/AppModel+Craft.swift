@@ -60,8 +60,23 @@ extension AppModel {
                 for await result in group { all.append(result) }
                 return all
             }
-            for (id, index) in results {
-                if let index, let old = films.first(where: { $0.tmdb?.id == id })?.craft, old.keeps(over: index) {
+            for (id, found) in results {
+                let old = films.first(where: { $0.tmdb?.id == id })?.craft
+                var index = found
+                // A site didn't answer: counted, so it's tried a few times and then left be.
+                if var reading = index, !reading.unanswered.isEmpty {
+                    reading.retries = (old?.retries ?? 0) + 1
+                    index = reading
+                }
+                if let index, var old, !index.unanswered.isEmpty, index.retries <= CraftIndex.maxRetries, old.sources > index.sources {
+                    // A site didn't answer and less was read than last time (by older rules too):
+                    // what was read before stays, and it's tried again in a few hours.
+                    old.unanswered = index.unanswered
+                    old.retries = index.retries
+                    old.readAt = Date()
+                    read[id] = old
+                    failedInARow = 0
+                } else if let index, let old, old.keeps(over: index) {
                     // Read from fewer texts than last time (a site down): kept as it was, and tried
                     // again in a week rather than in half a year.
                     read[id] = CraftIndex(version: old.version, readAt: Date().addingTimeInterval(7 * 86_400 - CraftIndex.maxAge),
@@ -135,11 +150,12 @@ extension AppModel {
     /// How much of the library Shot on covers (Settings › Performance): live-action films, each
     /// once, tagged out of those read; those read from their Wikipedia article alone; and how many
     /// are still to be read. Animated films aren't counted: they weren't shot on anything.
-    func craftCoverage() -> (tagged: Int, read: Int, articleOnly: Int, waiting: Int) {
+    func craftCoverage() -> (tagged: Int, read: Int, articleOnly: Int, waiting: Int, unanswered: Int) {
         var seen = Set<Int>()
-        var tagged = 0, read = 0, articleOnly = 0, waiting = 0
+        var tagged = 0, read = 0, articleOnly = 0, waiting = 0, unanswered = 0
         for film in films {
             guard let details = film.tmdb, seen.insert(details.id).inserted, !details.genreNames.contains("Animation") else { continue }
+            if let craft = film.craft, !craft.unanswered.isEmpty, craft.retries <= CraftIndex.maxRetries { unanswered += 1 }
             guard let craft = film.craft, !needsReading(film) else {
                 // Films whose Wikipedia facts aren't in yet aren't read either: not counted.
                 if film.funFacts != nil { waiting += 1 }
@@ -149,7 +165,7 @@ extension AppModel {
             if !Set(craft.shotOn).subtracting(removedShotOn[details.id] ?? []).isEmpty { tagged += 1 }
             if craft.sources <= 1 { articleOnly += 1 }
         }
-        return (tagged, read, articleOnly, waiting)
+        return (tagged, read, articleOnly, waiting, unanswered)
     }
 
     /// Puts new readings in the library, noting each film whose Shot on changed (Settings ›
@@ -179,6 +195,8 @@ extension AppModel {
                                       otherTitles: otherTitles(of: details))
         let current = films.first { $0.tmdb?.id == details.id }?.craft
         if let current, current.keeps(over: index) { return }
+        // A site didn't answer the tab and less was read than the summary has: the summary stays.
+        if let current, !index.unanswered.isEmpty, current.sources > index.sources { return }
         // The same as already kept: nothing to write.
         if let current, current.version == index.version, current.shotOn == index.shotOn, current.names == index.names,
            current.evidence == index.evidence, !current.isStale() { return }

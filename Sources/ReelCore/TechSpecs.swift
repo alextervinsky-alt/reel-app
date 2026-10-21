@@ -29,6 +29,9 @@ public struct TechSpecs: Equatable, Sendable {
         /// Its sentence says this film was shot with it ("shot on", "chose", "his main camera", a
         /// spec list), not an opinion, a comparison, other work or a look: only these are Shot on tags.
         public var capture = false
+        /// About this film: not other work, another film or gear in general ("I shoot a lot of
+        /// commercials with the Red", "Chazelle's La La Land… in CinemaScope").
+        public var aboutThisFilm = true
         public var id: String { kind.rawValue + "|" + name.lowercased() }
     }
 
@@ -67,7 +70,10 @@ public struct TechSpecs: Equatable, Sendable {
         }
     }
 
+    /// This film's gear and techniques (see `isThisFilms`).
     public let specs: [Spec]
+    /// Named, but not said of this film (another film's camera, gear in general): for diagnosis only.
+    public var mentioned: [Spec] = []
     /// Sentences naming gear that aren't in the parts below (at most six).
     public var sentences: [Note]
     /// The filmmakers' own words: interviews, and the cinematographer quoted in the article.
@@ -140,13 +146,19 @@ public struct TechSpecs: Equatable, Sendable {
         let directorNames = spellings(directors)
         // A cinematographer who directed it too has no director to come together with.
         let withDirector = !directors.isEmpty && Set(directors).isDisjoint(with: cinematographers)
+        // A round-up of many films ("the cameras behind this year's festival films") is read only
+        // where it names this film or its cinematographer.
+        let shortTitle = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
         for text in texts {
+            let roundup = text.isInterview && !shortTitle.isEmpty && isRoundup(text)
             for section in text.sections {
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
                 let commentary = !offTopic.contains { heading.contains($0) } && !Spoilers.isAfterSection([section.title])
                 let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
                 for paragraph in section.paragraphs {
+                    if roundup, paragraph.range(of: shortTitle, options: .caseInsensitive) == nil,
+                       !mentions(names, in: paragraph, generic: false) { continue }
                     // "He wanted…" right after a sentence about the cinematographer is theirs too.
                     var aboutThem = false
                     let sentences = Digest.sentences(in: paragraph)
@@ -183,11 +195,11 @@ public struct TechSpecs: Equatable, Sendable {
                                     if rule.isGauge, !filmGauge(sentence, at: at) { continue }
                                     gearNamed += 1
                                     if !namedHere.contains(name) { namedHere.append(name) }
+                                    let said = reading(sentence, at: at, title: title, otherTitles: otherTitles, people: names + directorNames)
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(sentence.prefix(400)), source: text.source,
-                                                      partial: saidOfPart(sentence, at: at),
-                                                      capture: saysCaptured(sentence, at: at, title: title, otherTitles: otherTitles,
-                                                                            people: names + directorNames)))
+                                                      partial: saidOfPart(sentence, at: at), capture: said.captured,
+                                                      aboutThisFilm: said.aboutThisFilm))
                                 }
                             }
                         }
@@ -264,7 +276,13 @@ public struct TechSpecs: Equatable, Sendable {
                 }
             }
         }
-        var specs = TechSpecs(specs: tidy(found), sentences: ranked(gear, 6))
+        // The sheet, search and Shot on hold only this film's gear: a camera, a lens or what it was shot
+        // on needs a sentence saying so; the rest (light, grip, ratios) only needs to be about this
+        // film. Everything else named is kept as mentioned.
+        let all = tidy(found)
+        let shown = all.filter(isThisFilms)
+        var specs = TechSpecs(specs: shown, sentences: ranked(gear, 6))
+        specs.mentioned = all.filter { !isThisFilms($0) }
         specs.approach = ranked(approach, 10)
         specs.intent = ranked(intent, 8)
         specs.references = ranked(references, 6)
@@ -275,6 +293,24 @@ public struct TechSpecs: Equatable, Sendable {
         specs.challenges = ranked(challenges, 6)
         specs.collaboration = ranked(collaboration, 3)
         return specs
+    }
+
+    /// Whether a name is this film's: a camera, a lens or what it was shot on needs a sentence saying
+    /// this film was shot with it; anything else (light, grip, a frame rate) a sentence about this film.
+    static func isThisFilms(_ spec: Spec) -> Bool {
+        spec.kind == .camera || spec.kind == .lens || !CraftIndex.shotOn(spec).isEmpty ? spec.capture : spec.aboutThisFilm
+    }
+
+    /// A text naming eight or more cameras is about many films: a round-up, not this film's story.
+    static func isRoundup(_ text: Text) -> Bool {
+        var cameras = Set<String>()
+        for paragraph in text.sections.flatMap(\.paragraphs) {
+            for rule in rules where rule.kind == .camera {
+                for (name, _) in rule.found(in: paragraph) { cameras.insert(name.lowercased()) }
+            }
+            if cameras.count >= 8 { return true }
+        }
+        return false
     }
 
     /// The most telling first (reading order among equals), at most `limit`.
@@ -468,7 +504,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// (its spelling and sentence): one that says this film was shot with it, about the whole film,
     /// before any other.
     static func tidy(_ specs: [Spec]) -> [Spec] {
-        func rank(_ spec: Spec) -> Int { (spec.capture ? 2 : 0) + (spec.partial ? 0 : 1) }
+        func rank(_ spec: Spec) -> Int { (spec.capture ? 4 : 0) + (spec.aboutThisFilm ? 2 : 0) + (spec.partial ? 0 : 1) }
         var best: [String: Spec] = [:]
         var order: [String] = []
         for spec in specs {
@@ -632,7 +668,14 @@ public struct TechSpecs: Equatable, Sendable {
     /// Only these are Shot on tags; the names are still read for the craft notes and search.
     static func saysCaptured(_ sentence: String, at range: Range<String.Index>, title: String?, otherTitles: [String],
                              people: [String]) -> Bool {
-        if isSpecList(sentence) { return true }
+        reading(sentence, at: range, title: title, otherTitles: otherTitles, people: people).captured
+    }
+
+    /// Whether the words at `range` are about this film (not other work, another film or gear in
+    /// general), and whether they're said to have been shot with (see `saysCaptured`).
+    static func reading(_ sentence: String, at range: Range<String.Index>, title: String?, otherTitles: [String],
+                        people: [String]) -> (aboutThisFilm: Bool, captured: Bool) {
+        if isSpecList(sentence) { return (true, true) }
         let whole = segmentRange(of: sentence, around: range)
         let part = String(sentence[whole])
         // Other work and remarks in general: before the words in their part of the sentence, or in
@@ -643,9 +686,9 @@ public struct TechSpecs: Equatable, Sendable {
         // A look made in the grade, right by the words: "the Ektachrome LUT", "the three-strip Technicolor look".
         let near = String(sentence[sentence.index(range.lowerBound, offsetBy: -min(12, sentence.distance(from: sentence.startIndex, to: range.lowerBound)))
                                    ..< sentence.index(range.upperBound, offsetBy: min(12, sentence.distance(from: range.upperBound, to: sentence.endIndex)))])
-        guard matches(captureCue, part), !matches(otherWork, lead), !matches(lookMade, near) else { return false }
-        return !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
+        let about = !matches(otherWork, lead) && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
+        return (about, about && matches(captureCue, part) && !matches(lookMade, near))
     }
 
     /// The part of the sentence the words at `range` are in, split only where the sentence turns
@@ -715,6 +758,10 @@ public struct TechSpecs: Equatable, Sendable {
             || before.range(of: #"\b(?:sensor|sensors|crop(?:ped|ping)?(?:\s+(?:to|at|in))?)\W*$"#, options: .regularExpression) != nil {
             return false
         }
+        // A lens made to cover a gauge: "a Canon 8-64mm Super 16 zoom lens".
+        if after.range(of: #"^\W*(?:[\w-]+\s+)?(?:zoom|zooms|lens|lenses|primes?|glass|optics)\b"#, options: .regularExpression) != nil {
+            return false
+        }
         if sentence[range].lowercased().hasPrefix("super") { return true }
         if after.range(of: #"^\W*(?:[\w-]+\s+){0,2}?(?:film|films|filmmaking|stocks?|negative|celluloid|format|cameras?|footage)\b"#,
                        options: .regularExpression) != nil { return true }
@@ -752,7 +799,11 @@ public struct TechSpecs: Equatable, Sendable {
         }
         // The collection's other films, where this film's own title isn't what's written.
         let owns = own.isEmpty ? [] : occurrences(of: title ?? "", in: part, options: .caseInsensitive)
-        for other in otherTitles where other.count >= 4 && other.lowercased() != own {
+        // The title before its colon, written alone, is the first film ("Alien" while reading Alien:
+        // Romulus), also when TMDB keeps them in different collections.
+        let first = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) }
+        let firstFilm = (title ?? "").contains(":") ? first.map { [$0] } ?? [] : []
+        for other in otherTitles + firstFilm where other.count >= 4 && other.lowercased() != own {
             for found in occurrences(of: other, in: part) where !owns.contains(where: { $0.overlaps(found) }) {
                 let edgeBefore = found.lowerBound == part.startIndex || !(part[part.index(before: found.lowerBound)].isLetter)
                 let edgeAfter = found.upperBound == part.endIndex || !(part[found.upperBound].isLetter || part[found.upperBound].isNumber)
@@ -808,12 +859,12 @@ public struct TechSpecs: Equatable, Sendable {
     /// Saying it was shot, chosen or used: the verbs, a camera's role, a camera package, "the lens
     /// was usually a…".
     static let captureCue = try! NSRegularExpression(
-        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|use|employed|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
+        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|employed|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
         options: [.caseInsensitive])
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".
@@ -969,7 +1020,8 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.camera, #"\bIMAX\s+(?:MSM\s+9802|MKIV|Mark\s+(?:IV|II|III)|65\s?mm\s+(?:film\s+)?cameras?|film\s+cameras?|digital\s+cameras?|cameras?)\b"#),
         Rule(.camera, #"\bAaton\s+(?:XTR(?:\s+Prod)?|Penelope|A-Minima|LTR|XTera|Delta)\b"#),
         Rule(.camera, #"\bBolex(?:\s+H16)?\b"#),
-        Rule(.camera, #"(?<!by )\bMoviecam(?:\s+Compact)?\b(?!\s+(?:lenses|lens|primes))"#),
+        // "Arri Rental Moviecam (Olympus OM)" are lenses Moviecam made.
+        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+Compact)?\b(?!\s+(?:lenses|lens|primes|\())"#),
         Rule(.camera, #"\bMitchell\s+(?:BNCR?|NC|Mark\s+II|65|camera)\b"#),
         Rule(.camera, #"\bBlackmagic\s+(?:URSA(?:\s+Mini)?(?:\s+Pro)?(?:\s+\d{1,2}(?:\.\d)?K)?|Pocket\s+Cinema\s+Camera(?:\s+\dK)?|Cinema\s+Camera(?:\s+\dK)?)"#),
         Rule(.camera, #"\bCanon\s+(?:EOS\s+)?(?:C\d{2,3}(?:\s+Mark\s+(?:II|III))?|5D(?:\s+Mark\s+(?:II|III|IV))?|7D|XL[12]s?|R5\s?C?)\b"#),

@@ -89,11 +89,11 @@ final class LiveShotOnTests: XCTestCase {
             for tag in ShotOn.allCases where known.has.contains(tag) && !craft.shotOn.contains(tag) {
                 missing.append(tag.title)
                 // What named it without saying it was shot that way.
-                for spec in specs.specs where !spec.capture && CraftIndex.shotOn(spec).contains(tag) {
+                for spec in specs.mentioned where CraftIndex.shotOn(spec).contains(tag) {
                     say("Shot on not counted: \(known.title) \(tag.title): \(spec.source ?? "Wikipedia"): \((spec.evidence ?? spec.name).prefix(140))")
                 }
                 // Sentences that name it at all, when none was read as a name (left out entirely).
-                if !specs.specs.contains(where: { CraftIndex.shotOn($0).contains(tag) }) {
+                if !(specs.specs + specs.mentioned).contains(where: { CraftIndex.shotOn($0).contains(tag) }) {
                     let words = tag == .digital ? #"(?i)\balexa|\bred\b|\bvenice\b|\bdigital"#
                         : tag == .film ? #"(?i)\b(?:35|65|16)\s?mm|film stock|kodak|celluloid|panavision|\bon film\b"#
                         : tag == .anamorphic ? #"(?i)anamorphic"# : tag == .imax ? #"(?i)imax"# : #"(?i)black[- ]and[- ]white"#
@@ -104,7 +104,11 @@ final class LiveShotOnTests: XCTestCase {
                     }
                 }
             }
-            say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(texts.count) texts | known \(known.has.count + known.hasNot.count)"
+            // The sheet's cameras and formats that say what it wasn't shot on ("Red Epic" for a film shot on film).
+            let wrongNames = specs.specs.filter { !CraftIndex.shotOn($0).isDisjoint(with: known.hasNot) }.map(\.name)
+            say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(texts.count) texts | \(specs.specs.count) names"
+                + (wrongNames.isEmpty ? "" : " (not its: \(wrongNames.joined(separator: ", ")))")
+                + " | known \(known.has.count + known.hasNot.count)"
                 + " | wrong \(wrong.joined(separator: "+")) | missing \(missing.joined(separator: "+"))")
         }
     }

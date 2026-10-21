@@ -151,6 +151,8 @@ public struct FilePicture: Equatable, Sendable {
     /// How sure: 5 a name's own words, 4 what the file can't be, 3 a folder's words, 2 a 1080p
     /// Blu-ray, 1 likely (the file's name over its folder's on a tie).
     var strength = 0
+    /// Your setting, when what the file is says otherwise (an H.264 1080p Blu-ray set to HDR): why.
+    public var against: String? = nil
 
     public var isHDR: Bool { setting == .hdr }
     public var isKnown: Bool { setting != nil }
@@ -196,7 +198,10 @@ public struct FilePicture: Equatable, Sendable {
             let setting: Setting = yours.isHDR ? .hdr : .sdr
             // The format the name says, when it agrees.
             let format = setting == .hdr && found?.setting == .hdr && found?.isGuess == false ? found?.format : nil
-            return FilePicture(setting: setting, format: format, basis: .yours, reason: "You set this")
+            var picture = FilePicture(setting: setting, format: format, basis: .yours, reason: "You set this")
+            // Said outright or proven by what the file is, and not what you set: worth a word.
+            if let found, let proven = found.setting, proven != setting, found.strength >= 4 { picture.against = found.reason }
+            return picture
         }
         if let found { return found }
         let why = name.anyResolution == "2160p"

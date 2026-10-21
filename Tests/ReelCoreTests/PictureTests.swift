@@ -193,6 +193,12 @@ final class PictureTests: XCTestCase {
         XCTAssertEqual(picture("Film.2021.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC-GRP.mkv", yours: .hdr).format, .dolbyVisionHDR10,
                        "the name's format, when it agrees")
         XCTAssertEqual(FilePicture.choices, [.hdr, .sdr], "all a Mac's display has")
+        let slip = picture("Film (2006) 1080p BluRay REMUX AVC [English DTS-HD MA 5.1].mkv", yours: .hdr)
+        XCTAssertEqual(slip.setting, .hdr, "yours still wins")
+        XCTAssertNotNil(slip.against, "but a 1080p H.264 Blu-ray can't be HDR: said")
+        XCTAssertNil(picture("Film (2006) 1080p BluRay REMUX AVC.mkv", yours: .sdr).against)
+        XCTAssertNil(picture("2013. Furious 6.mkv", yours: .hdr).against, "nothing to go against")
+        XCTAssertNil(picture("Film.2025.2160p.AMZN.WEB-DL.H.265-GRP.mkv", yours: .hdr).against, "a guess isn't proof")
     }
 
     func testSearchWords() {
