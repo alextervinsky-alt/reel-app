@@ -21,6 +21,18 @@ final class ShotOnAuditTests: XCTestCase {
         XCTAssertEqual(tags("We shot the night exteriors on a Moviecam Compact loaded with Kodak 5219."), [.film])
         XCTAssertEqual(tags("Doe chose two Moviecam cameras for the car work."), [.film])
         XCTAssertEqual(tags("For the rooftop, the crew used the Moviecam, which was light enough to rig."), [.film])
+        XCTAssertEqual(tags("We also used the Moviecams for the duels and the infrared scenes, because their ability to resolve was important."),
+                       [], "the Moviecams, resolving: lenses")
+    }
+
+    func testWhatsUsedForPartOfTheFilmIsInPart() {
+        let dreams = read(["The camera crew shot the dream sequences in Super 8 format, a habit of the director's, using Bolex cameras."]).craft
+        XCTAssertEqual(dreams.shotOn, [.film])
+        XCTAssertEqual(dreams.evidence(for: .film)?.partial, true, "the cameras of a clause about the dream sequences")
+        let fast = read(["Doe shot the film on Kodak 5219.", "A Phantom Flex camera was also used for some high-speed work."]).craft
+        XCTAssertEqual(fast.evidence(for: .digital)?.partial, true)
+        XCTAssertEqual(fast.evidence(for: .film)?.partial, false)
+        XCTAssertEqual(read(["We shot the film using Arri Alexa 35 cameras."]).craft.evidence(for: .digital)?.partial, false)
     }
 
     func testTheMagazinesOwnLinesAreNotTheFilmmakers() {

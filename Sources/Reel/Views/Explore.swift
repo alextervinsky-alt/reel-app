@@ -255,9 +255,10 @@ struct BestOfRow: View {
         // Ranked by the whole list, seen films included (only they're left out of the row).
         let all = model.bestOf(year: year, source: source) ?? []
         return ForEach(films.prefix(20)) { film in
+            // IMDb's ranking shows IMDb's rating, not TMDB's (the order would look random by TMDB's).
             DiscoverCard(film: film, width: 146,
                          rank: source == .tmdb || source == .imdb ? all.firstIndex { $0.id == film.id }.map { $0 + 1 } : nil,
-                         reason: source == .awards ? film.note : nil, onPreview: onPreview)
+                         reason: source == .awards ? film.note : nil, ratingLine: source == .imdb ? film.note : nil, onPreview: onPreview)
         }
     }
 }
@@ -503,6 +504,9 @@ struct DiscoverCard: View {
     var reason: String?
     /// Offers "Not for me" under the pointer (Explore's rows, where it leaves for good).
     var offersNotForMe = false
+    /// The line under the title instead of year, TMDB's rating and genre: the rating a list is
+    /// ranked by ("IMDb 8.4 · 580K votes").
+    var ratingLine: String?
     let onPreview: (PreviewFilm) -> Void
     @State private var hovering = false
 
@@ -531,7 +535,7 @@ struct DiscoverCard: View {
                             .foregroundStyle(Theme.brand)
                             .lineLimit(2, reservesSpace: true)
                     }
-                    Text(caption)
+                    Text(ratingLine ?? caption)
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

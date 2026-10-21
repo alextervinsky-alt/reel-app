@@ -34,6 +34,10 @@ final class ListsStore {
 
     @ObservationIgnored private var imdbFilms: [IMDbFilm] = []
     @ObservationIgnored private var imdbLists: [FilmListKind: [ListFilm]] = [:]
+    /// The saved copy's format (`IMDbRatingsFile.version`), once it's read.
+    @ObservationIgnored private var imdbFormat = IMDbRatingsFile.currentVersion
+    /// Asked for once a session from opening a list (`refreshStale` tries again every few hours).
+    @ObservationIgnored private var imdbRebuildAsked = false
     @ObservationIgnored private var awardsFetchedAt: [String: Date] = [:]
     @ObservationIgnored private var resolving: Set<String> = []
     @ObservationIgnored private var unresolvable: Set<String> = []
@@ -147,20 +151,25 @@ final class ListsStore {
             return awards[award] ?? []
         case .sightAndSound:
             return SightAndSound.films
-        case .imdbYear, .imdbAllTime:
+        case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted:
             guard case .ready = imdbState, !imdbFilms.isEmpty else { return [] }
             if let cached = imdbLists[kind] { return cached }
-            let ranked: [IMDbFilm]
-            if case .imdbYear(let year) = kind {
-                ranked = IMDbDataset.top(imdbFilms, year: year)
-            } else {
-                ranked = IMDbDataset.topAllTime(imdbFilms)
+            let ranked: [IMDbFilm] = switch kind {
+            case .imdbYear(let year): IMDbDataset.top(imdbFilms, year: year)
+            case .imdbDecade(let decade): IMDbDataset.top(imdbFilms, decade: decade)
+            case .imdbGenre(let genre, let decade?): IMDbDataset.top(imdbFilms, decade: decade, genre: genre)
+            case .imdbGenre(let genre, nil): IMDbDataset.top(imdbFilms, genre: genre)
+            case .imdbMostVoted: IMDbDataset.mostVoted(imdbFilms)
+            default: IMDbDataset.topAllTime(imdbFilms)
             }
             let list = ranked.map(ListFilm.init)
             imdbLists[kind] = list
             return list
         }
     }
+
+    /// The saved IMDb copy has each film's genres (copies before Reel 1.9.4 don't: built again).
+    var imdbHasGenres: Bool { imdbFormat >= 2 }
 
     /// IMDb's ratings are downloaded and ready for rankings.
     var imdbIsReady: Bool {
@@ -191,7 +200,7 @@ final class ListsStore {
             await loadAward(award)
         case .sightAndSound:
             break
-        case .imdbYear, .imdbAllTime:
+        case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted:
             await loadIMDbFilms()
             startIMDbIfNeeded()
         }
@@ -201,14 +210,20 @@ final class ListsStore {
     /// without asking.
     func startIMDbIfNeeded() {
         if case .notDownloaded = imdbState { Task { await downloadIMDb() } }
+        // A copy from before genres were kept: built again in the background (its lists stay meanwhile).
+        if imdbIsReady, !imdbFilms.isEmpty, !imdbHasGenres, !imdbRebuildAsked {
+            imdbRebuildAsked = true
+            Task { await downloadIMDb() }
+        }
     }
 
     /// Everything that's due, fetched in the background (at launch and every few hours).
     func refreshStale(sets wanted: [SetCandidate], using client: TMDBClient?) async {
         await prepare()
         await loadAllAwards()
+        if imdbIsReady { await loadIMDbFilms() }
         switch imdbState {
-        case .ready(let built) where built < Date().addingTimeInterval(-Self.imdbMaxAge):
+        case .ready(let built) where built < Date().addingTimeInterval(-Self.imdbMaxAge) || !imdbHasGenres:
             await downloadIMDb()
         case .failed:
             // A first download that failed is tried again on its own.
@@ -254,6 +269,7 @@ final class ListsStore {
         let saved = await Task.detached(priority: .userInitiated) { JSONStore.load(IMDbRatingsFile.self, from: file) }.value
         if let saved, !saved.films.isEmpty {
             imdbFilms = saved.films
+            imdbFormat = saved.version
             imdbLists = [:]
             imdbState = .ready(saved.builtAt)
         } else {
@@ -304,6 +320,7 @@ final class ListsStore {
                 return films
             }.value
             imdbFilms = films
+            imdbFormat = IMDbRatingsFile.currentVersion
             imdbLists = [:]
             imdbState = .ready(Date())
         } catch {

@@ -263,17 +263,24 @@ struct StartHereSection: View {
     }
 }
 
-/// IMDb's rankings, in its own view so download progress redraws only this part.
+/// IMDb's rankings, in its own view so download progress redraws only this part: the Top 250, a
+/// year's and a decade's best, the most voted, and the best of each genre, of all time or a decade.
 struct IMDbSection: View {
     @Environment(AppModel.self) private var model
     let columns: [GridItem]
     @State private var year = Calendar.current.component(.year, from: Date()) - 1
+    @State private var decade = IMDbChoices.decade(of: Calendar.current.component(.year, from: Date()) - 10)
+    /// The genres' era: 0 for all time, or a decade.
+    @State private var era = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 14) {
-                SectionHeading(title: "IMDb Rankings", subtitle: "Ranked by IMDb rating and number of votes")
-                if case .ready = model.lists.imdbState { YearMenu(year: $year) }
+                SectionHeading(title: "IMDb Rankings", subtitle: "Ranked by IMDb rating, weighed by the number of votes")
+                if case .ready = model.lists.imdbState {
+                    YearMenu(year: $year)
+                    ChoiceMenu(icon: "clock", options: IMDbChoices.decades, selection: $decade)
+                }
                 Spacer()
                 if model.lists.imdbUpdating {
                     HStack(spacing: 6) {
@@ -291,9 +298,12 @@ struct IMDbSection: View {
             switch model.lists.imdbState {
             case .ready:
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
-                    ListCard(kind: .imdbYear(year), source: "IMDb · \(year)", symbol: "calendar")
                     ListCard(kind: .imdbAllTime, source: "IMDb · All time", symbol: "trophy")
+                    ListCard(kind: .imdbYear(year), source: "IMDb · \(year)", symbol: "calendar")
+                    ListCard(kind: .imdbDecade(decade), source: "IMDb · The \(decade)s", symbol: "clock")
+                    ListCard(kind: .imdbMostVoted, source: "IMDb · Most voted", symbol: "person.3")
                 }
+                genres
             default:
                 IMDbSetupCard()
             }
@@ -302,15 +312,121 @@ struct IMDbSection: View {
             // Three posters for each card.
             guard let client = model.tmdb else { return }
             let lists = model.lists
-            await lists.resolve(Array(lists.films(for: .imdbYear(year)).prefix(3)) + lists.films(for: .imdbAllTime).prefix(3),
-                                using: client)
+            let kinds: [FilmListKind] = [.imdbAllTime, .imdbYear(year), .imdbDecade(decade), .imdbMostVoted]
+            await lists.resolve(kinds.flatMap { lists.films(for: $0).prefix(3) }, using: client)
         }
     }
 
-    /// Changes when the year or the IMDb data does.
+    /// The best of each genre: one click to its ranking, of all time or the chosen decade.
+    private var genres: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("Best by genre").font(.system(size: 15, weight: .semibold))
+                ChoiceMenu(icon: "clock", options: IMDbChoices.eras, selection: $era)
+                if !model.lists.imdbHasGenres {
+                    Text(model.lists.imdbUpdating ? "Adding genres to IMDb's ratings…" : "Genres arrive with the next update of IMDb's ratings.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(IMDbDataset.genres, id: \.self) { genre in
+                    NavigationLink(value: ListRoute(kind: .imdbGenre(genre, decade: era == 0 ? nil : era))) {
+                        Text(IMDbChoices.genreLabel(genre))
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 13)
+                            .frame(height: 30)
+                            .background(Capsule().fill(Color.white.opacity(0.07)))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.06)))
+                            .foregroundStyle(Color.white.opacity(0.88))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.lists.imdbHasGenres)
+                }
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    /// Changes when the year, the decade or the IMDb data does.
     private var postersKey: String {
-        if case .ready(let date) = model.lists.imdbState { return "\(year)|\(date.timeIntervalSince1970)" }
-        return "\(year)"
+        if case .ready(let date) = model.lists.imdbState { return "\(year)|\(decade)|\(date.timeIntervalSince1970)" }
+        return "\(year)|\(decade)"
+    }
+}
+
+/// The choices for IMDb's rankings: decades since the 1920s, all time or a decade, the genres.
+enum IMDbChoices {
+    static func decade(of year: Int) -> Int { year / 10 * 10 }
+
+    static var decades: [Choice<Int>] {
+        stride(from: decade(of: Calendar.current.component(.year, from: Date())), through: 1920, by: -10).map { Choice(value: $0, label: "\($0)s") }
+    }
+
+    static var eras: [Choice<Int>] { [Choice(value: 0, label: "All time")] + decades }
+
+    static var genres: [Choice<String>] { IMDbDataset.genres.map { Choice(value: $0, label: genreLabel($0)) } }
+
+    static func genreLabel(_ genre: String) -> String {
+        genre == "Film-Noir" ? "Film Noir" : genre
+    }
+}
+
+/// One choice in a `ChoiceMenu`.
+struct Choice<Value: Hashable>: Hashable {
+    let value: Value
+    let label: String
+}
+
+/// A compact menu of choices, drawn as a pill ("1990s ⌄").
+struct ChoiceMenu<Value: Hashable>: View {
+    @Environment(\.isSnapshot) private var isSnapshot
+    let icon: String
+    let options: [Choice<Value>]
+    @Binding var selection: Value
+
+    var body: some View {
+        let label = options.first { $0.value == selection }?.label ?? ""
+        if isSnapshot {
+            FilterPill(icon: icon, text: label, active: false)
+        } else {
+            Menu {
+                Picker("", selection: $selection) {
+                    ForEach(options, id: \.value) { Text($0.label).tag($0.value) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            } label: {
+                FilterPill(icon: icon, text: label, active: false)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
+    }
+}
+
+/// On a ranking's own page: its decade, or its genre and era, to change in place.
+struct IMDbRankingMenus: View {
+    @Binding var kind: FilmListKind
+
+    var body: some View {
+        switch kind {
+        case .imdbDecade(let decade):
+            ChoiceMenu(icon: "clock", options: IMDbChoices.decades, selection: Binding(get: { decade }, set: { kind = .imdbDecade($0) }))
+        case .imdbGenre(let genre, let decade):
+            HStack(spacing: 8) {
+                ChoiceMenu(icon: "theatermasks", options: IMDbChoices.genres,
+                           selection: Binding(get: { genre }, set: { kind = .imdbGenre($0, decade: decade) }))
+                ChoiceMenu(icon: "clock", options: IMDbChoices.eras,
+                           selection: Binding(get: { decade ?? 0 }, set: { kind = .imdbGenre(genre, decade: $0 == 0 ? nil : $0) }))
+            }
+        default:
+            EmptyView()
+        }
     }
 }
 

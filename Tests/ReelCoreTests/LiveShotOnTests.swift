@@ -91,7 +91,12 @@ final class LiveShotOnTests: XCTestCase {
                 guard known.hasNot.contains(tag) || wholeWhenPart else { continue }
                 wrong.append(tag.title + (wholeWhenPart ? " (whole)" : ""))
                 let why = craft.evidence(for: tag).map { "\($0.source): \($0.text.prefix(220))" } ?? ""
-                say("::warning::Shot on wrong: \(known.title) is not \(craft.label(for: tag)): \(why)")
+                // What comes before it in its paragraph: often what the sentence is about (tests, another film).
+                let before = craft.evidence(for: tag).flatMap { evidence in
+                    texts.lazy.flatMap { $0.sections.flatMap(\.paragraphs) }.first { $0.contains(evidence.text.prefix(80)) }
+                        .flatMap { paragraph in paragraph.range(of: evidence.text.prefix(80)).map { String(paragraph[..<$0.lowerBound].suffix(260)) } }
+                } ?? ""
+                say("::warning::Shot on wrong: \(known.title) is not \(craft.label(for: tag)): \(why)" + (before.isEmpty ? "" : " ⟵ after: \(before)"))
             }
             for tag in ShotOn.allCases where known.has.contains(tag) && !craft.shotOn.contains(tag) {
                 missing.append(tag.title)

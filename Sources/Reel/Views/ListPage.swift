@@ -130,6 +130,7 @@ struct ListPage: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(kind.title).font(.system(size: 30, weight: .bold))
                     if case .imdbYear = kind { YearMenu(year: $year) }
+                    IMDbRankingMenus(kind: $kind)
                 }
                 Text(kind.subtitle)
                     .font(.system(size: 14))
@@ -262,7 +263,7 @@ struct ListPage: View {
 
     private var attribution: String {
         switch kind {
-        case .imdbYear, .imdbAllTime: IMDbDataset.attribution
+        case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted: IMDbDataset.attribution
         case .sightAndSound: "The Sight and Sound critics' poll, 2022 (bfi.org.uk). Posters from TMDB."
         case .award: "From Wikidata (wikidata.org), free to use under CC0. Posters from TMDB."
         }

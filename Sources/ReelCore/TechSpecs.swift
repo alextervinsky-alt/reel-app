@@ -660,7 +660,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Part of the film only: "for the flashbacks", "the battle scenes", "some sequences", "the
     /// first IMAX 70 mm film camera shot" (one shot).
     static let partOfFilm = try! NSRegularExpression(
-        pattern: #"\b(?:flashbacks?|inserts?|simulated|segments?|portions?|parts? of the (?:film|movie)|(?:small )?bits of the (?:film|movie)|half of the|some of the|a handful of|storylines?|(?:some|certain|several|a few|select(?:ed)?|key|battle|night|underwater|action|aerial|opening|closing|dream|archival|flashback)\s+(?:\w+\s+)?(?:scenes|sequences|shots)|for (?:the |some )?(?:[\w-]+\s+){0,2}(?:scenes|sequences|shots)|(?:camera|effects?|vfx|single|lone|test) shots?)\b"#,
+        pattern: #"\b(?:flashbacks?|inserts?|simulated|segments?|portions?|parts? of the (?:film|movie)|(?:small )?bits of the (?:film|movie)|half of the|some of the|a handful of|storylines?|(?:some|certain|several|a few|select(?:ed)?|key|battle|night|underwater|action|aerial|opening|closing|dream|archival|flashback)\s+(?:\w+\s+)?(?:scenes|sequences|shots)|for (?:the |some )?(?:[\w-]+\s+){0,2}(?:scenes|sequences|shots)|(?:camera|effects?|vfx|single|lone|test) shots?|for some (?:[\w-]+\s+){0,2}(?:work|material|footage)|high[- ]speed (?:work|shots?|sequences?|photography|material|footage))\b"#,
         options: [.caseInsensitive])
 
     /// "…his Super 16mm work on Carol": gear named for someone's work on another film (not this one).
@@ -702,8 +702,14 @@ public struct TechSpecs: Equatable, Sendable {
         let text = String(chars)
         let lower = text.index(text.startIndex, offsetBy: sentence.distance(from: sentence.startIndex, to: range.lowerBound))
         let at = lower..<text.index(lower, offsetBy: sentence.distance(from: range.lowerBound, to: range.upperBound))
-        if let clause = clause(of: text, around: at, breaks: clauseBreaks.filter { $0 != "(" && $0 != ")" }), matches(partOfFilm, clause) {
-            return true
+        if let clause = clause(of: text, around: at, breaks: clauseBreaks.filter { $0 != "(" && $0 != ")" }) {
+            if matches(partOfFilm, clause) { return true }
+            // "…shot the dream sequences in Super 8 format, …, using Bolex cameras": the gear of a
+            // clause that only says what with is said of what the clause before it shot.
+            if clause.range(of: #"^\W*(?:using|with|employing|via)\b"#, options: [.regularExpression, .caseInsensitive]) != nil,
+               matches(partOfFilm, String(text[segmentRange(of: text, around: at).lowerBound..<at.lowerBound])) {
+                return true
+            }
         }
         guard let opening = sentence.range(of: #"^\W*(?:For|In|During|On|With|To)\b[^,]{0,100},"#, options: .regularExpression),
               opening.upperBound <= range.lowerBound else { return false }
@@ -740,7 +746,7 @@ public struct TechSpecs: Equatable, Sendable {
                                    ..< sentence.index(range.upperBound, offsetBy: min(12, sentence.distance(from: range.upperBound, to: sentence.endIndex)))])
         let about = !matches(otherWork, lead) && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
-            && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.lowerBound]), title: title)
+            && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.upperBound]), title: title)
         return (about, about && matches(captureCue, part) && !matches(lookMade, near))
     }
 
@@ -879,7 +885,7 @@ public struct TechSpecs: Equatable, Sendable {
 
     /// The words are in what's said of another film, compared with this one: "a visual balance between
     /// Alien, which was shot using [anamorphic lenses]…", "unlike Prometheus, which was filmed in [3D]".
-    /// `before`: the sentence up to the words.
+    /// `before`: the sentence up to the end of the words (a rule's words can hold the verb: "shot on film").
     static func saidOfAnotherTitle(_ before: String, title: String?) -> Bool {
         let range = NSRange(before.startIndex..., in: before)
         guard let match = whichWasShot.firstMatch(in: before, range: range),
@@ -1087,8 +1093,8 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.camera, #"\bBolex(?:\s+H16)?\b"#),
         // A Moviecam camera: a model ("Moviecam Compact"), "Moviecam cameras" or "a/the Moviecam".
         // Alone it's the lenses ("Arri Rental Moviecam (Olympus OM)", "Fraser used Moviecam, which was
-        // sharp in texture").
-        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+(?:Compact|SL|Super\s+America)\b|(?=\s+cameras?\b)|(?<=\b(?:a|an|the|our|his|her|their|two|three)\sMoviecam)(?!\s+(?:lenses|lens|primes|optics|glass|\()))"#),
+        // sharp in texture", "the Moviecams… their ability to resolve").
+        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+(?:Compact|SL|Super\s+America)\b|(?=\s+cameras?\b)|(?<=\b(?:a|an|the|our|his|her|their|two|three)\sMoviecam)\b(?!\s+(?:lenses|lens|primes|optics|glass|\()))"#),
         Rule(.camera, #"\bMitchell\s+(?:BNCR?|NC|Mark\s+II|65|camera)\b"#),
         Rule(.camera, #"\bBlackmagic\s+(?:URSA(?:\s+Mini)?(?:\s+Pro)?(?:\s+\d{1,2}(?:\.\d)?K)?|Pocket\s+Cinema\s+Camera(?:\s+\dK)?|Cinema\s+Camera(?:\s+\dK)?)"#),
         Rule(.camera, #"\bCanon\s+(?:EOS\s+)?(?:C\d{2,3}(?:\s+Mark\s+(?:II|III))?|5D(?:\s+Mark\s+(?:II|III|IV))?|7D|XL[12]s?|R5\s?C?)\b"#),

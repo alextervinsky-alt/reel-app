@@ -30,6 +30,55 @@ final class ListsTests: XCTestCase {
         XCTAssertEqual(films.map { $0.title }, ["The Matrix", "Fight Club"], "shorts and films with few votes are left out")
         XCTAssertEqual(films.first?.id, "tt0133093")
         XCTAssertEqual(films.first?.votes, 2_100_000)
+        XCTAssertEqual(films.first?.genres, ["Action", "Sci-Fi"])
+    }
+
+    /// Reel 1.9.4: more rankings from the same ratings, each with a vote bar that fits its films.
+    func testRankingsByDecadeGenreAndVotes() throws {
+        var films: [IMDbFilm] = []
+        // The 1990s: many dramas with plenty of votes, one much-loved, one loved by few.
+        for index in 0..<600 {
+            films.append(IMDbFilm(id: "tt9\(index)", title: "Drama \(index)", year: 1990 + index % 10, rating: 6.8, votes: 40_000 + index,
+                                  genres: ["Drama"]))
+        }
+        films.append(IMDbFilm(id: "tt-best", title: "Harbour Lights", year: 1994, rating: 9.0, votes: 2_000_000, genres: ["Drama", "Crime"]))
+        films.append(IMDbFilm(id: "tt-few", title: "Small Rooms", year: 1995, rating: 9.6, votes: 1_500, genres: ["Drama"]))
+        // The 1920s: few votes for anything, and documentaries: few films.
+        films.append(IMDbFilm(id: "tt-silent", title: "Silent Bells", year: 1925, rating: 8.1, votes: 3_000, genres: ["Drama"]))
+        films.append(IMDbFilm(id: "tt-silent2", title: "Silent Snow", year: 1927, rating: 7.2, votes: 2_000, genres: ["Romance"]))
+        films.append(IMDbFilm(id: "tt-doc", title: "Deep Water", year: 2011, rating: 8.4, votes: 6_000, genres: ["Documentary"]))
+        films.append(IMDbFilm(id: "tt-doc2", title: "Dry Land", year: 2012, rating: 7.9, votes: 4_000, genres: ["Documentary"]))
+
+        let nineties = IMDbDataset.top(films, decade: 1990, count: 5)
+        XCTAssertEqual(nineties.first?.title, "Harbour Lights")
+        XCTAssertFalse(nineties.contains { $0.title == "Small Rooms" }, "too few votes for the decade")
+        XCTAssertEqual(IMDbDataset.top(films, decade: 1920).map(\.title), ["Silent Bells", "Silent Snow"],
+                       "the 1920s aren't held to today's vote bar")
+        XCTAssertEqual(IMDbDataset.top(films, genre: "Documentary").map(\.title), ["Deep Water", "Dry Land"])
+        XCTAssertEqual(IMDbDataset.top(films, genre: "Crime").map(\.title), ["Harbour Lights"])
+        XCTAssertEqual(IMDbDataset.top(films, decade: 1920, genre: "Romance").map(\.title), ["Silent Snow"])
+        XCTAssertTrue(IMDbDataset.top(films, decade: 2000, genre: "Documentary").isEmpty, "2011 isn't the 2000s")
+        XCTAssertEqual(IMDbDataset.mostVoted(films, count: 2).map(\.title), ["Harbour Lights", "Drama 599"])
+
+        XCTAssertEqual(FilmListKind.imdbGenre("Sci-Fi", decade: 1980).title, "IMDb: Best Sci-Fi Films of the 1980s")
+        XCTAssertEqual(FilmListKind.imdbGenre("Documentary", decade: nil).title, "IMDb: Best Documentaries")
+        XCTAssertEqual(FilmListKind.imdbDecade(1970).title, "IMDb: Best of the 1970s")
+        XCTAssertTrue(FilmListKind.imdbMostVoted.usesIMDb)
+        let kind = FilmListKind.imdbGenre("Horror", decade: nil)
+        XCTAssertEqual(try JSONDecoder().decode(FilmListKind.self, from: JSONEncoder().encode(kind)), kind)
+    }
+
+    /// A copy saved before Reel 1.9.4 opens, without genres, and is known to be older.
+    func testAnOlderIMDbCopyOpens() throws {
+        let saved = #"{"builtAt":"2026-10-06T10:41:41Z","films":[{"i":"tt1","t":"Harbour Lights","y":1994,"r":9.0,"v":2000000}]}"#
+        let file = try JSONStore.decode(IMDbRatingsFile.self, from: Data(saved.utf8))
+        XCTAssertEqual(file.version, 1)
+        XCTAssertEqual(file.films.first?.genres, [])
+        let again = try JSONStore.decode(IMDbRatingsFile.self, from: JSONStore.encode(IMDbRatingsFile(builtAt: Date(), films: [
+            IMDbFilm(id: "tt1", title: "Harbour Lights", year: 1994, rating: 9, votes: 2_000_000, genres: ["Drama"]),
+        ])))
+        XCTAssertEqual(again.version, IMDbRatingsFile.currentVersion)
+        XCTAssertEqual(again.films.first?.genres, ["Drama"])
     }
 
     private func gzip(_ text: String, named name: String, in dir: URL) throws -> URL {

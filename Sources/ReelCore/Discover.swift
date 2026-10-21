@@ -19,7 +19,7 @@ public enum BestOfSource: String, CaseIterable, Hashable, Sendable, Identifiable
     public func subtitle(_ year: Int) -> String {
         switch self {
         case .tmdb: "The best-rated films of \(year) on TMDB"
-        case .imdb: "IMDb's Top 100 of \(year), by rating and number of votes"
+        case .imdb: "IMDb's Top 100 of \(year), ranked by IMDb's own rating weighed by votes"
         case .popular: "The films of \(year) the most people watched"
         case .awards: "What won the big prizes for \(year): the Oscars, Cannes, Venice, Berlin, BAFTA, César and more"
         case .gems: "Films of \(year) loved by those who saw them, but seen by few"

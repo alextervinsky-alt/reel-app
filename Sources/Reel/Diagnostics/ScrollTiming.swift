@@ -18,7 +18,7 @@ enum ScrollTiming {
     /// One scroll from top to bottom: each step's work in milliseconds.
     struct Pass {
         var steps: [Double] = []
-        /// Each step in parts: SwiftUI's update and layout, drawing, and other work before the next frame.
+        /// Each step in parts: SwiftUI's update and layout, drawing, and other work waiting for the main thread.
         var layout: [Double] = []
         var draw: [Double] = []
         var late: [Double] = []
@@ -45,6 +45,9 @@ enum ScrollTiming {
 
     /// Times each page and returns a line for each.
     static func run(_ pages: [Page], model: AppModel, log: (String) -> Void) async -> [String] {
+        // As when someone is using Reel: no App Nap, whose coalesced timers would stretch the frames.
+        let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical], reason: "Timing scrolling")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
         var lines: [String] = []
         for page in pages {
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .resizable, .fullSizeContentView],
@@ -102,8 +105,10 @@ enum ScrollTiming {
             host.window?.displayIfNeeded()
             CATransaction.flush()
             let drawn = clock.now
+            // What else is waiting for the main thread: a job queued now runs after it.
+            await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in DispatchQueue.main.async { done.resume() } }
+            let late = clock.now - drawn
             try? await Task.sleep(for: frame)
-            let late = max(.zero, clock.now - drawn - frame)
             result.layout.append(milliseconds(laidOut - start))
             result.draw.append(milliseconds(drawn - laidOut))
             result.late.append(milliseconds(late))
