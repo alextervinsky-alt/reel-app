@@ -22,19 +22,31 @@ public enum CraftReader {
     /// `otherTitles`: the other films of its collection, so what's said of them isn't this one's.
     public static func index(of details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?,
                              colour: [String]?, otherTitles: [String] = [], now: Date = Date()) -> CraftIndex {
+        evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now).index
+    }
+
+    /// The summary and the reading it came from.
+    static func evaluate(_ details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?, colour: [String]?,
+                         otherTitles: [String], now: Date) -> (index: CraftIndex, specs: TechSpecs) {
         let texts = texts(article: article, reading: reading, hiding: false)
         let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
                                    year: details.year, title: details.title, otherTitles: otherTitles)
         var index = CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
         index.unanswered = reading?.unanswered ?? []
-        return index
+        return (index, specs)
+    }
+
+    /// A film read: the summary, and the log of what was read for it (see `CraftLog`).
+    public struct Reading: Sendable {
+        public let index: CraftIndex
+        public let log: String
     }
 
     /// Fetches the film's article and what's written about how it was shot, and reads them. Nil when
     /// nothing could be reached (offline): tried again later.
     /// `otherTitles`: the other films of its collection, so their articles aren't read for it.
     public static func read(_ details: TMDBMovieDetails, articleTitle: String?, colour: [String]?,
-                            otherTitles: [String] = []) async -> CraftIndex? {
+                            otherTitles: [String] = []) async -> Reading? {
         async let fetched = CameraSourcesClient().read(articleTitle: articleTitle, filmTitle: details.title,
                                                        cinematographers: details.cinematographers,
                                                        directors: details.directors, year: details.year, otherTitles: otherTitles)
@@ -48,9 +60,12 @@ public enum CraftReader {
         }
         let reading = await fetched
         guard reached || !reading.sources.isEmpty || reading.cinematographer != nil else { return nil }
-        var read = index(of: details, article: article, reading: reading, colour: colour, otherTitles: otherTitles)
+        let now = Date()
+        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
+        var read = evaluated.index
         // The film's own article didn't come: read again later too.
         if articleTitle != nil, article == nil, !read.unanswered.contains("Wikipedia") { read.unanswered.append("Wikipedia") }
-        return read
+        return Reading(index: read, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
+                                                       reading: reading, specs: evaluated.specs, index: read, now: now))
     }
 }

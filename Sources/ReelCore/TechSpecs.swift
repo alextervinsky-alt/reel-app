@@ -58,15 +58,20 @@ public struct TechSpecs: Equatable, Sendable {
         /// An interview or craft article: its first-person sentences and quotes are the
         /// filmmakers' own words, and only what's about the look is read from it.
         public let isInterview: Bool
+        /// A page about many films ("The best films of 2024", a festival round-up): read only where it
+        /// names this film.
+        public var isList = false
 
-        public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool) {
+        public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool, isList: Bool = false) {
             self.source = source
             self.sections = sections
             self.isInterview = isInterview
+            self.isList = isList
         }
 
-        public init(source: String, paragraphs: [String], isInterview: Bool = true) {
-            self.init(source: source, sections: [FilmArticle.Section(id: 0, title: "", paragraphs: paragraphs)], isInterview: isInterview)
+        public init(source: String, paragraphs: [String], isInterview: Bool = true, isList: Bool = false) {
+            self.init(source: source, sections: [FilmArticle.Section(id: 0, title: "", paragraphs: paragraphs)], isInterview: isInterview,
+                      isList: isList)
         }
     }
 
@@ -74,6 +79,8 @@ public struct TechSpecs: Equatable, Sendable {
     public let specs: [Spec]
     /// Named, but not said of this film (another film's camera, gear in general): for diagnosis only.
     public var mentioned: [Spec] = []
+    /// The texts read as round-ups of many films (only where they name this film), by source.
+    public var roundups: [String] = []
     /// Sentences naming gear that aren't in the parts below (at most six).
     public var sentences: [Note]
     /// The filmmakers' own words: interviews, and the cinematographer quoted in the article.
@@ -149,16 +156,32 @@ public struct TechSpecs: Equatable, Sendable {
         // A round-up of many films ("the cameras behind this year's festival films") is read only
         // where it names this film or its cinematographer.
         let shortTitle = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
+        var roundups: [String] = []
         for text in texts {
-            let roundup = text.isInterview && !shortTitle.isEmpty && isRoundup(text, title: title ?? "")
+            let roundup = text.isInterview && !shortTitle.isEmpty && (text.isList || isRoundup(text, title: title ?? ""))
+            if roundup { roundups.append(text.source ?? "Wikipedia") }
+            // In a round-up, a spec list ("Camera: … Lenses: …") is this film's only in the film's own
+            // block: after a paragraph naming the film or its cinematographer, before the next film's.
+            var ownBlock = false, afterSpecs = false
             for section in text.sections {
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
                 let commentary = !offTopic.contains { heading.contains($0) } && !Spoilers.isAfterSection([section.title])
                 let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
                 for paragraph in section.paragraphs {
-                    if roundup, paragraph.range(of: shortTitle, options: .caseInsensitive) == nil,
-                       !mentions(names, in: paragraph, generic: false), !isSpecList(paragraph) { continue }
+                    if roundup {
+                        let namesIt = paragraph.range(of: shortTitle, options: .caseInsensitive) != nil
+                            || mentions(names, in: paragraph, generic: false)
+                        if isSpecList(paragraph) {
+                            afterSpecs = true
+                            if !ownBlock && !namesIt { continue }
+                        } else {
+                            // The paragraph after a block's specs begins the next film's.
+                            if afterSpecs { ownBlock = false }
+                            afterSpecs = false
+                            if namesIt { ownBlock = true } else { continue }
+                        }
+                    }
                     // "He wanted…" right after a sentence about the cinematographer is theirs too.
                     var aboutThem = false
                     let sentences = Digest.sentences(in: paragraph)
@@ -283,6 +306,7 @@ public struct TechSpecs: Equatable, Sendable {
         let shown = all.filter(isThisFilms)
         var specs = TechSpecs(specs: shown, sentences: ranked(gear, 6))
         specs.mentioned = all.filter { !isThisFilms($0) }
+        specs.roundups = roundups
         specs.approach = ranked(approach, 10)
         specs.intent = ranked(intent, 8)
         specs.references = ranked(references, 6)
@@ -307,7 +331,18 @@ public struct TechSpecs: Equatable, Sendable {
     static func isRoundup(_ text: Text, title: String) -> Bool {
         var cameras = Set<String>(), titles = Set<String>()
         let own = title.lowercased()
-        for paragraph in text.sections.flatMap(\.paragraphs) {
+        let paragraphs = text.sections.flatMap(\.paragraphs)
+        // Spec sheets for several films: "Camera:" twice or more among four or more labels (one
+        // film's own article prints its sheet once).
+        let labels = paragraphs.reduce(into: (all: 0, cameras: 0)) { count, paragraph in
+            let range = NSRange(paragraph.startIndex..., in: paragraph)
+            for match in specLabel.matches(in: paragraph, range: range) {
+                count.all += 1
+                if let word = Range(match.range(at: 1), in: paragraph), paragraph[word].lowercased().hasPrefix("camera") { count.cameras += 1 }
+            }
+        }
+        if labels.all >= 4, labels.cameras >= 2 { return true }
+        for paragraph in paragraphs {
             for rule in rules where rule.kind == .camera {
                 for (name, _) in rule.found(in: paragraph) { cameras.insert(name.lowercased()) }
             }
@@ -324,6 +359,9 @@ public struct TechSpecs: Equatable, Sendable {
         }
         return false
     }
+
+    /// A spec sheet's label: "Camera:", "Lenses:", "Format:", "Film stock:".
+    static let specLabel = try! NSRegularExpression(pattern: #"(?:^|[\s.;])(Cameras?|Lens(?:es)?|Format|Film stocks?|Stocks?)\s*:"#)
 
     /// The most telling first (reading order among equals), at most `limit`.
     static func ranked(_ notes: [Note], _ limit: Int) -> [Note] {
@@ -413,6 +451,8 @@ public struct TechSpecs: Equatable, Sendable {
         }
         guard let colon = sentence.firstIndex(of: ":") else { return false }
         let tag = String(sentence[..<colon])
+        // "Filmmaker: Scott Derrickson first started…": the magazine speaking, not the filmmakers.
+        if let source, !source.isEmpty, tag.caseInsensitiveCompare(source) == .orderedSame { return true }
         guard (1...5).contains(tag.count), tag.allSatisfy({ $0.isUppercase }) else { return false }
         let initials = String((source ?? "").split(separator: " ").compactMap(\.first).filter(\.isUppercase))
         return tag == "Q" || tag == "INT" || (initials.count >= 2 && tag == initials)
@@ -700,6 +740,7 @@ public struct TechSpecs: Equatable, Sendable {
                                    ..< sentence.index(range.upperBound, offsetBy: min(12, sentence.distance(from: range.upperBound, to: sentence.endIndex)))])
         let about = !matches(otherWork, lead) && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
+            && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.lowerBound]), title: title)
         return (about, about && matches(captureCue, part) && !matches(lookMade, near))
     }
 
@@ -836,6 +877,22 @@ public struct TechSpecs: Equatable, Sendable {
         return false
     }
 
+    /// The words are in what's said of another film, compared with this one: "a visual balance between
+    /// Alien, which was shot using [anamorphic lenses]…", "unlike Prometheus, which was filmed in [3D]".
+    /// `before`: the sentence up to the words.
+    static func saidOfAnotherTitle(_ before: String, title: String?) -> Bool {
+        let range = NSRange(before.startIndex..., in: before)
+        guard let match = whichWasShot.firstMatch(in: before, range: range),
+              let name = Range(match.range(at: 1), in: before) else { return false }
+        // Its own title is this film; anything else (the first film, "Alien" while reading Alien: Romulus) isn't.
+        return before[name].lowercased() != (title ?? "").lowercased()
+    }
+
+    /// "between Alien, which was shot using": a title after a comparison, and its own "which was shot"
+    /// clause running up to the words (no comma between).
+    static let whichWasShot = try! NSRegularExpression(
+        pattern: #"\b(?i:between|like|unlike|than|versus|vs\.?|both)\s+([A-Z][\w'’:.-]*(?:\s+(?:[A-Z0-9][\w'’:.-]*|of|the|and|a|in))*?),\s+which\s+(?:was|were|had been|is|are)\s+(?:\w+\s+){0,2}?(?:shot|filmed|photographed|lensed)\b[^,;]*$"#)
+
     /// Where `text` is written in `part`.
     static func occurrences(of text: String, in part: String, options: String.CompareOptions = []) -> [Range<String.Index>] {
         guard !text.isEmpty else { return [] }
@@ -872,7 +929,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|growing up|(?:in (?:his|her|my|their) )?childhood|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".
@@ -1028,8 +1085,10 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.camera, #"\bIMAX\s+(?:MSM\s+9802|MKIV|Mark\s+(?:IV|II|III)|65\s?mm\s+(?:film\s+)?cameras?|film\s+cameras?|digital\s+cameras?|cameras?)\b"#),
         Rule(.camera, #"\bAaton\s+(?:XTR(?:\s+Prod)?|Penelope|A-Minima|LTR|XTera|Delta)\b"#),
         Rule(.camera, #"\bBolex(?:\s+H16)?\b"#),
-        // "Arri Rental Moviecam (Olympus OM)" are lenses Moviecam made.
-        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+Compact)?\b(?!\s+(?:lenses|lens|primes|\())"#),
+        // A Moviecam camera: a model ("Moviecam Compact"), "Moviecam cameras" or "a/the Moviecam".
+        // Alone it's the lenses ("Arri Rental Moviecam (Olympus OM)", "Fraser used Moviecam, which was
+        // sharp in texture").
+        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+(?:Compact|SL|Super\s+America)\b|(?=\s+cameras?\b)|(?<=\b(?:a|an|the|our|his|her|their|two|three)\sMoviecam)(?!\s+(?:lenses|lens|primes|optics|glass|\()))"#),
         Rule(.camera, #"\bMitchell\s+(?:BNCR?|NC|Mark\s+II|65|camera)\b"#),
         Rule(.camera, #"\bBlackmagic\s+(?:URSA(?:\s+Mini)?(?:\s+Pro)?(?:\s+\d{1,2}(?:\.\d)?K)?|Pocket\s+Cinema\s+Camera(?:\s+\dK)?|Cinema\s+Camera(?:\s+\dK)?)"#),
         Rule(.camera, #"\bCanon\s+(?:EOS\s+)?(?:C\d{2,3}(?:\s+Mark\s+(?:II|III))?|5D(?:\s+Mark\s+(?:II|III|IV))?|7D|XL[12]s?|R5\s?C?)\b"#),

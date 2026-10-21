@@ -11,6 +11,7 @@ import Foundation
 ///       Image Cache.nosync/    posters and photos: size-limited, unused ones removed,
 ///                              never synced to iCloud or backed up by Time Machine
 ///       List Data.nosync/      IMDb ratings, award lists and sets (downloaded again if deleted)
+///       Shot On Readings.nosync/  what was read for each film's Shot on tags, and why (one text file a film)
 public struct ReelFolder: Sendable {
     public let root: URL
 
@@ -29,12 +30,13 @@ public struct ReelFolder: Sendable {
     public var safetyCopies: URL { root.appendingPathComponent("Safety Copies", isDirectory: true) }
     public var imageCache: URL { root.appendingPathComponent("Image Cache.nosync", isDirectory: true) }
     public var listData: URL { root.appendingPathComponent("List Data.nosync", isDirectory: true) }
+    public var shotOnReadings: URL { root.appendingPathComponent("Shot On Readings.nosync", isDirectory: true) }
     public var about: URL { root.appendingPathComponent("About this folder.txt") }
 
     /// Creates the folder structure. Cheap enough to run on every launch.
     public func prepare() {
         let fm = FileManager.default
-        for folder in [imageCache, listData] {
+        for folder in [imageCache, listData, shotOnReadings] {
             try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
             #if os(macOS)
             var cache = folder
@@ -63,6 +65,10 @@ public struct ReelFolder: Sendable {
     List Data.nosync      IMDb ratings (a compact copy of IMDb's free files), award lists
                           and the sets you're collecting. Safe to delete: downloaded
                           again when needed.
+    Shot On Readings.nosync
+                          For each film, what Reel read to tag how it was shot: the
+                          articles, what was left out and why, and the sentence behind
+                          each tag. Written again each time a film is read; safe to delete.
 
     Reel never writes anything to your film drives.
     """

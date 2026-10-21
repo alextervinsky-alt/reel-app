@@ -38,11 +38,20 @@ public struct CameraReading: Equatable, Sendable {
     /// read is kept, and the film is read again later.
     public var unanswered: [String] = []
 
-    public init(sources: [Source], more: [Source], cinematographer: Cinematographer?, unanswered: [String] = []) {
+    /// A page found but not read, and why (for the reading log).
+    public struct Skipped: Equatable, Sendable {
+        public let source: Source
+        public let reason: String
+    }
+
+    public var skipped: [Skipped] = []
+
+    public init(sources: [Source], more: [Source], cinematographer: Cinematographer?, unanswered: [String] = [], skipped: [Skipped] = []) {
         self.sources = sources
         self.more = more
         self.cinematographer = cinematographer
         self.unanswered = unanswered
+        self.skipped = skipped
     }
 
     /// Everything to read for `TechSpecs`, interviews first (the filmmakers' own words).
@@ -50,7 +59,9 @@ public struct CameraReading: Equatable, Sendable {
         func safe(_ paragraphs: [String]) -> [String] {
             spoilers ? paragraphs.filter { !Spoilers.mentionsPlot($0) } : paragraphs
         }
-        var texts = sources.map { TechSpecs.Text(source: $0.site, paragraphs: safe($0.paragraphs)) }
+        var texts = sources.map {
+            TechSpecs.Text(source: $0.site, paragraphs: safe($0.paragraphs), isList: CameraSources.isListPage(title: $0.title, url: $0.url))
+        }
         if let cinematographer, !cinematographer.aboutThisFilm.isEmpty {
             texts.append(TechSpecs.Text(source: "Wikipedia: \(cinematographer.name)", paragraphs: safe(cinematographer.aboutThisFilm),
                                         isInterview: false))
@@ -155,6 +166,17 @@ public enum CameraSources {
 
     /// A title as sites write it in their addresses: "The Brutalist" → "the-brutalist",
     /// "Amélie" → "amelie".
+    /// A page about many films, by its title or address: "The Best Films of 2024", "Top 10 …",
+    /// "Our favourite films of the year", "Sundance round-up", a critics' poll.
+    public static func isListPage(title: String, url: URL) -> Bool {
+        let slug = url.path.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
+        return [title, slug].contains { listWords.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) != nil }
+    }
+
+    static let listWords = try! NSRegularExpression(
+        pattern: #"\b(?:(?:best|favou?rite|greatest|top)\s+(?:\d+\s+)?(?:films|movies|features|documentaries|of\s+(?:the\s+year|20\d\d|19\d\d|the\s+decade))|(?:top|best)\s+\d+|\d+\s+(?:best|greatest|favou?rite)|films\s+of\s+(?:the\s+year|20\d\d|19\d\d)|year[\s-]end|year\s+in\s+review|round[\s-]?up|critics['’]?\s+poll)\b"#,
+        options: [.caseInsensitive])
+
     public static func slug(_ title: String) -> String {
         let folded = title.lowercased().folding(options: [.diacriticInsensitive], locale: Locale(identifier: "en_US"))
             .replacingOccurrences(of: "&", with: " and ").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "’", with: "")
@@ -413,11 +435,27 @@ public struct CameraSourcesClient: Sendable {
         }.map(\.url))
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }
-        let read = Array(found
-            .filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
-            .prefix(6))
+        let readable = found.filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
+        let read = Array(readable.prefix(6))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
-        return CameraReading(sources: read, more: more, cinematographer: await person, unanswered: await unanswered.all())
+        // Why each page found wasn't read.
+        func reason(_ page: CameraReading.Source) -> String {
+            if otherFilm.contains(page.url) { return "another film of that title: it doesn't name the film's cinematographer, director or year" }
+            if page.paragraphs.count < 3 { return "too little text to read" }
+            if CameraSources.isOtherCraft(title: page.title, cinematographers: cinematographers) {
+                return "an interview about another craft (editing, music, design)"
+            }
+            return "six sources were already read"
+        }
+        var skipped: [CameraReading.Skipped] = []
+        for (_, page, fallback) in pages where !read.contains(where: { $0.url == fallback.url }) {
+            skipped.append(CameraReading.Skipped(source: page ?? fallback,
+                                                 reason: page.map(reason) ?? "couldn't be read (a paywall, gone, or the site didn't answer)"))
+        }
+        for story in storiesRead where !read.contains(where: { $0.url == story.url }) && !pages.contains(where: { $0.2.url == story.url }) {
+            skipped.append(CameraReading.Skipped(source: story, reason: found.contains { $0.url == story.url } ? reason(story) : "the same page as one already found"))
+        }
+        return CameraReading(sources: read, more: more, cinematographer: await person, unanswered: await unanswered.all(), skipped: skipped)
     }
 
     /// The external links of the film's Wikipedia article (its references), picked for the craft.
@@ -459,8 +497,13 @@ public struct CameraSourcesClient: Sendable {
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
         guard let url = components.url,
-              let data = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting, search: true),
-              let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
+              let data = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting, search: true)
+        else { return [] }
+        // An answer that isn't the search's (a page in its place): not "nothing written", read again later.
+        guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
+            await noting?.add("American Cinematographer")
+            return []
+        }
         return CameraSources.about(filmTitle, in: hits.filter { ["article", "post", "news"].contains($0.subtype ?? "") }
             .map { (title: $0.title, link: $0.url) }, site: "American Cinematographer", limit: 3, otherTitles: otherTitles)
     }
@@ -477,8 +520,12 @@ public struct CameraSourcesClient: Sendable {
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
                                  URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
         guard let url = components.url,
-              let data = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting, search: true),
-              let hits = try? JSONDecoder().decode([Hit].self, from: data) else { return [] }
+              let data = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting, search: true)
+        else { return [] }
+        guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
+            await noting?.add("British Cinematographer")
+            return []
+        }
         return CameraSources.about(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
                                    site: "British Cinematographer", limit: 2, otherTitles: otherTitles)
     }

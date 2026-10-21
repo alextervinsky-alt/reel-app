@@ -8,28 +8,57 @@ public struct IMDbFilm: Codable, Equatable, Sendable, Identifiable {
     public let year: Int
     public let rating: Double
     public let votes: Int
+    /// IMDb's genres ("Drama", "Sci-Fi"), at most three (empty in copies saved before Reel 1.9.4).
+    public let genres: [String]
 
     enum CodingKeys: String, CodingKey {
-        case id = "i", title = "t", year = "y", rating = "r", votes = "v"
+        case id = "i", title = "t", year = "y", rating = "r", votes = "v", genres = "g"
     }
 
-    public init(id: String, title: String, year: Int, rating: Double, votes: Int) {
+    public init(id: String, title: String, year: Int, rating: Double, votes: Int, genres: [String] = []) {
         self.id = id
         self.title = title
         self.year = year
         self.rating = rating
         self.votes = votes
+        self.genres = genres
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        year = try c.decode(Int.self, forKey: .year)
+        rating = try c.decode(Double.self, forKey: .rating)
+        votes = try c.decode(Int.self, forKey: .votes)
+        genres = try c.decodeIfPresent([String].self, forKey: .genres) ?? []
     }
 }
 
 /// The saved compact copy: "IMDb Ratings.json" in List Data.
 public struct IMDbRatingsFile: Codable, Equatable, Sendable {
+    /// 2: with each film's genres (Reel 1.9.4). An older copy is built again in the background.
+    public static let currentVersion = 2
+
+    public var version: Int
     public var builtAt: Date
     public var films: [IMDbFilm]
 
-    public init(builtAt: Date, films: [IMDbFilm]) {
+    public init(version: Int = IMDbRatingsFile.currentVersion, builtAt: Date, films: [IMDbFilm]) {
+        self.version = version
         self.builtAt = builtAt
         self.films = films
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version, builtAt, films
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        builtAt = try c.decode(Date.self, forKey: .builtAt)
+        films = try c.decode([IMDbFilm].self, forKey: .films)
     }
 }
 
@@ -74,7 +103,9 @@ public enum IMDbDataset {
     static func film(fromBasics line: String, rating: Double, votes: Int) -> IMDbFilm? {
         let fields = line.split(separator: "\t", omittingEmptySubsequences: false)
         guard fields.count >= 6, fields[1] == "movie", fields[4] == "0", let year = Int(fields[5]) else { return nil }
-        return IMDbFilm(id: String(fields[0]), title: String(fields[2]), year: year, rating: rating, votes: votes)
+        // "\N" when it has none.
+        let genres = fields.count >= 9 && fields[8] != "\\N" ? fields[8].split(separator: ",").map(String.init) : []
+        return IMDbFilm(id: String(fields[0]), title: String(fields[2]), year: year, rating: rating, votes: votes, genres: genres)
     }
 
     /// "tt0137523…" → 137523, read straight from the bytes.
@@ -136,17 +167,45 @@ public enum IMDbDataset {
     /// IMDb's own charts use), so a film rated 8.9 by 1,200 people doesn't outrank one rated 8.6
     /// by 900,000. Only films with plenty of votes for their year qualify.
     public static func top(_ films: [IMDbFilm], year: Int, count: Int = 100) -> [IMDbFilm] {
-        let ofYear = films.filter { $0.year == year }
-        guard !ofYear.isEmpty else { return [] }
-        // The bar: the votes of the year's 300th most-voted film, between 1,000 and 25,000.
-        let votes = ofYear.map { $0.votes }.sorted(by: >)
-        let bar = min(25_000, max(minimumVotes, votes[min(votes.count - 1, 299)]))
-        return ranked(ofYear.filter { $0.votes >= bar }, bar: bar, count: count)
+        // The bar: the votes of the year's 300th most-voted film.
+        top(of: films.filter { $0.year == year }, depth: 300, count: count)
     }
 
     /// The highest-rated films of all time (25,000 votes or more).
     public static func topAllTime(_ films: [IMDbFilm], count: Int = 250) -> [IMDbFilm] {
         ranked(films.filter { $0.votes >= 25_000 }, bar: 25_000, count: count)
+    }
+
+    /// A decade's best ("the 1970s": 1970–1979), of one genre or all. The vote bar follows how many
+    /// people rate the films of that time and genre, so the 1920s or documentaries aren't held to
+    /// the bar of today's blockbusters.
+    public static func top(_ films: [IMDbFilm], decade: Int, genre: String? = nil, count: Int = 100) -> [IMDbFilm] {
+        let pool = films.filter { $0.year >= decade && $0.year < decade + 10 && (genre.map($0.genres.contains) ?? true) }
+        return top(of: pool, depth: genre == nil ? 500 : 300, count: count)
+    }
+
+    /// A genre's best of all time.
+    public static func top(_ films: [IMDbFilm], genre: String, count: Int = 100) -> [IMDbFilm] {
+        top(of: films.filter { $0.genres.contains(genre) }, depth: 1_000, count: count)
+    }
+
+    /// The films the most people have rated.
+    public static func mostVoted(_ films: [IMDbFilm], count: Int = 100) -> [IMDbFilm] {
+        Array(films.sorted { $0.votes != $1.votes ? $0.votes > $1.votes : $0.id < $1.id }.prefix(count))
+    }
+
+    /// IMDb's genres for feature films, in the order the menu shows them.
+    public static let genres = ["Action", "Adventure", "Animation", "Biography", "Comedy", "Crime", "Documentary", "Drama", "Family",
+                                "Fantasy", "Film-Noir", "History", "Horror", "Music", "Musical", "Mystery", "Romance", "Sci-Fi", "Sport",
+                                "Thriller", "War", "Western"]
+
+    /// Ranks the films with enough votes: at least the votes of the `depth`-th most voted of them,
+    /// between 1,000 and 25,000.
+    static func top(of pool: [IMDbFilm], depth: Int, count: Int) -> [IMDbFilm] {
+        guard !pool.isEmpty else { return [] }
+        let votes = pool.map { $0.votes }.sorted(by: >)
+        let bar = min(25_000, max(minimumVotes, votes[min(votes.count - 1, depth - 1)]))
+        return ranked(pool.filter { $0.votes >= bar }, bar: bar, count: count)
     }
 
     static func ranked(_ eligible: [IMDbFilm], bar: Int, count: Int) -> [IMDbFilm] {

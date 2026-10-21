@@ -42,7 +42,8 @@ extension AppModel {
             for film in batch { if let id = film.tmdb?.id { attempted.insert(id) } }
             // Their collections first (cached for two weeks), so a sequel's articles aren't read.
             for film in batch { if let details = film.tmdb { await loadCollection(of: details) } }
-            let results = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
+            var unknownCollection = Set<Int>()
+            let results = await withTaskGroup(of: (Int, CraftReader.Reading?, String).self) { group in
                 for film in batch {
                     guard let details = film.tmdb else { continue }
                     let title = film.funFacts?.articleTitle
@@ -51,17 +52,23 @@ extension AppModel {
                     // Its collection couldn't be read (offline, no token): read again later with it.
                     let collectionKnown = details.collection == nil || collectionLoaded(of: details)
                     group.addTask {
-                        var index = await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others)
-                        if !collectionKnown { index?.discovery = CraftIndex.currentDiscovery - 1 }
-                        return (details.id, index)
+                        (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others),
+                         CraftLog.fileName(for: details))
                     }
+                    if !collectionKnown { unknownCollection.insert(details.id) }
                 }
-                var all: [(Int, CraftIndex?)] = []
+                var all: [(Int, CraftReader.Reading?, String)] = []
                 for await result in group { all.append(result) }
                 return all
             }
-            for (id, found) in results {
-                if let found {
+            for (id, reading, logName) in results {
+                if let reading {
+                    var found = reading.index
+                    if unknownCollection.contains(id) { found.discovery = CraftIndex.currentDiscovery - 1 }
+                    // What was read and why, beside the library (see `CraftLog`).
+                    let file = folder.shotOnReadings.appendingPathComponent(logName)
+                    let log = reading.log
+                    writer.enqueue { try? Data(log.utf8).write(to: file, options: .atomic) }
                     // Thinner than what's kept (a site down or asking Reel to wait): kept, and tried
                     // again later (see `CraftIndex.merge`).
                     read[id] = CraftIndex.merge(old: films.first(where: { $0.tmdb?.id == id })?.craft, new: found)

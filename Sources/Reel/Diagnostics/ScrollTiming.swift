@@ -18,14 +18,22 @@ enum ScrollTiming {
     /// One scroll from top to bottom: each step's work in milliseconds.
     struct Pass {
         var steps: [Double] = []
+        /// Each step in parts: SwiftUI's update and layout, drawing, and other work before the next frame.
+        var layout: [Double] = []
+        var draw: [Double] = []
+        var late: [Double] = []
+
+        static func median(_ values: [Double]) -> Double {
+            values.isEmpty ? 0 : values.sorted()[values.count / 2]
+        }
 
         var summary: String {
             guard !steps.isEmpty else { return "nothing to scroll" }
             let sorted = steps.sorted()
             func at(_ share: Double) -> Double { sorted[min(sorted.count - 1, Int(Double(sorted.count - 1) * share))] }
-            let slow = steps.filter { $0 > 16.7 }.count, missed120 = steps.filter { $0 > 8.3 }.count
-            return String(format: "median %.1f ms, 95%% %.1f ms, worst %.1f ms, %d of %d over 16 ms (%d over 8 ms)",
-                          at(0.5), at(0.95), sorted.last ?? 0, slow, steps.count, missed120)
+            let slow = steps.filter { $0 > 16.7 }.count
+            return String(format: "median %.1f ms (layout %.1f, drawing %.1f, other %.1f), 95%% %.1f, worst %.1f, %d of %d over 16 ms",
+                          at(0.5), Self.median(layout), Self.median(draw), Self.median(late), at(0.95), sorted.last ?? 0, slow, steps.count)
         }
     }
 
@@ -90,13 +98,16 @@ enum ScrollTiming {
             clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: origin(offset)))
             scroll.reflectScrolledClipView(clip)
             host.layoutSubtreeIfNeeded()
+            let laidOut = clock.now
             host.window?.displayIfNeeded()
             CATransaction.flush()
-            let work = clock.now - start
-            let slept = clock.now
+            let drawn = clock.now
             try? await Task.sleep(for: frame)
-            let late = max(.zero, clock.now - slept - frame)
-            result.steps.append(milliseconds(work + late))
+            let late = max(.zero, clock.now - drawn - frame)
+            result.layout.append(milliseconds(laidOut - start))
+            result.draw.append(milliseconds(drawn - laidOut))
+            result.late.append(milliseconds(late))
+            result.steps.append(milliseconds(drawn - start + late))
         }
         return result
     }

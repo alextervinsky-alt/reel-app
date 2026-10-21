@@ -44,7 +44,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 5: the names too (the specification sheet, search, a cinematographer's habits) only this
     /// film's: a camera, lens or what it was shot on said to have been used, the rest said of this
     /// film; round-ups of many films read only where they name it.
-    public static let currentVersion = 5
+    /// 6: round-ups found by their spec sheets and list pages by their title, a sheet counted only in
+    /// the film's own block; Moviecam alone is lenses; the magazine's own lines, childhood and what's
+    /// said of another film in a comparison aren't this film's.
+    public static let currentVersion = 6
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.

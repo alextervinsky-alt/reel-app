@@ -45,6 +45,13 @@ final class LiveShotOnTests: XCTestCase {
         Known(title: "The Revenant", year: 2015, has: [.digital], hasNot: [.film]),
         Known(title: "The Substance", year: 2024, has: [.digital], hasNot: [.film]),
         Known(title: "Parasite", year: 2019, has: [.digital], hasNot: [.film]),
+        // The 1.9.3 audit's wrong tags: Moviecam lenses, another film's clause, a childhood camera,
+        // a round-up's other films.
+        Known(title: "Dune: Part Two", year: 2024, has: [.digital, .imax], hasNot: [.film]),
+        Known(title: "Alien: Romulus", year: 2024, has: [.digital], hasNot: [.film, .anamorphic]),
+        Known(title: "The Black Phone", year: 2021, has: [.digital], hasNot: [], partOnly: [.film]),
+        Known(title: "Megalopolis", year: 2024, has: [.digital], hasNot: [.film]),
+        Known(title: "All We Imagine as Light", year: 2024, has: [], hasNot: [.blackAndWhite]),
     ]
 
     func testShotOnForFilmsOnRecord() async throws {
@@ -108,6 +115,7 @@ final class LiveShotOnTests: XCTestCase {
             let wrongNames = specs.specs.filter { !CraftIndex.shotOn($0).isDisjoint(with: known.hasNot) }.map(\.name)
             say("Shot on: \(known.title) | \(tags.isEmpty ? "nothing" : tags) | \(texts.count) texts | \(specs.specs.count) names"
                 + (wrongNames.isEmpty ? "" : " (not its: \(wrongNames.joined(separator: ", ")))")
+                + (specs.roundups.isEmpty ? "" : " | read as many films: \(specs.roundups.joined(separator: ", "))")
                 + " | known \(known.has.count + known.hasNot.count)"
                 + " | wrong \(wrong.joined(separator: "+")) | missing \(missing.joined(separator: "+"))")
         }

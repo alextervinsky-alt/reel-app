@@ -256,7 +256,18 @@ enum ScreenRenderer {
     /// How smoothly the pages scroll (see `ScrollTiming`): a film page, a person's page, Explore,
     /// Lists, then All Films with 500 films. Written to scroll.txt beside the screens.
     private static func scrollCheck(_ model: AppModel, first: FilmEntry, output: URL) async {
-        var pages = [ScrollTiming.Page(name: "Film page", view: AnyView(NavigationStack { FilmPage(filmID: first.id) }))]
+        // The machine itself: a page of plain tiles, laid out as All Films is, with nothing in them.
+        let plain = AnyView(ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 168, maximum: 205), spacing: 22)], spacing: 30) {
+                ForEach(0..<600, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 12).fill(Color(hue: Double(index % 12) / 12, saturation: 0.4, brightness: 0.5))
+                        .aspectRatio(2 / 3, contentMode: .fit)
+                }
+            }
+            .padding(32)
+        }.background(Theme.background))
+        var pages = [ScrollTiming.Page(name: "Plain tiles (the machine)", view: plain),
+                     ScrollTiming.Page(name: "Film page", view: AnyView(NavigationStack { FilmPage(filmID: first.id) }))]
         if let director = first.tmdb?.credits?.crew.first(where: { $0.job == "Director" }), let id = director.id {
             pages.append(ScrollTiming.Page(name: "Person page", view: AnyView(NavigationStack { PersonPage(route: PersonRoute(id: id, name: director.name)) })))
         }
@@ -302,7 +313,7 @@ enum ScreenRenderer {
                 let others = model.otherTitles(of: details)
                 group.addTask {
                     (details.id, await CraftReader.read(details, articleTitle: film.funFacts?.articleTitle,
-                                                        colour: film.funFacts?.quick?.colour, otherTitles: others))
+                                                        colour: film.funFacts?.quick?.colour, otherTitles: others)?.index)
                 }
             }
             var found: [Int: CraftIndex] = [:]
