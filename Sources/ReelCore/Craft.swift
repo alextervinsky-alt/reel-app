@@ -93,15 +93,20 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     public var discovery: Int
     /// Sites that didn't answer or asked Reel to wait while it was read: read again in a few hours.
     public var unanswered: [String] = []
-    /// Readings in a row with a site unanswered (after four, what was read stands for half a year).
+    /// Readings in a row that came out thinner than the one kept, or with a site unanswered (after
+    /// four more, what's read then stands).
     public var retries = 0
+    /// When it's read again, when that's planned (a site didn't answer, or less was read than
+    /// before): until then it isn't, whatever the rules.
+    public var retryAt: Date?
 
     public init(version: Int = CraftIndex.currentVersion, readAt: Date = Date(), shotOn: [ShotOn], names: [String],
                 evidence: [Evidence] = [], sources: Int = 0, discovery: Int = CraftIndex.currentDiscovery,
-                unanswered: [String] = [], retries: Int = 0) {
+                unanswered: [String] = [], retries: Int = 0, retryAt: Date? = nil) {
         self.discovery = discovery
         self.unanswered = unanswered
         self.retries = retries
+        self.retryAt = retryAt
         self.version = version
         self.readAt = readAt
         self.shotOn = shotOn
@@ -121,28 +126,56 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 1
         unanswered = try c.decodeIfPresent([String].self, forKey: .unanswered) ?? []
         retries = try c.decodeIfPresent(Int.self, forKey: .retries) ?? 0
+        retryAt = try c.decodeIfPresent(Date.self, forKey: .retryAt)
     }
 
-    /// How long after a site didn't answer it's tried again.
-    public static let retryAfter: TimeInterval = 6 * 3600
     public static let maxRetries = 4
 
-    public func isStale(now: Date = Date()) -> Bool {
-        version < CraftIndex.currentVersion || readAt < now.addingTimeInterval(-CraftIndex.maxAge)
-            || (discovery < CraftIndex.currentDiscovery && isThin)
-            || (!unanswered.isEmpty && retries < CraftIndex.maxRetries && readAt < now.addingTimeInterval(-CraftIndex.retryAfter))
+    /// How long until a reading is tried again: after a site didn't answer, six hours, then a day,
+    /// three days, a week (a captcha lifts in hours, a site down for longer gets days); after
+    /// fewer texts with every site answering, a week.
+    static func retryDelay(_ retries: Int, unanswered: Bool) -> TimeInterval {
+        guard unanswered else { return 7 * 86_400 }
+        return [6 * 3600, 86_400, 3 * 86_400, 7 * 86_400][min(max(retries, 1), 4) - 1]
     }
+
+    public func isStale(now: Date = Date()) -> Bool {
+        // Planned: not before then (a reading kept by older rules isn't read again on every pass).
+        if let retryAt { return now >= retryAt }
+        return version < CraftIndex.currentVersion || readAt < now.addingTimeInterval(-CraftIndex.maxAge)
+            || (discovery < CraftIndex.currentDiscovery && isThin)
+    }
+
+    /// To be read again because a site didn't answer (Settings counts these).
+    public var willReadAgain: Bool { retryAt != nil && !unanswered.isEmpty }
 
     /// Read from the film's article alone (or nothing), or nothing found on what it was shot on:
     /// worth reading again when finding improves.
     public var isThin: Bool { sources <= 1 || shotOn.isEmpty }
 
-    /// Whether this reading stays instead of a `newer` one: when they're read by the same rules and
-    /// found the same way, and the newer one read fewer texts (a site down, offline for part of it).
-    /// It's tried again later. A reading found a better way always replaces it, even from fewer
-    /// texts: the ones it no longer reads were about another film.
-    public func keeps(over newer: CraftIndex) -> Bool {
-        version == newer.version && discovery >= newer.discovery && newer.sources < sources
+    /// What's kept when a film has been read again: the new reading, unless it's thinner than the
+    /// one kept (fewer texts, found the same way: a site down or asking Reel to wait, by these rules
+    /// or older ones). Then the kept one stays and the film is tried again later (see `retryDelay`),
+    /// four times at most; after that what's read stands. A reading found a better way always
+    /// replaces it, even from fewer texts: the ones it no longer reads were about another film.
+    public static func merge(old: CraftIndex?, new: CraftIndex, now: Date = Date()) -> CraftIndex {
+        var new = new
+        let unanswered = !new.unanswered.isEmpty
+        let tries = (old?.retries ?? 0) + 1
+        if var kept = old, new.sources < kept.sources, new.discovery <= kept.discovery, tries <= maxRetries {
+            kept.unanswered = new.unanswered
+            kept.retries = tries
+            kept.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: unanswered))
+            return kept
+        }
+        if unanswered, tries <= maxRetries {
+            new.retries = tries
+            new.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: true))
+        } else {
+            new.retries = 0
+            new.retryAt = nil
+        }
+        return new
     }
 
     /// "Black & white", or "Black & white (in part)".

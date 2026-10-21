@@ -101,10 +101,13 @@ final class CraftEvidenceTests: XCTestCase {
 
     func testAThinnerReadingDoesNotReplaceAFullerOne() {
         let full = CraftIndex(shotOn: [.film, .anamorphic], names: [], sources: 4)
-        XCTAssertTrue(full.keeps(over: CraftIndex(shotOn: [.film], names: [], sources: 1)), "a site was down")
-        XCTAssertFalse(full.keeps(over: CraftIndex(shotOn: [.film], names: [], sources: 4)))
-        XCTAssertFalse(CraftIndex(version: 1, shotOn: [.film], names: [], sources: 9).keeps(over: CraftIndex(shotOn: [], names: [], sources: 1)),
-                       "new rules always replace the old reading")
+        let thin = CraftIndex.merge(old: full, new: CraftIndex(shotOn: [.film], names: [], sources: 1))
+        XCTAssertEqual(thin.shotOn, [.film, .anamorphic], "a site was down: the fuller reading stays")
+        XCTAssertNotNil(thin.retryAt, "and it's read again later")
+        XCTAssertEqual(CraftIndex.merge(old: full, new: CraftIndex(shotOn: [.film], names: [], sources: 4)).shotOn, [.film])
+        let older = CraftIndex(version: 4, shotOn: [.film], names: [], sources: 9)
+        XCTAssertEqual(CraftIndex.merge(old: older, new: CraftIndex(shotOn: [], names: [], sources: 1)).version, 4,
+                       "a fuller reading by older rules stays too, while it's tried again")
     }
 
     // MARK: Reading again when finding improves
@@ -179,9 +182,8 @@ final class CraftEvidenceTests: XCTestCase {
 
     func testAFullerReadingFoundTheOldWayDoesNotStay() {
         let old = CraftIndex(shotOn: [.film, .digital], names: [], sources: 4, discovery: 1)
-        XCTAssertFalse(old.keeps(over: CraftIndex(shotOn: [.film], names: [], sources: 3)),
+        XCTAssertEqual(CraftIndex.merge(old: old, new: CraftIndex(shotOn: [.film], names: [], sources: 3)).shotOn, [.film],
                        "the sequel's article it read isn't read any more: the new reading replaces it")
-        XCTAssertTrue(CraftIndex(shotOn: [.film], names: [], sources: 4).keeps(over: CraftIndex(shotOn: [], names: [], sources: 1)))
     }
 
     // MARK: One reading

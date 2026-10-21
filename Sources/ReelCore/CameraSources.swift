@@ -72,8 +72,8 @@ public actor UnansweredSites {
     public func all() -> [String] { sites }
 }
 
-/// One request at a time to each site, a second apart, and a site that asked Reel to wait left
-/// alone for twenty minutes: magazines answer a library being read slowly, not all at once.
+/// Requests to each site start a second apart (at most three at once in all), and a site that
+/// asked Reel to wait is left alone for twenty minutes: magazines answer a library read slowly.
 public actor HostPacer {
     private var next: [String: Date] = [:]
     private var pausedUntil: [String: Date] = [:]
@@ -542,17 +542,19 @@ public struct CameraSourcesClient: Sendable {
     /// doesn't answer (`search`). A page that's gone or paywalled is just not read.
     private func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil, search: Bool = false) async -> Data? {
         let host = url.host ?? ""
-        if await Self.pacer.isPaused(host) {
-            await noting?.add(site)
-            return nil
-        }
-        await Self.pacer.turn(host)
         var request = URLRequest(url: url)
         // Reel says who it is; a site that turns it away is only linked.
         request.setValue(Wikimedia.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(accept, forHTTPHeaderField: "Accept")
         request.setValue("en", forHTTPHeaderField: "Accept-Language")
         await Self.gate.acquire()
+        // Checked once it's this request's turn: a pause that came while it waited holds it too.
+        if await Self.pacer.isPaused(host) {
+            await Self.gate.release()
+            await noting?.add(site)
+            return nil
+        }
+        await Self.pacer.turn(host)
         let result: (Data, Int)? = await withCheckedContinuation { continuation in
             session.dataTask(with: request) { data, response, error in
                 guard error == nil, let data else { return continuation.resume(returning: nil) }
@@ -564,7 +566,10 @@ public struct CameraSourcesClient: Sendable {
             if search { await noting?.add(site) }
             return nil
         }
-        if status == 429 || status == 202 || CameraSources.isChallenge(data) {
+        // "Too many requests", "accepted" with a captcha (SiteGround), or a challenge page in place of
+        // the page (Cloudflare's 403 and 503). A normal page can carry a challenge script, so the
+        // words alone don't count on a 200.
+        if status == 429 || status == 202 || ([403, 503].contains(status) && CameraSources.isChallenge(data)) {
             await Self.pacer.pause(host)
             await noting?.add(site)
             return nil

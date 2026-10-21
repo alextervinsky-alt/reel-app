@@ -150,7 +150,7 @@ public struct TechSpecs: Equatable, Sendable {
         // where it names this film or its cinematographer.
         let shortTitle = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
         for text in texts {
-            let roundup = text.isInterview && !shortTitle.isEmpty && isRoundup(text)
+            let roundup = text.isInterview && !shortTitle.isEmpty && isRoundup(text, title: title ?? "")
             for section in text.sections {
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
@@ -158,7 +158,7 @@ public struct TechSpecs: Equatable, Sendable {
                 let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
                 for paragraph in section.paragraphs {
                     if roundup, paragraph.range(of: shortTitle, options: .caseInsensitive) == nil,
-                       !mentions(names, in: paragraph, generic: false) { continue }
+                       !mentions(names, in: paragraph, generic: false), !isSpecList(paragraph) { continue }
                     // "He wanted…" right after a sentence about the cinematographer is theirs too.
                     var aboutThem = false
                     let sentences = Digest.sentences(in: paragraph)
@@ -301,14 +301,26 @@ public struct TechSpecs: Equatable, Sendable {
         spec.kind == .camera || spec.kind == .lens || !CraftIndex.shotOn(spec).isEmpty ? spec.capture : spec.aboutThisFilm
     }
 
-    /// A text naming eight or more cameras is about many films: a round-up, not this film's story.
-    static func isRoundup(_ text: Text) -> Bool {
-        var cameras = Set<String>()
+    /// A text about many films: eight or more cameras and three or more other films' titles in
+    /// quotes (“Twinless”, “Jurassic World Rebirth”), as round-ups write them. A long article about
+    /// one film can name many cameras, but not other titles.
+    static func isRoundup(_ text: Text, title: String) -> Bool {
+        var cameras = Set<String>(), titles = Set<String>()
+        let own = title.lowercased()
         for paragraph in text.sections.flatMap(\.paragraphs) {
             for rule in rules where rule.kind == .camera {
                 for (name, _) in rule.found(in: paragraph) { cameras.insert(name.lowercased()) }
             }
-            if cameras.count >= 8 { return true }
+            for match in quotedTitle.matches(in: paragraph, range: NSRange(paragraph.startIndex..., in: paragraph)) {
+                guard let inner = Range(match.range(at: 1), in: paragraph) else { continue }
+                let named = paragraph[inner].trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?"))
+                let words = named.split(separator: " ")
+                guard let first = words.first?.first, first.isUppercase,
+                      words.allSatisfy({ $0.count < 4 || ($0.first?.isUppercase ?? false) || ($0.first?.isNumber ?? false) }),
+                      named.lowercased() != own else { continue }
+                titles.insert(named.lowercased())
+            }
+            if cameras.count >= 8, titles.count >= 3 { return true }
         }
         return false
     }
@@ -759,7 +771,7 @@ public struct TechSpecs: Equatable, Sendable {
             return false
         }
         // A lens made to cover a gauge: "a Canon 8-64mm Super 16 zoom lens".
-        if after.range(of: #"^\W*(?:[\w-]+\s+)?(?:zoom|zooms|lens|lenses|primes?|glass|optics)\b"#, options: .regularExpression) != nil {
+        if after.range(of: #"^\s+(?:zoom\s+)?(?:zooms?|lens|lenses|primes?|glass|optics)\b"#, options: .regularExpression) != nil {
             return false
         }
         if sentence[range].lowercased().hasPrefix("super") { return true }
@@ -799,11 +811,7 @@ public struct TechSpecs: Equatable, Sendable {
         }
         // The collection's other films, where this film's own title isn't what's written.
         let owns = own.isEmpty ? [] : occurrences(of: title ?? "", in: part, options: .caseInsensitive)
-        // The title before its colon, written alone, is the first film ("Alien" while reading Alien:
-        // Romulus), also when TMDB keeps them in different collections.
-        let first = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) }
-        let firstFilm = (title ?? "").contains(":") ? first.map { [$0] } ?? [] : []
-        for other in otherTitles + firstFilm where other.count >= 4 && other.lowercased() != own {
+        for other in otherTitles where other.count >= 4 && other.lowercased() != own {
             for found in occurrences(of: other, in: part) where !owns.contains(where: { $0.overlaps(found) }) {
                 let edgeBefore = found.lowerBound == part.startIndex || !(part[part.index(before: found.lowerBound)].isLetter)
                 let edgeAfter = found.upperBound == part.endIndex || !(part[found.upperBound].isLetter || part[found.upperBound].isNumber)
@@ -859,7 +867,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Saying it was shot, chosen or used: the verbs, a camera's role, a camera package, "the lens
     /// was usually a…".
     static let captureCue = try! NSRegularExpression(
-        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|employed|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
+        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|employed|features|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
         options: [.caseInsensitive])
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".

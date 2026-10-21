@@ -546,7 +546,7 @@ struct PictureRangeTag: View {
         if !entries.isEmpty {
             let hdr = entries.contains { $0.picture.isHDR }
             let known = entries.contains { $0.picture.isKnown }
-            let dolbyVisionOnly = entries.contains { $0.picture.isDolbyVisionOnly || $0.picture.against != nil }
+            let dolbyVisionOnly = entries.contains { $0.picture.isDolbyVisionOnly } || entries.first?.picture.against != nil
             HStack(spacing: large ? 10 : 6) {
                 Image(systemName: dolbyVisionOnly ? "exclamationmark.triangle.fill" : hdr ? "sun.max.fill" : known ? "sun.min" : "questionmark.circle")
                 Text(entries.map(\.text).joined(separator: "   ·   "))
@@ -585,7 +585,7 @@ struct PictureRangeTag: View {
                 : "; a Mac sends any HDR to the TV the same way, so the one setting covers it.")
         }
         if let against = first.against {
-            return said + " You set this, but " + against.prefix(1).lowercased() + against.dropFirst()
+            return said + " You set this, but the file says otherwise: " + against
                 + ". If that was a slip, choose As the File Name Says in the film's … menu › Picture."
         }
         return said + " " + first.reason + "."

@@ -99,9 +99,12 @@ final class ShotOnStatementTests: XCTestCase {
 
     /// Found by the 1.9.2 audit of a real library.
     func testFoundInTheAudit() {
-        XCTAssertEqual(tags("This was chosen to balance Alien, which was shot using anamorphic lenses, and Aliens, which was filmed using spherical lenses.",
-                            title: "Alien: Romulus"), [], "the first film, though TMDB keeps them apart")
-        XCTAssertEqual(tags("Alien: Romulus was shot using anamorphic lenses.", title: "Alien: Romulus"), [.anamorphic])
+        XCTAssertEqual(tags("This was chosen to balance Alien, which was shot using anamorphic lenses.",
+                            title: "Alien: Romulus", otherTitles: ["Alien"]), [], "the first film, when its collection says so")
+        XCTAssertEqual(tags("Alien: Romulus was shot using anamorphic lenses.", title: "Alien: Romulus", otherTitles: ["Alien"]), [.anamorphic])
+        XCTAssertEqual(tags("Glass Onion was shot on the ARRI Alexa Mini LF.", title: "Glass Onion: A Knives Out Mystery"), [.digital],
+                       "a film often called by its title before the colon")
+        XCTAssertEqual(tags("The film uses anamorphic lenses throughout."), [.anamorphic])
         XCTAssertEqual(tags("We shot on the Sony Venice 2 and paired it with a Canon 8-64mm Super 16 zoom lens for its servo zoom."), [.digital])
         XCTAssertEqual(tags("2.39:1 Cameras | Arri Rental Alexa 65; Arri Alexa LF Lenses | Arri Rental Moviecam (Olympus OM), Prime DNA"), [.digital])
         XCTAssertEqual(tags("In my opinion, ARRI has achieved more complex colors that are closer to the skin shot on film."), [])

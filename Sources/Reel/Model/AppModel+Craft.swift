@@ -61,30 +61,10 @@ extension AppModel {
                 return all
             }
             for (id, found) in results {
-                let old = films.first(where: { $0.tmdb?.id == id })?.craft
-                var index = found
-                // A site didn't answer: counted, so it's tried a few times and then left be.
-                if var reading = index, !reading.unanswered.isEmpty {
-                    reading.retries = (old?.retries ?? 0) + 1
-                    index = reading
-                }
-                if let index, var old, !index.unanswered.isEmpty, index.retries <= CraftIndex.maxRetries, old.sources > index.sources {
-                    // A site didn't answer and less was read than last time (by older rules too):
-                    // what was read before stays, and it's tried again in a few hours.
-                    old.unanswered = index.unanswered
-                    old.retries = index.retries
-                    old.readAt = Date()
-                    read[id] = old
-                    failedInARow = 0
-                } else if let index, let old, old.keeps(over: index) {
-                    // Read from fewer texts than last time (a site down): kept as it was, and tried
-                    // again in a week rather than in half a year.
-                    read[id] = CraftIndex(version: old.version, readAt: Date().addingTimeInterval(7 * 86_400 - CraftIndex.maxAge),
-                                          shotOn: old.shotOn, names: old.names, evidence: old.evidence, sources: old.sources,
-                                          discovery: old.discovery)
-                    failedInARow = 0
-                } else if let index {
-                    read[id] = index
+                if let found {
+                    // Thinner than what's kept (a site down or asking Reel to wait): kept, and tried
+                    // again later (see `CraftIndex.merge`).
+                    read[id] = CraftIndex.merge(old: films.first(where: { $0.tmdb?.id == id })?.craft, new: found)
                     failedInARow = 0
                 } else {
                     // One film that can't be read is tried again next time; several in a row: offline.
@@ -102,6 +82,7 @@ extension AppModel {
     /// apart from its own (a film of a collection, read before discovery 2).
     func needsReading(_ film: FilmEntry) -> Bool {
         guard let craft = film.craft else { return true }
+        if let at = craft.retryAt { return at <= Date() }
         return craft.isStale() || (craft.discovery < CraftIndex.currentDiscovery && film.tmdb?.collection != nil)
     }
 
@@ -155,7 +136,7 @@ extension AppModel {
         var tagged = 0, read = 0, articleOnly = 0, waiting = 0, unanswered = 0
         for film in films {
             guard let details = film.tmdb, seen.insert(details.id).inserted, !details.genreNames.contains("Animation") else { continue }
-            if let craft = film.craft, !craft.unanswered.isEmpty, craft.retries <= CraftIndex.maxRetries { unanswered += 1 }
+            if film.craft?.willReadAgain == true { unanswered += 1 }
             guard let craft = film.craft, !needsReading(film) else {
                 // Films whose Wikipedia facts aren't in yet aren't read either: not counted.
                 if film.funFacts != nil { waiting += 1 }
@@ -194,13 +175,12 @@ extension AppModel {
         let index = CraftReader.index(of: details, article: article, reading: reading, colour: film.funFacts?.quick?.colour,
                                       otherTitles: otherTitles(of: details))
         let current = films.first { $0.tmdb?.id == details.id }?.craft
-        if let current, current.keeps(over: index) { return }
-        // A site didn't answer the tab and less was read than the summary has: the summary stays.
-        if let current, !index.unanswered.isEmpty, current.sources > index.sources { return }
-        // The same as already kept: nothing to write.
-        if let current, current.version == index.version, current.shotOn == index.shotOn, current.names == index.names,
-           current.evidence == index.evidence, !current.isStale() { return }
-        storeCraft([details.id: index])
+        let merged = CraftIndex.merge(old: current, new: index)
+        // Kept as it was (thinner), or the same as kept: nothing to write.
+        if let current, merged.readAt == current.readAt { return }
+        if let current, current.version == merged.version, current.shotOn == merged.shotOn, current.names == merged.names,
+           current.evidence == merged.evidence, current.unanswered == merged.unanswered, !current.isStale() { return }
+        storeCraft([details.id: merged])
     }
 }
 
