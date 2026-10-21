@@ -136,7 +136,8 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// fewer texts with every site answering, a week.
     static func retryDelay(_ retries: Int, unanswered: Bool) -> TimeInterval {
         guard unanswered else { return 7 * 86_400 }
-        return [6 * 3600, 86_400, 3 * 86_400, 7 * 86_400][min(max(retries, 1), 4) - 1]
+        let delays: [TimeInterval] = [6 * 3600, 86_400, 3 * 86_400, 7 * 86_400]
+        return delays[min(max(retries, 1), 4) - 1]
     }
 
     public func isStale(now: Date = Date()) -> Bool {
