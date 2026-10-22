@@ -247,10 +247,50 @@ enum ScreenRenderer {
                 .frame(width: 1300)
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("explore-mood.png"))
+        await acclaimedScreens(model, output: output)
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
         speedCheck(model.films)
         await scrollCheck(model, first: first, output: output)
         finish()
+    }
+
+    /// Last year's most acclaimed (in Explore and the Lists' rankings), once IMDb's ratings are in
+    /// (downloaded here, two minutes at most), with the critics' scores when OMDB_KEY is set.
+    private static func acclaimedScreens(_ model: AppModel, output: URL) async {
+        let year = Calendar.current.component(.year, from: Date()) - 1
+        if let key = ProcessInfo.processInfo.environment["OMDB_KEY"], !key.isEmpty { model.omdbKey = key }
+        await model.lists.load(.acclaimed(year))
+        let deadline = ContinuousClock.now + .seconds(120)
+        while ContinuousClock.now < deadline, !model.lists.imdbIsReady, !model.lists.imdbFailed {
+            try? await Task.sleep(for: .seconds(1))
+        }
+        guard model.lists.imdbIsReady else {
+            log("acclaimed: IMDb's ratings didn't arrive")
+            return
+        }
+        await model.loadBestOf(year: year, source: .acclaimed)
+        let shown = (model.bestOf(year: year, source: .acclaimed) ?? []).prefix(8)
+        for film in shown { if let path = film.posterPath { _ = await ImageStore.shared.image(path, .poster) } }
+        log("acclaimed \(year): " + model.lists.films(for: .acclaimed(year)).prefix(12).map { "\($0.title) (\($0.note ?? ""))" }.joined(separator: "; "))
+        render(BestOfRow(year: .constant(year), source: .constant(.acclaimed)) { _ in }
+                .padding(32)
+                .frame(width: 1300)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("explore-acclaimed.png"))
+        if let client = model.tmdb {
+            let kinds: [FilmListKind] = [.acclaimed(year), .imdbAllTime, .imdbYear(year), .imdbDecade(year / 10 * 10), .imdbMostVoted]
+            await model.lists.resolve(kinds.flatMap { model.lists.films(for: $0).prefix(3) }, using: client)
+            for kind in kinds {
+                for film in model.lists.films(for: kind).prefix(3) {
+                    if let path = model.lists.resolved(film)?.posterPath { _ = await ImageStore.shared.image(path, .poster) }
+                }
+            }
+        }
+        render(IMDbSection(columns: [GridItem(.adaptive(minimum: 330), spacing: 18, alignment: .top)])
+                .padding(32)
+                .frame(width: 1240)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("lists-rankings.png"))
     }
 
     /// How smoothly the pages scroll (see `ScrollTiming`): a film page, a person's page, Explore,

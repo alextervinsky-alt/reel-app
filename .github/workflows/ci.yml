@@ -59,6 +59,12 @@ jobs:
             grep -E "error:|failed" craft.log | head -10 | while read -r l; do echo "::error::${l}"; done
           fi
           exit $code
+      - name: The most acclaimed of last year, worked out live (a report)
+        run: |
+          set +e
+          swift test --skip-build --filter LiveAcclaimTests > acclaim.log 2>&1
+          grep -E "^::notice::Most acclaimed" acclaim.log || echo "::notice::Most acclaimed: not worked out ($(grep -cE 'error|failed' acclaim.log) errors)"
+          exit 0
 
       - name: Shot on for well-known films on record (wrong tags are warnings, missing ones notices)
         run: |
@@ -138,9 +144,14 @@ jobs:
         continue-on-error: true
         env:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          OMDB_KEY: ${{ secrets.OMDB_KEY }}
         run: |
           mkdir -p screens
-          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 420; exec @ARGV' build/Reel.app/Contents/MacOS/Reel &
+          # The same app with its symbols (the one shipped is stripped), so the samples name Reel's own code.
+          cp -R build/Reel.app "$RUNNER_TEMP/Reel.app"
+          cp "$(swift build -c release --arch arm64 --show-bin-path)/Reel" "$RUNNER_TEMP/Reel.app/Contents/MacOS/Reel"
+          codesign --force --deep -s - "$RUNNER_TEMP/Reel.app" >/dev/null 2>&1 || true
+          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 600; exec @ARGV' "$RUNNER_TEMP/Reel.app/Contents/MacOS/Reel" &
           pid=$!
           # Where the main thread's time goes while each page scrolls: a sample of the process per page.
           (

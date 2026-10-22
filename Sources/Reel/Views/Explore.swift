@@ -15,7 +15,7 @@ struct ExploreView: View {
     @Binding var path: NavigationPath
     @State private var preview: PreviewFilm?
     @State private var year = Calendar.current.component(.year, from: Date()) - 1
-    @State private var source = BestOfSource.tmdb
+    @State private var source = BestOfSource.acclaimed
     @State private var mood: Mood?
     /// A film looked up by name: its matches take the place of the rows while there's text.
     @State private var searchText = ""
@@ -198,7 +198,8 @@ struct BestOfRow: View {
                             .buttonStyle(SecondaryCapsuleStyle())
                     } else if found == nil || model.isLoadingBestOf(year: year, source: source) {
                         ProgressView().controlSize(.small)
-                        Text(source == .imdb && !model.lists.imdbIsReady ? "Getting IMDb's ratings (the first time takes a minute)…" : "Loading…")
+                        Text((source == .imdb || source == .acclaimed) && !model.lists.imdbIsReady
+                             ? "Getting IMDb's ratings (the first time takes a minute)…" : "Loading…")
                             .foregroundStyle(.secondary)
                     } else {
                         Text(source == .awards ? "No award winners from \(String(year)) in the lists." : "Nothing found for \(String(year)).")
@@ -222,7 +223,7 @@ struct BestOfRow: View {
     private func load() async {
         await model.loadBestOf(year: year, source: source)
         // IMDb's ratings download the first time: look again once they're in (or failed).
-        if source == .imdb, model.bestOf(year: year, source: source) == nil {
+        if source == .imdb || source == .acclaimed, model.bestOf(year: year, source: source) == nil {
             while !Task.isCancelled, !model.lists.imdbIsReady, !model.lists.imdbFailed { try? await Task.sleep(for: .seconds(2)) }
             await model.loadBestOf(year: year, source: source)
         }
@@ -238,6 +239,9 @@ struct BestOfRow: View {
                 .buttonStyle(.plain)
         case .imdb:
             NavigationLink(value: ListRoute(kind: .imdbYear(year))) { seeAllLabel }
+                .buttonStyle(.plain)
+        case .acclaimed:
+            NavigationLink(value: ListRoute(kind: .acclaimed(year))) { seeAllLabel }
                 .buttonStyle(.plain)
         case .awards:
             EmptyView()
@@ -259,8 +263,9 @@ struct BestOfRow: View {
         return ForEach(films.prefix(20)) { film in
             // IMDb's ranking shows IMDb's rating, not TMDB's (the order would look random by TMDB's).
             DiscoverCard(film: film, width: 146,
-                         rank: source == .tmdb || source == .imdb ? all.firstIndex { $0.id == film.id }.map { $0 + 1 } : nil,
-                         reason: source == .awards ? film.note : nil, ratingLine: source == .imdb ? film.note : nil, onPreview: onPreview)
+                         rank: source == .tmdb || source == .imdb || source == .acclaimed ? all.firstIndex { $0.id == film.id }.map { $0 + 1 } : nil,
+                         reason: source == .awards ? film.note : film.reason,
+                         ratingLine: source == .imdb || source == .acclaimed ? film.note : nil, onPreview: onPreview)
         }
     }
 }

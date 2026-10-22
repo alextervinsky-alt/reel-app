@@ -17,6 +17,8 @@ public enum FilmListKind: Hashable, Codable, Sendable {
     case imdbGenre(String, decade: Int?)
     /// The 100 films the most people have rated on IMDb.
     case imdbMostVoted
+    /// A year's most acclaimed films: critics, audiences, how widely seen, the big prizes (see `Acclaim`).
+    case acclaimed(Int)
     /// Award winners and nominees, or a collection, from Wikidata.
     case award(AwardList)
     /// Sight and Sound's poll of critics: the 100 greatest films of all time.
@@ -29,6 +31,7 @@ public enum FilmListKind: Hashable, Codable, Sendable {
         case .imdbDecade(let decade): "IMDb: Best of the \(decade)s"
         case .imdbGenre(let genre, let decade): "IMDb: Best \(FilmListKind.genreName(genre))" + (decade.map { " of the \($0)s" } ?? "")
         case .imdbMostVoted: "IMDb: Most Voted"
+        case .acclaimed(let year): "The Most Acclaimed of \(year)"
         case .award(let award): award.title
         case .sightAndSound: "The Greatest Films of All Time"
         }
@@ -55,6 +58,7 @@ public enum FilmListKind: Hashable, Codable, Sendable {
         case .imdbGenre(_, let decade): (decade == nil ? "The genre's best-rated films of all time" : "The genre's best-rated films of the decade")
             + ", ranked by IMDb rating and number of votes"
         case .imdbMostVoted: "The films the most people have rated on IMDb, the most first"
+        case .acclaimed: "Loved by critics and audiences, widely seen and talked about, and up for the big prizes"
         case .award(let award): award.subtitle
         case .sightAndSound: "Sight and Sound's 2022 poll of 1,639 critics, held once a decade since 1952"
         }
@@ -69,7 +73,7 @@ public enum FilmListKind: Hashable, Codable, Sendable {
     public var usesIMDb: Bool {
         switch self {
         case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted: true
-        case .award, .sightAndSound: false
+        case .award, .sightAndSound, .acclaimed: false
         }
     }
 
@@ -473,7 +477,7 @@ public enum ListBadges {
             case .sightAndSound:
                 result.append((1, ListBadge(id: "\(kind)", text: "Sight & Sound greatest films" + (film.rank.map { " · #\($0)" } ?? ""),
                                             symbol: "star.circle", isWin: true, kind: kind)))
-            case .imdbAllTime, .imdbYear, .imdbDecade, .imdbGenre, .imdbMostVoted:
+            case .imdbAllTime, .imdbYear, .imdbDecade, .imdbGenre, .imdbMostVoted, .acclaimed:
                 let place = (films.firstIndex(of: film) ?? 0) + 1
                 result.append((3, ListBadge(id: "\(kind)", text: "\(kind.title) · #\(place)", symbol: "list.number",
                                             isWin: true, kind: kind)))
@@ -507,7 +511,7 @@ public enum ListConsensus {
         switch kind {
         case .sightAndSound: 1.6
         case .imdbAllTime: 1.0
-        case .imdbYear, .imdbDecade, .imdbGenre, .imdbMostVoted: 0.5
+        case .imdbYear, .imdbDecade, .imdbGenre, .imdbMostVoted, .acclaimed: 0.5
         case .award(let award):
             switch award {
             case .palmeDOr: 1.3
@@ -583,7 +587,7 @@ public enum ListConsensus {
         case .sightAndSound: "Sight & Sound"
         case .imdbAllTime: "IMDb Top 250"
         case .imdbYear(let year): "IMDb Top 100 of \(year)"
-        case .imdbDecade, .imdbGenre, .imdbMostVoted: kind.title
+        case .imdbDecade, .imdbGenre, .imdbMostVoted, .acclaimed: kind.title
         case .award(let award):
             switch award {
             case .oscarBestPicture: "Best Picture"

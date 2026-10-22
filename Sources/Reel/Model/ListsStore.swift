@@ -31,6 +31,9 @@ final class ListsStore {
     /// A few facts about films outside the library (TMDB id → title, year, running time, genres,
     /// directors, pictures): for films you saw elsewhere and for Start Here. Downloaded once.
     private(set) var briefs: [Int: FilmBrief] = [:]
+    /// Each year's most acclaimed films, once worked out this session (see `AppModel.loadAcclaimed`).
+    private(set) var acclaimed: [Int: [ListFilm]] = [:]
+    private(set) var acclaimedLoading: Set<Int> = []
 
     @ObservationIgnored private var imdbFilms: [IMDbFilm] = []
     @ObservationIgnored private var imdbLists: [FilmListKind: [ListFilm]] = [:]
@@ -48,6 +51,8 @@ final class ListsStore {
     @ObservationIgnored private var queued: [ListFilm] = []
     @ObservationIgnored private var queueDrain: Task<Void, Never>?
     @ObservationIgnored private var fetchingBriefs: Set<Int> = []
+    /// Critics' scores of list films by IMDb id (via OMDb), kept a month.
+    @ObservationIgnored private var critics: [String: CriticScores] = [:]
 
     private let folder: URL
     private var imdbFile: URL { folder.appendingPathComponent("IMDb Ratings.json") }
@@ -55,6 +60,7 @@ final class ListsStore {
     private var artFile: URL { folder.appendingPathComponent("Film Art.json") }
     private var setsFile: URL { folder.appendingPathComponent("Sets.json") }
     private var briefsFile: URL { folder.appendingPathComponent("Film Briefs.json") }
+    private var criticsFile: URL { folder.appendingPathComponent("Critics.json") }
 
     static let awardsMaxAge: TimeInterval = 7 * 86_400
     static let setsMaxAge: TimeInterval = 14 * 86_400
@@ -74,14 +80,15 @@ final class ListsStore {
     }
 
     private func readSavedFiles() async {
-        let files = (awards: awardsFile, art: artFile, sets: setsFile, imdb: imdbFile, briefs: briefsFile)
+        let files = (awards: awardsFile, art: artFile, sets: setsFile, imdb: imdbFile, briefs: briefsFile, critics: criticsFile)
         let loaded = await Task.detached(priority: .userInitiated) {
             ListsStore.removeLeftoverDownloads()
             return (JSONStore.load(AwardListsFile.self, from: files.awards),
              JSONStore.load([String: ResolvedFilm].self, from: files.art),
              JSONStore.load(FilmSetsFile.self, from: files.sets),
              (try? FileManager.default.attributesOfItem(atPath: files.imdb.path))?[.modificationDate] as? Date,
-             JSONStore.load([Int: FilmBrief].self, from: files.briefs))
+             JSONStore.load([Int: FilmBrief].self, from: files.briefs),
+             JSONStore.load([String: CriticScores].self, from: files.critics))
         }.value
         // Lists saved before they had nominees are fetched again.
         if let saved = loaded.0, saved.version == AwardListsFile.currentVersion {
@@ -94,6 +101,7 @@ final class ListsStore {
         if let saved = loaded.2 { sets = Dictionary(saved.sets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
         if let built = loaded.3 { imdbState = .ready(built) }
         if let saved = loaded.4 { briefs = saved.merging(briefs) { _, new in new } }
+        if let saved = loaded.5 { critics = saved.merging(critics) { _, new in new } }
     }
 
     // MARK: Films outside the library
@@ -151,6 +159,8 @@ final class ListsStore {
             return awards[award] ?? []
         case .sightAndSound:
             return SightAndSound.films
+        case .acclaimed(let year):
+            return acclaimed[year] ?? []
         case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted:
             guard case .ready = imdbState, !imdbFilms.isEmpty else { return [] }
             if let cached = imdbLists[kind] { return cached }
@@ -171,6 +181,32 @@ final class ListsStore {
     /// The saved IMDb copy has each film's genres (copies before Reel 1.9.4 don't: built again).
     var imdbHasGenres: Bool { imdbFormat >= 2 }
 
+    // MARK: The most acclaimed
+
+    /// IMDb's films of a year (empty until IMDb's ratings are in).
+    func imdbFilms(year: Int) -> [IMDbFilm] {
+        imdbFilms.filter { $0.year == year }
+    }
+
+    /// A list film's critics' scores, when looked up in the last month.
+    func criticScores(_ imdbID: String) -> CriticScores? {
+        critics[imdbID].flatMap { $0.checkedAt > Date().addingTimeInterval(-CriticScores.maxAge) ? $0 : nil }
+    }
+
+    func keepCriticScores(_ found: [String: CriticScores]) {
+        guard !found.isEmpty else { return }
+        critics.merge(found) { _, new in new }
+        scheduleSave("critics")
+    }
+
+    func setAcclaimed(_ films: [ListFilm], year: Int) {
+        acclaimed[year] = films
+    }
+
+    func setAcclaimedLoading(_ loading: Bool, year: Int) {
+        if loading { acclaimedLoading.insert(year) } else { acclaimedLoading.remove(year) }
+    }
+
     /// IMDb's ratings are downloaded and ready for rankings.
     var imdbIsReady: Bool {
         if case .ready = imdbState { return true }
@@ -187,6 +223,7 @@ final class ListsStore {
         switch kind {
         case .award(let award): awardsLoading.contains(award)
         case .sightAndSound: false
+        case .acclaimed(let year): acclaimedLoading.contains(year)
         default: imdbState == .preparing || imdbFilmsLoading
         }
     }
@@ -200,7 +237,7 @@ final class ListsStore {
             await loadAward(award)
         case .sightAndSound:
             break
-        case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted:
+        case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted, .acclaimed:
             await loadIMDbFilms()
             startIMDbIfNeeded()
         }
@@ -546,6 +583,10 @@ final class ListsStore {
             url = briefsFile
             let briefs = self.briefs
             encode = { try? JSONStore.encode(briefs) }
+        case "critics":
+            url = criticsFile
+            let critics = self.critics
+            encode = { try? JSONStore.encode(critics) }
         default:
             url = setsFile
             let all = Array(sets.values)

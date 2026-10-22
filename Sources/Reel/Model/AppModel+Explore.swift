@@ -79,6 +79,7 @@ extension AppModel {
     func isLoadingBestOf(year: Int, source: BestOfSource) -> Bool {
         source.isTMDB ? discoverLoading.contains(.bestOf(year: year, source: source))
             : bestOfLoading.contains(Self.bestOfKey(year, source)) || (source == .imdb && lists.isLoading(.imdbYear(year)))
+                || (source == .acclaimed && lists.isLoading(.acclaimed(year)))
     }
 
     /// Fetches the best of a year from a source: TMDB's directly; IMDb's Top 100 from the Lists'
@@ -121,6 +122,13 @@ extension AppModel {
                     }
                 }
             }
+        case .acclaimed:
+            await loadAcclaimed(year: year)
+            guard lists.imdbIsReady else {
+                if lists.imdbFailed { bestOfMissing.insert(key) }
+                return
+            }
+            films = lists.films(for: .acclaimed(year)).prefix(40).map { ($0, $0.note) }
         case .tmdb, .popular, .gems:
             return
         }
@@ -130,13 +138,84 @@ extension AppModel {
             return
         }
         await lists.resolve(films.map(\.film), using: client)
+        let prizes = source == .acclaimed ? acclaimedPrizes[year] ?? [:] : [:]
         bestOfLists[key] = films.compactMap { entry in
             guard let art = lists.resolved(entry.film) else { return nil }
             let preview = PreviewFilm(entry.film, art: art)
             return PreviewFilm(id: preview.id, title: preview.title, year: preview.year, posterPath: preview.posterPath,
                                backdropPath: preview.backdropPath, voteAverage: preview.voteAverage, voteCount: preview.voteCount,
-                               genres: preview.genres, note: entry.note)
+                               genres: preview.genres, note: entry.note, reason: entry.film.imdbID.flatMap { prizes[$0] })
         }
+    }
+
+    // MARK: The most acclaimed
+
+    /// Works out a year's most acclaimed films (see `Acclaim`), once a session: its best-known
+    /// films and the award lists' films of the year, with TMDB's audience and, for the 60 most
+    /// likely, the critics' scores (OMDb, kept a month). Without an OMDb key, audiences, how widely
+    /// seen and the prizes decide.
+    func loadAcclaimed(year: Int) async {
+        let lists = self.lists
+        guard lists.acclaimed[year] == nil, !lists.acclaimedLoading.contains(year), let client = tmdb else { return }
+        await lists.load(.acclaimed(year))
+        guard lists.imdbIsReady else { return }
+        lists.setAcclaimedLoading(true, year: year)
+        defer { lists.setAcclaimedLoading(false, year: year) }
+        await lists.loadAllAwards()
+        let prizes = Acclaim.prizes(AwardList.allCases.map { ($0, lists.films(for: .award($0))) }, year: year)
+        let pool = Acclaim.pool(lists.imdbFilms(year: year), year: year, awarded: Set(prizes.keys))
+        guard !pool.isEmpty else {
+            lists.setAcclaimed([], year: year)
+            return
+        }
+        // TMDB's audience, from the posters' lookup.
+        let entries = pool.map(ListFilm.init)
+        await lists.resolve(entries, using: client)
+        var candidates = zip(pool, entries).map { film, entry -> Acclaim.Candidate in
+            let art = lists.resolved(entry)
+            let prize = prizes[film.id]
+            return Acclaim.Candidate(film: film, tmdbVote: art?.voteAverage, tmdbVotes: art?.voteCount,
+                                     prize: prize?.prize, prizeName: prize?.name)
+        }
+        // The critics, for the films most likely to make the list (their scores are what's missing).
+        if let omdb = omdbClient {
+            let likely = Acclaim.rank(candidates).prefix(60).map { $0.candidate.film.id }
+            let wanted = likely.filter { lists.criticScores($0) == nil }
+            var found: [String: CriticScores] = [:]
+            for start in stride(from: 0, to: wanted.count, by: 6) {
+                let batch = Array(wanted[start..<min(start + 6, wanted.count)])
+                let scores = await withTaskGroup(of: (String, CriticScores?).self, returning: [(String, CriticScores?)].self) { group in
+                    for id in batch {
+                        group.addTask {
+                            // Answered with no scores: kept as none. Not reached: asked again next time.
+                            do {
+                                let ratings = try await omdb.ratings(imdbID: id)
+                                return (id, CriticScores(metacritic: ratings?.metacritic, rottenTomatoes: ratings?.rottenTomatoes))
+                            } catch {
+                                return (id, nil)
+                            }
+                        }
+                    }
+                    var all: [(String, CriticScores?)] = []
+                    for await result in group { all.append(result) }
+                    return all
+                }
+                for (id, score) in scores { if let score { found[id] = score } }
+            }
+            lists.keepCriticScores(found)
+            for index in candidates.indices {
+                guard let scores = lists.criticScores(candidates[index].film.id) else { continue }
+                candidates[index].metacritic = scores.metacritic
+                candidates[index].rottenTomatoes = scores.rottenTomatoes
+            }
+        }
+        let ranked = Acclaim.rank(candidates).prefix(50)
+        acclaimedPrizes[year] = Dictionary(ranked.compactMap { entry in entry.candidate.prizeName.map { (entry.candidate.film.id, $0) } },
+                                           uniquingKeysWith: { first, _ in first })
+        lists.setAcclaimed(ranked.map { entry in
+            ListFilm(imdbID: entry.candidate.film.id, tmdbID: nil, title: entry.candidate.film.title, year: entry.candidate.film.year,
+                     note: Acclaim.note(entry.candidate))
+        }, year: year)
     }
 }
 #endif

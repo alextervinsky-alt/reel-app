@@ -266,8 +266,9 @@ struct StartHereSection: View {
     }
 }
 
-/// IMDb's rankings, in its own view so download progress redraws only this part: the Top 250, a
-/// year's and a decade's best, the most voted, and the best of each genre, of all time or a decade.
+/// The rankings, in their own view so download progress redraws only this part: the year's most
+/// acclaimed; IMDb's Top 250, a year's and a decade's best, the most voted, and the best of each
+/// genre, of all time or a decade.
 struct IMDbSection: View {
     @Environment(AppModel.self) private var model
     let columns: [GridItem]
@@ -279,7 +280,7 @@ struct IMDbSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 14) {
-                SectionHeading(title: "IMDb Rankings", subtitle: "Ranked by IMDb rating, weighed by the number of votes")
+                SectionHeading(title: "Rankings", subtitle: "The year's most acclaimed, and IMDb's ratings weighed by the number of votes")
                 if case .ready = model.lists.imdbState {
                     YearMenu(year: $year)
                     ChoiceMenu(icon: "clock", options: IMDbChoices.decades, selection: $decade)
@@ -301,6 +302,7 @@ struct IMDbSection: View {
             switch model.lists.imdbState {
             case .ready:
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+                    ListCard(kind: .acclaimed(year), source: "Critics · Audiences · Prizes", symbol: "star.circle")
                     ListCard(kind: .imdbAllTime, source: "IMDb · All time", symbol: "trophy")
                     ListCard(kind: .imdbYear(year), source: "IMDb · \(year)", symbol: "calendar")
                     ListCard(kind: .imdbDecade(decade), source: "IMDb · The \(decade)s", symbol: "clock")
@@ -315,7 +317,8 @@ struct IMDbSection: View {
             // Three posters for each card.
             guard let client = model.tmdb else { return }
             let lists = model.lists
-            let kinds: [FilmListKind] = [.imdbAllTime, .imdbYear(year), .imdbDecade(decade), .imdbMostVoted]
+            await model.loadAcclaimed(year: year)
+            let kinds: [FilmListKind] = [.acclaimed(year), .imdbAllTime, .imdbYear(year), .imdbDecade(decade), .imdbMostVoted]
             await lists.resolve(kinds.flatMap { lists.films(for: $0).prefix(3) }, using: client)
         }
     }

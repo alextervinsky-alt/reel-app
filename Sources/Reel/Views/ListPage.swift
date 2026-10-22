@@ -30,6 +30,8 @@ struct ListPage: View {
         _kind = State(initialValue: kind)
         if case .imdbYear(let y) = kind {
             _year = State(initialValue: y)
+        } else if case .acclaimed(let y) = kind {
+            _year = State(initialValue: y)
         } else {
             _year = State(initialValue: Calendar.current.component(.year, from: Date()) - 1)
         }
@@ -100,11 +102,12 @@ struct ListPage: View {
         // Runs again when the list arrives (first IMDb download, a refresh): posters for up to
         // 250 films are looked up straight away, the rest as their rows come into view.
         .task(id: "\(kind)|\(films.count)") {
-            await lists.load(kind)
+            if case .acclaimed(let year) = kind { await model.loadAcclaimed(year: year) } else { await lists.load(kind) }
             if let client = model.tmdb { await lists.resolve(Array(lists.films(for: kind).prefix(250)), using: client) }
         }
         .onChange(of: year) {
             if case .imdbYear = kind { kind = .imdbYear(year) }
+            if case .acclaimed = kind { kind = .acclaimed(year) }
         }
     }
 
@@ -131,6 +134,7 @@ struct ListPage: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(kind.title).font(.system(size: 30, weight: .bold))
                     if case .imdbYear = kind { YearMenu(year: $year) }
+                    if case .acclaimed = kind { YearMenu(year: $year) }
                     IMDbRankingMenus(kind: $kind)
                 }
                 Text(kind.subtitle)
@@ -233,6 +237,9 @@ struct ListPage: View {
         if let year = film.year { parts.append(String(year)) }
         if kind.usesIMDb {
             if let note = film.note { parts.append("IMDb " + note) }
+        } else if case .acclaimed(let year) = kind {
+            if let note = film.note { parts.append(note) }
+            if let prize = film.imdbID.flatMap({ model.acclaimedPrizes[year]?[$0] }) { parts.append(prize) }
         } else {
             if case .award(let award) = kind, award != .criterion, let note = film.note { parts.append(note) }
             if let vote = model.lists.resolved(film)?.voteAverage, vote > 0 { parts.append("★ " + Format.rating(vote)) }
@@ -246,7 +253,7 @@ struct ListPage: View {
     @ViewBuilder
     private var emptyState: some View {
         let lists = model.lists
-        if kind.usesIMDb, !(lists.imdbFilmsLoading), lists.films(for: kind).isEmpty, !isReady {
+        if kind.usesIMDb || isAcclaimed, !(lists.imdbFilmsLoading), lists.films(for: kind).isEmpty, !isReady {
             IMDbSetupCard()
         } else if lists.isLoading(kind) || lists.imdbFilmsLoading {
             ProgressView().frame(maxWidth: .infinity, minHeight: 240)
@@ -255,6 +262,11 @@ struct ListPage: View {
                                    description: Text("Check the internet connection and try again."))
                 .frame(minHeight: 240)
         }
+    }
+
+    private var isAcclaimed: Bool {
+        if case .acclaimed = kind { return true }
+        return false
     }
 
     private var isReady: Bool {
@@ -267,6 +279,8 @@ struct ListPage: View {
         case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted: IMDbDataset.attribution
         case .sightAndSound: "The Sight and Sound critics' poll, 2022 (bfi.org.uk). Posters from TMDB."
         case .award: "From Wikidata (wikidata.org), free to use under CC0. Posters from TMDB."
+        case .acclaimed: "Ranked by Reel from critics' scores (Metacritic and Rotten Tomatoes, via OMDb), IMDb's ratings and votes, "
+            + "TMDB's ratings and the award lists. " + IMDbDataset.attribution
         }
     }
 }

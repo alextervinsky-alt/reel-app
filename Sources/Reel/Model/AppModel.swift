@@ -99,6 +99,8 @@ final class AppModel {
     @ObservationIgnored let exploreLaunch = UUID().uuidString
     /// Best of a year from the Lists' sources (IMDb, award winners), as films to show.
     var bestOfLists: [String: [PreviewFilm]] = [:]
+    /// The prizes of each year's most acclaimed films, by IMDb id ("Palme d'Or"), for their cards.
+    @ObservationIgnored var acclaimedPrizes: [Int: [String: String]] = [:]
     var bestOfLoading: Set<String> = []
     /// Couldn't be found (offline, or IMDb's ratings failed to download): the row offers to try again.
     var bestOfMissing: Set<String> = []

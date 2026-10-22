@@ -108,9 +108,12 @@ struct PreviewFilm: Identifiable, Hashable {
     let genres: [String]
     /// Extra line, e.g. "Director · Cinematographer" or "92% match".
     let note: String?
+    /// Why it's on a list, in Reel's colour ("Palme d'Or").
+    var reason: String?
 
     init(id: Int, title: String, year: Int?, posterPath: String?, backdropPath: String?, voteAverage: Double?,
-         voteCount: Int, genres: [String], note: String?) {
+         voteCount: Int, genres: [String], note: String?, reason: String? = nil) {
+        self.reason = reason
         self.id = id
         self.title = title
         self.year = year

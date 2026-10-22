@@ -2,12 +2,13 @@ import Foundation
 
 /// Where Explore's "Best of" list comes from.
 public enum BestOfSource: String, CaseIterable, Hashable, Sendable, Identifiable {
-    case tmdb, imdb, popular, awards, gems
+    case acclaimed, tmdb, imdb, popular, awards, gems
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
+        case .acclaimed: "Most Acclaimed"
         case .tmdb: "TMDB Rating"
         case .imdb: "IMDb Rating"
         case .popular: "Most Popular"
@@ -18,6 +19,7 @@ public enum BestOfSource: String, CaseIterable, Hashable, Sendable, Identifiable
 
     public func subtitle(_ year: Int) -> String {
         switch self {
+        case .acclaimed: "The films of \(year) critics and audiences loved, that were widely seen and up for the big prizes"
         case .tmdb: "The best-rated films of \(year) on TMDB"
         case .imdb: "IMDb's Top 100 of \(year), ranked by IMDb's own rating weighed by votes"
         case .popular: "The films of \(year) the most people watched"
@@ -158,7 +160,7 @@ public enum DiscoverList: Hashable, Sendable {
                                             URLQueryItem(name: "vote_average.gte", value: "7"),
                                             URLQueryItem(name: "vote_count.gte", value: old ? "60" : "150"),
                                             URLQueryItem(name: "vote_count.lte", value: old ? "400" : "1000"), noAdult], 3)
-            case .tmdb, .imdb, .awards:
+            case .tmdb, .imdb, .awards, .acclaimed:
                 return ("/discover/movie", [year, URLQueryItem(name: "sort_by", value: "vote_average.desc"),
                                             URLQueryItem(name: "vote_count.gte", value: old ? "150" : "400"), noAdult], 5)
             }
