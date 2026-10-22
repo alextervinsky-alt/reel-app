@@ -37,6 +37,13 @@ final class ShotOnAuditTests: XCTestCase {
         XCTAssertEqual(whole.evidence(for: .anamorphic)?.partial, false)
     }
 
+    func testWhatWasTestedIsNotWhatItWasShotOn() {
+        let tests = read(["For this film, I performed some simple tests. I shot 35mm Double-X, 35mm color film [5219], and with the Arri Alexa."]).craft
+        XCTAssertEqual(tests.shotOn, [])
+        XCTAssertEqual(read(["We tested many cameras. In the end we shot on the Arri Alexa 65."]).craft.shotOn, [.digital])
+        XCTAssertEqual(read(["After testing, they chose Kodak Double-X. We shot on 35mm film."]).craft.shotOn.contains(.film), true)
+    }
+
     func testTheMagazinesOwnLinesAreNotTheFilmmakers() {
         XCTAssertEqual(tags("Filmmaker: Doe first started making movies as a kid on his dad’s Super 8 camera and also used it for his short films.",
                             source: "Filmmaker"), [])

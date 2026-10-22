@@ -220,9 +220,9 @@ final class AppModel {
     /// Goes up each time the library's films are built again (a cache key).
     @ObservationIgnored var libraryVersion = 0
     /// Every film on the lists, once each (see `listPicks`), until the lists change.
-    @ObservationIgnored var listPicksCache: (stamp: Int, all: [ListPick], byFilm: [String: ListPick])?
+    @ObservationIgnored var listPicksCache: (stamp: Int, art: Int, at: Date, all: [ListPick], byFilm: [String: ListPick])?
     /// The Lists hub's Start Here (see `startHere`), until something it shows changes.
-    @ObservationIgnored var startHereCache: (stamp: StartHereStamp, picks: Int,
+    @ObservationIgnored var startHereCache: (stamp: StartHereStamp, picks: Int, at: Date,
                                               value: (onDrive: [ListSuggestion], toFind: [ListSuggestion]))?
     @ObservationIgnored var personCache: [Int: TMDBPerson] = [:]
     @ObservationIgnored var discoverLoadedAt: [DiscoverList: Date] = [:]

@@ -22,6 +22,11 @@ struct StartHereStamp: Equatable {
     let seen: Int
     let wishlist: Int
     let ratings: Int
+
+    /// The same without what arrives in a stream while lists open (posters, briefs).
+    var withoutPictures: StartHereStamp {
+        StartHereStamp(library: library, films: films, art: 0, briefs: 0, seen: seen, wishlist: wishlist, ratings: ratings)
+    }
 }
 
 /// The Lists hub turned toward finding your next film: the films the lists agree on, ranked by
@@ -39,12 +44,17 @@ extension AppModel {
     /// Every film on the lists, once each, weightiest first; and the same by each list film's id.
     func listPicks() -> (all: [ListPick], byFilm: [String: ListPick]) {
         let lists = consensusLists
-        let stamp = lists.reduce(0) { $0 &+ $1.films.count } &+ self.lists.art.count
-        if let cached = listPicksCache, cached.stamp == stamp { return (cached.all, cached.byFilm) }
+        let stamp = lists.reduce(0) { $0 &+ $1.films.count }
+        // Posters found for list films (a page of them every moment while a list opens) only join
+        // films up across lists: worked in every few seconds, not on every batch, which redrew the
+        // page mid-scroll with a fresh count each time.
+        let art = self.lists.art.count
+        if let cached = listPicksCache, cached.stamp == stamp,
+           cached.art == art || Date().timeIntervalSince(cached.at) < 5 { return (cached.all, cached.byFilm) }
         let picks = ListConsensus.gather(lists) { self.lists.tmdbID($0) }
         var byFilm: [String: ListPick] = [:]
         for pick in picks { for id in pick.ids { byFilm[id] = pick } }
-        listPicksCache = (stamp, picks, byFilm)
+        listPicksCache = (stamp, art, Date(), picks, byFilm)
         return (picks, byFilm)
     }
 
@@ -66,7 +76,11 @@ extension AppModel {
         let stamp = StartHereStamp(library: libraryVersion, films: items.count, art: lists.art.count, briefs: lists.briefs.count,
                                    seen: personal.watchedIDs.hashValue, wishlist: wishlistIDs.count, ratings: personal.ratingsVersion)
         let picks = listPicks().all
-        if let cached = startHereCache, cached.stamp == stamp, cached.picks == picks.count { return cached.value }
+        if let cached = startHereCache, cached.picks == picks.count,
+           cached.stamp == stamp || (cached.stamp.withoutPictures == stamp.withoutPictures && Date().timeIntervalSince(cached.at) < 5) {
+            // Only posters and briefs arrived meanwhile: worked in every few seconds (see `listPicks`).
+            return cached.value
+        }
 
         var onDrive: [ListSuggestion] = []
         var toFind: [ListSuggestion] = []
@@ -96,7 +110,7 @@ extension AppModel {
         }
         let value = (onDrive: Array(onDrive.sorted { $0.score > $1.score }.prefix(12)),
                      toFind: Array(toFind.sorted { $0.score > $1.score }.prefix(20)))
-        startHereCache = (stamp, picks.count, value)
+        startHereCache = (stamp, picks.count, Date(), value)
         return value
     }
 

@@ -203,6 +203,10 @@ public struct TechSpecs: Equatable, Sendable {
                         // Oppenheimer", "in 1993, employing a Sony F900"): no gear is read from it,
                         // and it's kept only as how the cinematographer and the director met.
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title)
+                        // "I performed some simple tests. I shot 35mm Double-X, 35mm color film and with the
+                        // Arri Alexa.": what was tried, not what it was shot on (unless it says what was chosen).
+                        let tried = index > 0 && matches(testsDone, sentences[index - 1]) && !matches(chosenAfter, sentences[index - 1])
+                            && !matches(chosenAfter, sentence)
                         if !otherFilm, triggers.contains(where: { lowered.contains($0) }) {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
@@ -221,7 +225,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     let said = reading(sentence, at: at, title: title, otherTitles: otherTitles, people: names + directorNames)
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(sentence.prefix(400)), source: text.source,
-                                                      partial: saidOfPart(sentence, at: at), capture: said.captured,
+                                                      partial: saidOfPart(sentence, at: at), capture: said.captured && !tried,
                                                       aboutThisFilm: said.aboutThisFilm))
                                 }
                             }
@@ -359,6 +363,13 @@ public struct TechSpecs: Equatable, Sendable {
         }
         return false
     }
+
+    /// Tests spoken of: the sentence after says what was tried.
+    static let testsDone = try! NSRegularExpression(pattern: #"\b(?:tests?|tested|testing|camera trials?)\b"#, options: [.caseInsensitive])
+    /// What was chosen after the tests.
+    static let chosenAfter = try! NSRegularExpression(
+        pattern: #"\b(?:in the end|ultimately|finally|eventually|chose|chosen|decided|settled on|went with|opted|so we (?:shot|used)|for the (?:film|shoot|production|movie|rest)|principal photography|main camera)\b"#,
+        options: [.caseInsensitive])
 
     /// A spec sheet's label: "Camera:", "Lenses:", "Format:", "Film stock:".
     static let specLabel = try! NSRegularExpression(pattern: #"(?:^|[\s.;])(Cameras?|Lens(?:es)?|Format|Film stocks?|Stocks?)\s*:"#)
