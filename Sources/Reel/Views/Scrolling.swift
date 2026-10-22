@@ -16,7 +16,7 @@ final class ScrollState {
     /// The scroll views moving now (a page, and a row scrolled inside it).
     @ObservationIgnored private var moving: Set<UUID> = []
     /// For a page with one scroll view of its own.
-    static let page = UUID()
+    nonisolated static let page = UUID()
 
     /// A scroll started or stopped: the lifted card settles as it starts; the card the pointer came
     /// to rest on lifts once every scroll has stopped. The library's updates wait meanwhile
