@@ -160,9 +160,10 @@ public struct TechSpecs: Equatable, Sendable {
         for text in texts {
             let roundup = text.isInterview && !shortTitle.isEmpty && (text.isList || isRoundup(text, title: title ?? ""))
             if roundup { roundups.append(text.source ?? "Wikipedia") }
-            // In a round-up, a spec list ("Camera: … Lenses: …") is this film's only in the film's own
-            // block: after a paragraph naming the film or its cinematographer, before the next film's.
-            var ownBlock = false, afterSpecs = false
+            // In a round-up, a spec sheet ("Camera: … Lenses: …") is this film's only when it names the
+            // film, or follows the paragraph that does closely (one paragraph between at most, no other sheet
+            // between; a sheet in several paragraphs counts as one).
+            var sinceNamed: Int?, sheetSinceNamed = false, inOwnSheet = false
             for section in text.sections {
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
@@ -173,13 +174,19 @@ public struct TechSpecs: Equatable, Sendable {
                         let namesIt = paragraph.range(of: shortTitle, options: .caseInsensitive) != nil
                             || mentions(names, in: paragraph, generic: false)
                         if isSpecList(paragraph) {
-                            afterSpecs = true
-                            if !ownBlock && !namesIt { continue }
+                            let own = namesIt || inOwnSheet || ((sinceNamed.map { $0 <= 1 } ?? false) && !sheetSinceNamed)
+                            sheetSinceNamed = true
+                            inOwnSheet = own
+                            if !own { continue }
                         } else {
-                            // The paragraph after a block's specs begins the next film's.
-                            if afterSpecs { ownBlock = false }
-                            afterSpecs = false
-                            if namesIt { ownBlock = true } else { continue }
+                            inOwnSheet = false
+                            if namesIt {
+                                sinceNamed = 0
+                                sheetSinceNamed = false
+                            } else {
+                                sinceNamed = sinceNamed.map { $0 + 1 }
+                                continue
+                            }
                         }
                     }
                     // "He wanted…" right after a sentence about the cinematographer is theirs too.
@@ -336,16 +343,18 @@ public struct TechSpecs: Equatable, Sendable {
         var cameras = Set<String>(), titles = Set<String>()
         let own = title.lowercased()
         let paragraphs = text.sections.flatMap(\.paragraphs)
-        // Spec sheets for several films: "Camera:" twice or more among four or more labels (one
-        // film's own article prints its sheet once).
-        let labels = paragraphs.reduce(into: (all: 0, cameras: 0)) { count, paragraph in
-            let range = NSRange(paragraph.startIndex..., in: paragraph)
-            for match in specLabel.matches(in: paragraph, range: range) {
-                count.all += 1
-                if let word = Range(match.range(at: 1), in: paragraph), paragraph[word].lowercased().hasPrefix("camera") { count.cameras += 1 }
+        // Spec sheets for several films: "Camera:" and "Lenses:" each in two or more paragraphs (one
+        // film's own article prints its sheet once, "A Camera: … B Camera: …" included).
+        var cameraSheets = 0, lensSheets = 0
+        for paragraph in paragraphs {
+            var labels = Set<String>()
+            for match in specLabel.matches(in: paragraph, range: NSRange(paragraph.startIndex..., in: paragraph)) {
+                if let word = Range(match.range(at: 1), in: paragraph) { labels.insert(String(paragraph[word].lowercased().prefix(4))) }
             }
+            if labels.contains("came") { cameraSheets += 1 }
+            if labels.contains("lens") { lensSheets += 1 }
         }
-        if labels.all >= 4, labels.cameras >= 2 { return true }
+        if cameraSheets >= 2, lensSheets >= 2 { return true }
         for paragraph in paragraphs {
             for rule in rules where rule.kind == .camera {
                 for (name, _) in rule.found(in: paragraph) { cameras.insert(name.lowercased()) }
@@ -365,10 +374,12 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     /// Tests spoken of: the sentence after says what was tried.
-    static let testsDone = try! NSRegularExpression(pattern: #"\b(?:tests?|tested|testing|camera trials?)\b"#, options: [.caseInsensitive])
+    static let testsDone = try! NSRegularExpression(
+        pattern: #"\b(?:camera|lens|lenses|stock|film|format|digital|look|image|photographic)\s+tests?\b|\b(?:i|we|he|she|they)\s+(?:also\s+)?(?:did|performed|ran|shot|conducted|made|tested)\b[^.]{0,40}\btests?\b|\b(?:i|we|he|she|they)\s+tested\b"#,
+        options: [.caseInsensitive])
     /// What was chosen after the tests.
     static let chosenAfter = try! NSRegularExpression(
-        pattern: #"\b(?:in the end|ultimately|finally|eventually|chose|chosen|decided|settled on|went with|opted|so we (?:shot|used)|for the (?:film|shoot|production|movie|rest)|principal photography|main camera)\b"#,
+        pattern: #"\b(?:in the end|ultimately|finally|eventually|chose|chosen|decided|settled on|went with|opted|so we (?:shot|used)|for the (?:film|shoot|production|movie|rest)|principal photography|main camera|(?:the film|the movie|it|the production|the picture) was (?:shot|filmed|photographed|captured))\b"#,
         options: [.caseInsensitive])
 
     /// A spec sheet's label: "Camera:", "Lenses:", "Format:", "Film stock:".
@@ -946,7 +957,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|growing up|(?:in (?:his|her|my|their) )?childhood|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".
@@ -1105,7 +1116,7 @@ public struct TechSpecs: Equatable, Sendable {
         // A Moviecam camera: a model ("Moviecam Compact"), "Moviecam cameras" or "a/the Moviecam".
         // Alone it's the lenses ("Arri Rental Moviecam (Olympus OM)", "Fraser used Moviecam, which was
         // sharp in texture", "the Moviecams… their ability to resolve").
-        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+(?:Compact|SL|Super\s+America)\b|(?=\s+cameras?\b)|(?<=\b(?:a|an|the|our|his|her|their|two|three)\sMoviecam)\b(?!\s+(?:lenses|lens|primes|optics|glass|\()))"#),
+        Rule(.camera, #"(?<!by )(?<!Rental )\bMoviecam(?:\s+(?:Compacts?|SL|Super\s+America)\b|(?=\s+cameras?\b)|(?<=\b(?:a|an|the|our|his|her|their|two|three)\sMoviecam)\b(?!\s+(?:lenses|lens|primes|optics|glass|\()))"#),
         Rule(.camera, #"\bMitchell\s+(?:BNCR?|NC|Mark\s+II|65|camera)\b"#),
         Rule(.camera, #"\bBlackmagic\s+(?:URSA(?:\s+Mini)?(?:\s+Pro)?(?:\s+\d{1,2}(?:\.\d)?K)?|Pocket\s+Cinema\s+Camera(?:\s+\dK)?|Cinema\s+Camera(?:\s+\dK)?)"#),
         Rule(.camera, #"\bCanon\s+(?:EOS\s+)?(?:C\d{2,3}(?:\s+Mark\s+(?:II|III))?|5D(?:\s+Mark\s+(?:II|III|IV))?|7D|XL[12]s?|R5\s?C?)\b"#),

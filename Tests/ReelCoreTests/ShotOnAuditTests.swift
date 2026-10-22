@@ -42,6 +42,31 @@ final class ShotOnAuditTests: XCTestCase {
         XCTAssertEqual(tests.shotOn, [])
         XCTAssertEqual(read(["We tested many cameras. In the end we shot on the Arri Alexa 65."]).craft.shotOn, [.digital])
         XCTAssertEqual(read(["After testing, they chose Kodak Double-X. We shot on 35mm film."]).craft.shotOn.contains(.film), true)
+        XCTAssertEqual(read(["We did weeks of camera tests. The film was shot on the Alexa 65 with Ultra Vista lenses."]).craft.shotOn, [.digital])
+        XCTAssertEqual(read(["The costume and makeup tests began in May. Doe shot on Kodak 5219."]).craft.shotOn, [.film],
+                       "tests of something else")
+    }
+
+    func testAFilmAboutChildhoodIsStillThisFilm() {
+        XCTAssertEqual(tags("To capture the haze of childhood memory, we shot on Super 16."), [.film])
+        XCTAssertEqual(tags("When I was a kid I shot everything on my father's Super 8 camera."), [])
+    }
+
+    /// One film's own sheet with an A and a B camera isn't a round-up; nor is the next film's sheet ours
+    /// when our entry has none.
+    func testRoundUpsAreSeveralFilmsSheets() {
+        let own = read(["A Camera: ARRI Alexa 35 B Camera: Sony Venice 2 Lenses: Cooke S7/i Format: Digital",
+                        "Doe lit the house with practicals."]).specs
+        XCTAssertTrue(own.roundups.isEmpty)
+        let roundup = read([
+            "The Quiet Harbour Dir. Carl Example, DP: Jane Doe — a ghost story told in long takes and fog.",
+            "Glass Rivers Dir. Dana Example, DP: Eve Sample — two sisters and a river that keeps rising.",
+            "We wanted the water to feel like a character, so everything was handheld and close.",
+            "Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i",
+            "Sun Over Water Dir. Ann Example, DP: Bob Sample — a summer at the coast, remembered.",
+            "Format: Super 16mm Camera: ARRIFLEX 416 Lenses: Zeiss Ultra 16",
+        ], source: "IndieWire").craft
+        XCTAssertEqual(roundup.shotOn, [], "the next film's sheet isn't ours")
     }
 
     func testTheMagazinesOwnLinesAreNotTheFilmmakers() {

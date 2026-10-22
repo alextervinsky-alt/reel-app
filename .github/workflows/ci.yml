@@ -162,7 +162,7 @@ jobs:
           ) &
           wait $pid || true
           ls -la screens
-          echo "::notice::Rendered $(ls screens | wc -l | tr -d ' ') screens"
+          echo "::notice::Rendered $(ls screens/*.png 2>/dev/null | wc -l | tr -d ' ') screens"
       - uses: actions/upload-artifact@v6
         if: always()
         with:

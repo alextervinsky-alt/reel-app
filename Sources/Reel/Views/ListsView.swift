@@ -18,7 +18,8 @@ struct ListsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 46) {
+            // Lazy: a section is made as it comes into view, so scrolling lays out only what's showing.
+            LazyVStack(alignment: .leading, spacing: 46) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Lists").font(.system(size: 30, weight: .bold))
                     Text("Critics' polls, festival winners and rankings, to find the next film worth watching.")
@@ -317,7 +318,8 @@ struct IMDbSection: View {
             // Three posters for each card.
             guard let client = model.tmdb else { return }
             let lists = model.lists
-            await model.loadAcclaimed(year: year)
+            // The card only: no critics asked for (the list asks when opened).
+            await model.loadAcclaimed(year: year, askCritics: false)
             let kinds: [FilmListKind] = [.acclaimed(year), .imdbAllTime, .imdbYear(year), .imdbDecade(decade), .imdbMostVoted]
             await lists.resolve(kinds.flatMap { lists.films(for: $0).prefix(3) }, using: client)
         }

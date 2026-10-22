@@ -124,8 +124,8 @@ extension AppModel {
             }
         case .acclaimed:
             await loadAcclaimed(year: year)
-            guard lists.imdbIsReady else {
-                if lists.imdbFailed { bestOfMissing.insert(key) }
+            guard lists.imdbIsReady, lists.acclaimed[year] != nil else {
+                if lists.imdbFailed || (lists.imdbIsReady && tmdb != nil) { bestOfMissing.insert(key) }
                 return
             }
             films = lists.films(for: .acclaimed(year)).prefix(40).map { ($0, $0.note) }
@@ -151,16 +151,31 @@ extension AppModel {
     // MARK: The most acclaimed
 
     /// Works out a year's most acclaimed films (see `Acclaim`), once a session: its best-known
-    /// films and the award lists' films of the year, with TMDB's audience and, for the 60 most
+    /// films and the award lists' films of the year, with TMDB's audience and, for the 40 most
     /// likely, the critics' scores (OMDb, kept a month). Without an OMDb key, audiences, how widely
-    /// seen and the prizes decide.
-    func loadAcclaimed(year: Int) async {
+    /// seen and the prizes decide. `askCritics` false (the Lists card): only critics' scores already
+    /// kept, so browsing years there spends no OMDb requests; the list itself asks for the rest.
+    /// Asked for twice at once, it's worked out once.
+    func loadAcclaimed(year: Int, askCritics: Bool = true) async {
+        let done = lists.acclaimed[year] != nil && (!askCritics || acclaimedWithCritics.contains(year))
+        guard !done else { return }
+        if let running = acclaimedTasks[year] {
+            await running.value
+            if !askCritics || acclaimedWithCritics.contains(year) { return }
+        }
+        let task = Task { await workOutAcclaimed(year: year, askCritics: askCritics) }
+        acclaimedTasks[year] = task
+        await task.value
+        acclaimedTasks[year] = nil
+    }
+
+    private func workOutAcclaimed(year: Int, askCritics: Bool) async {
         let lists = self.lists
-        guard lists.acclaimed[year] == nil, !lists.acclaimedLoading.contains(year), let client = tmdb else { return }
-        await lists.load(.acclaimed(year))
-        guard lists.imdbIsReady else { return }
+        guard let client = tmdb else { return }
         lists.setAcclaimedLoading(true, year: year)
         defer { lists.setAcclaimedLoading(false, year: year) }
+        await lists.load(.acclaimed(year))
+        guard lists.imdbIsReady else { return }
         await lists.loadAllAwards()
         let prizes = Acclaim.prizes(AwardList.allCases.map { ($0, lists.films(for: .award($0))) }, year: year)
         let pool = Acclaim.pool(lists.imdbFilms(year: year), year: year, awarded: Set(prizes.keys))
@@ -178,37 +193,49 @@ extension AppModel {
                                      prize: prize?.prize, prizeName: prize?.name)
         }
         // The critics, for the films most likely to make the list (their scores are what's missing).
-        if let omdb = omdbClient {
-            let likely = Acclaim.rank(candidates).prefix(60).map { $0.candidate.film.id }
+        if let omdb = omdbClient, askCritics {
+            let likely = Acclaim.rank(candidates).prefix(40).map { $0.candidate.film.id }
             let wanted = likely.filter { lists.criticScores($0) == nil }
             var found: [String: CriticScores] = [:]
-            for start in stride(from: 0, to: wanted.count, by: 6) {
+            var refused = false
+            for start in stride(from: 0, to: wanted.count, by: 6) where !refused {
                 let batch = Array(wanted[start..<min(start + 6, wanted.count)])
-                let scores = await withTaskGroup(of: (String, CriticScores?).self, returning: [(String, CriticScores?)].self) { group in
+                let scores = await withTaskGroup(of: (String, CriticsAnswer).self, returning: [(String, CriticsAnswer)].self) { group in
                     for id in batch {
                         group.addTask {
                             // Answered with no scores: kept as none. Not reached: asked again next time.
                             do {
                                 let ratings = try await omdb.ratings(imdbID: id)
-                                return (id, CriticScores(metacritic: ratings?.metacritic, rottenTomatoes: ratings?.rottenTomatoes))
+                                return (id, .answered(CriticScores(metacritic: ratings?.metacritic, rottenTomatoes: ratings?.rottenTomatoes)))
+                            } catch OMDbError.unauthorized {
+                                return (id, .refused)
                             } catch {
-                                return (id, nil)
+                                return (id, .unreached)
                             }
                         }
                     }
-                    var all: [(String, CriticScores?)] = []
+                    var all: [(String, CriticsAnswer)] = []
                     for await result in group { all.append(result) }
                     return all
                 }
-                for (id, score) in scores { if let score { found[id] = score } }
+                for (id, answer) in scores {
+                    switch answer {
+                    case .answered(let score): found[id] = score
+                    // The day's requests are used up (or the key is wrong): no more asked now.
+                    case .refused: refused = true
+                    case .unreached: break
+                    }
+                }
             }
             lists.keepCriticScores(found)
-            for index in candidates.indices {
-                guard let scores = lists.criticScores(candidates[index].film.id) else { continue }
-                candidates[index].metacritic = scores.metacritic
-                candidates[index].rottenTomatoes = scores.rottenTomatoes
-            }
         }
+        // What the critics said, as far as it's known.
+        for index in candidates.indices {
+            guard let scores = lists.criticScores(candidates[index].film.id) else { continue }
+            candidates[index].metacritic = scores.metacritic
+            candidates[index].rottenTomatoes = scores.rottenTomatoes
+        }
+        if askCritics { acclaimedWithCritics.insert(year) }
         let ranked = Acclaim.rank(candidates).prefix(50)
         acclaimedPrizes[year] = Dictionary(ranked.compactMap { entry in entry.candidate.prizeName.map { (entry.candidate.film.id, $0) } },
                                            uniquingKeysWith: { first, _ in first })
@@ -217,5 +244,10 @@ extension AppModel {
                      note: Acclaim.note(entry.candidate))
         }, year: year)
     }
+}
+
+/// OMDb's answer for one film's critics.
+private enum CriticsAnswer: Sendable {
+    case answered(CriticScores), refused, unreached
 }
 #endif

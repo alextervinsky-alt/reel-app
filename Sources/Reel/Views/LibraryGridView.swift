@@ -128,7 +128,7 @@ struct LibraryGridView: View {
         }
         .onDisappear {
             scroll.pointed = nil
-            model.userIsScrolling = false
+            scroll.phaseChanged(scrolling: false, model: model)
         }
         // The poster under the pointer is gone once the list replaces the grid.
         .onChange(of: asList) { scroll.pointed = nil }

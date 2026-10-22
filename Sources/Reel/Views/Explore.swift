@@ -32,7 +32,8 @@ struct ExploreView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 38) {
+            // Lazy: a row is made as it comes into view, so scrolling lays out only what's showing.
+            LazyVStack(alignment: .leading, spacing: 38) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -264,7 +265,8 @@ struct BestOfRow: View {
             // IMDb's ranking shows IMDb's rating, not TMDB's (the order would look random by TMDB's).
             DiscoverCard(film: film, width: 146,
                          rank: source == .tmdb || source == .imdb || source == .acclaimed ? all.firstIndex { $0.id == film.id }.map { $0 + 1 } : nil,
-                         reason: source == .awards ? film.note : film.reason,
+                         // A line kept for the prize on every card, so the scores line up.
+                         reason: source == .awards ? film.note : film.reason ?? (source == .acclaimed ? " " : nil),
                          ratingLine: source == .imdb || source == .acclaimed ? film.note : nil, onPreview: onPreview)
         }
     }

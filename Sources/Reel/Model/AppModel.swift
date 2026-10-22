@@ -101,6 +101,9 @@ final class AppModel {
     var bestOfLists: [String: [PreviewFilm]] = [:]
     /// The prizes of each year's most acclaimed films, by IMDb id ("Palme d'Or"), for their cards.
     @ObservationIgnored var acclaimedPrizes: [Int: [String: String]] = [:]
+    /// Years worked out with the critics asked (not only those already kept), and those under way.
+    @ObservationIgnored var acclaimedWithCritics: Set<Int> = []
+    @ObservationIgnored var acclaimedTasks: [Int: Task<Void, Never>] = [:]
     var bestOfLoading: Set<String> = []
     /// Couldn't be found (offline, or IMDb's ratings failed to download): the row offers to try again.
     var bestOfMissing: Set<String> = []
@@ -220,6 +223,9 @@ final class AppModel {
     /// Goes up each time the library's films are built again (a cache key).
     @ObservationIgnored var libraryVersion = 0
     /// Every film on the lists, once each (see `listPicks`), until the lists change.
+    /// Counts up when the lists' picks are due to be worked in again (see `refreshListsSoon`).
+    var listsTick = 0
+    @ObservationIgnored var listsTickPending = false
     @ObservationIgnored var listPicksCache: (stamp: Int, art: Int, at: Date, all: [ListPick], byFilm: [String: ListPick])?
     /// The Lists hub's Start Here (see `startHere`), until something it shows changes.
     @ObservationIgnored var startHereCache: (stamp: StartHereStamp, picks: Int, at: Date,

@@ -49,13 +49,29 @@ extension AppModel {
         // films up across lists: worked in every few seconds, not on every batch, which redrew the
         // page mid-scroll with a fresh count each time.
         let art = self.lists.art.count
-        if let cached = listPicksCache, cached.stamp == stamp,
-           cached.art == art || Date().timeIntervalSince(cached.at) < 5 { return (cached.all, cached.byFilm) }
+        _ = listsTick
+        if let cached = listPicksCache, cached.stamp == stamp, cached.art == art { return (cached.all, cached.byFilm) }
+        if let cached = listPicksCache, cached.stamp == stamp, Date().timeIntervalSince(cached.at) < 5 {
+            refreshListsSoon(after: 5 - Date().timeIntervalSince(cached.at))
+            return (cached.all, cached.byFilm)
+        }
         let picks = ListConsensus.gather(lists) { self.lists.tmdbID($0) }
         var byFilm: [String: ListPick] = [:]
         for pick in picks { for id in pick.ids { byFilm[id] = pick } }
         listPicksCache = (stamp, art, Date(), picks, byFilm)
         return (picks, byFilm)
+    }
+
+    /// Has what shows the lists' picks drawn again once the few seconds are up, so the last
+    /// posters to arrive are worked in even when nothing else changes.
+    private func refreshListsSoon(after seconds: TimeInterval) {
+        guard !listsTickPending else { return }
+        listsTickPending = true
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0.1, seconds)))
+            self?.listsTickPending = false
+            self?.listsTick &+= 1
+        }
     }
 
     /// The library film a list pick is, if any.
@@ -76,9 +92,11 @@ extension AppModel {
         let stamp = StartHereStamp(library: libraryVersion, films: items.count, art: lists.art.count, briefs: lists.briefs.count,
                                    seen: personal.watchedIDs.hashValue, wishlist: wishlistIDs.count, ratings: personal.ratingsVersion)
         let picks = listPicks().all
-        if let cached = startHereCache, cached.picks == picks.count,
-           cached.stamp == stamp || (cached.stamp.withoutPictures == stamp.withoutPictures && Date().timeIntervalSince(cached.at) < 5) {
+        if let cached = startHereCache, cached.picks == picks.count, cached.stamp == stamp { return cached.value }
+        if let cached = startHereCache, cached.picks == picks.count, cached.stamp.withoutPictures == stamp.withoutPictures,
+           Date().timeIntervalSince(cached.at) < 5 {
             // Only posters and briefs arrived meanwhile: worked in every few seconds (see `listPicks`).
+            refreshListsSoon(after: 5 - Date().timeIntervalSince(cached.at))
             return cached.value
         }
 

@@ -13,16 +13,24 @@ final class ScrollState {
     /// The poster under the pointer, for Space (Quick Look).
     @ObservationIgnored var pointed: LibraryItem?
 
+    /// The scroll views moving now (a page, and a row scrolled inside it).
+    @ObservationIgnored private var moving: Set<UUID> = []
+    /// For a page with one scroll view of its own.
+    static let page = UUID()
+
     /// A scroll started or stopped: the lifted card settles as it starts; the card the pointer came
-    /// to rest on lifts once it stops. The library's updates wait meanwhile (`AppModel.userIsScrolling`).
-    func phaseChanged(scrolling: Bool, model: AppModel) {
-        if scrolling && !isScrolling {
+    /// to rest on lifts once every scroll has stopped. The library's updates wait meanwhile
+    /// (`AppModel.userIsScrolling`).
+    func phaseChanged(scrolling: Bool, of scroller: UUID = ScrollState.page, model: AppModel) {
+        if scrolling { moving.insert(scroller) } else { moving.remove(scroller) }
+        let now = !moving.isEmpty
+        if now && !isScrolling {
             endHover?()
             endHover = nil
         }
-        let stopped = !scrolling && isScrolling
-        isScrolling = scrolling
-        model.userIsScrolling = scrolling
+        let stopped = !now && isScrolling
+        isScrolling = now
+        model.userIsScrolling = now
         if stopped {
             waiting?.lift()
             waiting = nil
@@ -50,16 +58,16 @@ private struct TracksScrolling: ViewModifier {
     @Environment(AppModel.self) private var model
     @Environment(ScrollState.self) private var outer: ScrollState?
     @State private var own = ScrollState()
+    @State private var id = UUID()
 
     func body(content: Content) -> some View {
         let scroll = outer ?? own
         content
-            .onScrollPhaseChange { _, phase in scroll.phaseChanged(scrolling: phase.isScrolling, model: model) }
+            .onScrollPhaseChange { _, phase in scroll.phaseChanged(scrolling: phase.isScrolling, of: id, model: model) }
             .environment(scroll)
             .onDisappear {
-                guard outer == nil else { return }
-                own.pointed = nil
-                if own.isScrolling { own.phaseChanged(scrolling: false, model: model) }
+                if outer == nil { own.pointed = nil }
+                scroll.phaseChanged(scrolling: false, of: id, model: model)
             }
     }
 }
