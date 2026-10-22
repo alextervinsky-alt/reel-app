@@ -46,6 +46,7 @@ struct FilmPage: View {
                     .frame(maxWidth: 1180, alignment: .leading)
                 }
             }
+            .tracksScrolling()
             .background(Theme.background)
             .ignoresSafeArea(.container, edges: .top)
             .navigationTitle("")
@@ -426,6 +427,7 @@ struct OverviewTab: View {
                     }
                 }
             }
+            .tracksScrolling()
         }
     }
 
@@ -632,7 +634,7 @@ struct PairItWith: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .animation(.easeOut(duration: 0.15), value: hovering)
         .help("A double feature from your library")
     }
@@ -659,7 +661,7 @@ struct PersonLink: View {
                     .foregroundStyle(hovering ? Theme.brand : Color.primary)
             }
             .buttonStyle(.plain)
-            .onHover { hovering = $0 }
+            .scrollAwareHover($hovering)
             .help("See all films by \(name)")
         } else {
             Text(name).font(.system(size: 13.5))
@@ -792,6 +794,7 @@ struct ReceptionTab: View {
                 }
             }
         }
+        .tracksScrolling()
     }
 
     private func tile(_ value: String, source: String, detail: String?, accent: Color? = nil) -> some View {
@@ -958,7 +961,7 @@ private struct StillTile: View {
         .contextMenu {
             Button("Not a Frame from the Film", action: hide)
         }
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .animation(.easeOut(duration: 0.15), value: hovering)
     }
 }

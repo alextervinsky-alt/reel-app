@@ -36,6 +36,7 @@ struct ListsView: View {
             .padding(.top, 18)
             .padding(.bottom, 48)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("Lists")
         .filmPreviewSheet($preview)
@@ -93,6 +94,7 @@ struct ListsView: View {
                     }
                     .padding(.vertical, 6)
                 }
+                .tracksScrolling()
             }
         }
     }
@@ -259,6 +261,7 @@ struct StartHereSection: View {
                 }
                 .padding(.vertical, 6)
             }
+            .tracksScrolling()
         }
     }
 }
@@ -611,7 +614,7 @@ private struct ListTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .task(id: list) { await model.loadDiscover(list) }
     }
 }
@@ -648,7 +651,7 @@ struct SetCard: View {
             }
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .scaleEffect(hovering ? 1.03 : 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.82), value: hovering)
         .help("\(progress.owned) of \(progress.total) in your library, \(progress.seen) seen")
@@ -754,7 +757,7 @@ struct ListCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .animation(.easeOut(duration: 0.15), value: hovering)
     }
 

@@ -28,7 +28,7 @@ struct CinemaTonight: View {
                 page(items).snapshotPage()
             } else {
                 // Tall columns scroll down; more films than fit scroll sideways.
-                ScrollView(.vertical) { page(items) }
+                ScrollView(.vertical) { page(items) }.tracksScrolling()
                     .scrollIndicators(.hidden)
             }
         }
@@ -107,7 +107,7 @@ struct CinemaTonight: View {
                 columns(items).snapshotRow()
             } else {
                 ScrollViewReader { proxy in
-                    ScrollView(.horizontal) { columns(items) }
+                    ScrollView(.horizontal) { columns(items) }.tracksScrolling()
                         .scrollIndicators(.hidden)
                         .onChange(of: focus) { _, place in
                             guard case .film(let id)? = place else { return }

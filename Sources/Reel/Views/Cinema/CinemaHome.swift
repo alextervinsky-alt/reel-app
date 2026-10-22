@@ -72,6 +72,7 @@ private struct CinemaHomeContent: View {
                             .padding(.top, 130)
                             .padding(.bottom, 80)
                     }
+                    .tracksScrolling()
                     .scrollIndicators(.hidden)
                     .onChange(of: selection?.row) { _, row in
                         guard followSelection, let row else { return }
@@ -283,6 +284,7 @@ struct CinemaRowView: View {
                             .padding(.horizontal, Cinema.gutter)
                             .padding(.vertical, 14)
                     }
+                    .tracksScrolling()
                     .scrollIndicators(.hidden)
                     .onChange(of: selected) { _, index in
                         guard followSelection, let index, items.indices.contains(index) else { return }

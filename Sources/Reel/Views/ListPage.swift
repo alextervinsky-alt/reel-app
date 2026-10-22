@@ -93,6 +93,7 @@ struct ListPage: View {
             .padding(.vertical, 22)
             .frame(maxWidth: 1080, alignment: .leading)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle(kind.title)
         .filmPreviewSheet($preview)
@@ -324,7 +325,7 @@ struct ListRow: View {
         .padding(.horizontal, 16)
         .frame(height: 84)
         .background(hovering ? Color.white.opacity(0.035) : Color.clear)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .onAppear {
             if art == nil, let client = model.tmdb { model.lists.want(film, using: client) }
         }
@@ -481,6 +482,7 @@ struct FranchisePage: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle(route.name)
         .filmPreviewSheet($preview)

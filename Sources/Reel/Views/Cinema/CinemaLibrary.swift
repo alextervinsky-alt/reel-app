@@ -70,6 +70,7 @@ struct CinemaLibrary: View {
                             withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                         }
                     }
+                    .tracksScrolling()
                     .scrollIndicators(.hidden)
                     .onChange(of: above) { _, now in
                         guard now != nil else { return }
@@ -198,7 +199,7 @@ struct CinemaLibrary: View {
             if isSnapshot {
                 row.snapshotRow()
             } else {
-                ScrollView(.horizontal) { row }
+                ScrollView(.horizontal) { row }.tracksScrolling()
                     .scrollIndicators(.hidden)
                     .scrollClipDisabled()
             }

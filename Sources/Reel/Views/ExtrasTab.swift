@@ -229,7 +229,7 @@ struct ExtraCard: View {
         }
         .buttonStyle(.plain)
         .disabled(!online)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .animation(.easeOut(duration: 0.15), value: hovering)
         .help(video.file.fileName)
     }
@@ -272,7 +272,7 @@ struct ExtraFileRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!online)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
     }
 
     private var detail: String {

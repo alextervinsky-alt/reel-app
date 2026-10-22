@@ -143,6 +143,7 @@ struct TonightView: View {
                         }
                         .padding(.bottom, 6)
                     }
+                    .tracksScrolling()
                     .scrollClipDisabled()
                 }
             }
@@ -150,6 +151,7 @@ struct TonightView: View {
             .padding(.vertical, 22)
             .onGeometryChange(for: CGFloat.self) { $0.size.width - 64 } action: { width = $0 }
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("Tonight")
         .onAppear { model.startNewEveningIfNeeded() }

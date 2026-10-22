@@ -68,6 +68,9 @@ enum ScrollTiming {
                 continue
             }
             let height = scroll.documentView?.frame.height ?? 0
+            // CI samples the main thread while each page scrolls (see the workflow): it starts on this line.
+            log("scroll begins: \(page.name)")
+            try? await Task.sleep(for: .milliseconds(600))
             let first = await pass(scroll, host: host)
             try? await Task.sleep(for: .seconds(1))
             let second = await pass(scroll, host: host)

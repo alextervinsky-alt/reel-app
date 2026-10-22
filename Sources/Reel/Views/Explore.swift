@@ -66,6 +66,7 @@ struct ExploreView: View {
             .padding(.top, 18)
             .padding(.bottom, 40)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("Explore")
         .filmPreviewSheet($preview)
@@ -212,6 +213,7 @@ struct BestOfRow: View {
                     LazyHStack(alignment: .top, spacing: 18) { cards(films) }
                         .padding(.vertical, 6)
                 }
+                .tracksScrolling()
             }
         }
         .task(id: "\(year)|\(source.rawValue)") { await load() }
@@ -352,6 +354,7 @@ struct DiscoverRow: View {
                     LazyHStack(alignment: .top, spacing: 18) { cards(films) }
                         .padding(.vertical, 6)
                 }
+                .tracksScrolling()
             }
         }
     }
@@ -424,6 +427,7 @@ struct DiscoverListPage: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle(list.title)
         .filmPreviewSheet($preview)
@@ -545,7 +549,7 @@ struct DiscoverCard: View {
             }
         }
         .frame(width: width)
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
     }
 
     /// Films you own open their page; others open the preview.
@@ -683,6 +687,7 @@ struct WishlistView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("Wishlist")
         .filmPreviewSheet($preview)
@@ -899,6 +904,7 @@ struct SimilarRow: View {
                 }
                 .padding(.vertical, 6)
             }
+            .tracksScrolling()
         }
     }
 }

@@ -49,6 +49,7 @@ struct RecommendedView: View {
             .padding(.vertical, 22)
             .frame(maxWidth: 1120, alignment: .leading)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("Recommended")
         // Play is right here: VLC gets a head start.
@@ -93,6 +94,7 @@ struct MoodChips: View {
                 }
             }
         }
+        .tracksScrolling()
         .scrollClipDisabled()
     }
 }
@@ -124,7 +126,7 @@ struct RecommendationCard: View {
                     .animation(.spring(response: 0.28, dampingFraction: 0.82), value: hovering)
             }
             .buttonStyle(.plain)
-            .onHover { hovering = $0 }
+            .scrollAwareHover($hovering)
 
             VStack(alignment: .leading, spacing: 9) {
                 // Why it's here (the one orange line), then the same order as everywhere else.

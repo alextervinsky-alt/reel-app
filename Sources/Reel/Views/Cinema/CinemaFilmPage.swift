@@ -27,7 +27,7 @@ struct CinemaFilmPage: View {
                         content(film, heroHeight: heroHeight).snapshotPage()
                     } else {
                         ScrollViewReader { proxy in
-                            ScrollView { content(film, heroHeight: heroHeight) }
+                            ScrollView { content(film, heroHeight: heroHeight) }.tracksScrolling()
                                 .scrollIndicators(.hidden)
                                 .onChange(of: focus?.row) { _, row in
                                     guard let row else { return }

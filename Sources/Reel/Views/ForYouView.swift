@@ -50,6 +50,7 @@ struct ForYouView: View {
             .padding(.vertical, 22)
             .frame(maxWidth: 1120, alignment: .leading)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("For You")
         .filmPreviewSheet($preview)
@@ -80,6 +81,7 @@ struct ForYouView: View {
                         }
                     }
                 }
+                .tracksScrolling()
             }
         }
     }
@@ -172,7 +174,7 @@ struct ForYouCard: View {
                     .animation(.spring(response: 0.28, dampingFraction: 0.82), value: hovering)
             }
             .buttonStyle(.plain)
-            .onHover { hovering = $0 }
+            .scrollAwareHover($hovering)
 
             VStack(alignment: .leading, spacing: 9) {
                 Text(pick.reason.uppercased())

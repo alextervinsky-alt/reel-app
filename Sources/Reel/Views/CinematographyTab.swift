@@ -610,7 +610,7 @@ private struct SpecValue: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering = $0 }
+                .scrollAwareHover($hovering)
                 .help("What is it?")
                 if open {
                     Text(explanation)

@@ -171,7 +171,7 @@ struct FilmListRow: View {
         .background(hovering ? Color.white.opacity(0.045) : Color.clear)
         .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1) }
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
+        .scrollAwareHover($hovering)
         .contextMenu {
             Button("Play") { model.play(film) }.disabled(!item.isOnline)
             Button(model.isTonight(item.id) ? "Remove from Tonight" : "Add to Tonight") { model.toggleTonight(item.id) }

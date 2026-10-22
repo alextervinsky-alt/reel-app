@@ -49,7 +49,8 @@ final class LiveShotOnTests: XCTestCase {
         // a round-up's other films.
         Known(title: "Dune: Part Two", year: 2024, has: [.digital, .imax], hasNot: [.film]),
         Known(title: "Alien: Romulus", year: 2024, has: [.digital], hasNot: [.film, .anamorphic]),
-        Known(title: "The Black Phone", year: 2021, has: [.digital], hasNot: [], partOnly: [.film]),
+        // Digital, with Super 8 for the dreams (Film and Digital both show when a film mixes them).
+        Known(title: "The Black Phone", year: 2021, has: [.digital, .film], hasNot: []),
         Known(title: "Megalopolis", year: 2024, has: [.digital], hasNot: [.film]),
         Known(title: "All We Imagine as Light", year: 2024, has: [], hasNot: [.blackAndWhite]),
     ]

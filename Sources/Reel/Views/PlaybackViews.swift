@@ -698,7 +698,6 @@ struct SimilarRoute: Hashable {
 struct MoreLikeThisPage: View {
     @Environment(AppModel.self) private var model
     let route: SimilarRoute
-    @State private var scroll = ScrollState()
 
     var body: some View {
         let film = model.film(id: route.filmID)
@@ -729,7 +728,7 @@ struct MoreLikeThisPage: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
         }
-        .environment(scroll)
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle("More Like This")
     }

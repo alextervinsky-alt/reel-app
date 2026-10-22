@@ -54,6 +54,7 @@ struct PersonPage: View {
             .padding(.vertical, 28)
             .frame(maxWidth: 1180, alignment: .leading)
         }
+        .tracksScrolling()
         .background(Theme.background)
         .navigationTitle(route.name)
         .filmPreviewSheet($preview)
@@ -172,6 +173,7 @@ struct PersonPage: View {
                             }
                         }
                     }
+                    .tracksScrolling()
                 }
             }
             LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {

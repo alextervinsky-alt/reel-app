@@ -140,7 +140,16 @@ jobs:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
         run: |
           mkdir -p screens
-          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 420; exec @ARGV' build/Reel.app/Contents/MacOS/Reel
+          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 420; exec @ARGV' build/Reel.app/Contents/MacOS/Reel &
+          pid=$!
+          # Where the main thread's time goes while each page scrolls: a sample of the process per page.
+          (
+            for page in "Film page" "Explore" "Lists" "All Films"; do
+              until grep -q "scroll begins: ${page}" screens/progress.txt 2>/dev/null; do kill -0 $pid 2>/dev/null || exit 0; sleep 0.3; done
+              sudo sample $pid 6 -mayDie -file "screens/sample-${page// /-}.txt" >/dev/null 2>&1 || true
+            done
+          ) &
+          wait $pid || true
           ls -la screens
           echo "::notice::Rendered $(ls screens | wc -l | tr -d ' ') screens"
       - uses: actions/upload-artifact@v6

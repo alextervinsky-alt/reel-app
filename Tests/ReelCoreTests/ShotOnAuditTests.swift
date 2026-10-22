@@ -25,14 +25,16 @@ final class ShotOnAuditTests: XCTestCase {
                        [], "the Moviecams, resolving: lenses")
     }
 
+    /// Film and Digital both show when a film mixes them; "in part" is for the other tags.
     func testWhatsUsedForPartOfTheFilmIsInPart() {
-        let dreams = read(["The camera crew shot the dream sequences in Super 8 format, a habit of the director's, using Bolex cameras."]).craft
-        XCTAssertEqual(dreams.shotOn, [.film])
-        XCTAssertEqual(dreams.evidence(for: .film)?.partial, true, "the cameras of a clause about the dream sequences")
-        let fast = read(["Doe shot the film on Kodak 5219.", "A Phantom Flex camera was also used for some high-speed work."]).craft
-        XCTAssertEqual(fast.evidence(for: .digital)?.partial, true)
-        XCTAssertEqual(fast.evidence(for: .film)?.partial, false)
-        XCTAssertEqual(read(["We shot the film using Arri Alexa 35 cameras."]).craft.evidence(for: .digital)?.partial, false)
+        let dreams = read(["The camera crew shot the dream sequences on 35mm film, a habit of the director's, using anamorphic lenses."]).specs
+        XCTAssertEqual(dreams.specs.first { $0.name.lowercased().contains("anamorphic") }?.partial, true,
+                       "the lenses of a clause about the dream sequences")
+        let aerial = read(["Doe shot the film on Kodak 5219.", "An IMAX camera was also used for some aerial work."]).craft
+        XCTAssertEqual(aerial.evidence(for: .imax)?.partial, true)
+        XCTAssertEqual(aerial.label(for: .imax), "IMAX (in part)")
+        let whole = read(["We shot the film using Arri Alexa 35 cameras with anamorphic lenses."]).craft
+        XCTAssertEqual(whole.evidence(for: .anamorphic)?.partial, false)
     }
 
     func testTheMagazinesOwnLinesAreNotTheFilmmakers() {

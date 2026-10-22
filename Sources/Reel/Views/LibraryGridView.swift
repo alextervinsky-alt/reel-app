@@ -3,19 +3,6 @@ import AppKit
 import SwiftUI
 import ReelCore
 
-/// Scrolling and hover, shared by a grid and its posters. Nothing here is observed, so starting or
-/// stopping a scroll redraws no poster except the one under the pointer, which is told to settle.
-@Observable @MainActor
-final class ScrollState {
-    @ObservationIgnored var isScrolling = false
-    /// Settles the lifted poster (set by the poster the pointer is on).
-    @ObservationIgnored var endHover: (() -> Void)?
-    /// The poster that came under the pointer while scrolling: lifted when the scroll stops.
-    @ObservationIgnored var waiting: (id: String, lift: () -> Void)?
-    /// The poster under the pointer, for Space (Quick Look).
-    @ObservationIgnored var pointed: LibraryItem?
-}
-
 struct LibraryGridView: View {
     @Environment(AppModel.self) private var model
     let shelf: Shelf
@@ -117,20 +104,7 @@ struct LibraryGridView: View {
                 }
             }
         }
-        .onScrollPhaseChange { _, phase in
-            let isScrolling = phase.isScrolling
-            if isScrolling && !scroll.isScrolling {
-                scroll.endHover?()
-                scroll.endHover = nil
-            }
-            let stopped = !isScrolling && scroll.isScrolling
-            scroll.isScrolling = isScrolling
-            model.userIsScrolling = isScrolling
-            if stopped {
-                scroll.waiting?.lift()
-                scroll.waiting = nil
-            }
-        }
+        .onScrollPhaseChange { _, phase in scroll.phaseChanged(scrolling: phase.isScrolling, model: model) }
         .environment(scroll)
         .background(Theme.background)
         // The banner reaches the top of the window, like a film page's backdrop.
@@ -930,23 +904,9 @@ struct PosterCard: View, Equatable {
             }
         }
         .contentShape(Rectangle())
-        .onHover { inside in
-            // Read here, not while drawing: scrolling never redraws the cards.
-            let hover = $hovering
-            let scroll = scroll
-            let lift = {
-                hover.wrappedValue = true
-                scroll.endHover = { hover.wrappedValue = false }
-            }
+        .scrollAwareHover($hovering) { [scroll, item] inside in
+            // The poster under the pointer, for Space.
             if inside { scroll.pointed = item } else if scroll.pointed?.id == item.id { scroll.pointed = nil }
-            if !inside {
-                hovering = false
-                if scroll.waiting?.id == item.id { scroll.waiting = nil }
-            } else if scroll.isScrolling {
-                scroll.waiting = (item.id, lift)
-            } else {
-                lift()
-            }
         }
         .contextMenu { menu }
     }

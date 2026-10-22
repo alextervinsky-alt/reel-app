@@ -494,6 +494,7 @@ struct PosterRow: View {
                     }
                 }
             }
+            .tracksScrolling()
         }
     }
 
