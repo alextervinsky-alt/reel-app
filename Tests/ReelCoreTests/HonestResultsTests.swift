@@ -109,6 +109,22 @@ final class HonestResultsTests: XCTestCase {
 
     // MARK: What the review of 1.9.5 caught: real capture kept
 
+    /// Reel 1.9.6: the rest of a speech's quote ("Four out of five nominated films were shot on
+    /// celluloid…”"), and films counted in general.
+    func testTheRestOfASpeechIsntHowItWasShot() {
+        let quote = "In her acceptance speech, Doe said: “Celluloid is alive and kicking. Four out of five nominated films were shot on celluloid and it proves that film is resilient.” The Quiet Harbour was shot on Kodak 65mm negative."
+        let read = craft([quote], source: "British Cinematographer")
+        XCTAssertEqual(read.shotOn, [.film])
+        XCTAssertTrue(read.evidence(for: .film)?.text.hasPrefix("The Quiet Harbour was shot") ?? false, "\(read.evidence(for: .film)?.text ?? "")")
+        XCTAssertEqual(craft(["Doe won the BAFTA for Best Cinematography.", "Four out of five nominated films were shot on celluloid."],
+                             source: "British Cinematographer").shotOn, [], "films in general")
+        XCTAssertEqual(craft(["Doe shot the film on 35mm film; it was one of five nominated films shot that way."]).shotOn, [.film])
+        XCTAssertTrue(TechSpecs.quoteStaysOpen("He said: “Celluloid is alive.", wasOpen: false))
+        XCTAssertTrue(TechSpecs.quoteStaysOpen("It's easier than you think.", wasOpen: true))
+        XCTAssertFalse(TechSpecs.quoteStaysOpen("It looks so much better.”", wasOpen: true))
+        XCTAssertFalse(TechSpecs.quoteStaysOpen("He said: “It's alive.”", wasOpen: false))
+    }
+
     func testNarrowRulesKeepRealCapture() {
         // Transfers: a shooting verb after "to", or the copy's verb in another clause, isn't a transfer.
         XCTAssertEqual(craft(["After scanning the tests we switched to the Alexa 65 for the whole shoot."]).shotOn, [.digital])

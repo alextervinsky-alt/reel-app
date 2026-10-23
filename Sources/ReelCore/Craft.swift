@@ -49,7 +49,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// said of another film in a comparison aren't this film's.
     /// 7: a plan given up, what footage was transferred onto, an award speech and an interviewer's
     /// line aren't how it was shot; a stated share ("about 28 minutes of IMAX") is in part.
-    public static let currentVersion = 7
+    /// 8: the rest of an award speech's quote, and films counted in general ("four out of five
+    /// nominated films"), aren't how it was shot either.
+    public static let currentVersion = 8
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.

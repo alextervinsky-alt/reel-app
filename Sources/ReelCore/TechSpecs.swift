@@ -201,7 +201,12 @@ public struct TechSpecs: Equatable, Sendable {
                     var aboutThem = false
                     let sentences = Digest.sentences(in: paragraph)
                     var skipNext = false
+                    // Inside the quote of an award speech ("…said: “Celluloid is alive and kicking. Four
+                    // out of five nominated films were shot on celluloid…”"): not how this film was shot.
+                    var speaking = false
                     for (index, sentence) in sentences.enumerated() {
+                        let speech = speaking || matches(acceptanceSpeech, sentence)
+                        speaking = speech && quoteStaysOpen(sentence, wasOpen: speaking)
                         if skipNext {
                             skipNext = false
                             continue
@@ -246,7 +251,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(sentence.prefix(400)), source: text.source,
                                                       partial: part, share: share, wholeFilm: !part && saidOfWholeFilm(sentence, at: at),
-                                                      capture: said.captured && !tried, aboutThisFilm: said.aboutThisFilm))
+                                                      capture: said.captured && !tried && !speech, aboutThisFilm: said.aboutThisFilm))
                                 }
                             }
                         }
@@ -787,6 +792,15 @@ public struct TechSpecs: Equatable, Sendable {
         pattern: #"\b(?:entirely|completely|wholly|exclusively|in (?:its|their) entirety|from (?:start|beginning) to (?:finish|end)|(?:the )?(?:whole|entire) (?:film|movie|picture|feature|production|shoot)|all of the (?:film|movie|footage|picture)|every (?:frame|shot|scene))\b|\b100\s*(?:%|per ?cent)"#,
         options: [.caseInsensitive])
 
+    /// Whether a quote is still open after `sentence`: “ and ” counted, a lone " turning it.
+    static func quoteStaysOpen(_ sentence: String, wasOpen: Bool) -> Bool {
+        let opens = sentence.filter { $0 == "“" }.count, closes = sentence.filter { $0 == "”" }.count
+        var open = wasOpen
+        if opens != closes { open = opens > closes }
+        if sentence.filter({ $0 == "\"" }).count % 2 == 1 { open.toggle() }
+        return open
+    }
+
     /// Words said while accepting an award ("On accepting his award, he said: 'try shooting…
     /// celluloid'"): advice to others, not how this film was shot.
     static let acceptanceSpeech = try! NSRegularExpression(
@@ -1060,7 +1074,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:nominated films|(?:\w+\s+)?out of (?:the )?(?:\w+\s+){0,2}(?:films|movies|features|nominees)|commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".
