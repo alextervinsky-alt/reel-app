@@ -59,6 +59,34 @@ final class TrustworthyEvidenceTests: XCTestCase {
         XCTAssertEqual(equal.evidence(for: .film)?.source, "Lens Weekly")
     }
 
+    /// The review of 1.9.7: Film and Digital are ranked by how much of the film is said too.
+    func testTheWholeFilmBeatsPartOfIt() {
+        let film = craft(["We shot entirely on Kodak 5219 35mm film.", "The film was shot on 16mm film stock for the dream sequences."])
+        XCTAssertEqual(film.evidence(for: .film)?.text, "We shot entirely on Kodak 5219 35mm film.")
+        XCTAssertEqual(film.label(for: .film), "Film", "never in part")
+        // A bare "it" may be a scene: not said of the film in so many words.
+        let scene = craft(["The battle sequence took weeks, and it was shot on 65mm film stock.", "Doe used Kodak 5219 for the rest."])
+        XCTAssertEqual(scene.evidence(for: .film)?.text, "The battle sequence took weeks, and it was shot on 65mm film stock.", "the first read, as neither is direct")
+    }
+
+    func testOneOfTheFewFilmsShotThatWayIsThisFilm() {
+        XCTAssertEqual(craft(["The Quiet Harbour is one of the few films that were shot entirely on 65mm film stock."]).shotOn, [.film])
+        XCTAssertEqual(craft(["It was among the first feature films that were shot on the Sony Venice 2."]).shotOn, [.digital])
+    }
+
+    func testShortAndPunctuatedTitles() {
+        func direct(_ sentence: String, _ words: String, title: String) -> Bool {
+            guard let range = sentence.range(of: words) else { return false }
+            return TechSpecs.saidDirectly(sentence, at: range, title: title)
+        }
+        XCTAssertFalse(direct("Doe shot her close-ups on the Alexa Mini.", "Alexa Mini", title: "Her"), "her, not Her")
+        XCTAssertTrue(direct("Doe shot Her on the Alexa Mini.", "Alexa Mini", title: "Her"))
+        XCTAssertTrue(direct("Doe shot Mother! on 35mm film.", "35mm", title: "Mother!"))
+        XCTAssertTrue(direct("Doe shot Schindler’s List on Double-X.", "Double-X", title: "Schindler's List"))
+        XCTAssertFalse(direct("Doe shot the film's opening on 16mm.", "16mm", title: "The Quiet Harbour"), "the film's opening")
+        XCTAssertFalse(direct("It was originally shot on 16mm, but the studio wanted 35mm.", "16mm", title: "The Quiet Harbour"))
+    }
+
     func testScopeStillComesFirst() {
         // A stated share outweighs a sentence saying the film was shot with it.
         let share = craft(["The Quiet Harbour was shot with IMAX cameras.", "About 40 minutes were shot with IMAX cameras."])
@@ -119,6 +147,10 @@ final class TrustworthyEvidenceTests: XCTestCase {
                        CameraSources.identity(URL(string: "https://lens.example/a?id=3")!))
         XCTAssertNotEqual(CameraSources.identity(URL(string: "https://lens.example/a?id=3")!),
                           CameraSources.identity(URL(string: "https://lens.example/a?id=4")!))
+        XCTAssertEqual(CameraSources.identity(URL(string: "https://lens.example/a?id=3&ref=rss&fbclid=x&mc_cid=1")!),
+                       CameraSources.identity(URL(string: "https://lens.example/a?id=3")!), "where it was shared from")
+        XCTAssertEqual(CameraSources.identity(URL(string: "https://lens.example/a?b=2&a=1")!),
+                       CameraSources.identity(URL(string: "https://lens.example/a?a=1&b=2")!))
         let picked = CameraSources.pick(["http://www.theasc.com/ac_magazine/July2008/Harbour/page1.php",
                                          "https://theasc.com/ac_magazine/July2008/Harbour/page1.php",
                                          "https://theasc.com/article/harbour-doe-interview/"], cinematographers: ["Jane Doe"])
@@ -137,6 +169,8 @@ final class TrustworthyEvidenceTests: XCTestCase {
         XCTAssertEqual(SourceFailure.of(status: 200, data: Data(), requested: asked, landed: URL(string: "https://lens.example/")!),
                        .gone("moved to the site's front page"))
         XCTAssertNil(SourceFailure.of(status: 200, data: Data(), requested: asked, landed: URL(string: "https://lens.example/articles/harbour")!))
+        // A search answered by the front page isn't a page that's gone: it fails as a search, noted.
+        XCTAssertNil(SourceFailure.of(status: 200, data: Data(), requested: asked, landed: URL(string: "https://lens.example/")!, page: false))
     }
 
     // MARK: What a failure means
@@ -162,6 +196,16 @@ final class TrustworthyEvidenceTests: XCTestCase {
         XCTAssertEqual(SourceFailure.of(error: NSError(domain: NSURLErrorDomain, code: -1022)),
                        .restricted("only over plain HTTP, which Reel doesn't load"), "no plain-HTTP fallback")
         XCTAssertEqual(SourceFailure.of(error: URLError(.secureConnectionFailed)).retried, true, "a failed secure connection may pass")
+        XCTAssertEqual(of(408)?.retried, true, "a request that took too long")
+        XCTAssertEqual(of(425)?.retried, true)
+        XCTAssertEqual(of(407)?.retried, true, "a proxy on Reel's own side")
+        XCTAssertEqual(SourceFailure.of(error: NSError(domain: NSURLErrorDomain, code: -1007)), .restricted("its redirects go round in a loop"))
+        XCTAssertEqual(SourceFailure.of(error: NSError(domain: NSURLErrorDomain, code: -1202)), .restricted("its certificate isn't valid"))
+        // Cited as plain HTTP and no HTTPS to be had: not retried every month.
+        XCTAssertEqual(SourceFailure.of(error: URLError(.secureConnectionFailed), upgraded: true), .restricted("only over plain HTTP, which Reel doesn't load"))
+        XCTAssertEqual(SourceFailure.of(error: URLError(.cannotConnectToHost), upgraded: true).retried, false)
+        XCTAssertEqual(SourceFailure.of(error: URLError(.timedOut), upgraded: true).retried, true, "a timeout may pass")
+        XCTAssertEqual(SourceFailure.of(error: NSError(domain: "Elsewhere", code: -1022)), .unanswered("no answer"), "only URL errors by their codes")
     }
 
     // MARK: Over the network (a stand-in for the sites)
@@ -192,12 +236,15 @@ final class TrustworthyEvidenceTests: XCTestCase {
         StandInSite.answer("refused.example", status: 403, body: "<p>Members only</p>")
         StandInSite.answer("failing.example", status: 500, body: "")
         StandInSite.fail("slow.example", code: -1001)
+        StandInSite.fail("plain.example", code: -1200)
         let noting = UnansweredSites()
         let client = client()
         let gone = await client.page(URL(string: "https://gone.example/harbour")!, site: "Gone Weekly", title: nil, noting: noting)
         let refused = await client.page(URL(string: "https://refused.example/harbour")!, site: "Members Weekly", title: nil, noting: noting)
         let failing = await client.page(URL(string: "https://failing.example/harbour")!, site: "Failing Weekly", title: nil, noting: noting)
         let slow = await client.page(URL(string: "https://slow.example/harbour")!, site: "Slow Weekly", title: nil, noting: noting)
+        let plain = await client.page(URL(string: "http://plain.example/1999/harbour.html")!, site: "Plain Weekly", title: nil, noting: noting)
+        XCTAssertEqual(plain.failure, .restricted("only over plain HTTP, which Reel doesn't load"), "cited as HTTP, no HTTPS")
         XCTAssertEqual(gone.failure, .gone("not found (404)"))
         XCTAssertEqual(refused.failure?.retried, false)
         XCTAssertEqual(failing.failure, .unanswered("the server failed (500)"))
@@ -254,14 +301,17 @@ final class StandInSite: URLProtocol {
     private static var answers: [String: Answer] = [:]
     private static var requests: [URL] = []
 
+    /// How `host` answers from now on (and what it was asked before is forgotten).
     static func answer(_ host: String, status: Int, body: String) {
         lock.lock(); defer { lock.unlock() }
         answers[host] = Answer(status: status, body: body, error: nil)
+        requests.removeAll { $0.host == host }
     }
 
     static func fail(_ host: String, code: Int) {
         lock.lock(); defer { lock.unlock() }
         answers[host] = Answer(status: 0, body: "", error: code)
+        requests.removeAll { $0.host == host }
     }
 
     static func asked(of host: String) -> [URL] {

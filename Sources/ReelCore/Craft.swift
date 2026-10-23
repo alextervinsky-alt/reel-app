@@ -334,7 +334,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 // Film and Digital both show when a film mixes them; "in part" is for the rest.
                 let mixed = [.film, .digital].contains(found)
                 var partial = spec.partial && !mixed
-                var rank = mixed ? 1 : spec.scopeRank
+                // Ranked by how much of the film they're said of as well ("we shot entirely on 35mm"
+                // over "the dream sequences on 16mm"), though never shown "in part".
+                var rank = spec.scopeRank
                 // A black-and-white stock (Double-X) is often for some scenes: in part, unless
                 // Wikidata says the whole film is black and white (below).
                 if found == .blackAndWhite, spec.name != "Black and white", !partial {

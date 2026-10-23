@@ -145,32 +145,43 @@ public enum SourceFailure: Equatable, Sendable {
     }
 
     /// What an HTTP answer means. `requested` and `landed`: the address asked for and where the
-    /// site's redirects ended.
-    public static func of(status: Int, data: Data, requested: URL, landed: URL?) -> SourceFailure? {
+    /// site's redirects ended. `page`: a web page asked for (a search answered by the site's front
+    /// page isn't "gone": it fails as a search, and the site counts as not answering).
+    public static func of(status: Int, data: Data, requested: URL, landed: URL?, page: Bool = true) -> SourceFailure? {
         if status == 429 { return .wait("too many requests (429)") }
         if status == 202 || ([403, 503].contains(status) && CameraSources.isChallenge(data)) { return .wait("a challenge page in place of the page") }
         if status >= 500 { return .unanswered("the server failed (\(status))") }
-        if [401, 402, 403, 407, 451].contains(status) { return .restricted("refused (\(status)): a sign-in, a paywall or access denied") }
+        // A request that took too long, came too early, or a proxy on Reel's own side.
+        if [407, 408, 425].contains(status) { return .unanswered("not answered in time (\(status))") }
+        if [401, 402, 403, 451].contains(status) { return .restricted("refused (\(status)): a sign-in, a paywall or access denied") }
         if [404, 410].contains(status) { return .gone("not found (\(status))") }
         if (400..<500).contains(status) { return .gone("not available (\(status))") }
         guard (200..<300).contains(status) else { return .unanswered("an unexpected answer (\(status))") }
         if data.count >= 6_000_000 { return .restricted("too large to read") }
-        if let landed, CameraSources.isFrontPage(landed, for: requested) { return .gone("moved to the site's front page") }
+        if page, let landed, CameraSources.isFrontPage(landed, for: requested) { return .gone("moved to the site's front page") }
         return nil
     }
 
     /// What a request that didn't get an answer means (`URLError` codes, the same on Linux).
-    public static func of(error: Error) -> SourceFailure {
-        switch (error as NSError).code {
+    /// `upgraded`: asked for over HTTPS though cited as plain HTTP, when a failed secure connection
+    /// or no connection means the site has no HTTPS.
+    public static func of(error: Error, upgraded: Bool = false) -> SourceFailure {
+        let error = error as NSError
+        guard error.domain == NSURLErrorDomain else { return .unanswered("no answer") }
+        switch error.code {
         case -1022: return .restricted("only over plain HTTP, which Reel doesn't load")
-        case -1000, -1002: return .gone("not a web address Reel can read")
+        case -1000, -1002, -1010: return .gone("not a web address Reel can read")
         case -1013: return .restricted("a sign-in")
+        case -1007: return .restricted("its redirects go round in a loop")
+        case -1201, -1202, -1203, -1204: return .restricted("its certificate isn't valid")
+        case -1004 where upgraded, -1200 where upgraded, -1205 where upgraded, -1206 where upgraded:
+            return .restricted("only over plain HTTP, which Reel doesn't load")
         case -1001: return .unanswered("timed out")
         case -1003, -1006: return .unanswered("the site's address wasn't found")
         case -1004: return .unanswered("couldn't connect")
         case -1005: return .unanswered("the connection dropped")
         case -1009: return .unanswered("offline")
-        case -1200, -1201, -1202, -1203, -1204, -1205, -1206: return .unanswered("the secure connection failed")
+        case -1200, -1205, -1206: return .unanswered("the secure connection failed")
         default: return .unanswered("no answer")
         }
     }
@@ -194,10 +205,17 @@ public enum CameraSources {
         if host.hasPrefix("www.") { host.removeFirst(4) }
         let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let query = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
-            .filter { !$0.name.lowercased().hasPrefix("utm_") }
+            .filter { item in
+                let name = item.name.lowercased()
+                return !trackingTags.contains(name) && !["utm_", "mc_", "_ga"].contains(where: name.hasPrefix)
+            }
             .map { $0.name + "=" + ($0.value ?? "") }
+            .sorted()
         return host + "/" + path + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
     }
+
+    /// Query items that only say where a link was shared from.
+    static let trackingTags: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "ref", "src", "amp", "igshid", "cmpid", "ito"]
 
     /// A page asked for by its own address that ends on the site's front page: what it was is gone.
     public static func isFrontPage(_ landed: URL, for requested: URL) -> Bool {
@@ -669,7 +687,7 @@ public struct CameraSourcesClient: Sendable {
     /// One page's title and paragraphs, or why it couldn't be read. Asked for over HTTPS.
     func page(_ url: URL, site: String, title: String?, noting: UnansweredSites? = nil) async
         -> (source: CameraReading.Source?, failure: SourceFailure?) {
-        switch await fetch(CameraSources.secure(url), accept: "text/html", site: site, noting: noting) {
+        switch await fetch(CameraSources.secure(url), accept: "text/html", site: site, noting: noting, upgraded: url.scheme == "http") {
         case .failed(let failure):
             return (nil, failure)
         case .page(let data, let landed):
@@ -712,7 +730,7 @@ public struct CameraSourcesClient: Sendable {
     /// didn't answer (offline, timed out, failing), is noted, so the film is read again later rather
     /// than kept as if nothing were written about it. A page that's gone, or refused to Reel, is just
     /// not read.
-    func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil) async -> Fetched {
+    func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil, upgraded: Bool = false) async -> Fetched {
         let host = url.host ?? ""
         var request = URLRequest(url: url)
         // Reel says who it is; a site that turns it away is only linked.
@@ -738,11 +756,12 @@ public struct CameraSourcesClient: Sendable {
         let why: SourceFailure
         switch result {
         case .failure(let error):
-            why = .of(error: error)
+            why = .of(error: error, upgraded: upgraded)
         case .success(let (data, status, final)):
             // Where the site's redirects ended, when that isn't where Reel asked.
             let landed = final.flatMap { CameraSources.identity($0) == CameraSources.identity(url) ? nil : $0 }
-            guard let failure = SourceFailure.of(status: status, data: data, requested: url, landed: landed) else {
+            guard let failure = SourceFailure.of(status: status, data: data, requested: url, landed: landed,
+                                                 page: accept.hasPrefix("text/html")) else {
                 return .page(data, landed: landed)
             }
             why = failure

@@ -330,7 +330,8 @@ struct CinematographyTab: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(all.prefix(8).enumerated()), id: \.element.id) { index, source in
                         if index > 0 { Divider().overlay(Theme.hairline) }
-                        Link(destination: source.url) {
+                        // A page that couldn't be read over HTTPS opens as it was cited.
+                        Link(destination: source.paragraphs.isEmpty ? source.cited ?? source.url : source.url) {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(source.title)

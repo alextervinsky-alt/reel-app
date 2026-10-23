@@ -526,7 +526,7 @@ struct FilmFactSheet: View {
             guard let why = craft.evidence(for: kind) else { return nil }
             let said = Spoilers.tellsTheStory(why.text) ? "" : ": “\(why.text)”"
             // Kept from an earlier reading while it couldn't be read again: said so, with its date.
-            let since = craft.unanswered.contains(why.site) ? "\(why.site) didn't answer since" : "its page wasn't found again since"
+            let since = craft.unanswered.contains(why.site) ? "\(why.site) didn't answer since" : "its page wasn't read again since"
             let earlier = why.carriedFrom.map { " (from the reading of \($0.formatted(date: .abbreviated, time: .omitted)); \(since))" } ?? ""
             return "\(craft.label(for: kind)), from \(why.source)\(earlier)\(said)"
         }.joined(separator: "\n\n")

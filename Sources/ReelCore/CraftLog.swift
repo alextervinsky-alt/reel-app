@@ -80,7 +80,7 @@ public enum CraftLog {
         for kind in index.shotOn {
             guard let why = index.evidence(for: kind) else { continue }
             if let from = why.carriedFrom {
-                let how = index.unanswered.contains(why.site) ? "\(why.site) didn't answer this time" : "its page wasn't found this time"
+                let how = index.unanswered.contains(why.site) ? "\(why.site) didn't answer this time" : "its page wasn't read this time"
                 lines.append("• \(index.label(for: kind)) — carried from the reading of \(day.string(from: from)) (rules \(why.carriedRules ?? index.version)), "
                              + "\(how): \(why.source): “\(why.text.prefix(300))”")
             } else {
