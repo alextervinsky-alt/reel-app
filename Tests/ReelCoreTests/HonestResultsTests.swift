@@ -107,6 +107,30 @@ final class HonestResultsTests: XCTestCase {
         XCTAssertEqual(craft(["The entire film was shot with IMAX cameras.", "About 40 minutes were shot with IMAX cameras at night."]).label(for: .imax), "IMAX")
     }
 
+    // MARK: What the review of 1.9.5 caught: real capture kept
+
+    func testNarrowRulesKeepRealCapture() {
+        // Transfers: a shooting verb after "to", or the copy's verb in another clause, isn't a transfer.
+        XCTAssertEqual(craft(["After scanning the tests we switched to the Alexa 65 for the whole shoot."]).shotOn, [.digital])
+        XCTAssertTrue(craft(["After the tests were scanned, Doe decided to shoot on IMAX 65 cameras."]).shotOn.contains(.imax))
+        XCTAssertEqual(craft(["Doe shot on Super 35 film and the negative was blown up to IMAX for release."]).shotOn, [.film],
+                       "blown up to IMAX is the release")
+        // Speeches: only an award accepted, or an acceptance speech.
+        XCTAssertEqual(craft(["After accepting the job, Doe chose to shoot on 35mm film stock."]).shotOn, [.film])
+        XCTAssertEqual(craft(["During the speech scene, the camera was a handheld Alexa Mini."]).shotOn, [.digital])
+        // Shares: a running time or a magazine's length isn't one.
+        XCTAssertEqual(craft(["The film is 169 minutes and was shot with IMAX cameras."]).label(for: .imax), "IMAX")
+        XCTAssertEqual(craft(["IMAX cameras hold only 3 minutes of film per magazine, and Doe shot with IMAX cameras throughout."]).label(for: .imax), "IMAX")
+        // Plans: an intention that isn't about the shooting.
+        XCTAssertEqual(craft(["His intention was to immerse the audience so he shot it with IMAX cameras."]).shotOn, [.imax])
+    }
+
+    func testCapitalLabelsAndNamesAreNotTheInterviewer() {
+        XCTAssertFalse(TechSpecs.isQuestion("LENS: Cooke S4/i primes throughout.", source: "American Cinematographer", people: ["Roger Example"]))
+        XCTAssertFalse(TechSpecs.isQuestion("ROGER: We shot on Kodak 5219.", source: "American Cinematographer", people: ["Roger Example"]))
+        XCTAssertEqual(craft(["ROGER: We shot the days on Kodak 5219 film."], dp: ["Roger Example"]).shotOn, [.film])
+    }
+
     // MARK: Reading again, tag by tag
 
     private let then = Date(timeIntervalSince1970: 1_790_000_000)
@@ -181,6 +205,30 @@ final class HonestResultsTests: XCTestCase {
         XCTAssertNil(merged.index.retryAt)
     }
 
+    func testAPageNotFoundIsCountedApartFromASiteDown() {
+        // Six readings with Lens Weekly down, then it answers but the page isn't found: carried, by
+        // its own count (not dropped on the first miss because of the site's).
+        var merged = CraftIndex.merging(old: earlier, new: reading([.film], read: ["Wikipedia"], unanswered: ["Lens Weekly"]), now: now)
+        for _ in 0..<5 { merged = CraftIndex.merging(old: merged.index, new: reading([.film], read: ["Wikipedia"], unanswered: ["Lens Weekly"]), now: now) }
+        let older = CraftIndex.merging(old: merged.index, new: reading([.film], read: ["Wikipedia"]), now: now)
+        XCTAssertEqual(older.index.shotOn, [.film], "found by rules 6: not kept once its site answers without it")
+        var same = CraftIndex(readAt: then, shotOn: [.anamorphic], names: [],
+                              evidence: [CraftIndex.Evidence(shotOn: .anamorphic, text: "We used C-Series anamorphics.", source: "Lens Weekly")],
+                              sources: 2, read: ["Lens Weekly"])
+        for _ in 0..<5 { same = CraftIndex.merging(old: same, new: reading([], read: ["Wikipedia"], unanswered: ["Lens Weekly"]), now: now).index }
+        let missed = CraftIndex.merging(old: same, new: reading([], read: ["Wikipedia"]), now: now)
+        XCTAssertEqual(missed.index.shotOn, [.anamorphic], "its first miss")
+        XCTAssertEqual(missed.index.evidence(for: .anamorphic)?.misses, 1)
+    }
+
+    func testTheCinematographersArticleReadAgainIsntTakenForWikipediaDown() {
+        let old = CraftIndex(readAt: then, shotOn: [.film], names: [],
+                             evidence: [CraftIndex.Evidence(shotOn: .film, text: "Doe shot it on 35 mm film.", source: "Wikipedia: Jane Doe")],
+                             sources: 2, read: ["Wikipedia", "Wikipedia: Jane Doe"])
+        let merged = CraftIndex.merging(old: old, new: reading([], read: ["Wikipedia: Jane Doe"], unanswered: ["Wikipedia"]), now: now)
+        XCTAssertEqual(merged.index.shotOn, [], "her article was read again and no longer says so")
+    }
+
     func testAReadingFoundABetterWayReplacesTheOld() {
         let new = CraftIndex(shotOn: [.film], names: [], sources: 1, read: ["Wikipedia"], discovery: CraftIndex.currentDiscovery + 1,
                              unanswered: ["Lens Weekly"])
@@ -235,7 +283,7 @@ final class HonestResultsTests: XCTestCase {
     func testTheTabAndTheBackgroundLogTheSameWay() {
         var details = TMDBMovieDetails(id: 7, title: "The Quiet Harbour", releaseDate: "2020-01-01")
         details.credits = TMDBCredits(cast: [], crew: [TMDBCrewMember(name: "Jane Doe", job: "Director of Photography")])
-        let article = FilmArticle(title: "The Quiet Harbour", extract: "== Production ==\nThe film was shot on 35 mm film.")
+        let article = FilmArticle(title: "The Quiet Harbour", extract: "== Production ==\nThe film was shot on 35 mm film by Jane Doe, on the coast of Galicia.")
         let sources = CameraReading(sources: [CameraReading.Source(title: "Harbour light", site: "Lens Weekly",
                                                                    url: URL(string: "https://example.com/a")!, paragraphs: ["We used C-Series anamorphic lenses throughout."])],
                                     more: [], cinematographer: nil)
@@ -311,6 +359,23 @@ final class HonestResultsTests: XCTestCase {
         // When their time comes, the films never read come first, then the longest since tried.
         films[6].craft = done(at: now.addingTimeInterval(3600))
         XCTAssertEqual(CraftQueue.due(films, now: now.addingTimeInterval(7 * 3600)).map { $0.tmdb?.id }, [8, 9, 1, 2, 3, 4, 5, 6])
+    }
+
+    func testACopyAddedLaterIsReadAsTheFilmsNewestReading() {
+        let read = film(1, craft: done(at: now))
+        let added = film(1, drive: "Backup")
+        XCTAssertEqual(CraftQueue.due([read, added], now: now).count, 0, "the film is read: its new copy waits for nothing")
+        XCTAssertEqual(CraftQueue.representatives(of: [added, read]).first?.craft, read.craft)
+        XCTAssertEqual(CraftQueue.coverage(of: [added, read], now: now).read, 1)
+    }
+
+    func testOfflineDoesntUncountWhatsRead() {
+        let readNow = CraftIndex.merging(old: nil, new: reading([.film], read: ["Wikipedia"], unanswered: ["Lens Weekly"]), now: now).index
+        let offline = film(1, craft: readNow, attempt: CraftAttempt.failed(after: nil, now: now.addingTimeInterval(7 * 3600)))
+        let coverage = CraftQueue.coverage(of: [offline], now: now.addingTimeInterval(8 * 3600))
+        XCTAssertEqual(coverage.read, 1)
+        XCTAssertEqual(coverage.partial, 1)
+        XCTAssertEqual(coverage.toRead, 0)
     }
 
     func testTheQueueIsTheSameAfterARelaunch() throws {

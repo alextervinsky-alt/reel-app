@@ -496,12 +496,17 @@ public struct TechSpecs: Equatable, Sendable {
         if tag == "Q" || tag == "INT" || (publication.count >= 2 && tag == publication) { return true }
         // The answer, the cinematographer by their job, or a label that isn't a person ("ISO:").
         if notSpeakers.contains(tag) || tag.count < 2 { return false }
-        return !initials(of: people).contains(tag)
+        // Their initials, or one of their names in capitals ("ROGER:", "HOYTE:").
+        let names = Set(people.flatMap { $0.split(whereSeparator: { $0 == " " || $0 == "-" }).map { $0.uppercased() } })
+        return !initials(of: people).contains(tag) && !names.contains(tag)
     }
 
     /// Capitals before a colon that aren't someone speaking.
     static let notSpeakers: Set<String> = ["A", "DP", "DOP", "ISO", "ASA", "EI", "FPS", "LUT", "HDR", "SDR", "DCP", "DI", "VFX", "SFX",
-                                           "FX", "CGI", "LED", "HMI", "RGB", "NB", "PS", "EXT", "TV", "UK", "US", "USA", "NY", "LA"]
+                                           "FX", "CGI", "LED", "HMI", "RGB", "NB", "PS", "EXT", "TV", "UK", "US", "USA", "NY", "LA",
+                                           // A spec sheet's labels in capitals ("LENS:", "STOCK:").
+                                           "LENS", "STOCK", "FILM", "RATIO", "IMAX", "ARRI", "RED", "SONY", "KODAK", "CAM", "CAMS",
+                                           "GRIP", "LIGHT", "LUTS", "FRAME", "SPECS", "GEAR", "LAB"]
 
     /// "RD" for Roger Deakins, "HVH" and "HH" for Hoyte van Hoytema, "JJR" and "JR" for Joshua James Richards.
     static func initials(of people: [String]) -> Set<String> {
@@ -748,7 +753,8 @@ public struct TechSpecs: Equatable, Sendable {
         return lead.range(of: transferredOnto, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    static let transferredOnto = #"\b(?:transferr?(?:ed|ing|s)?|scann?(?:ed|ing)|print(?:ed|ing)|output(?:ted|ting)?|record(?:ed|ing)?\s+(?:out|back)|film(?:ed)?[- ]out|blown\s+up|blow(?:ing)?[- ]up)\b[^.;]{0,120}?\b(?:onto|on to|to|into)\s+(?:[\w-]+\s+){0,3}$"#
+    /// The copy's verb, then (in the same clause, no verb of shooting after "to") what it went onto.
+    static let transferredOnto = #"\b(?:transferr?(?:ed|ing|s)?|scann?(?:ed|ing)|print(?:ed|ing)|output(?:ted|ting)?|record(?:ed|ing)?\s+(?:out|back)|film(?:ed)?[- ]out|blown\s+up|blow(?:ing)?[- ]up)\b(?:(?!\b(?:we|they|he|she|i|switch\w*|decid\w*|went|go|chose|opted|moved|turned)\b)[^.;,]){0,80}?\b(?:onto|on to|to|into)\s+(?!(?:shoot|shooting|film|filming|use|using|capture|capturing|photograph|go|switch|turn|work|rely)\b)(?:[\w-]+\s+){0,3}$"#
 
     /// Said of a stated share of the film, in the words' clause: "film about 40 minutes with IMAX
     /// cameras", "15–20% IMAX footage", "for much of the filming". A running time ("the film runs 152
@@ -767,7 +773,7 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     static let shareOfFilm = try! NSRegularExpression(
-        pattern: #"\b\d{1,3}(?:\s*[–-]\s*\d{1,3})?\s+minutes\b(?!\s+long)|\b[1-9]\d?(?:\s*[–-]\s*[1-9]\d?)?\s*(?:%|per ?cent)(?=\W)\s*(?:of\s+(?:the\s+)?)?(?:[\w-]+\s+){0,2}?(?:footage|film|movie|picture|running time|runtime|material|shots|scenes)\b|\b(?:much|most|half|a third|a quarter|two[- ]thirds|three[- ]quarters|a portion|part) of the (?:film(?:ing)?|movie|footage|shoot(?:ing)?|picture|running time|production)\b"#,
+        pattern: #"\b\d{1,3}(?:\s*[–-]\s*\d{1,3})?\s+minutes\s+(?:with\b|(?:were|was)\s+(?:shot|filmed|captured|photographed|produced)\b|(?:were|was)?\s*(?:shot|filmed|captured|photographed)\b|of\s+(?:the\s+(?:final\s+cut|film|movie|picture|running\s+time)|(?:[\w-]+\s+)?footage)\b|in\s+IMAX\b)|\b(?:shoot|shot|film|filmed|capture|captured|photograph|photographed)\s+(?:only\s+|about\s+|approximately\s+|roughly\s+|around\s+|some\s+|nearly\s+|almost\s+|over\s+)?\d{1,3}\s+minutes\b|\b[1-9]\d?(?:\s*[–-]\s*[1-9]\d?)?\s*(?:%|per ?cent)(?=\W)\s*(?:of\s+the\s+(?:film|movie|footage|picture|running time|runtime|shots|scenes)\b|of\s+(?:[\w-]+\s+)?footage\b|(?:[\w-]+\s+)?footage\b)|\b(?:much|most|half|a third|a quarter|two[- ]thirds|three[- ]quarters|a portion|part) of the (?:film(?:ing)?|movie|footage|shoot(?:ing)?|picture|running time|production)\b"#,
         options: [.caseInsensitive])
 
     /// Said of the whole film in so many words, in the words' clause: "the entire film was shot with
@@ -784,13 +790,13 @@ public struct TechSpecs: Equatable, Sendable {
     /// Words said while accepting an award ("On accepting his award, he said: 'try shooting…
     /// celluloid'"): advice to others, not how this film was shot.
     static let acceptanceSpeech = try! NSRegularExpression(
-        pattern: #"\b(?:on|upon|in|while|when|after)\s+accepting\b|\baccept(?:ed|ing|s)?\s+(?:the|his|her|their|an?|this|that)\s+(?:[\w'’-]+\s+){0,4}?(?:awards?|prizes?|oscars?|baftas?|honou?rs?|trophy|trophies|statuettes?|emmys?|golden globes?)\b|\bacceptance speech\b|\b(?:in|during)\s+(?:his|her|their|the)\s+(?:[\w'’-]+\s+){0,2}?speech\b"#,
+        pattern: #"\baccept(?:ed|ing|s)?\s+(?:the|his|her|their|an?|this|that)\s+(?:[\w'’-]+\s+){0,4}?(?:awards?|prizes?|oscars?|baftas?|honou?rs?|trophy|trophies|statuettes?|emmys?|golden globes?)\b|\bacceptance speech\b"#,
         options: [.caseInsensitive])
 
     /// A plan or intention given up ("Though the original plan had been to shoot on 16mm film, the
     /// feature was ultimately captured digitally"), unless the sentence says it was kept ("and we
     /// did", "as planned").
-    static let planBefore = #"\b(?:the |our |my |his |her |their |an? )?(?:original |initial |first |early |earlier )?(?:plan|intention) (?:had been|was|were|is) (?:always |originally |initially |first )?to\b|\bhad (?:originally |initially |first )?(?:planned|intended) (?:on|to)\b"#
+    static let planBefore = #"\b(?:the |our |my |his |her |their |an? )?(?:original |initial |first |early |earlier )?(?:plan|intention) (?:had been|was|were|is) (?:always |originally |initially |first )?to (?:shoot|film|use|capture|photograph|go with|lens)\b|\bhad (?:originally |initially |first )?(?:planned|intended) (?:on|to) (?:shoot|shooting|film|filming|use|using|capture|capturing|photograph)\b"#
     static let planKept = #"\b(?:and|which|as)\s+(?:that'?s\s+what\s+|so\s+|is\s+what\s+)?(?:we|they|he|she|i|it)\s+did\b|\bas (?:planned|intended)\b|\b(?:stuck|stayed) (?:to|with) (?:it|that|the plan)\b"#
 
     /// Whether the clause around `range` is about finishing, printing or showing the film.
@@ -1302,7 +1308,7 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.format, #"\b(?:Ultra|Super)\s+Panavision\s+70\b"#, needsShooting: true),
         Rule(.format, #"\bTodd-AO\b(?!\s+lens)"#, name: "Todd-AO", needsShooting: true),
         Rule(.format, #"\bthree-strip\s+Technicolor\b|\bTechnicolor\s+(?:three-strip|Process\s+4)\b"#, name: "Three-strip Technicolor"),
-        Rule(.format, #"\b(?:shot|filmed|photographed|captured|recorded)\b(?:(?!releas|screen|project|convert|exhibit)[^.]){0,40}\bIMAX\b|\bIMAX\s+(?:film\s+)?cameras?\b|\bIMAX\s+65\b|\b15/70\b"#, name: "IMAX"),
+        Rule(.format, #"\b(?:shot|filmed|photographed|captured|recorded)\b(?:(?!releas|screen|project|convert|exhibit|blow|blown|transfer|scann|print)[^.]){0,40}\bIMAX\b|\bIMAX\s+(?:film\s+)?cameras?\b|\bIMAX\s+65\b|\b15/70\b"#, name: "IMAX"),
         Rule(.format, #"\bIMAX\s+(?:70|65)\s?-?\s?mm\b"#, name: "IMAX", needsShooting: true),
         Rule(.format, #"\b(?:shot|filmed|photographed)\s+(?:entirely\s+|largely\s+|mostly\s+)?(?:in|on)\s+black[- ]and[- ]white\b|\bblack[- ]and[- ]white\s+(?:film\s+)?stock\b"#, name: "Black and white"),
         Rule(.format, #"\b(?:shot|filmed|photographed|captured|recorded)\s+(?:\w+\s+){0,2}digitally\b|\bdigital(?:ly)?\s+(?:shot|filmed)\b|\b(?:shot|filmed)\s+(?:\w+\s+){0,2}on\s+digital\b|\bdigital\s+cinematography\b|\bdigital\s+cameras?\b"#, name: "Digital"),

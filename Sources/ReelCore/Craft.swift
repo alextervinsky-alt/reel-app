@@ -70,15 +70,19 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         /// answer): when that reading was made, and by which rules. Nil: found by the reading it's in.
         public var carriedFrom: Date?
         public var carriedRules: Int?
+        /// Readings in a row, every site answering, that didn't find its page again (it's dropped
+        /// after `CraftIndex.maxRetries`).
+        public var misses: Int?
 
         public init(shotOn: ShotOn, text: String, source: String, partial: Bool = false, carriedFrom: Date? = nil,
-                    carriedRules: Int? = nil) {
+                    carriedRules: Int? = nil, misses: Int? = nil) {
             self.shotOn = shotOn
             self.text = text
             self.source = source
             self.partial = partial
             self.carriedFrom = carriedFrom
             self.carriedRules = carriedRules
+            self.misses = misses
         }
 
         public init(from decoder: Decoder) throws {
@@ -89,6 +93,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             partial = try c.decodeIfPresent(Bool.self, forKey: .partial) ?? false
             carriedFrom = try c.decodeIfPresent(Date.self, forKey: .carriedFrom)
             carriedRules = try c.decodeIfPresent(Int.self, forKey: .carriedRules)
+            misses = try c.decodeIfPresent(Int.self, forKey: .misses)
         }
 
         public var isCarried: Bool { carriedFrom != nil }
@@ -228,9 +233,12 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 let site = evidence.site
                 // Worked out from Wikidata and TMDB each time, not read from a page.
                 let fromPage = site != "Wikidata" && site != "TMDB"
-                let siteDown = fromPage && new.unanswered.contains(site)
                 let readAgain = new.read.contains(evidence.source)
+                // Its site didn't answer, unless its own page was read all the same (the
+                // cinematographer's article, "Wikipedia: …", while the film's didn't come).
+                let siteDown = fromPage && new.unanswered.contains(site) && !(readAgain && evidence.source != site)
                 let sameRules = (evidence.carriedRules ?? old.version) == new.version
+                let misses = (evidence.misses ?? 0) + 1
                 let carry: Bool
                 let reason: String
                 if new.discovery > old.discovery {
@@ -248,7 +256,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 } else if !sameRules {
                     carry = false
                     reason = "found by rules \(evidence.carriedRules ?? old.version); \(evidence.source) wasn't found again to read by rules \(new.version)"
-                } else if tries <= maxRetries {
+                } else if misses <= maxRetries {
                     carry = true
                     reason = ""
                 } else {
@@ -259,6 +267,8 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                     var kept = evidence
                     kept.carriedFrom = evidence.carriedFrom ?? old.readAt
                     kept.carriedRules = evidence.carriedRules ?? old.version
+                    // Counted only while every site answers and its page isn't found.
+                    kept.misses = siteDown ? evidence.misses : misses
                     carried.append(kept)
                 } else {
                     dropped.append(Dropped(shotOn: kind, reason: reason))

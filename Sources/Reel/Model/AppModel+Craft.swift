@@ -18,6 +18,9 @@ extension AppModel {
         }
         var attempted = Set<Int>()
         var failedInARow = 0
+        // The films of the latest failures in a row: when they end the run (offline), they aren't
+        // put back for hours, as one film that can't be reached is.
+        var failingRun: [Int] = []
         // Kept and written in batches: the library is rebuilt once per batch, not per film.
         var read: [Int: CraftIndex] = [:]
         var failed: [Int: CraftAttempt] = [:]
@@ -62,7 +65,8 @@ extension AppModel {
                 return all
             }
             for (id, reading, logName) in results {
-                let film = batch.first { $0.tmdb?.id == id }
+                // As it is now (the tab may have stored a reading meanwhile), its newest copy.
+                let film = CraftQueue.representatives(of: films.filter { $0.tmdb?.id == id }).first
                 if let reading {
                     var found = reading.index
                     if unknownCollection.contains(id) { found.discovery = CraftIndex.currentDiscovery - 1 }
@@ -73,15 +77,20 @@ extension AppModel {
                     // What was read and why, and what's stored, beside the library (see `CraftLog`).
                     writeCraftLog(reading.log + CraftLog.stored(merged), named: logName)
                     failedInARow = 0
+                    failingRun = []
                 } else {
                     // Nothing could be reached: tried again later (its log still says what's stored),
                     // so it doesn't come first again next time.
                     failed[id] = CraftAttempt.failed(after: film?.craftAttempt)
                     failedInARow += 1
+                    failingRun.append(id)
                 }
             }
-            // Several in a row: offline. The rest wait for the next run.
-            if failedInARow >= 6 { return }
+            // Several in a row: offline, not these films. The rest wait for the next run.
+            if failedInARow >= 6 {
+                for id in failingRun { failed[id] = nil }
+                return
+            }
             if read.count + failed.count >= 9 || Date().timeIntervalSince(lastWrite) > 30 { write() }
             // A short pause between batches, whatever the size of the library.
             try? await Task.sleep(for: .seconds(2))
@@ -168,11 +177,25 @@ extension AppModel {
     /// What the Cinematography tab just read becomes the film's summary too, so the Shot on filter
     /// and search say what the tab shows, merged tag by tag as the background reading is, with its
     /// log written the same way.
+    /// Only while the film is due: the tab's reading is kept for the session, and a newer reading
+    /// in the background isn't replaced by it.
     func craftRead(for film: FilmEntry, article: FilmArticle?, reading: CameraReading?) {
         guard let details = film.tmdb, article != nil || reading != nil else { return }
-        let read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
+        let stored = CraftQueue.representatives(of: films.filter { $0.tmdb?.id == details.id }).first ?? film
+        let current = stored.craft
+        // Its sources couldn't be reached (offline, every site asking to wait): the stored reading stands.
+        if current != nil, reading == nil { return }
+        guard current == nil || CraftQueue.isDue(craft: current, attempt: stored.craftAttempt, hasFacts: true,
+                                                 inCollection: details.collection != nil) else { return }
+        var read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
                                        colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details))
-        let current = films.first { $0.tmdb?.id == details.id }?.craft
+        // The article didn't come (not: there's no such article): Wikipedia didn't answer.
+        if film.funFacts?.articleTitle != nil, article == nil, !articlesMissing.contains(details.id),
+           !read.index.unanswered.contains("Wikipedia") {
+            var index = read.index
+            index.unanswered.append("Wikipedia")
+            read = CraftReader.Reading(index: index, log: read.log)
+        }
         let merged = CraftIndex.merging(old: current, new: read.index)
         // The same as kept: nothing to write (the log already says what's stored, and opening the
         // tab again doesn't put off a planned reading).

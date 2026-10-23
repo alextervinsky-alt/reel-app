@@ -497,7 +497,7 @@ public struct CameraSourcesClient: Sendable {
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
         guard let url = components.url,
-              let data = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting, search: true)
+              let data = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting)
         else { return [] }
         // An answer that isn't the search's (a page in its place): not "nothing written", read again later.
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
@@ -520,7 +520,7 @@ public struct CameraSourcesClient: Sendable {
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
                                  URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
         guard let url = components.url,
-              let data = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting, search: true)
+              let data = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting)
         else { return [] }
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
             await noting?.add("British Cinematographer")
@@ -587,7 +587,7 @@ public struct CameraSourcesClient: Sendable {
     /// "accepted" with nothing in it) is paused for a while and noted, so the film is read again
     /// later rather than kept as if nothing were written about it; so is a magazine's search that
     /// doesn't answer (`search`). A page that's gone or paywalled is just not read.
-    private func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil, search: Bool = false) async -> Data? {
+    private func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil) async -> Data? {
         let host = url.host ?? ""
         var request = URLRequest(url: url)
         // Reel says who it is; a site that turns it away is only linked.
@@ -609,8 +609,10 @@ public struct CameraSourcesClient: Sendable {
             }.resume()
         }
         await Self.gate.release()
+        // A search or a page that didn't come (offline, timed out, the server failing): that site
+        // didn't answer, so what it said before isn't taken for gone (see `CraftIndex.merge`).
         guard let (data, status) = result else {
-            if search { await noting?.add(site) }
+            await noting?.add(site)
             return nil
         }
         // "Too many requests", "accepted" with a captcha (SiteGround), or a challenge page in place of
@@ -622,7 +624,7 @@ public struct CameraSourcesClient: Sendable {
             return nil
         }
         if status >= 500 {
-            if search { await noting?.add(site) }
+            await noting?.add(site)
             return nil
         }
         guard (200..<300).contains(status), data.count < 6_000_000 else { return nil }

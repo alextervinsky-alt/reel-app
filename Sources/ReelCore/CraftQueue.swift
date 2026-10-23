@@ -86,16 +86,35 @@ public enum CraftQueue {
     /// this run (`attempted`), the longest since it was last tried first (never tried before
     /// anything), the library's order among equals.
     public static func due(_ films: [FilmEntry], attempted: Set<Int> = [], now: Date = Date()) -> [FilmEntry] {
-        var seen = Set<Int>()
         var due: [(film: FilmEntry, last: Date, order: Int)] = []
-        for (order, film) in films.enumerated() {
-            guard let id = film.tmdb?.id, !attempted.contains(id), seen.insert(id).inserted,
+        // Each film as its copy with the newest reading says (a copy added later has none yet).
+        for (order, film) in representatives(of: films).enumerated() {
+            guard let id = film.tmdb?.id, !attempted.contains(id),
                   isDue(craft: film.craft, attempt: film.craftAttempt, hasFacts: film.funFacts != nil,
                         inCollection: film.tmdb?.collection != nil, now: now) else { continue }
             let last = [film.craft?.readAt, film.craftAttempt?.at].compactMap { $0 }.max() ?? .distantPast
             due.append((film, last, order))
         }
         return due.sorted { ($0.last, $0.order) < ($1.last, $1.order) }.map(\.film)
+    }
+
+    /// One copy for each film, in the library's order of first copies: the one with the newest
+    /// reading (and with its facts, when only some copies have them).
+    public static func representatives(of films: [FilmEntry]) -> [FilmEntry] {
+        var best: [Int: FilmEntry] = [:]
+        var order: [Int] = []
+        for film in films {
+            guard let id = film.tmdb?.id else { continue }
+            guard let known = best[id] else {
+                best[id] = film
+                order.append(id)
+                continue
+            }
+            let newer = (film.craft?.readAt ?? .distantPast) > (known.craft?.readAt ?? .distantPast)
+            let facts = known.funFacts == nil && film.funFacts != nil
+            if newer || facts { best[id] = film }
+        }
+        return order.compactMap { best[$0] }
     }
 
     /// How much of the library Shot on covers, for Settings: live-action films, each once.
@@ -114,20 +133,24 @@ public enum CraftQueue {
 
     /// `removed`: the Shot on tags you said are wrong, by film.
     public static func coverage(of films: [FilmEntry], removed: [Int: Set<ShotOn>] = [:], now: Date = Date()) -> Coverage {
-        var seen = Set<Int>()
         var coverage = Coverage()
-        for film in films {
+        for film in representatives(of: films) {
             // Animated films weren't shot on anything.
-            guard let details = film.tmdb, seen.insert(details.id).inserted, !details.genreNames.contains("Animation") else { continue }
-            switch state(of: film, now: now) {
-            case .waitingForFacts, .notRead, .failed, .olderRules, .stale:
+            guard let details = film.tmdb, !details.genreNames.contains("Animation") else { continue }
+            let standing = state(of: film, now: now)
+            // Tried again since and nothing reached (offline): still read by these rules.
+            let readByTheseRules = standing == .failed && film.craft?.version == CraftIndex.currentVersion
+            switch standing {
+            case .waitingForFacts, .notRead, .olderRules, .stale:
                 coverage.toRead += 1
-            case .partial, .complete:
+            case .failed where !readByTheseRules:
+                coverage.toRead += 1
+            case .failed, .partial, .complete:
                 guard let craft = film.craft else { continue }
                 coverage.read += 1
                 if !Set(craft.shotOn).subtracting(removed[details.id] ?? []).isEmpty { coverage.tagged += 1 }
                 if craft.sources <= 1 { coverage.articleOnly += 1 }
-                if craft.isPartial || craft.retryAt != nil { coverage.partial += 1 }
+                if craft.isPartial || craft.retryAt != nil || readByTheseRules { coverage.partial += 1 }
             }
         }
         return coverage

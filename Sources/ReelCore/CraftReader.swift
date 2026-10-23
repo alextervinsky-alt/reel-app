@@ -44,6 +44,11 @@ public enum CraftReader {
     public struct Reading: Sendable {
         public let index: CraftIndex
         public let log: String
+
+        public init(index: CraftIndex, log: String) {
+            self.index = index
+            self.log = log
+        }
     }
 
     /// Fetches the film's article and what's written about how it was shot, and reads them. Nil when
