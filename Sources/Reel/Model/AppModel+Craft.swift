@@ -6,8 +6,9 @@ import ReelCore
 /// it are read in the background, two films at a time (see `CraftReader`), and the names of the
 /// gear and techniques are kept, with the sentence behind each Shot on (see `CraftIndex`).
 extension AppModel {
-    /// Reads the films not read yet (or read long ago). Runs after film info is looked up; stops
-    /// when offline, and carries on next time.
+    /// Reads the films not read yet, read by older rules or long ago, and those whose last reading
+    /// was incomplete when it's due again (see `CraftQueue`). Runs after film info is looked up;
+    /// stops when offline, and carries on next time: what's due is worked out from what's stored.
     func readCraft() async {
         guard !craftRunning else { return }
         craftRunning = true
@@ -19,22 +20,21 @@ extension AppModel {
         var failedInARow = 0
         // Kept and written in batches: the library is rebuilt once per batch, not per film.
         var read: [Int: CraftIndex] = [:]
+        var failed: [Int: CraftAttempt] = [:]
         var lastWrite = Date()
         func write() {
-            guard !read.isEmpty else { return }
-            let batch = read
+            guard !read.isEmpty || !failed.isEmpty else { return }
+            let batch = read, tries = failed
             read = [:]
+            failed = [:]
             lastWrite = Date()
-            storeCraft(batch)
+            storeCraft(batch, failed: tries)
         }
         defer { write() }
         while !Task.isCancelled {
-            // Films whose info and Wikipedia facts are in (the article's title comes with the facts).
-            var seen = Set<Int>()
-            let due = films.filter { film in
-                guard let id = film.tmdb?.id, !attempted.contains(id), film.funFacts != nil, needsReading(film) else { return false }
-                return seen.insert(id).inserted
-            }
+            // Films whose info and Wikipedia facts are in (the article's title comes with the facts),
+            // one for each film, the longest since tried first.
+            let due = CraftQueue.due(films, attempted: attempted)
             if craftPending != due.count + read.count { craftPending = due.count + read.count }
             // Two films at a time (each reads its article and camera sources side by side).
             let batch = Array(due.prefix(2))
@@ -62,35 +62,35 @@ extension AppModel {
                 return all
             }
             for (id, reading, logName) in results {
+                let film = batch.first { $0.tmdb?.id == id }
                 if let reading {
                     var found = reading.index
                     if unknownCollection.contains(id) { found.discovery = CraftIndex.currentDiscovery - 1 }
-                    // What was read and why, beside the library (see `CraftLog`).
-                    let file = folder.shotOnReadings.appendingPathComponent(logName)
-                    let log = reading.log
-                    writer.enqueue { try? Data(log.utf8).write(to: file, options: .atomic) }
-                    // Thinner than what's kept (a site down or asking Reel to wait): kept, and tried
-                    // again later (see `CraftIndex.merge`).
-                    read[id] = CraftIndex.merge(old: films.first(where: { $0.tmdb?.id == id })?.craft, new: found)
+                    // Tag by tag: what a site that didn't answer said before is carried over, marked
+                    // so, and read again later (see `CraftIndex.merge`).
+                    let merged = CraftIndex.merging(old: film?.craft, new: found)
+                    read[id] = merged.index
+                    // What was read and why, and what's stored, beside the library (see `CraftLog`).
+                    writeCraftLog(reading.log + CraftLog.stored(merged), named: logName)
                     failedInARow = 0
                 } else {
-                    // One film that can't be read is tried again next time; several in a row: offline.
+                    // Nothing could be reached: tried again later (its log still says what's stored),
+                    // so it doesn't come first again next time.
+                    failed[id] = CraftAttempt.failed(after: film?.craftAttempt)
                     failedInARow += 1
                 }
             }
+            // Several in a row: offline. The rest wait for the next run.
             if failedInARow >= 6 { return }
-            if read.count >= 9 || Date().timeIntervalSince(lastWrite) > 30 { write() }
+            if read.count + failed.count >= 9 || Date().timeIntervalSince(lastWrite) > 30 { write() }
             // A short pause between batches, whatever the size of the library.
             try? await Task.sleep(for: .seconds(2))
         }
     }
 
-    /// Not read yet, read long ago or by older rules, or read before a sequel's articles were told
-    /// apart from its own (a film of a collection, read before discovery 2).
-    func needsReading(_ film: FilmEntry) -> Bool {
-        guard let craft = film.craft else { return true }
-        if let at = craft.retryAt { return at <= Date() }
-        return craft.isStale() || (craft.discovery < CraftIndex.currentDiscovery && film.tmdb?.collection != nil)
+    func writeCraftLog(_ log: String, named name: String) {
+        let file = folder.shotOnReadings.appendingPathComponent(name)
+        writer.enqueue { try? Data(log.utf8).write(to: file, options: .atomic) }
     }
 
     /// Fetches the film's collection from TMDB when it isn't kept yet (two weeks; see `ListsStore`).
@@ -136,58 +136,53 @@ extension AppModel {
     }
 
     /// How much of the library Shot on covers (Settings › Performance): live-action films, each
-    /// once, tagged out of those read; those read from their Wikipedia article alone; and how many
-    /// are still to be read. Animated films aren't counted: they weren't shot on anything.
-    func craftCoverage() -> (tagged: Int, read: Int, articleOnly: Int, waiting: Int, unanswered: Int) {
-        var seen = Set<Int>()
-        var tagged = 0, read = 0, articleOnly = 0, waiting = 0, unanswered = 0
-        for film in films {
-            guard let details = film.tmdb, seen.insert(details.id).inserted, !details.genreNames.contains("Animation") else { continue }
-            if film.craft?.willReadAgain == true { unanswered += 1 }
-            guard let craft = film.craft, !needsReading(film) else {
-                // Films whose Wikipedia facts aren't in yet aren't read either: not counted.
-                if film.funFacts != nil { waiting += 1 }
-                continue
-            }
-            read += 1
-            if !Set(craft.shotOn).subtracting(removedShotOn[details.id] ?? []).isEmpty { tagged += 1 }
-            if craft.sources <= 1 { articleOnly += 1 }
-        }
-        return (tagged, read, articleOnly, waiting, unanswered)
+    /// once (see `CraftQueue.coverage`).
+    func craftCoverage() -> CraftQueue.Coverage {
+        CraftQueue.coverage(of: films, removed: removedShotOn)
     }
 
-    /// Puts new readings in the library, noting each film whose Shot on changed (Settings ›
-    /// Performance lists them, so a change can be checked).
-    func storeCraft(_ batch: [Int: CraftIndex]) {
-        guard !batch.isEmpty else { return }
+    /// Puts new readings in the library, and the tries that came to nothing, noting each film whose
+    /// Shot on changed (Settings › Performance lists them, so a change can be checked).
+    func storeCraft(_ batch: [Int: CraftIndex], failed: [Int: CraftAttempt] = [:]) {
+        guard !batch.isEmpty || !failed.isEmpty else { return }
         var changes: [CraftChange] = []
         var noted = Set<Int>()
         mutateFilms { list in
             for i in list.indices {
-                guard let id = list[i].tmdb?.id, let index = batch[id] else { continue }
-                let before = list[i].craft?.shotOn
-                if let before, before != index.shotOn, noted.insert(id).inserted {
-                    changes.append(CraftChange(title: list[i].displayTitle, before: before, after: index.shotOn))
+                guard let id = list[i].tmdb?.id else { continue }
+                if let index = batch[id] {
+                    let before = list[i].craft?.shotOn
+                    if let before, before != index.shotOn, noted.insert(id).inserted {
+                        changes.append(CraftChange(title: list[i].displayTitle, before: before, after: index.shotOn))
+                    }
+                    list[i].craft = index
+                    list[i].craftAttempt = nil
+                } else if let attempt = failed[id] {
+                    list[i].craftAttempt = attempt
                 }
-                list[i].craft = index
             }
         }
         if !changes.isEmpty { craftChanges = Array((changes + craftChanges).prefix(200)) }
     }
 
     /// What the Cinematography tab just read becomes the film's summary too, so the Shot on filter
-    /// and search say what the tab shows (unless it read fewer texts than the summary had).
+    /// and search say what the tab shows, merged tag by tag as the background reading is, with its
+    /// log written the same way.
     func craftRead(for film: FilmEntry, article: FilmArticle?, reading: CameraReading?) {
         guard let details = film.tmdb, article != nil || reading != nil else { return }
-        let index = CraftReader.index(of: details, article: article, reading: reading, colour: film.funFacts?.quick?.colour,
-                                      otherTitles: otherTitles(of: details))
+        let read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
+                                       colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details))
         let current = films.first { $0.tmdb?.id == details.id }?.craft
-        let merged = CraftIndex.merge(old: current, new: index)
-        // Kept as it was (thinner), or the same as kept: nothing to write.
-        if let current, merged.readAt == current.readAt { return }
-        if let current, current.version == merged.version, current.shotOn == merged.shotOn, current.names == merged.names,
-           current.evidence == merged.evidence, current.unanswered == merged.unanswered, !current.isStale() { return }
-        storeCraft([details.id: merged])
+        let merged = CraftIndex.merging(old: current, new: read.index)
+        // The same as kept: nothing to write (the log already says what's stored, and opening the
+        // tab again doesn't put off a planned reading).
+        if let current, current.version == merged.index.version, current.shotOn == merged.index.shotOn,
+           current.names == merged.index.names, current.evidence == merged.index.evidence,
+           current.unanswered == merged.index.unanswered {
+            return
+        }
+        storeCraft([details.id: merged.index])
+        writeCraftLog(read.log + CraftLog.stored(merged), named: CraftLog.fileName(for: details))
     }
 }
 

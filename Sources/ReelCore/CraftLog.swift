@@ -1,11 +1,13 @@
 import Foundation
 
 /// The reading log: for one film, what was read to tag how it was shot, what was left out and
-/// why, and the sentence behind each tag and name. Written as plain text to
-/// Documents › Reel › Shot On Readings, so any tag can be checked.
+/// why, and the sentence behind each tag and name; then what Reel stored (see `stored`), which is
+/// what it shows. Written as plain text to Documents › Reel › Shot On Readings, so any tag can be
+/// checked.
 public enum CraftLog {
-    public static func text(details: TMDBMovieDetails, articleTitle: String?, articleRead: Bool, reading: CameraReading,
-                            specs: TechSpecs, index: CraftIndex, now: Date = Date()) -> String {
+    /// What one reading found. `articleMissing`: Wikipedia answered that the article isn't there.
+    public static func text(details: TMDBMovieDetails, articleTitle: String?, articleRead: Bool, articleMissing: Bool = false,
+                            reading: CameraReading, specs: TechSpecs, index: CraftIndex, now: Date = Date()) -> String {
         var lines: [String] = []
         let when = ISO8601DateFormatter().string(from: now)
         lines.append("How \(details.title)\(details.year.map { " (\($0))" } ?? "") was shot: read \(when), rules \(CraftIndex.currentVersion)")
@@ -20,7 +22,8 @@ public enum CraftLog {
             lines.append("  \(source.url.absoluteString)")
         }
         if let articleTitle {
-            lines.append(articleRead ? "• Wikipedia: \(articleTitle)" : "• Wikipedia: \(articleTitle) — couldn't be reached")
+            lines.append(articleRead ? "• Wikipedia: \(articleTitle)"
+                         : articleMissing ? "• Wikipedia: \(articleTitle) — no such article now" : "• Wikipedia: \(articleTitle) — couldn't be reached")
         } else {
             lines.append("• Wikipedia: no article found for the film")
         }
@@ -41,7 +44,7 @@ public enum CraftLog {
         }
 
         lines.append("")
-        lines.append("SHOT ON")
+        lines.append("SHOT ON, IN THIS READING")
         if index.shotOn.isEmpty { lines.append("• nothing said") }
         for kind in index.shotOn {
             let why = index.evidence(for: kind)
@@ -61,6 +64,39 @@ public enum CraftLog {
                 let why = spec.aboutThisFilm ? "not said to be what it was shot with" : "about other work, another film or gear in general"
                 lines.append("• \(spec.kind.rawValue): \(spec.name) — \(why)" + said(spec))
             }
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// What Reel stored after the reading (see `CraftIndex.merge`), which is what it shows: each tag
+    /// and whether this reading found it or it was carried over from an earlier one (when, and from
+    /// where), the tags dropped and why, and whether the reading is complete.
+    public static func stored(_ merged: CraftIndex.Merged) -> String {
+        let index = merged.index
+        let day = ISO8601DateFormatter()
+        day.formatOptions = [.withFullDate]
+        var lines = ["", "STORED IN REEL"]
+        if index.shotOn.isEmpty { lines.append("• no Shot on") }
+        for kind in index.shotOn {
+            guard let why = index.evidence(for: kind) else { continue }
+            if let from = why.carriedFrom {
+                let how = index.unanswered.contains(why.site) ? "\(why.site) didn't answer this time" : "its page wasn't found this time"
+                lines.append("• \(index.label(for: kind)) — carried from the reading of \(day.string(from: from)) (rules \(why.carriedRules ?? index.version)), "
+                             + "\(how): \(why.source): “\(why.text.prefix(300))”")
+            } else {
+                lines.append("• \(index.label(for: kind)) — found in this reading: \(why.source): “\(why.text.prefix(300))”")
+            }
+        }
+        for dropped in merged.dropped {
+            lines.append("• dropped: \(dropped.shotOn.title) — \(dropped.reason)")
+        }
+        let next = index.retryAt.map { " Read again automatically after \(day.string(from: $0))." } ?? ""
+        if !index.unanswered.isEmpty {
+            lines.append("Incomplete: \(index.unanswered.joined(separator: ", ")) didn't answer.\(next)")
+        } else if index.isPartial {
+            lines.append("Incomplete: tags carried over from an earlier reading.\(next)")
+        } else {
+            lines.append("Complete: every source answered (rules \(index.version)).")
         }
         return lines.joined(separator: "\n") + "\n"
     }

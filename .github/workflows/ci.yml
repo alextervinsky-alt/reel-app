@@ -72,7 +72,7 @@ jobs:
           swift build --build-tests 2>&1 | tail -3
           # One film per run: a crash in Linux's networking costs that film only.
           crashed=0
-          for i in $(seq 0 30); do
+          for i in $(seq 0 33); do
             SHOTON_FILM=$i swift test --skip-build --filter LiveShotOnTests > one.log 2>&1 || crashed=$((crashed+1))
             grep -E "^(Shot on|::warning::Shot on)" one.log | tee -a shoton.log
           done
@@ -83,9 +83,11 @@ jobs:
           missing=$(grep -E "^Shot on: " shoton.log | sed -nE 's/^Shot on: ([^|]+) \|.*\| missing (.+)$/\1\2/p' | paste -sd ',' -)
           films=$(grep -cE "^Shot on: .*\| known" shoton.log)
           known=$(grep -oE "\| known [0-9]+" shoton.log | awk '{s+=$3} END {print s+0}')
-          echo "::notice::Shot on check: ${films} of 31 films read (${crashed} runs stopped), ${known} known tags. Wrong: ${wrong:-none}. Missing: ${missing:-none}"
+          echo "::notice::Shot on check: ${films} of 34 films read (${crashed} runs stopped), ${known} known tags. Wrong: ${wrong:-none}. Missing: ${missing:-none}"
           uncounted=$(grep -E "^Shot on not counted: " shoton.log | sed -E 's/^Shot on not counted: //' | head -30 | paste -sd '~' - | sed 's/~/ ¦ /g')
           echo "::notice::Shot on not counted (named, not said to be shot that way): ${uncounted:-none}"
+          why=$(grep -E "^Shot on why: " shoton.log | sed -E 's/^Shot on why: //' | paste -sd '~' - | sed 's/~/ ¦ /g')
+          echo "::notice::Shot on why (the 1.9.4 audit's films): ${why:-none}"
           # Reports only: the unit tests are what pass or fail a build.
           exit 0
 

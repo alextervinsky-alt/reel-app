@@ -16,13 +16,15 @@ final class LiveShotOnTests: XCTestCase {
         let hasNot: Set<ShotOn>
         /// Tags it may have only as "in part" (one IMAX shot, black-and-white storylines).
         var partOnly: Set<ShotOn> = []
+        /// The sentence behind each tag is reported too (the 1.9.4 audit's films).
+        var showWhy = false
     }
 
     private let films: [Known] = [
-        Known(title: "Oppenheimer", year: 2023, has: [.film, .imax], hasNot: [.digital, .anamorphic], partOnly: [.blackAndWhite]),
+        Known(title: "Oppenheimer", year: 2023, has: [.film, .imax], hasNot: [.digital, .anamorphic], partOnly: [.blackAndWhite], showWhy: true),
         Known(title: "Interstellar", year: 2014, has: [.film, .imax, .anamorphic], hasNot: [.digital]),
         Known(title: "The Prestige", year: 2006, has: [.film], hasNot: [.digital], partOnly: [.imax]),
-        Known(title: "The Dark Knight", year: 2008, has: [.film, .imax], hasNot: [.digital]),
+        Known(title: "The Dark Knight", year: 2008, has: [.film, .imax], hasNot: [.digital], partOnly: [.imax], showWhy: true),
         Known(title: "Inception", year: 2010, has: [.film, .anamorphic], hasNot: [.imax]),
         Known(title: "The Matrix", year: 1999, has: [.film], hasNot: [.digital, .anamorphic]),
         Known(title: "No Country for Old Men", year: 2007, has: [.film], hasNot: [.digital]),
@@ -53,6 +55,12 @@ final class LiveShotOnTests: XCTestCase {
         Known(title: "The Black Phone", year: 2021, has: [.digital, .film], hasNot: []),
         Known(title: "Megalopolis", year: 2024, has: [.digital], hasNot: [.film]),
         Known(title: "All We Imagine as Light", year: 2024, has: [], hasNot: [.blackAndWhite]),
+        // The 1.9.4 audit's: a plan given up, a transfer, an award speech, an interviewer's line,
+        // IMAX for part of the film.
+        Known(title: "Mandy", year: 2018, has: [.digital, .anamorphic], hasNot: [.film], showWhy: true),
+        Known(title: "The Dark Knight Rises", year: 2012, has: [.film, .imax, .anamorphic], hasNot: [.digital],
+              partOnly: [.imax, .anamorphic], showWhy: true),
+        Known(title: "Uncut Gems", year: 2019, has: [.film, .digital, .anamorphic], hasNot: [], showWhy: true),
     ]
 
     func testShotOnForFilmsOnRecord() async throws {
@@ -115,6 +123,12 @@ final class LiveShotOnTests: XCTestCase {
                     for (source, sentence) in named.prefix(2) {
                         say("Shot on not counted: \(known.title) \(tag.title) (left out): \(source): \(sentence.prefix(140))")
                     }
+                }
+            }
+            if known.showWhy {
+                for tag in craft.shotOn {
+                    guard let why = craft.evidence(for: tag) else { continue }
+                    say("Shot on why: \(known.title) \(craft.label(for: tag)): \(why.source): \(why.text.prefix(200))")
                 }
             }
             // The sheet's cameras and formats that say what it wasn't shot on ("Red Epic" for a film shot on film).

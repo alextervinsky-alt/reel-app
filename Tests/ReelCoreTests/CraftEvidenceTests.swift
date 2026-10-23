@@ -100,14 +100,21 @@ final class CraftEvidenceTests: XCTestCase {
     // MARK: Refreshing never makes it worse
 
     func testAThinnerReadingDoesNotReplaceAFullerOne() {
-        let full = CraftIndex(shotOn: [.film, .anamorphic], names: [], sources: 4)
-        let thin = CraftIndex.merge(old: full, new: CraftIndex(shotOn: [.film], names: [], sources: 1))
-        XCTAssertEqual(thin.shotOn, [.film, .anamorphic], "a site was down: the fuller reading stays")
+        let full = CraftIndex(shotOn: [.film, .anamorphic], names: [],
+                              evidence: [CraftIndex.Evidence(shotOn: .film, text: "It was shot on 35 mm film.", source: "Wikipedia"),
+                                         CraftIndex.Evidence(shotOn: .anamorphic, text: "We used anamorphic lenses.", source: "Lens Weekly")],
+                              sources: 4, read: ["Lens Weekly", "Wikipedia"])
+        let thin = CraftIndex.merge(old: full, new: CraftIndex(shotOn: [.film], names: [], sources: 1, read: ["Wikipedia"],
+                                                               unanswered: ["Lens Weekly"]))
+        XCTAssertEqual(thin.shotOn, [.film, .anamorphic], "a site was down: what it said stays, marked so")
         XCTAssertNotNil(thin.retryAt, "and it's read again later")
-        XCTAssertEqual(CraftIndex.merge(old: full, new: CraftIndex(shotOn: [.film], names: [], sources: 4)).shotOn, [.film])
-        let older = CraftIndex(version: 4, shotOn: [.film], names: [], sources: 9)
-        XCTAssertEqual(CraftIndex.merge(old: older, new: CraftIndex(shotOn: [], names: [], sources: 1)).version, 4,
-                       "a fuller reading by older rules stays too, while it's tried again")
+        XCTAssertEqual(CraftIndex.merge(old: full, new: CraftIndex(shotOn: [.film], names: [], sources: 4, read: ["Lens Weekly", "Wikipedia"])).shotOn,
+                       [.film], "read again, it no longer says so")
+        // 1.9.5: a tag found by older rules isn't kept because fewer texts were read.
+        let older = CraftIndex(version: 4, shotOn: [.film], names: [],
+                               evidence: [CraftIndex.Evidence(shotOn: .film, text: "We shot on film.", source: "Lens Weekly")], sources: 9)
+        XCTAssertEqual(CraftIndex.merge(old: older, new: CraftIndex(shotOn: [], names: [], sources: 1, read: ["Wikipedia"])).shotOn, [],
+                       "its source answered but its page wasn't found again to read by the new rules")
     }
 
     // MARK: Reading again when finding improves

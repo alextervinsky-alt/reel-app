@@ -26,6 +26,11 @@ public struct TechSpecs: Equatable, Sendable {
         public var source: String? = nil
         /// Said of part of the film only ("for the flashbacks", "the battle scenes", "the rest").
         public var partial = false
+        /// Part of the film by a stated share ("about 28 minutes", "15–20% IMAX footage", "much of the
+        /// filming"): outweighs a sentence that only says it was filmed that way.
+        public var share = false
+        /// Said of the whole film in so many words ("the entire film", "shot entirely in IMAX").
+        public var wholeFilm = false
         /// Its sentence says this film was shot with it ("shot on", "chose", "his main camera", a
         /// spec list), not an opinion, a comparison, other work or a look: only these are Shot on tags.
         public var capture = false
@@ -33,6 +38,9 @@ public struct TechSpecs: Equatable, Sendable {
         /// commercials with the Red", "Chazelle's La La Land… in CinemaScope").
         public var aboutThisFilm = true
         public var id: String { kind.rawValue + "|" + name.lowercased() }
+        /// How firmly it's said of how much of the film: the whole in so many words (3), a stated share
+        /// (2), plainly (1), part of it (0).
+        public var scopeRank: Int { wholeFilm ? 3 : share ? 2 : partial ? 0 : 1 }
     }
 
     /// A sentence (or two that belong together) and where it was read.
@@ -199,7 +207,7 @@ public struct TechSpecs: Equatable, Sendable {
                             continue
                         }
                         // The interviewer's questions ("NFS: How does…?") are not the filmmakers' words.
-                        if text.isInterview, isQuestion(sentence, source: text.source) {
+                        if text.isInterview, isQuestion(sentence, source: text.source, people: cinematographers + directors) {
                             aboutThem = false
                             continue
                         }
@@ -225,15 +233,20 @@ public struct TechSpecs: Equatable, Sendable {
                                     // "hybrid photochemical finishing", "70 mm prints": how it was
                                     // finished or shown, not what it was shot on.
                                     if rule.kind != .finish, aboutFinishing(sentence, at: at) { continue }
+                                    // "transferring images captured in IMAX onto 35mm negative": what
+                                    // it was copied onto, not what it was shot on.
+                                    if rule.kind != .finish, transferTarget(sentence, at: at) { continue }
                                     // "a 28mm and a 35mm", "Super 35 sensors": a lens or a sensor, not film.
                                     if rule.isGauge, !filmGauge(sentence, at: at) { continue }
                                     gearNamed += 1
                                     if !namedHere.contains(name) { namedHere.append(name) }
                                     let said = reading(sentence, at: at, title: title, otherTitles: otherTitles, people: names + directorNames)
+                                    let share = saidOfShare(sentence, at: at)
+                                    let part = share || saidOfPart(sentence, at: at)
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(sentence.prefix(400)), source: text.source,
-                                                      partial: saidOfPart(sentence, at: at), capture: said.captured && !tried,
-                                                      aboutThisFilm: said.aboutThisFilm))
+                                                      partial: part, share: share, wholeFilm: !part && saidOfWholeFilm(sentence, at: at),
+                                                      capture: said.captured && !tried, aboutThisFilm: said.aboutThisFilm))
                                 }
                             }
                         }
@@ -464,7 +477,10 @@ public struct TechSpecs: Equatable, Sendable {
 
     /// A question, or a line the interviewer speaks: "Q:", or the publication's initials ("NFS:" in
     /// No Film School, "AC:" in American Cinematographer). The filmmaker's own tag ("DP:") is theirs.
-    static func isQuestion(_ sentence: String, source: String?) -> Bool {
+    /// Initials are the filmmakers' only when they're a credited cinematographer's or director's
+    /// ("RD:" for Roger Deakins); anyone else's ("BB:", the interviewer) aren't taken for theirs.
+    /// `people`: the film's cinematographers and directors, as credited.
+    static func isQuestion(_ sentence: String, source: String?, people: [String] = []) -> Bool {
         let trimmed = sentence.trimmingCharacters(in: CharacterSet(charactersIn: " \"”’'"))
         if trimmed.hasSuffix("?") { return true }
         // "Tell us about the small bits you shot digitally.": asked, not said.
@@ -476,8 +492,29 @@ public struct TechSpecs: Equatable, Sendable {
         // "Filmmaker: Scott Derrickson first started…": the magazine speaking, not the filmmakers.
         if let source, !source.isEmpty, tag.caseInsensitiveCompare(source) == .orderedSame { return true }
         guard (1...5).contains(tag.count), tag.allSatisfy({ $0.isUppercase }) else { return false }
-        let initials = String((source ?? "").split(separator: " ").compactMap(\.first).filter(\.isUppercase))
-        return tag == "Q" || tag == "INT" || (initials.count >= 2 && tag == initials)
+        let publication = String((source ?? "").split(separator: " ").compactMap(\.first).filter(\.isUppercase))
+        if tag == "Q" || tag == "INT" || (publication.count >= 2 && tag == publication) { return true }
+        // The answer, the cinematographer by their job, or a label that isn't a person ("ISO:").
+        if notSpeakers.contains(tag) || tag.count < 2 { return false }
+        return !initials(of: people).contains(tag)
+    }
+
+    /// Capitals before a colon that aren't someone speaking.
+    static let notSpeakers: Set<String> = ["A", "DP", "DOP", "ISO", "ASA", "EI", "FPS", "LUT", "HDR", "SDR", "DCP", "DI", "VFX", "SFX",
+                                           "FX", "CGI", "LED", "HMI", "RGB", "NB", "PS", "EXT", "TV", "UK", "US", "USA", "NY", "LA"]
+
+    /// "RD" for Roger Deakins, "HVH" and "HH" for Hoyte van Hoytema, "JJR" and "JR" for Joshua James Richards.
+    static func initials(of people: [String]) -> Set<String> {
+        var found = Set<String>()
+        for person in people {
+            let parts = person.split(whereSeparator: { $0 == " " || $0 == "-" }).filter { !$0.isEmpty }
+            guard parts.count >= 2 else { continue }
+            let main = parts.filter { !($0.first?.isLowercase ?? true) }
+            found.insert(String(parts.compactMap(\.first)).uppercased())
+            found.insert(String(main.compactMap(\.first)).uppercased())
+            if let first = main.first?.first, let last = main.last?.first { found.insert(String([first, last]).uppercased()) }
+        }
+        return found
     }
 
     /// About the picture itself: the look words, leaving out the job's name ("the film's
@@ -578,7 +615,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// (its spelling and sentence): one that says this film was shot with it, about the whole film,
     /// before any other.
     static func tidy(_ specs: [Spec]) -> [Spec] {
-        func rank(_ spec: Spec) -> Int { (spec.capture ? 4 : 0) + (spec.aboutThisFilm ? 2 : 0) + (spec.partial ? 0 : 1) }
+        func rank(_ spec: Spec) -> Int { (spec.capture ? 8 : 0) + (spec.aboutThisFilm ? 4 : 0) + spec.scopeRank }
         var best: [String: Spec] = [:]
         var order: [String] = []
         for spec in specs {
@@ -595,10 +632,12 @@ public struct TechSpecs: Equatable, Sendable {
         }
         // A shorter name stays when it's the one said of this film's shooting.
         return unique.filter { spec in !unique.contains { covers($0, spec) && ($0.capture || !spec.capture) } }.map { kept in
-            // "IMAX 70 mm" for the battle scenes and "IMAX" for the whole film: the whole film.
+            // "IMAX 70 mm" for the battle scenes and "IMAX" for the whole film: the whole film (a
+            // stated share stands against a sentence that only says it was filmed that way).
             var spec = kept
-            if spec.partial, unique.contains(where: { covers(spec, $0) && !$0.partial && (!spec.capture || $0.capture) }) {
+            if spec.partial, unique.contains(where: { covers(spec, $0) && $0.scopeRank > spec.scopeRank && (!spec.capture || $0.capture) }) {
                 spec.partial = false
+                spec.share = false
             }
             return spec
         }
@@ -659,6 +698,9 @@ public struct TechSpecs: Equatable, Sendable {
         }
         let clause = String(before[clauseStart...]).replacingOccurrences(of: "not only", with: "")
         if clause.range(of: deniedBefore, options: .regularExpression) != nil { return true }
+        if clause.range(of: planBefore, options: .regularExpression) != nil, after.range(of: planKept, options: .regularExpression) == nil {
+            return true
+        }
         // Said of cameras in general, right before the name: "every digital camera is trying to
         // emulate 35mm film", "anything shot digitally" isn't this film's.
         let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
@@ -697,6 +739,59 @@ public struct TechSpecs: Equatable, Sendable {
         let short = title.split(separator: ":").first.map(String.init) ?? title
         return !after.hasPrefix(title.lowercased()) && !after.hasPrefix(short.lowercased())
     }
+
+    /// The words are what something was transferred, scanned, printed or blown up onto ("…transferring
+    /// images captured in IMAX format onto 35mm colour negative film"): a copy, not how it was shot.
+    /// What was transferred ("images captured in IMAX format") still says how it was shot.
+    static func transferTarget(_ sentence: String, at range: Range<String.Index>) -> Bool {
+        let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
+        return lead.range(of: transferredOnto, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    static let transferredOnto = #"\b(?:transferr?(?:ed|ing|s)?|scann?(?:ed|ing)|print(?:ed|ing)|output(?:ted|ting)?|record(?:ed|ing)?\s+(?:out|back)|film(?:ed)?[- ]out|blown\s+up|blow(?:ing)?[- ]up)\b[^.;]{0,120}?\b(?:onto|on to|to|into)\s+(?:[\w-]+\s+){0,3}$"#
+
+    /// Said of a stated share of the film, in the words' clause: "film about 40 minutes with IMAX
+    /// cameras", "15–20% IMAX footage", "for much of the filming". A running time ("the film runs 152
+    /// minutes") isn't a share.
+    static func saidOfShare(_ sentence: String, at range: Range<String.Index>) -> Bool {
+        guard let clause = clause(of: sentence, around: range) else { return false }
+        let whole = NSRange(clause.startIndex..., in: clause)
+        for match in shareOfFilm.matches(in: clause, range: whole) {
+            guard let found = Range(match.range, in: clause) else { continue }
+            let before = clause[..<found.lowerBound].suffix(30)
+            if before.range(of: #"\b(?:runs?|running(?: time)?(?: of)?|lasts?|length(?: of)?|clocks? in at|duration(?: of)?)\s*$"#,
+                            options: .regularExpression) != nil { continue }
+            return true
+        }
+        return false
+    }
+
+    static let shareOfFilm = try! NSRegularExpression(
+        pattern: #"\b\d{1,3}(?:\s*[–-]\s*\d{1,3})?\s+minutes\b(?!\s+long)|\b[1-9]\d?(?:\s*[–-]\s*[1-9]\d?)?\s*(?:%|per ?cent)(?=\W)\s*(?:of\s+(?:the\s+)?)?(?:[\w-]+\s+){0,2}?(?:footage|film|movie|picture|running time|runtime|material|shots|scenes)\b|\b(?:much|most|half|a third|a quarter|two[- ]thirds|three[- ]quarters|a portion|part) of the (?:film(?:ing)?|movie|footage|shoot(?:ing)?|picture|running time|production)\b"#,
+        options: [.caseInsensitive])
+
+    /// Said of the whole film in so many words, in the words' clause: "the entire film was shot with
+    /// IMAX cameras", "shot entirely on 35mm".
+    static func saidOfWholeFilm(_ sentence: String, at range: Range<String.Index>) -> Bool {
+        guard let clause = clause(of: sentence, around: range) else { return false }
+        return matches(wholeOfFilm, clause)
+    }
+
+    static let wholeOfFilm = try! NSRegularExpression(
+        pattern: #"\b(?:entirely|completely|wholly|exclusively|in (?:its|their) entirety|from (?:start|beginning) to (?:finish|end)|(?:the )?(?:whole|entire) (?:film|movie|picture|feature|production|shoot)|all of the (?:film|movie|footage|picture)|every (?:frame|shot|scene))\b|\b100\s*(?:%|per ?cent)"#,
+        options: [.caseInsensitive])
+
+    /// Words said while accepting an award ("On accepting his award, he said: 'try shooting…
+    /// celluloid'"): advice to others, not how this film was shot.
+    static let acceptanceSpeech = try! NSRegularExpression(
+        pattern: #"\b(?:on|upon|in|while|when|after)\s+accepting\b|\baccept(?:ed|ing|s)?\s+(?:the|his|her|their|an?|this|that)\s+(?:[\w'’-]+\s+){0,4}?(?:awards?|prizes?|oscars?|baftas?|honou?rs?|trophy|trophies|statuettes?|emmys?|golden globes?)\b|\bacceptance speech\b|\b(?:in|during)\s+(?:his|her|their|the)\s+(?:[\w'’-]+\s+){0,2}?speech\b"#,
+        options: [.caseInsensitive])
+
+    /// A plan or intention given up ("Though the original plan had been to shoot on 16mm film, the
+    /// feature was ultimately captured digitally"), unless the sentence says it was kept ("and we
+    /// did", "as planned").
+    static let planBefore = #"\b(?:the |our |my |his |her |their |an? )?(?:original |initial |first |early |earlier )?(?:plan|intention) (?:had been|was|were|is) (?:always |originally |initially |first )?to\b|\bhad (?:originally |initially |first )?(?:planned|intended) (?:on|to)\b"#
+    static let planKept = #"\b(?:and|which|as)\s+(?:that'?s\s+what\s+|so\s+|is\s+what\s+)?(?:we|they|he|she|i|it)\s+did\b|\bas (?:planned|intended)\b|\b(?:stuck|stayed) (?:to|with) (?:it|that|the plan)\b"#
 
     /// Whether the clause around `range` is about finishing, printing or showing the film.
     /// "Shot on 35mm and finished photochemically" still says what it was shot on.
@@ -769,7 +864,9 @@ public struct TechSpecs: Equatable, Sendable {
         let about = !matches(otherWork, lead) && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
             && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.upperBound]), title: title)
-        return (about, about && matches(captureCue, part) && !matches(lookMade, near))
+        // Said while accepting an award: advice to others, not how this film was shot.
+        let speech = matches(acceptanceSpeech, sentence)
+        return (about, about && !speech && matches(captureCue, part) && !matches(lookMade, near))
     }
 
     /// The part of the sentence the words at `range` are in, split only where the sentence turns

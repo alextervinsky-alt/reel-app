@@ -25,33 +25,43 @@ final class ReadingAgainTests: XCTestCase {
         }
         XCTAssertEqual(reading.retries, 4)
         XCTAssertEqual(reading.retryAt, now.addingTimeInterval(7 * 86_400), "six hours, a day, three days, a week")
+        // 1.9.5: after that it isn't given up (it was left for half a year, uncounted): every 30 days.
         reading = CraftIndex.merge(old: reading, new: CraftIndex(shotOn: [], names: [], sources: 1, unanswered: ["American Cinematographer"]), now: now)
-        XCTAssertNil(reading.retryAt, "after that what was read stands")
-        XCTAssertFalse(reading.willReadAgain)
+        XCTAssertEqual(reading.retryAt, now.addingTimeInterval(30 * 86_400))
+        XCTAssertTrue(reading.willReadAgain)
         // A complete reading clears it.
         let complete = CraftIndex.merge(old: reading, new: CraftIndex(shotOn: [.film], names: [], sources: 3), now: now)
         XCTAssertEqual(complete.retries, 0)
         XCTAssertNil(complete.retryAt)
     }
 
-    /// The 1.9.3 re-read of a whole library, while a magazine asks Reel to wait: a fuller reading by
-    /// 1.9.2's rules isn't lost, and isn't read again on every pass.
-    func testAFullerOlderReadingWaitsForTheSite() {
+    /// A re-read of a whole library by new rules while a magazine asks Reel to wait: what that
+    /// magazine said isn't lost, tag by tag and marked as from the earlier reading (1.9.5: not the
+    /// whole older reading kept, with tags the new rules no longer find), and the film isn't read
+    /// again on every pass.
+    func testWhatASiteSaidBeforeWaitsForTheSite() {
         let now = Date()
-        let old = CraftIndex(version: 4, readAt: now.addingTimeInterval(-86_400), shotOn: [.film, .anamorphic], names: ["Panaflex"], sources: 5)
-        var kept = CraftIndex.merge(old: old, new: CraftIndex(readAt: now, shotOn: [], names: [], sources: 1,
+        let old = CraftIndex(version: 6, readAt: now.addingTimeInterval(-86_400), shotOn: [.film, .anamorphic], names: ["Panaflex"],
+                             evidence: [CraftIndex.Evidence(shotOn: .film, text: "We shot on Kodak 5219.", source: "American Cinematographer"),
+                                        CraftIndex.Evidence(shotOn: .anamorphic, text: "It was shot with anamorphic lenses.", source: "Wikipedia")],
+                             sources: 5)
+        var kept = CraftIndex.merge(old: old, new: CraftIndex(readAt: now, shotOn: [], names: [], sources: 1, read: ["Wikipedia"],
                                                               unanswered: ["American Cinematographer"]), now: now)
-        XCTAssertEqual(kept.version, 4)
-        XCTAssertEqual(kept.shotOn, [.film, .anamorphic])
-        XCTAssertFalse(kept.isStale(now: now.addingTimeInterval(60)), "not on the next pass, though its rules are older")
+        XCTAssertEqual(kept.version, CraftIndex.currentVersion)
+        XCTAssertEqual(kept.shotOn, [.film], "the magazine's Film carried; Wikipedia was read again and no longer says Anamorphic")
+        XCTAssertNotNil(kept.evidence(for: .film)?.carriedFrom)
+        XCTAssertFalse(kept.isStale(now: now.addingTimeInterval(60)), "not on the next pass")
         XCTAssertTrue(kept.isStale(now: now.addingTimeInterval(7 * 3600)))
         for _ in 0..<3 {
-            kept = CraftIndex.merge(old: kept, new: CraftIndex(shotOn: [], names: [], sources: 1, unanswered: ["American Cinematographer"]), now: now)
+            kept = CraftIndex.merge(old: kept, new: CraftIndex(shotOn: [], names: [], sources: 1, read: ["Wikipedia"],
+                                                               unanswered: ["American Cinematographer"]), now: now)
         }
-        XCTAssertEqual(kept.version, 4, "four tries in all")
-        let full = CraftIndex.merge(old: kept, new: CraftIndex(shotOn: [.film, .anamorphic], names: [], sources: 5), now: now)
+        XCTAssertEqual(kept.shotOn, [.film], "for as long as the site doesn't answer")
+        let full = CraftIndex.merge(old: kept, new: CraftIndex(shotOn: [.film, .anamorphic], names: [], sources: 5,
+                                                               read: ["American Cinematographer", "Wikipedia"]), now: now)
         XCTAssertEqual(full.version, CraftIndex.currentVersion)
         XCTAssertNil(full.retryAt)
+        XCTAssertFalse(full.isPartial)
     }
 
     func testOlderReadingsOpenWithoutTheNewFields() throws {

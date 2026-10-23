@@ -33,6 +33,10 @@ public enum CraftReader {
                                    year: details.year, title: details.title, otherTitles: otherTitles)
         var index = CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
         index.unanswered = reading?.unanswered ?? []
+        // Where it was read, as its sentences' sources say it (what `CraftIndex.merge` compares).
+        var read: [String] = []
+        for text in texts where !read.contains(text.source ?? "Wikipedia") { read.append(text.source ?? "Wikipedia") }
+        index.read = read
         return (index, specs)
     }
 
@@ -52,11 +56,15 @@ public enum CraftReader {
                                                        directors: details.directors, year: details.year, otherTitles: otherTitles)
         var reached = articleTitle == nil
         var article: FilmArticle?
+        // Wikipedia didn't answer (not: answered that there's no such page, which is read).
+        var articleFailed = false
         if let articleTitle {
             do {
                 article = try await WikipediaClient().article(title: articleTitle)
                 reached = true
-            } catch {}
+            } catch {
+                articleFailed = true
+            }
         }
         let reading = await fetched
         guard reached || !reading.sources.isEmpty || reading.cinematographer != nil else { return nil }
@@ -64,8 +72,19 @@ public enum CraftReader {
         let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
         var read = evaluated.index
         // The film's own article didn't come: read again later too.
-        if articleTitle != nil, article == nil, !read.unanswered.contains("Wikipedia") { read.unanswered.append("Wikipedia") }
+        if articleFailed, !read.unanswered.contains("Wikipedia") { read.unanswered.append("Wikipedia") }
         return Reading(index: read, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
+                                                       articleMissing: articleTitle != nil && article == nil && !articleFailed,
                                                        reading: reading, specs: evaluated.specs, index: read, now: now))
+    }
+
+    /// What the Cinematography tab read (its article and sources, already fetched), as the summary
+    /// and its log: the same rules and the same log as the background reading.
+    public static func reading(of details: TMDBMovieDetails, articleTitle: String?, article: FilmArticle?, reading: CameraReading?,
+                               colour: [String]?, otherTitles: [String] = [], now: Date = Date()) -> Reading {
+        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
+        let sources = reading ?? CameraReading(sources: [], more: [], cinematographer: nil)
+        return Reading(index: evaluated.index, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
+                                                                  reading: sources, specs: evaluated.specs, index: evaluated.index, now: now))
     }
 }

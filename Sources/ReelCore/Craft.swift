@@ -47,7 +47,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 6: round-ups found by their spec sheets and list pages by their title, a sheet counted only in
     /// the film's own block; Moviecam alone is lenses; the magazine's own lines, childhood and what's
     /// said of another film in a comparison aren't this film's.
-    public static let currentVersion = 6
+    /// 7: a plan given up, what footage was transferred onto, an award speech and an interviewer's
+    /// line aren't how it was shot; a stated share ("about 28 minutes of IMAX") is in part.
+    public static let currentVersion = 7
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
@@ -64,12 +66,19 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         public let source: String
         /// Every sentence behind it says part of the film only ("Black & white, in part").
         public var partial: Bool
+        /// Carried from an earlier reading because its source couldn't be read again (a site didn't
+        /// answer): when that reading was made, and by which rules. Nil: found by the reading it's in.
+        public var carriedFrom: Date?
+        public var carriedRules: Int?
 
-        public init(shotOn: ShotOn, text: String, source: String, partial: Bool = false) {
+        public init(shotOn: ShotOn, text: String, source: String, partial: Bool = false, carriedFrom: Date? = nil,
+                    carriedRules: Int? = nil) {
             self.shotOn = shotOn
             self.text = text
             self.source = source
             self.partial = partial
+            self.carriedFrom = carriedFrom
+            self.carriedRules = carriedRules
         }
 
         public init(from decoder: Decoder) throws {
@@ -78,7 +87,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             text = try c.decode(String.self, forKey: .text)
             source = try c.decode(String.self, forKey: .source)
             partial = try c.decodeIfPresent(Bool.self, forKey: .partial) ?? false
+            carriedFrom = try c.decodeIfPresent(Date.self, forKey: .carriedFrom)
+            carriedRules = try c.decodeIfPresent(Int.self, forKey: .carriedRules)
         }
+
+        public var isCarried: Bool { carriedFrom != nil }
+
+        /// The site it was read on: "Wikipedia" for "Wikipedia: Roger Deakins" too.
+        public var site: String { CraftIndex.site(of: source) }
     }
 
     public var version: Int
@@ -89,23 +105,25 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     public var names: [String]
     /// One for each of `shotOn`.
     public var evidence: [Evidence]
-    /// How many texts it was read from (the article, interviews, the cinematographer's article):
-    /// a later reading from fewer, while a site is down, doesn't replace it (see `keeps`).
+    /// How many texts it was read from (the article, interviews, the cinematographer's article).
     public var sources: Int
+    /// Where those texts were read, as their sentences' sources say it ("American Cinematographer",
+    /// "Wikipedia", "Wikipedia: Roger Deakins"): what was read again, for `merge`.
+    public var read: [String] = []
     /// How it was found (see `currentDiscovery`); 1 for readings before 1.9.0.
     public var discovery: Int
-    /// Sites that didn't answer or asked Reel to wait while it was read: read again in a few hours.
+    /// Sites that didn't answer or asked Reel to wait while it was read: read again later.
     public var unanswered: [String] = []
-    /// Readings in a row that came out thinner than the one kept, or with a site unanswered (after
-    /// four more, what's read then stands).
+    /// Readings in a row that were incomplete: a site unanswered, or a tag carried over.
     public var retries = 0
-    /// When it's read again, when that's planned (a site didn't answer, or less was read than
-    /// before): until then it isn't, whatever the rules.
+    /// When it's read again, when that's planned (a site didn't answer, a tag was carried over):
+    /// until then it isn't, unless the rules change.
     public var retryAt: Date?
 
     public init(version: Int = CraftIndex.currentVersion, readAt: Date = Date(), shotOn: [ShotOn], names: [String],
-                evidence: [Evidence] = [], sources: Int = 0, discovery: Int = CraftIndex.currentDiscovery,
+                evidence: [Evidence] = [], sources: Int = 0, read: [String] = [], discovery: Int = CraftIndex.currentDiscovery,
                 unanswered: [String] = [], retries: Int = 0, retryAt: Date? = nil) {
+        self.read = read
         self.discovery = discovery
         self.unanswered = unanswered
         self.retries = retries
@@ -126,60 +144,150 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         names = try c.decode([String].self, forKey: .names)
         evidence = try c.decodeIfPresent([Evidence].self, forKey: .evidence) ?? []
         sources = try c.decodeIfPresent(Int.self, forKey: .sources) ?? 0
+        read = try c.decodeIfPresent([String].self, forKey: .read) ?? []
         discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 1
         unanswered = try c.decodeIfPresent([String].self, forKey: .unanswered) ?? []
         retries = try c.decodeIfPresent(Int.self, forKey: .retries) ?? 0
         retryAt = try c.decodeIfPresent(Date.self, forKey: .retryAt)
     }
 
+    /// Tries in a row while a tag is carried over because its page wasn't found again (every site
+    /// answering): after that the reading made then stands.
     public static let maxRetries = 4
 
-    /// How long until a reading is tried again: after a site didn't answer, six hours, then a day,
-    /// three days, a week (a captcha lifts in hours, a site down for longer gets days); after
-    /// fewer texts with every site answering, a week.
-    static func retryDelay(_ retries: Int, unanswered: Bool) -> TimeInterval {
+    /// How long until an incomplete reading is tried again: after a site didn't answer, six hours,
+    /// then a day, three days, a week, and then every 30 days for as long as it doesn't (a captcha
+    /// lifts in hours, a site down for longer gets days, one gone for good isn't asked every week);
+    /// when a tag was carried over with every site answering, a week.
+    public static func retryDelay(_ retries: Int, unanswered: Bool) -> TimeInterval {
         guard unanswered else { return 7 * 86_400 }
-        let delays: [TimeInterval] = [6 * 3600, 86_400, 3 * 86_400, 7 * 86_400]
-        return delays[min(max(retries, 1), 4) - 1]
+        let delays: [TimeInterval] = [6 * 3600, 86_400, 3 * 86_400, 7 * 86_400, 30 * 86_400]
+        return delays[min(max(retries, 1), delays.count) - 1]
     }
 
+    /// To be read again: by newer rules at once; otherwise when planned, after half a year, or when
+    /// finding has improved and it was read from little.
     public func isStale(now: Date = Date()) -> Bool {
-        // Planned: not before then (a reading kept by older rules isn't read again on every pass).
+        if version < CraftIndex.currentVersion { return true }
         if let retryAt { return now >= retryAt }
-        return version < CraftIndex.currentVersion || readAt < now.addingTimeInterval(-CraftIndex.maxAge)
-            || (discovery < CraftIndex.currentDiscovery && isThin)
+        return readAt < now.addingTimeInterval(-CraftIndex.maxAge) || (discovery < CraftIndex.currentDiscovery && isThin)
     }
 
-    /// To be read again because a site didn't answer (Settings counts these).
-    public var willReadAgain: Bool { retryAt != nil && !unanswered.isEmpty }
+    /// Not everything could be read again: a site didn't answer, or a tag stands on an earlier
+    /// reading's sentence. Read again automatically (`retryAt`); Settings counts these.
+    public var isPartial: Bool { !unanswered.isEmpty || evidence.contains(where: \.isCarried) }
+
+    /// To be read again because it's partial (Settings counts these).
+    public var willReadAgain: Bool { retryAt != nil && isPartial }
 
     /// Read from the film's article alone (or nothing), or nothing found on what it was shot on:
     /// worth reading again when finding improves.
     public var isThin: Bool { sources <= 1 || shotOn.isEmpty }
 
-    /// What's kept when a film has been read again: the new reading, unless it's thinner than the
-    /// one kept (fewer texts, found the same way: a site down or asking Reel to wait, by these rules
-    /// or older ones). Then the kept one stays and the film is tried again later (see `retryDelay`),
-    /// four times at most; after that what's read stands. A reading found a better way always
-    /// replaces it, even from fewer texts: the ones it no longer reads were about another film.
+    /// "Wikipedia" for "Wikipedia: Roger Deakins": the site a source is on, as `unanswered` names it.
+    public static func site(of source: String) -> String {
+        source.components(separatedBy: ": ").first ?? source
+    }
+
+    /// A tag the new reading no longer has, and why it wasn't kept.
+    public struct Dropped: Equatable, Sendable {
+        public let shotOn: ShotOn
+        public let reason: String
+    }
+
+    /// What `merge` kept: the reading stored, the tags carried over from the one before (marked so),
+    /// and the ones dropped.
+    public struct Merged: Equatable, Sendable {
+        public let index: CraftIndex
+        public let carried: [Evidence]
+        public let dropped: [Dropped]
+    }
+
+    /// What's stored when a film has been read again: the new reading, tag by tag. A tag it no longer
+    /// has is dropped when its sentence's source was read again (by these rules it doesn't say so), or
+    /// its source answered but its page wasn't found again for four readings, or it was found by
+    /// older rules. It's carried over, marked with the reading it came from, only while its source
+    /// couldn't be read again: its site didn't answer (for as long as it doesn't, with the reading
+    /// tried again later), or, by the same rules, its page wasn't found this time. A reading found a
+    /// better way (discovery) replaces the old one whole: the texts it no longer reads were about
+    /// another film.
     public static func merge(old: CraftIndex?, new: CraftIndex, now: Date = Date()) -> CraftIndex {
-        var new = new
-        let unanswered = !new.unanswered.isEmpty
+        merging(old: old, new: new, now: now).index
+    }
+
+    public static func merging(old: CraftIndex?, new: CraftIndex, now: Date = Date()) -> Merged {
+        var merged = new
         let tries = (old?.retries ?? 0) + 1
-        if var kept = old, new.sources < kept.sources, new.discovery <= kept.discovery, tries <= maxRetries {
-            kept.unanswered = new.unanswered
-            kept.retries = tries
-            kept.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: unanswered))
-            return kept
+        var carried: [Evidence] = [], dropped: [Dropped] = []
+        if let old {
+            for kind in old.shotOn where !new.shotOn.contains(kind) {
+                guard let evidence = old.evidence(for: kind) else {
+                    dropped.append(Dropped(shotOn: kind, reason: "the earlier reading kept no sentence for it"))
+                    continue
+                }
+                let site = evidence.site
+                // Worked out from Wikidata and TMDB each time, not read from a page.
+                let fromPage = site != "Wikidata" && site != "TMDB"
+                let siteDown = fromPage && new.unanswered.contains(site)
+                let readAgain = new.read.contains(evidence.source)
+                let sameRules = (evidence.carriedRules ?? old.version) == new.version
+                let carry: Bool
+                let reason: String
+                if new.discovery > old.discovery {
+                    carry = false
+                    reason = "found again a better way, which no longer reads its source"
+                } else if !fromPage {
+                    carry = false
+                    reason = "\(site) no longer says so"
+                } else if siteDown {
+                    carry = true
+                    reason = ""
+                } else if readAgain {
+                    carry = false
+                    reason = "\(evidence.source) was read again and, by rules \(new.version), doesn't say so"
+                } else if !sameRules {
+                    carry = false
+                    reason = "found by rules \(evidence.carriedRules ?? old.version); \(evidence.source) wasn't found again to read by rules \(new.version)"
+                } else if tries <= maxRetries {
+                    carry = true
+                    reason = ""
+                } else {
+                    carry = false
+                    reason = "\(evidence.source) wasn't found again in \(maxRetries) readings"
+                }
+                if carry {
+                    var kept = evidence
+                    kept.carriedFrom = evidence.carriedFrom ?? old.readAt
+                    kept.carriedRules = evidence.carriedRules ?? old.version
+                    carried.append(kept)
+                } else {
+                    dropped.append(Dropped(shotOn: kind, reason: reason))
+                }
+            }
+            if !carried.isEmpty {
+                let kinds = Set(merged.shotOn).union(carried.map(\.shotOn))
+                merged.shotOn = ShotOn.allCases.filter { kinds.contains($0) }
+                let byKind = Dictionary((merged.evidence + carried).map { ($0.shotOn, $0) }, uniquingKeysWith: { first, _ in first })
+                merged.evidence = merged.shotOn.compactMap { byKind[$0] }
+                // Its names too, when read by these rules: search still finds what that page named.
+                if old.version == new.version {
+                    var names = merged.names
+                    for name in old.names where !names.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { names.append(name) }
+                    merged.names = Array(names.prefix(30))
+                }
+            }
         }
-        if unanswered, tries <= maxRetries {
-            new.retries = tries
-            new.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: true))
+        if !new.unanswered.isEmpty {
+            merged.retries = tries
+            merged.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: true))
+        } else if !carried.isEmpty {
+            merged.retries = tries
+            merged.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: false))
         } else {
-            new.retries = 0
-            new.retryAt = nil
+            merged.retries = 0
+            merged.retryAt = nil
         }
-        return new
+        return Merged(index: merged, carried: carried, dropped: dropped)
     }
 
     /// "Black & white", or "Black & white (in part)".
@@ -203,18 +311,27 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             }
         }
         var evidence: [ShotOn: Evidence] = [:]
+        var scope: [ShotOn: Int] = [:]
         // Only what's said to have been shot with: the names alone are for the notes and search.
         for spec in specs.specs where spec.capture {
             for found in Self.shotOn(spec) {
                 // Film and Digital both show when a film mixes them; "in part" is for the rest.
-                var partial = spec.partial && ![.film, .digital].contains(found)
+                let mixed = [.film, .digital].contains(found)
+                var partial = spec.partial && !mixed
+                var rank = mixed ? 1 : spec.scopeRank
                 // A black-and-white stock (Double-X) is often for some scenes: in part, unless
                 // Wikidata says the whole film is black and white (below).
-                if found == .blackAndWhite, spec.name != "Black and white" { partial = true }
+                if found == .blackAndWhite, spec.name != "Black and white", !partial {
+                    partial = true
+                    rank = 0
+                }
                 let said = Evidence(shotOn: found, text: spec.evidence ?? spec.name, source: spec.source ?? "Wikipedia", partial: partial)
-                // One sentence about the whole film outweighs any number about part of it.
-                if let known = evidence[found], !(known.partial && !said.partial) { continue }
+                // The whole film in so many words outweighs a stated share ("about 28 minutes"), which
+                // outweighs a sentence that only says it was filmed that way, which outweighs any
+                // number about part of it. Among equals, the first read.
+                if let known = scope[found], known >= rank { continue }
                 evidence[found] = said
+                scope[found] = rank
             }
         }
         let colours = (colour ?? []).map { $0.lowercased() }

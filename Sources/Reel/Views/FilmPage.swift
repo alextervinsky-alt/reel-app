@@ -525,7 +525,9 @@ struct FilmFactSheet: View {
         return model.shownShotOn(film).compactMap { kind -> String? in
             guard let why = craft.evidence(for: kind) else { return nil }
             let said = Spoilers.tellsTheStory(why.text) ? "" : ": “\(why.text)”"
-            return "\(craft.label(for: kind)), from \(why.source)\(said)"
+            // Kept from an earlier reading while its site doesn't answer: said so, with its date.
+            let earlier = why.carriedFrom.map { " (from the reading of \($0.formatted(date: .abbreviated, time: .omitted)); \(why.site) didn't answer since)" } ?? ""
+            return "\(craft.label(for: kind)), from \(why.source)\(earlier)\(said)"
         }.joined(separator: "\n\n")
     }
 

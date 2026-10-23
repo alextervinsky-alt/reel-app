@@ -248,13 +248,16 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     public var extras: [FilmExtra]
     /// The gear and techniques read about the film, for searching by craft (see `CraftIndex`).
     public var craft: CraftIndex?
+    /// The last try at reading it that came to nothing, while it's waiting to be tried again (see
+    /// `CraftQueue`).
+    public var craftAttempt: CraftAttempt?
     /// Read from the file name once, not stored on disk (so parser improvements apply automatically).
     public let parsed: ParsedFilename
 
     enum CodingKeys: String, CodingKey {
         case driveID, relativePath, fileName, size, modified, addedAt, matchState, matchScore, tmdb, candidates, lastError
         case ratings, reception, infoVersion, lastLookup, ratingsDue, ratingsTriedAt, funFacts, checkedStills, extras
-        case infoUpdatedAt, checkedStillsVersion, craft
+        case infoUpdatedAt, checkedStillsVersion, craft, craftAttempt
     }
 
     /// Bump when Reel starts storing more film info, so existing entries get refreshed.
@@ -295,6 +298,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         self.checkedStillsVersion = nil
         self.extras = extras
         self.craft = nil
+        self.craftAttempt = nil
         self.parsed = FilenameParser.parse(fileName)
     }
 
@@ -323,6 +327,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         infoUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .infoUpdatedAt)
         checkedStillsVersion = try c.decodeIfPresent(Int.self, forKey: .checkedStillsVersion)
         craft = try? c.decodeIfPresent(CraftIndex.self, forKey: .craft)
+        craftAttempt = try? c.decodeIfPresent(CraftAttempt.self, forKey: .craftAttempt)
         if checkedStillsVersion != FilmEntry.currentStillsCheck { checkedStills = nil }
         if infoUpdatedAt == nil, let id = tmdb?.id {
             // Saved before Reel kept this date: spread the first refresh over the coming month
@@ -365,6 +370,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         if tmdb?.id != details.id {
             funFacts = nil
             craft = nil
+            craftAttempt = nil
         }
         if tmdb?.stillPaths != details.stillPaths { checkedStills = nil }
         tmdb = details
