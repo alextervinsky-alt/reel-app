@@ -14,8 +14,13 @@ public struct CameraReading: Equatable, Sendable {
         public let title: String
         /// "American Cinematographer".
         public let site: String
+        /// The address read: HTTPS, even when it was cited as plain HTTP (see `cited`).
         public let url: URL
         public let paragraphs: [String]
+        /// The address as cited, when it wasn't the one read ("http://…" read as "https://…").
+        public var cited: URL? = nil
+        /// Where the site sent Reel, when it redirected.
+        public var landed: URL? = nil
         public var id: URL { url }
     }
 
@@ -105,7 +110,103 @@ public actor HostPacer {
     }
 }
 
+/// Why a page or a search wasn't read. Only `unanswered` and `wait` leave the film's reading
+/// incomplete (read again automatically, see `CraftIndex.merge`): a page that's gone, or that the
+/// site refuses to Reel (a paywall, a sign-in, "access denied"), is read again only when the film is
+/// (new rules, or half a year on).
+public enum SourceFailure: Equatable, Sendable {
+    /// Not there: 404, 410, another 4xx, a bad address, or moved to the site's front page.
+    case gone(String)
+    /// There, but not for Reel: 401, 402, 403 without a challenge, 451, too large, or only over
+    /// plain HTTP.
+    case restricted(String)
+    /// Didn't come: timed out, the connection dropped, the address not found, a failed secure
+    /// connection, a server error, or an answer in place of a search's: nothing is known.
+    case unanswered(String)
+    /// Asked Reel to wait: "too many requests", a captcha or a challenge page. The site is left
+    /// alone for a while (see `HostPacer`).
+    case wait(String)
+
+    public var retried: Bool {
+        switch self {
+        case .unanswered, .wait: true
+        case .gone, .restricted: false
+        }
+    }
+
+    /// For the reading log.
+    public var reason: String {
+        switch self {
+        case .gone(let why): "gone: \(why)"
+        case .restricted(let why): "not open to Reel: \(why)"
+        case .unanswered(let why): "didn't answer: \(why) (read again later)"
+        case .wait(let why): "asked Reel to wait: \(why) (read again later)"
+        }
+    }
+
+    /// What an HTTP answer means. `requested` and `landed`: the address asked for and where the
+    /// site's redirects ended.
+    public static func of(status: Int, data: Data, requested: URL, landed: URL?) -> SourceFailure? {
+        if status == 429 { return .wait("too many requests (429)") }
+        if status == 202 || ([403, 503].contains(status) && CameraSources.isChallenge(data)) { return .wait("a challenge page in place of the page") }
+        if status >= 500 { return .unanswered("the server failed (\(status))") }
+        if [401, 402, 403, 407, 451].contains(status) { return .restricted("refused (\(status)): a sign-in, a paywall or access denied") }
+        if [404, 410].contains(status) { return .gone("not found (\(status))") }
+        if (400..<500).contains(status) { return .gone("not available (\(status))") }
+        guard (200..<300).contains(status) else { return .unanswered("an unexpected answer (\(status))") }
+        if data.count >= 6_000_000 { return .restricted("too large to read") }
+        if let landed, CameraSources.isFrontPage(landed, for: requested) { return .gone("moved to the site's front page") }
+        return nil
+    }
+
+    /// What a request that didn't get an answer means (`URLError` codes, the same on Linux).
+    public static func of(error: Error) -> SourceFailure {
+        switch (error as NSError).code {
+        case -1022: return .restricted("only over plain HTTP, which Reel doesn't load")
+        case -1000, -1002: return .gone("not a web address Reel can read")
+        case -1013: return .restricted("a sign-in")
+        case -1001: return .unanswered("timed out")
+        case -1003, -1006: return .unanswered("the site's address wasn't found")
+        case -1004: return .unanswered("couldn't connect")
+        case -1005: return .unanswered("the connection dropped")
+        case -1009: return .unanswered("offline")
+        case -1200, -1201, -1202, -1203, -1204, -1205, -1206: return .unanswered("the secure connection failed")
+        default: return .unanswered("no answer")
+        }
+    }
+}
+
 public enum CameraSources {
+    /// The same page over HTTPS: a link cited as "http://…" (as Wikipedia keeps older references) is
+    /// read as "https://…", the same host, path and query. macOS doesn't load plain HTTP, and Reel
+    /// doesn't ask it to. Already HTTPS, or not a web address: as it is.
+    public static func secure(_ url: URL) -> URL {
+        guard url.scheme?.lowercased() == "http", var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        parts.scheme = "https"
+        if parts.port == 80 { parts.port = nil }
+        return parts.url ?? url
+    }
+
+    /// What makes two addresses the same page: the host without "www.", the path without its
+    /// trailing "/" and the query without tracking tags, whatever the scheme.
+    public static func identity(_ url: URL) -> String {
+        var host = (url.host ?? "").lowercased()
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let query = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .filter { !$0.name.lowercased().hasPrefix("utm_") }
+            .map { $0.name + "=" + ($0.value ?? "") }
+        return host + "/" + path + (query.isEmpty ? "" : "?" + query.joined(separator: "&"))
+    }
+
+    /// A page asked for by its own address that ends on the site's front page: what it was is gone.
+    public static func isFrontPage(_ landed: URL, for requested: URL) -> Bool {
+        let asked = requested.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let ended = landed.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+        return !asked.isEmpty && (ended.isEmpty || ["index.php", "index.html", "index.htm", "home", "en"].contains(ended))
+            && (landed.query ?? "").isEmpty
+    }
+
     /// A page asking for proof that a person is reading (SiteGround's "sgcaptcha", Cloudflare's
     /// challenge), not the page.
     public static func isChallenge(_ data: Data) -> Bool {
@@ -140,28 +241,31 @@ public enum CameraSources {
 
     /// The cited links worth reading, best first: craft sites, then news pieces about the shooting;
     /// those naming the cinematographer before the rest. At most `limit`.
-    public static func pick(_ links: [String], cinematographers: [String], limit: Int = 8) -> [(url: URL, site: String)] {
+    /// Each is read over HTTPS (see `secure`), and the same page cited twice ("http://www…" and
+    /// "https://…") once; `cited` is the address as cited when it isn't the one read.
+    public static func pick(_ links: [String], cinematographers: [String], limit: Int = 8) -> [(url: URL, site: String, cited: URL?)] {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map { $0.lowercased() } }
             .filter { $0.count >= 3 }
         var seen = Set<String>()
-        var picked: [(url: URL, site: String, rank: Int)] = []
+        var picked: [(url: URL, site: String, cited: URL?, rank: Int)] = []
         for (index, link) in links.enumerated() {
-            guard let url = URL(string: link), let scheme = url.scheme, scheme.hasPrefix("http"),
-                  let host = url.host?.lowercased() else { continue }
+            guard let given = URL(string: link), let scheme = given.scheme?.lowercased(), scheme == "http" || scheme == "https",
+                  let host = given.host?.lowercased() else { continue }
+            let url = secure(given)
             let path = url.path.lowercased()
             // Front pages, tags and searches aren't articles.
             guard path.count > 8, !path.contains("/tag/"), !path.contains("/search"), !path.contains("/category/") else { continue }
-            let key = host + path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            guard seen.insert(key).inserted else { continue }
+            guard seen.insert(identity(url)).inserted else { continue }
+            let cited = url == given ? nil : given
             let namesThem = surnames.contains { path.contains($0) }
             if let site = craftSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }) {
-                picked.append((url, site.name, (namesThem ? 0 : 100) + index))
+                picked.append((url, site.name, cited, (namesThem ? 0 : 100) + index))
             } else if let site = newsSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }),
                       namesThem || craftWords.contains(where: { path.contains($0) }) {
-                picked.append((url, site.name, (namesThem ? 200 : 300) + index))
+                picked.append((url, site.name, cited, (namesThem ? 200 : 300) + index))
             }
         }
-        return picked.sorted { $0.rank < $1.rank }.prefix(limit).map { ($0.url, $0.site) }
+        return picked.sorted { $0.rank < $1.rank }.prefix(limit).map { ($0.url, $0.site, $0.cited) }
     }
 
     /// A title as sites write it in their addresses: "The Brutalist" → "the-brutalist",
@@ -205,7 +309,7 @@ public enum CameraSources {
         var found: [(url: URL, site: String, title: String?)] = []
         for hit in hits where isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link)
             && !namesOtherFilm(hit.title, link: hit.link, film: filmTitle, otherTitles: otherTitles) {
-            guard let link = URL(string: hit.link), !found.contains(where: { $0.url == link }) else { continue }
+            guard let link = URL(string: hit.link).map(secure), !found.contains(where: { identity($0.url) == identity(link) }) else { continue }
             found.append((link, site, HTMLText.plain(hit.title)))
         }
         return Array(found.prefix(limit))
@@ -404,24 +508,28 @@ public struct CameraSourcesClient: Sendable {
         async let stories = storyPages(filmTitle: filmTitle, cinematographers: cinematographers)
         async let person = cinematographer(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
-        // then what Wikipedia cites; each page once.
-        var links = await asc
-        let fromSites = await british
+        // then what Wikipedia cites; each page once, however its address is written.
+        var links = (await asc).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
+        let fromSites = (await british).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
         let fromArticle = await cited
         // Found by searching the magazines for the title (not cited by the film's own article):
         // read only when the page names the film's people or year.
-        let searched = Set((links + fromSites).map(\.url)).subtracting(fromArticle.map(\.url))
-        for link in fromSites + fromArticle where !links.contains(where: { $0.url.path == link.url.path && $0.url.host == link.url.host }) {
+        let searched = Set((links + fromSites).map { CameraSources.identity($0.url) })
+            .subtracting(fromArticle.map { CameraSources.identity($0.url) })
+        for link in fromSites + fromArticle where !links.contains(where: { CameraSources.identity($0.url) == CameraSources.identity(link.url) }) {
             links.append(link)
         }
-        let pages = await withTaskGroup(of: (Int, CameraReading.Source?, CameraReading.Source).self) { group in
+        let pages = await withTaskGroup(of: (Int, CameraReading.Source?, CameraReading.Source, SourceFailure?).self) { group in
             for (index, link) in links.prefix(8).enumerated() {
                 group.addTask {
-                    let fallback = CameraReading.Source(title: link.title ?? link.site, site: link.site, url: link.url, paragraphs: [])
-                    return (index, await page(link.url, site: link.site, title: link.title, noting: unanswered), fallback)
+                    var fallback = CameraReading.Source(title: link.title ?? link.site, site: link.site, url: link.url, paragraphs: [])
+                    fallback.cited = link.cited
+                    var got = await page(link.url, site: link.site, title: link.title, noting: unanswered)
+                    got.source?.cited = link.cited
+                    return (index, got.source, fallback, got.failure)
                 }
             }
-            var results: [(Int, CameraReading.Source?, CameraReading.Source)] = []
+            var results: [(Int, CameraReading.Source?, CameraReading.Source, SourceFailure?)] = []
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
@@ -430,11 +538,11 @@ public struct CameraSourcesClient: Sendable {
         let storiesRead = await stories
         // Another film's article (same title) isn't read, nor offered as a link.
         let otherFilm = Set(pages.compactMap { $0.1 }.filter {
-            searched.contains($0.url) && !CameraSources.namesFilm($0.paragraphs, cinematographers: cinematographers,
-                                                                  directors: directors, year: year)
+            searched.contains(CameraSources.identity($0.url)) && !CameraSources.namesFilm($0.paragraphs, cinematographers: cinematographers,
+                                                                                          directors: directors, year: year)
         }.map(\.url))
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
-            + storiesRead.filter { story in !pages.contains { $0.2.url.path == story.url.path && $0.2.url.host == story.url.host } }
+            + storiesRead.filter { story in !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) } }
         let readable = found.filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
         let read = Array(readable.prefix(6))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
@@ -448,18 +556,19 @@ public struct CameraSourcesClient: Sendable {
             return "six sources were already read"
         }
         var skipped: [CameraReading.Skipped] = []
-        for (_, page, fallback) in pages where !read.contains(where: { $0.url == fallback.url }) {
+        for (_, page, fallback, failure) in pages where !read.contains(where: { $0.url == fallback.url }) {
             skipped.append(CameraReading.Skipped(source: page ?? fallback,
-                                                 reason: page.map(reason) ?? "couldn't be read (a paywall, gone, or the site didn't answer)"))
+                                                 reason: page.map(reason) ?? failure?.reason ?? "couldn't be read"))
         }
-        for story in storiesRead where !read.contains(where: { $0.url == story.url }) && !pages.contains(where: { $0.2.url == story.url }) {
+        for story in storiesRead where !read.contains(where: { $0.url == story.url })
+            && !pages.contains(where: { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }) {
             skipped.append(CameraReading.Skipped(source: story, reason: found.contains { $0.url == story.url } ? reason(story) : "the same page as one already found"))
         }
         return CameraReading(sources: read, more: more, cinematographer: await person, unanswered: await unanswered.all(), skipped: skipped)
     }
 
     /// The external links of the film's Wikipedia article (its references), picked for the craft.
-    func citedLinks(articleTitle: String?, cinematographers: [String]) async -> [(url: URL, site: String, title: String?)] {
+    func citedLinks(articleTitle: String?, cinematographers: [String]) async -> [(url: URL, site: String, title: String?, cited: URL?)] {
         struct Response: Decodable {
             struct Query: Decodable {
                 struct Page: Decodable {
@@ -481,7 +590,7 @@ public struct CameraSourcesClient: Sendable {
             "action": "query", "prop": "extlinks", "titles": articleTitle, "ellimit": "500", "redirects": "1", "format": "json",
         ], session: session) else { return [] }
         let links = (response.query?.pages?.values.first?.extlinks ?? []).compactMap { $0.url ?? $0.star }
-        return CameraSources.pick(links, cinematographers: cinematographers).map { ($0.url, $0.site, nil) }
+        return CameraSources.pick(links, cinematographers: cinematographers).map { ($0.url, $0.site, nil, $0.cited) }
     }
 
     /// American Cinematographer's articles about the film (its site has a free WordPress API).
@@ -497,7 +606,7 @@ public struct CameraSourcesClient: Sendable {
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
         guard let url = components.url,
-              let data = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting)
+              case .page(let data, _) = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting)
         else { return [] }
         // An answer that isn't the search's (a page in its place): not "nothing written", read again later.
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
@@ -520,7 +629,7 @@ public struct CameraSourcesClient: Sendable {
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
                                  URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
         guard let url = components.url,
-              let data = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting)
+              case .page(let data, _) = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting)
         else { return [] }
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
             await noting?.add("British Cinematographer")
@@ -546,7 +655,7 @@ public struct CameraSourcesClient: Sendable {
         return await withTaskGroup(of: (Int, CameraReading.Source?).self) { group in
             for (index, guess) in guesses.enumerated() {
                 group.addTask {
-                    guard let url = URL(string: guess.0), let found = await page(url, site: guess.1, title: nil),
+                    guard let url = URL(string: guess.0), let found = await page(url, site: guess.1, title: nil).source,
                           found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else { return (index, nil) }
                     return (index, found)
                 }
@@ -557,12 +666,27 @@ public struct CameraSourcesClient: Sendable {
         }
     }
 
-    /// One page's title and paragraphs; nil when it can't be read.
-    func page(_ url: URL, site: String, title: String?, noting: UnansweredSites? = nil) async -> CameraReading.Source? {
-        guard let data = await fetch(url, accept: "text/html", site: site, noting: noting),
-              let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else { return nil }
-        let paragraphs = HTMLText.paragraphs(html)
-        return CameraReading.Source(title: title ?? HTMLText.title(html) ?? site, site: site, url: url, paragraphs: paragraphs)
+    /// One page's title and paragraphs, or why it couldn't be read. Asked for over HTTPS.
+    func page(_ url: URL, site: String, title: String?, noting: UnansweredSites? = nil) async
+        -> (source: CameraReading.Source?, failure: SourceFailure?) {
+        switch await fetch(CameraSources.secure(url), accept: "text/html", site: site, noting: noting) {
+        case .failed(let failure):
+            return (nil, failure)
+        case .page(let data, let landed):
+            guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+                return (nil, .gone("not a readable page"))
+            }
+            var source = CameraReading.Source(title: title ?? HTMLText.title(html) ?? site, site: site, url: CameraSources.secure(url),
+                                              paragraphs: HTMLText.paragraphs(html))
+            source.landed = landed
+            return (source, nil)
+        }
+    }
+
+    /// What a request brought: the page (and where a redirect ended, when it did), or why not.
+    enum Fetched: Sendable {
+        case page(Data, landed: URL?)
+        case failed(SourceFailure)
     }
 
     /// The cinematographer's Wikipedia article: its opening and the paragraphs naming the film.
@@ -583,11 +707,12 @@ public struct CameraSourcesClient: Sendable {
     /// Spaces the requests to each site and pauses a site that asks Reel to wait.
     static let pacer = HostPacer()
 
-    /// The page, or nil. A site that asks Reel to wait (a captcha page, "too many requests",
-    /// "accepted" with nothing in it) is paused for a while and noted, so the film is read again
-    /// later rather than kept as if nothing were written about it; so is a magazine's search that
-    /// doesn't answer (`search`). A page that's gone or paywalled is just not read.
-    private func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil) async -> Data? {
+    /// The page, or why not (see `SourceFailure`). A site that asks Reel to wait (a captcha page,
+    /// "too many requests", "accepted" with nothing in it) is paused for a while; it, and a site that
+    /// didn't answer (offline, timed out, failing), is noted, so the film is read again later rather
+    /// than kept as if nothing were written about it. A page that's gone, or refused to Reel, is just
+    /// not read.
+    func fetch(_ url: URL, accept: String, site: String = "", noting: UnansweredSites? = nil) async -> Fetched {
         let host = url.host ?? ""
         var request = URLRequest(url: url)
         // Reel says who it is; a site that turns it away is only linked.
@@ -599,35 +724,31 @@ public struct CameraSourcesClient: Sendable {
         if await Self.pacer.isPaused(host) {
             await Self.gate.release()
             await noting?.add(site)
-            return nil
+            return .failed(.wait("asked Reel to wait a little earlier"))
         }
         await Self.pacer.turn(host)
-        let result: (Data, Int)? = await withCheckedContinuation { continuation in
+        let result: Result<(Data, Int, URL?), Error> = await withCheckedContinuation { continuation in
             session.dataTask(with: request) { data, response, error in
-                guard error == nil, let data else { return continuation.resume(returning: nil) }
-                continuation.resume(returning: (data, (response as? HTTPURLResponse)?.statusCode ?? 0))
+                if let error { return continuation.resume(returning: .failure(error)) }
+                let http = response as? HTTPURLResponse
+                continuation.resume(returning: .success((data ?? Data(), http?.statusCode ?? 0, http?.url)))
             }.resume()
         }
         await Self.gate.release()
-        // A search or a page that didn't come (offline, timed out, the server failing): that site
-        // didn't answer, so what it said before isn't taken for gone (see `CraftIndex.merge`).
-        guard let (data, status) = result else {
-            await noting?.add(site)
-            return nil
+        let why: SourceFailure
+        switch result {
+        case .failure(let error):
+            why = .of(error: error)
+        case .success(let (data, status, final)):
+            // Where the site's redirects ended, when that isn't where Reel asked.
+            let landed = final.flatMap { CameraSources.identity($0) == CameraSources.identity(url) ? nil : $0 }
+            guard let failure = SourceFailure.of(status: status, data: data, requested: url, landed: landed) else {
+                return .page(data, landed: landed)
+            }
+            why = failure
         }
-        // "Too many requests", "accepted" with a captcha (SiteGround), or a challenge page in place of
-        // the page (Cloudflare's 403 and 503). A normal page can carry a challenge script, so the
-        // words alone don't count on a 200.
-        if status == 429 || status == 202 || ([403, 503].contains(status) && CameraSources.isChallenge(data)) {
-            await Self.pacer.pause(host)
-            await noting?.add(site)
-            return nil
-        }
-        if status >= 500 {
-            await noting?.add(site)
-            return nil
-        }
-        guard (200..<300).contains(status), data.count < 6_000_000 else { return nil }
-        return data
+        if case .wait = why { await Self.pacer.pause(host) }
+        if why.retried { await noting?.add(site) }
+        return .failed(why)
     }
 }

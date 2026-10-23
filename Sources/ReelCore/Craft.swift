@@ -51,7 +51,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// line aren't how it was shot; a stated share ("about 28 minutes of IMAX") is in part.
     /// 8: the rest of an award speech's quote, and films counted in general ("four out of five
     /// nominated films"), aren't how it was shot either.
-    public static let currentVersion = 8
+    /// 9: each tag's reason is its strongest sentence (scope, then said in so many words of this
+    /// film, then gear named), not the first read; films in general ("films that are shot on film")
+    /// aren't this film; cited "http://" pages are read over HTTPS, and a page that's gone or refused
+    /// doesn't leave the reading incomplete.
+    public static let currentVersion = 9
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
@@ -323,7 +327,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             }
         }
         var evidence: [ShotOn: Evidence] = [:]
-        var scope: [ShotOn: Int] = [:]
+        var strength: [ShotOn: (Int, Int, Int)] = [:]
         // Only what's said to have been shot with: the names alone are for the notes and search.
         for spec in specs.specs where spec.capture {
             for found in Self.shotOn(spec) {
@@ -338,12 +342,17 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                     rank = 0
                 }
                 let said = Evidence(shotOn: found, text: spec.evidence ?? spec.name, source: spec.source ?? "Wikipedia", partial: partial)
-                // The whole film in so many words outweighs a stated share ("about 28 minutes"), which
-                // outweighs a sentence that only says it was filmed that way, which outweighs any
-                // number about part of it. Among equals, the first read.
-                if let known = scope[found], known >= rank { continue }
+                // The reason shown is the strongest sentence, in this order: how much of the film it
+                // says (the whole film in so many words, then a stated share such as "about 28
+                // minutes", then a sentence that only says it was filmed that way, then part of it);
+                // then a sentence saying in so many words that this film was shot with it (see
+                // `TechSpecs.Spec.direct`) over one that only says it was used; then gear named
+                // ("Kodak Vision3 250D") over Reel's own word ("Film"). Among equals, the first read
+                // (the magazines' interviews, then the film's article, then the cinematographer's).
+                let strong = (rank, spec.direct ? 1 : 0, spec.isFixedName ? 0 : 1)
+                if let known = strength[found], known >= strong { continue }
                 evidence[found] = said
-                scope[found] = rank
+                strength[found] = strong
             }
         }
         let colours = (colour ?? []).map { $0.lowercased() }

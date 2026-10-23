@@ -31,6 +31,10 @@ public struct TechSpecs: Equatable, Sendable {
         public var share = false
         /// Said of the whole film in so many words ("the entire film", "shot entirely in IMAX").
         public var wholeFilm = false
+        /// Its sentence says in so many words that this film was shot with it ("Doe shot The Quiet
+        /// Harbour on Kodak 65mm…", "The film was mostly shot with…", "we shot it on…", a spec
+        /// sheet), not only that it was used somewhere in the telling: the stronger reason.
+        public var direct = false
         /// Its sentence says this film was shot with it ("shot on", "chose", "his main camera", a
         /// spec list), not an opinion, a comparison, other work or a look: only these are Shot on tags.
         public var capture = false
@@ -251,6 +255,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(sentence.prefix(400)), source: text.source,
                                                       partial: part, share: share, wholeFilm: !part && saidOfWholeFilm(sentence, at: at),
+                                                      direct: saidDirectly(sentence, at: at, title: title),
                                                       capture: said.captured && !tried && !speech, aboutThisFilm: said.aboutThisFilm))
                                 }
                             }
@@ -625,7 +630,11 @@ public struct TechSpecs: Equatable, Sendable {
     /// (its spelling and sentence): one that says this film was shot with it, about the whole film,
     /// before any other.
     static func tidy(_ specs: [Spec]) -> [Spec] {
-        func rank(_ spec: Spec) -> Int { (spec.capture ? 8 : 0) + (spec.aboutThisFilm ? 4 : 0) + spec.scopeRank }
+        // Said to have been shot with it, about this film, how much of it, then said in so many words
+        // (see `Spec.direct`); among equals the first read.
+        func rank(_ spec: Spec) -> (Int, Int, Int, Int) {
+            (spec.capture ? 1 : 0, spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.direct ? 1 : 0)
+        }
         var best: [String: Spec] = [:]
         var order: [String] = []
         for spec in specs {
@@ -756,6 +765,34 @@ public struct TechSpecs: Equatable, Sendable {
     static func transferTarget(_ sentence: String, at range: Range<String.Index>) -> Bool {
         let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
         return lead.range(of: transferredOnto, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// Whether the words' part of the sentence says in so many words that this film was shot with
+    /// them: "<title> was (mostly) shot/filmed…", "the film was photographed…", "Doe shot <title> on…",
+    /// "shot the film on…", "we shot it on…", or a spec sheet. Said only that they were used ("…discuss
+    /// using custom optics, 65mm film negative…") isn't.
+    static func saidDirectly(_ sentence: String, at range: Range<String.Index>, title: String?) -> Bool {
+        if isSpecList(sentence) { return true }
+        let part = segment(of: sentence, around: range)
+        var films = ["the (?:film|movie|feature|picture|production)"]
+        if let title, !title.isEmpty {
+            films.append(NSRegularExpression.escapedPattern(for: title))
+            if let short = title.split(separator: ":").first.map({ $0.trimmingCharacters(in: .whitespaces) }), short.count >= 3, short != title {
+                films.append(NSRegularExpression.escapedPattern(for: short))
+            }
+        }
+        let film = "(?:" + films.joined(separator: "|") + "|it)"
+        let verbs = "shot|filmed|photographed|lensed|captured"
+        let patterns = [
+            // "Doe shot The Quiet Harbour on…", "shot the film on…", "shot it on…"
+            #"\b(?:"# + verbs + #")\s+"# + film + #"\b"#,
+            // "The Quiet Harbour was mostly shot with…", "the film was photographed…"
+            #"\b"# + film + #"\s+(?:was|were|is)\s+(?:(?:mostly|mainly|primarily|largely|entirely|principally|predominantly|all|also|originally)\s+)?(?:"#
+                + verbs + #"|originated|acquired)\b"#,
+            // "We shot the whole film on…", "I shot everything on…"
+            #"\b(?:we|i)\s+(?:"# + verbs + #")\s+(?:the (?:whole |entire )?(?:film|movie|thing)|it|everything)\b"#,
+        ]
+        return patterns.contains { part.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
     }
 
     /// The copy's verb, then (in the same clause, no verb of shooting after "to") what it went onto.
@@ -1074,7 +1111,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:nominated films|(?:\w+\s+)?out of (?:the )?(?:\w+\s+){0,2}(?:films|movies|features|nominees)|commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:nominated films|(?:films|movies|pictures) (?:that|which) (?:are|were|get|got) (?:\w+ )?(?:shot|filmed|made|photographed)|(?:\w+\s+)?out of (?:the )?(?:\w+\s+){0,2}(?:films|movies|features|nominees)|commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".

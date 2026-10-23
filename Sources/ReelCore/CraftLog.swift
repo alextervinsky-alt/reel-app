@@ -19,7 +19,7 @@ public enum CraftLog {
         for source in reading.sources {
             let roundup = specs.roundups.contains(source.site) ? "  [about many films: read only where it names this one]" : ""
             lines.append("• \(source.site): \(source.title) (\(source.paragraphs.count) paragraphs)\(roundup)")
-            lines.append("  \(source.url.absoluteString)")
+            lines.append("  \(source.url.absoluteString)" + provenance(source))
         }
         if let articleTitle {
             lines.append(articleRead ? "• Wikipedia: \(articleTitle)"
@@ -35,7 +35,7 @@ public enum CraftLog {
             lines.append("NOT READ")
             for skipped in reading.skipped {
                 lines.append("• \(skipped.source.site): \(skipped.source.title) — \(skipped.reason)")
-                lines.append("  \(skipped.source.url.absoluteString)")
+                lines.append("  \(skipped.source.url.absoluteString)" + provenance(skipped.source))
             }
         }
         if !index.unanswered.isEmpty {
@@ -99,6 +99,14 @@ public enum CraftLog {
             lines.append("Complete: every source answered (rules \(index.version)).")
         }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// "(cited as http://…; the site sent Reel to https://…)".
+    private static func provenance(_ source: CameraReading.Source) -> String {
+        var notes: [String] = []
+        if let cited = source.cited { notes.append("cited as " + cited.absoluteString) }
+        if let landed = source.landed { notes.append("the site sent Reel to " + landed.absoluteString) }
+        return notes.isEmpty ? "" : "  (" + notes.joined(separator: "; ") + ")"
     }
 
     private static func said(_ spec: TechSpecs.Spec) -> String {
