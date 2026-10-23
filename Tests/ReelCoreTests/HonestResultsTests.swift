@@ -29,7 +29,9 @@ final class HonestResultsTests: XCTestCase {
     }
 
     func testAPlanThatWasKeptStillCounts() {
-        XCTAssertEqual(craft(["The plan was always to shoot on 35mm film, and that's what we did."]).shotOn, [.film])
+        // ("shoot" alone isn't a word about the shooting for a gauge: the stock is.)
+        XCTAssertEqual(craft(["The plan was always to shoot on 35mm film stock, and that's what we did."]).shotOn, [.film])
+        XCTAssertEqual(craft(["The plan was always to shoot on 35mm film stock."]).shotOn, [], "a plan alone isn't what was done")
         XCTAssertEqual(craft(["The plan was to shoot on 35mm film, and in the end the film was shot on Kodak 5219."]).shotOn, [.film])
         XCTAssertEqual(craft(["Doe shot the film on Kodak Vision3 500T 5219."]).shotOn, [.film])
     }
