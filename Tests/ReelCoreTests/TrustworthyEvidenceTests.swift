@@ -159,7 +159,7 @@ final class TrustworthyEvidenceTests: XCTestCase {
         XCTAssertEqual(SourceFailure.of(error: URLError(.timedOut)), .unanswered("timed out"))
         XCTAssertEqual(SourceFailure.of(error: URLError(.cannotFindHost)), .unanswered("the site's address wasn't found"))
         XCTAssertEqual(SourceFailure.of(error: URLError(.networkConnectionLost)).retried, true)
-        XCTAssertEqual(SourceFailure.of(error: URLError(URLError.Code(rawValue: -1022))),
+        XCTAssertEqual(SourceFailure.of(error: NSError(domain: NSURLErrorDomain, code: -1022)),
                        .restricted("only over plain HTTP, which Reel doesn't load"), "no plain-HTTP fallback")
         XCTAssertEqual(SourceFailure.of(error: URLError(.secureConnectionFailed)).retried, true, "a failed secure connection may pass")
     }
@@ -191,7 +191,7 @@ final class TrustworthyEvidenceTests: XCTestCase {
         StandInSite.answer("gone.example", status: 404, body: "<p>Not here</p>")
         StandInSite.answer("refused.example", status: 403, body: "<p>Members only</p>")
         StandInSite.answer("failing.example", status: 500, body: "")
-        StandInSite.fail("slow.example", code: URLError.timedOut.rawValue)
+        StandInSite.fail("slow.example", code: -1001)
         let noting = UnansweredSites()
         let client = client()
         let gone = await client.page(URL(string: "https://gone.example/harbour")!, site: "Gone Weekly", title: nil, noting: noting)
@@ -279,7 +279,7 @@ final class StandInSite: URLProtocol {
         let answer = Self.answers[url.host ?? ""]
         Self.lock.unlock()
         guard let answer, answer.error == nil else {
-            client?.urlProtocol(self, didFailWithError: URLError(URLError.Code(rawValue: answer?.error ?? URLError.cannotFindHost.rawValue)))
+            client?.urlProtocol(self, didFailWithError: NSError(domain: NSURLErrorDomain, code: answer?.error ?? -1003))
             return
         }
         let response = HTTPURLResponse(url: url, statusCode: answer.status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "text/html"])!
