@@ -205,6 +205,9 @@ final class IdentityEligibilityGearTests: XCTestCase {
         }
         for sentence in ["On The Quiet Harbour, we shot with the Sony Venice 2.", "The Quiet Harbour was shot on film.",
                          "As The Quiet Harbour was shot at night, Doe chose the Venice 2.",
+                         "Since The Quiet Harbour was shot on film, the grain was part of the look.",
+                         "It looks like The Quiet Harbour, which was shot on 35mm film.",
+                         "Shortly after The Quiet Harbour was shot, Doe moved to London.",
                          "Footage from The Quiet Harbour was scanned at 4K.",
                          "Like on The Quiet Harbour, we shot on film, and The Quiet Harbour itself was all 35mm."] {
             XCTAssertFalse(TechSpecs.namesOnlyAsReference(sentence, title: "The Quiet Harbour"), sentence)
@@ -216,8 +219,9 @@ final class IdentityEligibilityGearTests: XCTestCase {
         XCTAssertEqual(first.shotOn, [.digital])
         let (_, looking) = craft(["JD: Looking back, we shot The Quiet Harbour on Kodak 5219, and I'd do it again."])
         XCTAssertEqual(looking.shotOn, [.film])
-        // Earlier work named in the same sentence as a statement about this film doesn't undo it.
-        let (_, both) = craft(["JD: I knew the Sony Venice 2 from my work on Glass Rivers, and I shot The Quiet Harbour on it too."])
+        // Earlier work named in the same sentence as a statement about this film doesn't undo it
+        // (the gear in the clause about the earlier work is that work's, as before).
+        let (_, both) = craft(["JD: I knew the Venice 2 from my work on Glass Rivers, and I shot The Quiet Harbour on the Sony Venice 2 too."])
         XCTAssertEqual(both.shotOn, [.digital])
     }
 
@@ -231,10 +235,10 @@ final class IdentityEligibilityGearTests: XCTestCase {
     }
 
     func testScopeIsntChangedByAReference() {
-        let (_, craft) = craft(["About 40 minutes of The Quiet Harbour were shot with IMAX cameras.",
+        let (_, craft) = craft(["Some 30 percent of the footage was shot with IMAX cameras.",
                                 "Since The Quiet Harbour, Doe has shot everything with IMAX cameras."], interview: false)
-        XCTAssertEqual(craft.label(for: .imax), "IMAX (in part)")
-        XCTAssertEqual(craft.evidence(for: .imax)?.text, "About 40 minutes of The Quiet Harbour were shot with IMAX cameras.")
+        XCTAssertEqual(craft.label(for: .imax), "IMAX (in part)", "the later films' whole isn't this film's")
+        XCTAssertEqual(craft.evidence(for: .imax)?.text, "Some 30 percent of the footage was shot with IMAX cameras.")
     }
 
     /// Questions that aren't about another production don't change what the answers are about.

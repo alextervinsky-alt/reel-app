@@ -885,7 +885,7 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     /// Whether the film's title appears only as a point of reference for other work: "from my work
-    /// on <title>", "as on <title>", "since <title>", "unlike <title>", "after <title>". The sentence
+    /// on <title>", "as on <title>", "like on <title>", "since <title>", "unlike <title>". The sentence
     /// is then about another production (an earlier film's camera known "from my work on" this one is
     /// what the speaker used next). "On <title>, we shot…" and "<title> was shot…" aren't references.
     static func namesOnlyAsReference(_ sentence: String, title: String?) -> Bool {
@@ -905,12 +905,16 @@ public struct TechSpecs: Equatable, Sendable {
                 found = true
                 let before = String(folded[..<range.lowerBound].suffix(60)).lowercased()
                 if before.range(of: referenceBefore, options: .regularExpression) == nil { return false }
+                if String(folded[range.upperBound...]).range(of: shotAfterTitle, options: [.regularExpression, .caseInsensitive]) != nil { return false }
             }
         }
         return found
     }
 
-    static let referenceBefore = #"(?:\bfrom\s+(?:my|our|his|her|their)\s+(?:work|time|experience|days)\s+(?:on|in|with)|\b(?:my|our)\s+(?:work|time|experience)\s+(?:on|in|with)|\bas\s+(?:we\s+did\s+|i\s+did\s+)?(?:on|in|with)|\b(?:since|unlike|like|after)(?:\s+(?:on|in|with))?|\bthan\s+(?:on|in|with))\s+$"#
+    static let referenceBefore = #"(?:\bfrom\s+(?:my|our|his|her|their)\s+(?:work|time|experience|days)\s+(?:on|in|with)|\b(?:my|our)\s+(?:work|time|experience)\s+(?:on|in|with)|\bas\s+(?:we\s+did\s+|i\s+did\s+)?(?:on|in|with)|\b(?:since|unlike)|\b(?:like|than)\s+(?:on|in|with))\s+$"#
+    /// After the title, what makes it the subject of how it was shot ("Since <title> was shot on
+    /// film…", "like <title>, which was shot on 35mm"): not a reference.
+    static let shotAfterTitle = #"^\W{0,3}(?:which\s+|that\s+)?(?:was|were|is)\s+(?:(?:mostly|mainly|largely|entirely|also|all|partly|primarily)\s+)?(?:shot|filmed|photographed|lensed|captured)\b"#
 
     /// Whether an interviewer's question is about another production: "What can you tell us about
     /// Testament Of Youth?" (a title of two words or more after "about", not this film's, not a
