@@ -218,8 +218,30 @@ public enum CameraSources {
     }
 
     /// What makes two addresses the same page: the host without "www.", the path without its
-    /// trailing "/" and the query without tracking tags, whatever the scheme.
+    /// trailing "/" and the query without tracking tags, whatever the scheme; and an article a site
+    /// publishes under more than one address the same article (see `articleAliases`).
     public static func identity(_ url: URL) -> String {
+        let address = addressIdentity(url)
+        for alias in articleAliases {
+            if let range = address.range(of: alias.pattern, options: .regularExpression), range == address.startIndex..<address.endIndex {
+                return address.replacingOccurrences(of: alias.pattern, with: alias.article, options: .regularExpression)
+            }
+        }
+        return address
+    }
+
+    /// An article's other addresses on the same publication, each with the evidence for it.
+    /// American Cinematographer moved from ascmag.com to theasc.com: an article is
+    /// "ascmag.com/articles/<slug>" or "theasc.com/articles/<slug>" as well as
+    /// "theasc.com/article/<slug>", which theasc.com gives as the canonical address of its
+    /// "/articles/" pages. One slug, one path segment, and nothing else is treated as the same.
+    static let articleAliases: [(pattern: String, article: String)] = [
+        (#"^(?:theasc\.com|ascmag\.com)/articles?/([a-z0-9][a-z0-9\-]*)$"#, "theasc.com/article/$1"),
+    ]
+
+    /// The address alone (no aliases): the host without "www.", the path without its trailing "/"
+    /// and the query without tracking tags, whatever the scheme.
+    public static func addressIdentity(_ url: URL) -> String {
         var host = (url.host ?? "").lowercased()
         if host.hasPrefix("www.") { host.removeFirst(4) }
         let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -235,6 +257,29 @@ public enum CameraSources {
 
     /// Query items that only say where a link was shared from.
     static let trackingTags: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "ref", "src", "amp", "igshid", "cmpid", "ito"]
+
+    typealias Link = (url: URL, site: String, title: String?, cited: URL?)
+
+    /// The links to ask for, in order, each article once however its address is written; the
+    /// ones left out because they're another address of an article already listed (`aliases`; the
+    /// same address written another way, "http://" or "www.", is simply left out).
+    static func merge(_ links: [Link], adding more: [Link]) -> (links: [Link], aliases: [Link]) {
+        var kept = links, aliases: [Link] = []
+        for link in more {
+            guard let same = kept.first(where: { identity($0.url) == identity(link.url) }) else {
+                kept.append(link)
+                continue
+            }
+            if addressIdentity(same.url) != addressIdentity(link.url) { aliases.append(link) }
+        }
+        return (kept, aliases)
+    }
+
+    /// Why another address of an article already listed wasn't asked for itself (what became of
+    /// that article is said under its own address).
+    static func aliasReason(of article: URL, read: Bool) -> String {
+        "the same article as \(article.absoluteString)" + (read ? ", which was read" : "")
+    }
 
     /// Why a page found and not read wasn't examined, when that's why: it didn't load (`failure`), or
     /// it loaded with too little text to read (fewer than three paragraphs: a teaser, a page built by
@@ -572,9 +617,8 @@ public struct CameraSourcesClient: Sendable {
         // read only when the page names the film's people or year.
         let searched = Set((links + fromSites).map { CameraSources.identity($0.url) })
             .subtracting(fromArticle.map { CameraSources.identity($0.url) })
-        for link in fromSites + fromArticle where !links.contains(where: { CameraSources.identity($0.url) == CameraSources.identity(link.url) }) {
-            links.append(link)
-        }
+        let merged = CameraSources.merge(links, adding: fromSites + fromArticle)
+        links = merged.links
         let pages = await withTaskGroup(of: (Int, CameraReading.Source?, CameraReading.Source, SourceFailure?).self) { group in
             for (index, link) in links.prefix(8).enumerated() {
                 group.addTask {
@@ -616,6 +660,15 @@ public struct CameraSourcesClient: Sendable {
             let limit = CameraSources.limit(page: page, failure: failure, otherFilm: page.map { otherFilm.contains($0.url) } ?? false)
             skipped.append(CameraReading.Skipped(source: page ?? fallback,
                                                  reason: page.map(reason) ?? failure?.reason ?? "couldn't be read", limit: limit))
+        }
+        // The same article under another address: not asked for again, with what became of the one
+        // that was (read, or its own failure or limit, which stands for both).
+        for alias in merged.aliases {
+            guard let kept = links.first(where: { CameraSources.identity($0.url) == CameraSources.identity(alias.url) }) else { continue }
+            var source = CameraReading.Source(title: alias.title ?? alias.site, site: alias.site, url: alias.url, paragraphs: [])
+            source.cited = alias.cited
+            skipped.append(CameraReading.Skipped(source: source, reason: CameraSources.aliasReason(of: kept.url,
+                                                                                               read: read.contains { CameraSources.identity($0.url) == CameraSources.identity(kept.url) })))
         }
         for story in storiesRead where !read.contains(where: { $0.url == story.url })
             && !pages.contains(where: { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }) {
@@ -800,7 +853,7 @@ public struct CameraSourcesClient: Sendable {
             why = .of(error: error, upgraded: upgraded)
         case .success(let (data, status, final)):
             // Where the site's redirects ended, when that isn't where Reel asked.
-            let landed = final.flatMap { CameraSources.identity($0) == CameraSources.identity(url) ? nil : $0 }
+            let landed = final.flatMap { CameraSources.addressIdentity($0) == CameraSources.addressIdentity(url) ? nil : $0 }
             guard let failure = SourceFailure.of(status: status, data: data, requested: url, landed: landed,
                                                  page: accept.hasPrefix("text/html")) else {
                 return .page(data, landed: landed)

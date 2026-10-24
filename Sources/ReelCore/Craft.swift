@@ -60,7 +60,12 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// another film is that film; the reason ranked by how plainly it's said (in so many words, a
     /// spec sheet, a mention), said as done over what would be used, naming the film, then gear
     /// named; pages found and not examined kept with the reading (`limits`).
-    public static let currentVersion = 10
+    /// 11: an article under another address of its publication (American Cinematographer's
+    /// ascmag.com and theasc.com) is the same article, read once; a sentence that names the film
+    /// only as earlier work ("from my work on <title>"), and an interview's answers to a question
+    /// about another production, aren't this film's; "the main shoot was with…" says how it was
+    /// shot; film-out only as the process, not "figure this film out".
+    public static let currentVersion = 11
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.

@@ -34,8 +34,8 @@ final class LiveShotOnTests: XCTestCase {
         Known(title: "Jaws", year: 1975, has: [.film], hasNot: [.digital]),
         Known(title: "Saltburn", year: 2023, has: [.film], hasNot: [.digital, .anamorphic]),
         Known(title: "Roma", year: 2018, has: [.digital, .blackAndWhite], hasNot: [.film]),
-        Known(title: "Ex Machina", year: 2015, has: [.digital], hasNot: [.film]),
-        Known(title: "Blade Runner 2049", year: 2017, has: [.digital], hasNot: [.film]),
+        Known(title: "Ex Machina", year: 2015, has: [.digital], hasNot: [.film], showWhy: true),
+        Known(title: "Blade Runner 2049", year: 2017, has: [.digital], hasNot: [.film], showWhy: true),
         Known(title: "Arrival", year: 2016, has: [.digital], hasNot: [.film]),
         Known(title: "Dune", year: 2021, has: [.digital, .imax], hasNot: [.film]),
         Known(title: "Mad Max: Fury Road", year: 2015, has: [.digital], hasNot: [.film]),
@@ -89,7 +89,8 @@ final class LiveShotOnTests: XCTestCase {
                                                            year: details.year, otherTitles: others)
             var article: FilmArticle?
             if let title = facts?.articleTitle { article = try? await WikipediaClient().article(title: title) }
-            let texts = CraftReader.texts(article: article, reading: await fetched, hiding: false)
+            let got = await fetched
+            let texts = CraftReader.texts(article: article, reading: got, hiding: false)
             let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
                                        year: details.year, title: details.title, otherTitles: others)
             let craft = CraftIndex.make(from: specs, colour: facts?.quick?.colour, keywords: details.keywordNames, sources: texts.count)
@@ -130,7 +131,10 @@ final class LiveShotOnTests: XCTestCase {
                     guard let why = craft.evidence(for: tag) else { continue }
                     say("Shot on why: \(known.title) \(craft.label(for: tag)): \(why.source): \(why.text.prefix(200))")
                 }
-                say("Shot on cameras: \(known.title): \(specs.names(.camera).joined(separator: ", "))")
+                say("Shot on cameras: \(known.title): \(specs.names(.camera).joined(separator: ", "))"
+                    + " | finish: \(specs.names(.finish).joined(separator: ", "))"
+                    + " | didn't answer: \(got.unanswered.isEmpty ? "none" : got.unanswered.joined(separator: ", "))"
+                    + " | same article: \(got.skipped.filter { $0.reason.hasPrefix("the same article") }.map { $0.source.url.absoluteString }.joined(separator: ", "))")
             }
             // The sheet's cameras and formats that say what it wasn't shot on ("Red Epic" for a film shot on film).
             let wrongNames = specs.specs.filter { !CraftIndex.shotOn($0).isDisjoint(with: known.hasNot) }.map(\.name)
