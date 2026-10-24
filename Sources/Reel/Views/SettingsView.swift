@@ -173,7 +173,7 @@ struct SettingsView: View {
                     }
                 }
                 if coverage.limited > 0 {
-                    LabeledContent("Read, with some pages found unavailable (gone or not open to Reel)") {
+                    LabeledContent("Read, with some pages not examined (gone, not open to Reel, too little text)") {
                         Text(coverage.limited.formatted()).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }

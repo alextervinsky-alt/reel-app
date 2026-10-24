@@ -83,9 +83,63 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertTrue(cameras(own.specs).contains { $0.contains("alexa 65") })
     }
 
+    /// The review of 1.9.8: "It…" is another film's only after a sentence naming another production,
+    /// and never when it names this film.
+    func testAYearOrAPersonAloneIsntAnotherProduction() {
+        let set = read([text(["The Quiet Harbour is set in 1968 Lisbon. It was shot on Kodak 5219 with Panaflex cameras."], source: "Lens Weekly")])
+        XCTAssertEqual(set.craft.shotOn, [.film], "\(set.specs.names(.camera))")
+        let set2 = read([text(["The film takes place in 1968. It was shot on Kodak 5219 with Panaflex cameras."], source: "Lens Weekly")])
+        XCTAssertEqual(set2.craft.shotOn, [.film])
+        let reunion = read([text(["Doe and Example first worked together on the 2007 feature Glass Rivers. It was the start of a long collaboration, and The Quiet Harbour was shot with two ARRI Alexa 65 cameras."], source: "Lens Weekly")])
+        XCTAssertTrue(cameras(reunion.specs).contains { $0.contains("alexa 65") }, "it names this film")
+        let thisTime = read([text(["Doe shot Glass Rivers in 2007 on Super 16. This time she chose the ARRI Alexa 65 for The Quiet Harbour."], source: "Lens Weekly")])
+        XCTAssertTrue(cameras(thisTime.specs).contains { $0.contains("alexa 65") })
+        // A film named by its year in brackets is another production.
+        let bracket = read([text(["Doe's earlier work includes Glass Rivers (2007). It was shot on Sony HDW-F900 CineAlta cameras."], source: "Lens Weekly")])
+        XCTAssertFalse(cameras(bracket.specs).contains { $0.contains("f900") || $0.contains("cinealta") }, "\(bracket.specs.names(.camera))")
+    }
+
+    /// The review of 1.9.8: a short title is a word, not letters inside other words, and a credits line
+    /// is this film's by its director and cinematographer, not the cinematographer alone.
+    func testShortTitlesAndACinematographerWithTwoEntries() {
+        let paragraphs = [
+            "Dir: Ann Sample, DP: Jane Doe Category: Competition",
+            "Format: Super 16mm Camera: ARRIFLEX 416 Lenses: Zeiss Ultra 16",
+            "The Look: Upstream, the river turns; we used up every roll on the upper reaches.",
+            "Dir: Carl Example, DP: Jane Doe Category: Competition",
+            "Format: 6.5K ARRIRAW Camera: ALEXA 65 Lenses: Panavision Sphero 65",
+            "The Look: Carl wanted it to feel enormous.",
+        ]
+        let specs = TechSpecs.read(texts: [text(paragraphs)], cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2024, title: "Up")
+        XCTAssertEqual(specs.roundups, ["Fest Weekly"])
+        XCTAssertTrue(cameras(specs).contains { $0.contains("alexa 65") }, "\(specs.names(.camera))")
+        XCTAssertFalse(cameras(specs).contains { $0.contains("arriflex") }, "Doe's other entry, by another director")
+        XCTAssertTrue(EntryLayout.isOwn("DIR: Carl Example, CINEMATOGRAPHER: Jane Doe", title: "Up", cinematographers: ["Jane Doe"], directors: ["Carl Example"]))
+        XCTAssertFalse(EntryLayout.isOwn("Dir: Ann Sample, DP: Jane Doe", title: "Up", cinematographers: ["Jane Doe"], directors: ["Carl Example"]))
+        XCTAssertFalse(TechSpecs.namesTitle("Upstream, the river turns", title: "Up"))
+        // Written without the accents: still this film's credits.
+        XCTAssertTrue(EntryLayout.isOwn("Dir: Carl Example, DP: Mihai Malaimare Jr. Category: Competition", title: "Up",
+                                        cinematographers: ["Mihai Mălaimare Jr."], directors: ["Carl Example"]))
+        XCTAssertTrue(EntryLayout.isOwn("DP: Mihai Malaimare Jr.", title: "Up", cinematographers: ["Mihai Mălaimare Jr."], directors: ["Carl Example"]))
+    }
+
+    /// The review of 1.9.8: what reaches the reading from a real page: a short credits line and sheet
+    /// are kept (other short paragraphs aren't), so the page is still read entry by entry.
+    func testARoundUpPageKeepsItsShortCreditsLines() {
+        let html = festival.map { "<p>" + $0 + "</p>" }.joined() + "<p>Share this</p><p>Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i</p>"
+        let paragraphs = HTMLText.paragraphs(html)
+        XCTAssertTrue(paragraphs.contains("Dir: Ann Example, DP: Bob Sample Category: Competition"))
+        XCTAssertEqual(paragraphs.filter { $0 == "Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i" }.count, 2, "each entry's sheet")
+        XCTAssertFalse(paragraphs.contains("Share this"))
+        XCTAssertTrue(EntryLayout(text(paragraphs)).sheetsFollowCredits)
+        let (specs, _) = read([text(paragraphs)])
+        XCTAssertFalse(cameras(specs).contains { $0.contains("amira") || $0.contains("arricam") }, "\(specs.names(.camera))")
+    }
+
     func testOneFilmsOwnArticleIsReadInFull() {
-        let (specs, craft) = read([text(["Doe shot the film on the Sony Venice 2 with Cooke S7/i lenses.",
-                                         "Format: Digital Camera: Sony Venice 2 Lenses: Cooke S7/i"], source: "Lens Weekly")])
+        // The sheet read first: the sentence still wins.
+        let (specs, craft) = read([text(["Format: Digital Camera: Sony Venice 2 Lenses: Cooke S7/i",
+                                         "Doe shot the film on the Sony Venice 2 with Cooke S7/i lenses."], source: "Lens Weekly")])
         XCTAssertTrue(specs.roundups.isEmpty)
         XCTAssertEqual(craft.shotOn, [.digital])
         XCTAssertEqual(craft.evidence(for: .digital)?.text, "Doe shot the film on the Sony Venice 2 with Cooke S7/i lenses.",
@@ -248,6 +302,22 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertTrue(answered.limits.isEmpty)
     }
 
+    /// The review of 1.9.8: a story page found and too thin to read is a limit like any page.
+    func testAThinStoryIsALimitAndTheArticleIsKeptTheSameFromTheTab() {
+        let teaser = CameraReading.Source(title: "Teaser", site: "Stock House", url: URL(string: "https://stock.example/a")!, paragraphs: ["Subscribe."])
+        XCTAssertEqual(CameraSources.limit(page: teaser, failure: nil, otherFilm: false), .thin)
+        // The film's Wikipedia article gone, read from the Cinematography tab: kept as the background keeps it.
+        let gone = CraftReader.reading(of: details(), articleTitle: "The Quiet Harbour", article: nil,
+                                       reading: CameraReading(sources: [readPage], more: [], cinematographer: nil), colour: nil)
+        XCTAssertEqual(gone.index.limits.map(\.kind), [.gone])
+        XCTAssertEqual(gone.index.coverage, .limited)
+        XCTAssertTrue(gone.log.contains("no such article now"), gone.log)
+        let failed = CraftReader.reading(of: details(), articleTitle: "The Quiet Harbour", article: nil,
+                                         reading: CameraReading(sources: [readPage], more: [], cinematographer: nil), colour: nil, articleFailed: true)
+        XCTAssertEqual(failed.index.unanswered, ["Wikipedia"])
+        XCTAssertEqual(failed.index.coverage, .partial)
+    }
+
     func testSettingsCountsFullLimitedAndPartialApart() {
         func film(_ id: Int, _ craft: CraftIndex) -> FilmEntry {
             var entry = FilmEntry(driveID: "Main", relativePath: "\(id).mkv", fileName: "\(id).mkv", size: 1, modified: nil, addedAt: Date())
@@ -264,6 +334,14 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertEqual(coverage.read, 3)
         XCTAssertEqual(coverage.limited, 1)
         XCTAssertEqual(coverage.partial, 1)
+        // Read long ago and tried again offline: counted as its reading (and its log) says.
+        let later = Date().addingTimeInterval(200 * 86_400)
+        var offline = film(2, limited)
+        offline.craftAttempt = CraftAttempt.failed(after: nil, now: later)
+        let counted = CraftQueue.coverage(of: [offline], now: later.addingTimeInterval(60))
+        XCTAssertEqual(CraftQueue.state(of: offline, now: later.addingTimeInterval(60)), .failed)
+        XCTAssertEqual(counted.limited, 1)
+        XCTAssertEqual(counted.partial, 0)
         // Each film's log says what the counts say.
         XCTAssertTrue(CraftLog.stored(CraftIndex.Merged(index: full, carried: [], dropped: [])).contains("Complete: every page found was read"))
         XCTAssertTrue(CraftLog.stored(CraftIndex.Merged(index: limited, carried: [], dropped: [])).contains("Complete, with limits"))

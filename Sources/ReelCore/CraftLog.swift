@@ -103,7 +103,7 @@ public enum CraftLog {
         case .limited:
             lines.append("Complete, with limits:\(limited) Not tried again until the film is next read (rules \(index.version)).")
         case .full:
-            lines.append("Complete: every page found was read (rules \(index.version)).")
+            lines.append("Complete: every page found was read or deliberately left out (another film's, another craft's, more than the six read); none failed (rules \(index.version)).")
         }
         return lines.joined(separator: "\n") + "\n"
     }

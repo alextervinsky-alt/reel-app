@@ -187,15 +187,10 @@ extension AppModel {
         if current != nil, reading == nil { return }
         guard current == nil || CraftQueue.isDue(craft: current, attempt: stored.craftAttempt, hasFacts: true,
                                                  inCollection: details.collection != nil) else { return }
-        var read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
-                                       colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details))
         // The article didn't come (not: there's no such article): Wikipedia didn't answer.
-        if film.funFacts?.articleTitle != nil, article == nil, !articlesMissing.contains(details.id),
-           !read.index.unanswered.contains("Wikipedia") {
-            var index = read.index
-            index.unanswered.append("Wikipedia")
-            read = CraftReader.Reading(index: index, log: read.log)
-        }
+        let articleFailed = film.funFacts?.articleTitle != nil && article == nil && !articlesMissing.contains(details.id)
+        let read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
+                                       colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details), articleFailed: articleFailed)
         let merged = CraftIndex.merging(old: current, new: read.index)
         // The same as kept: nothing to write (the log already says what's stored, and opening the
         // tab again doesn't put off a planned reading).

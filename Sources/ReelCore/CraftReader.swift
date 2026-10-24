@@ -81,25 +81,35 @@ public enum CraftReader {
         let now = Date()
         let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
         var read = evaluated.index
-        // The film's own article didn't come: read again later too.
-        if articleFailed, !read.unanswered.contains("Wikipedia") { read.unanswered.append("Wikipedia") }
-        if let articleTitle, article == nil {
-            read.limits.append(CraftIndex.SourceLimit(site: "Wikipedia", url: "https://en.wikipedia.org/wiki/" + articleTitle.replacingOccurrences(of: " ", with: "_"),
-                                                      kind: articleFailed ? .unanswered : .gone,
-                                                      detail: articleFailed ? "didn't answer (read again later)" : "no such article now"))
-        }
+        noteArticle(&read, articleTitle: articleTitle, article: article, failed: articleFailed)
         return Reading(index: read, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
                                                        articleMissing: articleTitle != nil && article == nil && !articleFailed,
                                                        reading: reading, specs: evaluated.specs, index: read, now: now))
     }
 
+    /// The film's own article, when it didn't come: Wikipedia didn't answer (`failed`: read again
+    /// later), or answered that there's no such article now. Kept with the reading either way, the
+    /// same from the background and the Cinematography tab.
+    static func noteArticle(_ index: inout CraftIndex, articleTitle: String?, article: FilmArticle?, failed: Bool) {
+        guard let articleTitle, article == nil else { return }
+        if failed, !index.unanswered.contains("Wikipedia") { index.unanswered.append("Wikipedia") }
+        guard !index.limits.contains(where: { $0.site == "Wikipedia" }) else { return }
+        index.limits.append(CraftIndex.SourceLimit(site: "Wikipedia", url: "https://en.wikipedia.org/wiki/" + articleTitle.replacingOccurrences(of: " ", with: "_"),
+                                                   kind: failed ? .unanswered : .gone,
+                                                   detail: failed ? "didn't answer (read again later)" : "no such article now"))
+    }
+
     /// What the Cinematography tab read (its article and sources, already fetched), as the summary
     /// and its log: the same rules and the same log as the background reading.
+    /// `articleFailed`: the article was asked for and Wikipedia didn't answer (not: there's no such article).
     public static func reading(of details: TMDBMovieDetails, articleTitle: String?, article: FilmArticle?, reading: CameraReading?,
-                               colour: [String]?, otherTitles: [String] = [], now: Date = Date()) -> Reading {
+                               colour: [String]?, otherTitles: [String] = [], articleFailed: Bool = false, now: Date = Date()) -> Reading {
         let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
         let sources = reading ?? CameraReading(sources: [], more: [], cinematographer: nil)
-        return Reading(index: evaluated.index, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
-                                                                  reading: sources, specs: evaluated.specs, index: evaluated.index, now: now))
+        var index = evaluated.index
+        noteArticle(&index, articleTitle: articleTitle, article: article, failed: articleFailed)
+        return Reading(index: index, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
+                                                        articleMissing: articleTitle != nil && article == nil && !articleFailed,
+                                                        reading: sources, specs: evaluated.specs, index: index, now: now))
     }
 }

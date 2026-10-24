@@ -285,7 +285,7 @@ final class HonestResultsTests: XCTestCase {
         XCTAssertTrue(dropped.contains("Complete: every page found was read"), dropped)
         XCTAssertEqual(storedTags(dropped), ["Film"])
         XCTAssertEqual(CraftLog.stored(CraftIndex.merging(old: nil, new: reading([], read: ["Wikipedia"]), now: now)),
-                       "\nSTORED IN REEL\n• no Shot on\nComplete: every page found was read (rules \(CraftIndex.currentVersion)).\n")
+                       "\nSTORED IN REEL\n• no Shot on\nComplete: every page found was read or deliberately left out (another film's, another craft's, more than the six read); none failed (rules \(CraftIndex.currentVersion)).\n")
     }
 
     /// The tags the log's STORED IN REEL section lists, as shown.

@@ -466,7 +466,9 @@ public enum HTMLText {
         return regex.matches(in: body, range: NSRange(body.startIndex..., in: body)).compactMap { match in
             guard let range = Range(match.range(at: 1), in: body) else { return nil }
             let text = plain(String(body[range]))
-            guard text.count >= 60, text.contains(" "), seen.insert(text).inserted else { return nil }
+            // A round-up's credits line or spec sheet is short and may repeat: kept, as each marks an entry.
+            let entry = text.count >= 20 && text.count <= 600 && (EntryLayout.isCredits(text) || TechSpecs.isSpecList(text))
+            guard text.count >= 60 || entry, text.contains(" "), entry || seen.insert(text).inserted else { return nil }
             // Newsletter boxes, credits lines and cookie notices.
             let lower = text.lowercased()
             if ["subscribe", "newsletter", "cookie", "all rights reserved", "sign up", "log in", "advertisement"].contains(where: lower.contains),
@@ -609,7 +611,9 @@ public struct CameraSourcesClient: Sendable {
         }
         for story in storiesRead where !read.contains(where: { $0.url == story.url })
             && !pages.contains(where: { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }) {
-            skipped.append(CameraReading.Skipped(source: story, reason: found.contains { $0.url == story.url } ? reason(story) : "the same page as one already found"))
+            let own = found.contains { $0.url == story.url }
+            skipped.append(CameraReading.Skipped(source: story, reason: own ? reason(story) : "the same page as one already found",
+                                                 limit: own ? CameraSources.limit(page: story, failure: nil, otherFilm: false) : nil))
         }
         return CameraReading(sources: read, more: more, cinematographer: await person, unanswered: await unanswered.all(), skipped: skipped)
     }

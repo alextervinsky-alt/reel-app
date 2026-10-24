@@ -43,7 +43,8 @@ public enum CraftQueue {
         /// Read by these rules, but a site didn't answer or a tag stands on an earlier reading's
         /// sentence: read again when planned.
         case partial
-        /// Read by these rules, every source answered: done (with or without tags).
+        /// Read by these rules, every site answered and nothing carried over: done (with or without
+        /// tags), however many pages found couldn't be examined (see `CraftIndex.coverage`).
         case complete
 
         /// Still work to do for it.
@@ -153,7 +154,8 @@ public enum CraftQueue {
                 coverage.read += 1
                 if !Set(craft.shotOn).subtracting(removed[details.id] ?? []).isEmpty { coverage.tagged += 1 }
                 if craft.sources <= 1 { coverage.articleOnly += 1 }
-                if craft.isPartial || craft.retryAt != nil || readByTheseRules || craft.coverage == .partial {
+                // As its reading and its log say (tried again since and nothing reached: still that reading).
+                if craft.isPartial || craft.retryAt != nil || craft.coverage == .partial {
                     coverage.partial += 1
                 } else if craft.coverage == .limited {
                     coverage.limited += 1

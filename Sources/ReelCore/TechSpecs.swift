@@ -198,8 +198,7 @@ public struct TechSpecs: Equatable, Sendable {
                 let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
                 for paragraph in section.paragraphs {
                     if roundup {
-                        let namesIt = paragraph.range(of: shortTitle, options: .caseInsensitive) != nil
-                            || mentions(names, in: paragraph, generic: false)
+                        let namesIt = namesTitle(paragraph, title: shortTitle) || mentions(names, in: paragraph, generic: false)
                         if isSpecList(paragraph) {
                             let entry = layout?.sheetsFollowCredits == true ? afterOwnCredits
                                 : (sinceNamed.map { $0 <= 1 } ?? false) && !sheetSinceNamed
@@ -212,14 +211,19 @@ public struct TechSpecs: Equatable, Sendable {
                             if inOwnSheet { ownSheetRead = true }
                             inOwnSheet = false
                             let credits = EntryLayout.isCredits(paragraph)
-                            afterOwnCredits = credits && namesIt
-                            if credits && namesIt {
+                            // A credits line is this film's when it names the film, or its director and
+                            // cinematographer as credited there (the same cinematographer may shoot two
+                            // entries of a festival).
+                            let ownCredits = credits && EntryLayout.isOwn(paragraph, title: shortTitle, cinematographers: cinematographers,
+                                                                          directors: directors)
+                            afterOwnCredits = ownCredits
+                            if ownCredits {
                                 // This film's entry begins (again).
                                 sinceNamed = 0
                                 sheetSinceNamed = false
                                 ownSheetRead = false
                             } else if credits {
-                                // Another film's entry.
+                                // Another film's entry (or this cinematographer's other film).
                                 sinceNamed = nil
                                 continue
                             } else if namesIt {
@@ -259,9 +263,12 @@ public struct TechSpecs: Equatable, Sendable {
                         // About another film ("his Super 16mm work on Carol", "Christopher Nolan's
                         // Oppenheimer", "in 1993, employing a Sony F900"): no gear is read from it,
                         // and it's kept only as how the cinematographer and the director met.
-                        let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title)
-                            || (previousOtherFilm && matches(continuesAbout, sentence))
-                        previousOtherFilm = otherFilm
+                        let continued = previousOtherFilm && matches(continuesAbout, sentence) && !namesTitle(sentence, title: title)
+                        let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
+                        // Only a sentence that names another production is followed by "It…" about it: not
+                        // "The Quiet Harbour is set in 1968 Lisbon."
+                        previousOtherFilm = continued || (otherFilm && !namesTitle(sentence, title: title)
+                            && (matches(anotherProduction, sentence) || aboutOtherFilm(sentence, year: nil, people: names + directorNames, title: title)))
                         // "I performed some simple tests. I shot 35mm Double-X, 35mm color film and with the
                         // Arri Alexa.": what was tried, not what it was shot on (unless it says what was chosen).
                         let tried = index > 0 && matches(testsDone, sentences[index - 1]) && !matches(chosenAfter, sentences[index - 1])
@@ -1181,7 +1188,9 @@ public struct TechSpecs: Equatable, Sendable {
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     /// A sentence going on about what the one before was about: "It was shot…", "They used…".
-    static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|They|This|That|Both)\b"#)
+    static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|That)\b(?!\s+time\b)|^\W*This\b(?!\s+(?:time|film|movie|picture|feature|one|project)\b)"#)
+    /// Another production named: "his 2007 feature Glass Rivers", "her previous film", "Glass Rivers (2007)".
+    static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
 
     static let filmsInGeneral = try! NSRegularExpression(
         pattern: #"\b(?:films|movies|pictures) (?:that|which) (?:are|were|get|got) (?:\w+ )?(?:shot|filmed|made|photographed)\b"#,
@@ -1525,8 +1534,23 @@ struct EntryLayout {
 
     /// An entry's credits line: short, with a director's or cinematographer's credit.
     static func isCredits(_ paragraph: String) -> Bool {
-        paragraph.count <= 200 && paragraph.range(of: credit, options: .regularExpression) != nil
+        paragraph.count <= 200 && paragraph.range(of: credit, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    static let credit = #"\b(?:Dir\.|Dir:|Directors?:|Directed by|DP:|DoP:|D\.P\.:|Cinematographer:|Director of Photography:)"#
+    static let credit = #"\b(?:Dir\.|Dir:|Directors?:|Directed by|DP:|DoP:|D\.P\.:|Cinematographers?:|Cinematography(?: by|:)|Director of Photography:)"#
+    static let directorCredit = #"\b(?:Dir\.|Dir:|Directors?:|Directed by)"#
+    static let photographyCredit = #"\b(?:DP:|DoP:|D\.P\.:|Cinematographers?:|Cinematography(?: by|:)|Director of Photography:)"#
+
+    /// Whether a credits line is this film's: it names the film, or credits its director (by full
+    /// name), or, where no director is credited, its cinematographer. The director decides, as the same
+    /// cinematographer may shoot two entries of a festival. Accents aside ("Malaimare" for "Mălaimare").
+    static func isOwn(_ credits: String, title: String, cinematographers: [String], directors: [String]) -> Bool {
+        if TechSpecs.namesTitle(credits, title: title) { return true }
+        func fold(_ text: String) -> String { text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
+        let line = fold(credits)
+        func named(_ people: [String]) -> Bool { people.contains { $0.count > 3 && TechSpecs.namesTitle(line, title: fold($0)) } }
+        let saysDirector = credits.range(of: directorCredit, options: [.regularExpression, .caseInsensitive]) != nil
+        if saysDirector, !directors.isEmpty { return named(directors) }
+        return named(cinematographers) || named(directors)
+    }
 }
