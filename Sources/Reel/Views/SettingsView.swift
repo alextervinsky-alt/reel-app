@@ -172,6 +172,11 @@ struct SettingsView: View {
                         Text(coverage.toRead.formatted()).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
+                if coverage.limited > 0 {
+                    LabeledContent("Read, with some pages found unavailable (gone or not open to Reel)") {
+                        Text(coverage.limited.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
                 if coverage.partial > 0 {
                     LabeledContent("Read in part, to read again (a site didn't answer)") {
                         Text(coverage.partial.formatted()).monospacedDigit().foregroundStyle(.secondary)

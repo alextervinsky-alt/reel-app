@@ -122,7 +122,7 @@ final class TrustworthyEvidenceTests: XCTestCase {
         XCTAssertTrue(direct("Dune was shot on the Alexa LF.", "Alexa LF"), "the title before its colon")
         XCTAssertTrue(direct("The film was mostly shot with Kodak 5219.", "Kodak 5219"))
         XCTAssertTrue(direct("We shot the whole film on the Alexa 65.", "Alexa 65"))
-        XCTAssertTrue(direct("Cameras: Alexa 65 | Lenses: Moviecam | Format: 2.39:1", "Alexa 65"), "a spec sheet")
+        XCTAssertFalse(direct("Cameras: Alexa 65 | Lenses: Moviecam | Format: 2.39:1", "Alexa 65"), "1.9.8: a spec sheet is its own rank (`Spec.sheet`)")
         XCTAssertFalse(direct("They discuss using the Alexa 65 for the deserts.", "Alexa 65"))
         XCTAssertFalse(direct("The film was shot in Jordan, but the Alexa 65 was used for the deserts.", "Alexa 65"),
                        "said in another part of the sentence")
@@ -181,8 +181,8 @@ final class TrustworthyEvidenceTests: XCTestCase {
             SourceFailure.of(status: status, data: Data(body.utf8), requested: asked, landed: nil)
         }
         XCTAssertNil(of(200))
-        XCTAssertEqual(of(404), .gone("not found (404)"))
-        XCTAssertEqual(of(410), .gone("not found (410)"))
+        XCTAssertEqual(of(404), .gone("not found over HTTPS (404)"), "as seen: over HTTPS")
+        XCTAssertEqual(of(410), .gone("not found over HTTPS (410)"))
         XCTAssertEqual(of(403), .restricted("refused (403): a sign-in, a paywall or access denied"), "a 403 isn't taken for gone")
         XCTAssertEqual(of(403, "<html><head><title>Just a moment...</title>"), .wait("a challenge page in place of the page"))
         XCTAssertEqual(of(429), .wait("too many requests (429)"))
@@ -245,7 +245,7 @@ final class TrustworthyEvidenceTests: XCTestCase {
         let slow = await client.page(URL(string: "https://slow.example/harbour")!, site: "Slow Weekly", title: nil, noting: noting)
         let plain = await client.page(URL(string: "http://plain.example/1999/harbour.html")!, site: "Plain Weekly", title: nil, noting: noting)
         XCTAssertEqual(plain.failure, .restricted("only over plain HTTP, which Reel doesn't load"), "cited as HTTP, no HTTPS")
-        XCTAssertEqual(gone.failure, .gone("not found (404)"))
+        XCTAssertEqual(gone.failure, .gone("not found over HTTPS (404)"))
         XCTAssertEqual(refused.failure?.retried, false)
         XCTAssertEqual(failing.failure, .unanswered("the server failed (500)"))
         XCTAssertEqual(slow.failure, .unanswered("timed out"))

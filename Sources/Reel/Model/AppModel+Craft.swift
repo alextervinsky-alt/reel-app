@@ -201,7 +201,7 @@ extension AppModel {
         // tab again doesn't put off a planned reading).
         if let current, current.version == merged.index.version, current.shotOn == merged.index.shotOn,
            current.names == merged.index.names, current.evidence == merged.index.evidence,
-           current.unanswered == merged.index.unanswered {
+           current.unanswered == merged.index.unanswered, current.limits == merged.index.limits {
             return
         }
         storeCraft([details.id: merged.index])

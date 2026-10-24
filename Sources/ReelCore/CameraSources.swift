@@ -47,6 +47,15 @@ public struct CameraReading: Equatable, Sendable {
     public struct Skipped: Equatable, Sendable {
         public let source: Source
         public let reason: String
+        /// Why it couldn't be examined, when that's what kept it from being read (not when it was
+        /// another film's, about another craft, or one more than was read).
+        public var limit: CraftIndex.SourceLimit.Kind? = nil
+
+        public init(source: Source, reason: String, limit: CraftIndex.SourceLimit.Kind? = nil) {
+            self.source = source
+            self.reason = reason
+            self.limit = limit
+        }
     }
 
     public var skipped: [Skipped] = []
@@ -134,6 +143,15 @@ public enum SourceFailure: Equatable, Sendable {
         }
     }
 
+    /// As kept with the reading.
+    public var limit: CraftIndex.SourceLimit.Kind {
+        switch self {
+        case .gone: .gone
+        case .restricted: .restricted
+        case .unanswered, .wait: .unanswered
+        }
+    }
+
     /// For the reading log.
     public var reason: String {
         switch self {
@@ -154,7 +172,8 @@ public enum SourceFailure: Equatable, Sendable {
         // A request that took too long, came too early, or a proxy on Reel's own side.
         if [407, 408, 425].contains(status) { return .unanswered("not answered in time (\(status))") }
         if [401, 402, 403, 451].contains(status) { return .restricted("refused (\(status)): a sign-in, a paywall or access denied") }
-        if [404, 410].contains(status) { return .gone("not found (\(status))") }
+        // Said as seen: not found where Reel asked (over HTTPS), not that it's nowhere.
+        if [404, 410].contains(status) { return .gone("not found\(requested.scheme == "https" ? " over HTTPS" : "") (\(status))") }
         if (400..<500).contains(status) { return .gone("not available (\(status))") }
         guard (200..<300).contains(status) else { return .unanswered("an unexpected answer (\(status))") }
         if data.count >= 6_000_000 { return .restricted("too large to read") }
@@ -216,6 +235,15 @@ public enum CameraSources {
 
     /// Query items that only say where a link was shared from.
     static let trackingTags: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "ref", "src", "amp", "igshid", "cmpid", "ito"]
+
+    /// Why a page found and not read wasn't examined, when that's why: it didn't load (`failure`), or
+    /// it loaded with too little text to read (fewer than three paragraphs: a teaser, a page built by
+    /// script, a sign-in wall). That page is kept as a limit, not retried: reading it again soon would
+    /// bring the same page. A page that was read, another film's, or one more than was read: nil.
+    public static func limit(page: CameraReading.Source?, failure: SourceFailure?, otherFilm: Bool) -> CraftIndex.SourceLimit.Kind? {
+        guard let page else { return failure?.limit ?? .unknown }
+        return !otherFilm && page.paragraphs.count < 3 ? .thin : nil
+    }
 
     /// A page asked for by its own address that ends on the site's front page: what it was is gone.
     public static func isFrontPage(_ landed: URL, for requested: URL) -> Bool {
@@ -575,8 +603,9 @@ public struct CameraSourcesClient: Sendable {
         }
         var skipped: [CameraReading.Skipped] = []
         for (_, page, fallback, failure) in pages where !read.contains(where: { $0.url == fallback.url }) {
+            let limit = CameraSources.limit(page: page, failure: failure, otherFilm: page.map { otherFilm.contains($0.url) } ?? false)
             skipped.append(CameraReading.Skipped(source: page ?? fallback,
-                                                 reason: page.map(reason) ?? failure?.reason ?? "couldn't be read"))
+                                                 reason: page.map(reason) ?? failure?.reason ?? "couldn't be read", limit: limit))
         }
         for story in storiesRead where !read.contains(where: { $0.url == story.url })
             && !pages.contains(where: { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }) {

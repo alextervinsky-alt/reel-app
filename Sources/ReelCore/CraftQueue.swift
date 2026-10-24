@@ -129,6 +129,9 @@ public enum CraftQueue {
         public var toRead = 0
         /// Read by these rules, but not completely: read again automatically.
         public var partial = 0
+        /// Read by these rules and done, but some pages found couldn't be examined (gone, not open to
+        /// Reel, too little text): not counted as read in full.
+        public var limited = 0
     }
 
     /// `removed`: the Shot on tags you said are wrong, by film.
@@ -150,7 +153,11 @@ public enum CraftQueue {
                 coverage.read += 1
                 if !Set(craft.shotOn).subtracting(removed[details.id] ?? []).isEmpty { coverage.tagged += 1 }
                 if craft.sources <= 1 { coverage.articleOnly += 1 }
-                if craft.isPartial || craft.retryAt != nil || readByTheseRules { coverage.partial += 1 }
+                if craft.isPartial || craft.retryAt != nil || readByTheseRules || craft.coverage == .partial {
+                    coverage.partial += 1
+                } else if craft.coverage == .limited {
+                    coverage.limited += 1
+                }
             }
         }
         return coverage

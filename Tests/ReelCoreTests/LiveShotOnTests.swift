@@ -53,7 +53,7 @@ final class LiveShotOnTests: XCTestCase {
         Known(title: "Alien: Romulus", year: 2024, has: [.digital], hasNot: [.film, .anamorphic]),
         // Digital, with Super 8 for the dreams (Film and Digital both show when a film mixes them).
         Known(title: "The Black Phone", year: 2021, has: [.digital, .film], hasNot: []),
-        Known(title: "Megalopolis", year: 2024, has: [.digital], hasNot: [.film]),
+        Known(title: "Megalopolis", year: 2024, has: [.digital], hasNot: [.film], showWhy: true),
         Known(title: "All We Imagine as Light", year: 2024, has: [], hasNot: [.blackAndWhite]),
         // The 1.9.4 audit's: a plan given up, a transfer, an award speech, an interviewer's line,
         // IMAX for part of the film.
@@ -130,6 +130,7 @@ final class LiveShotOnTests: XCTestCase {
                     guard let why = craft.evidence(for: tag) else { continue }
                     say("Shot on why: \(known.title) \(craft.label(for: tag)): \(why.source): \(why.text.prefix(200))")
                 }
+                say("Shot on cameras: \(known.title): \(specs.names(.camera).joined(separator: ", "))")
             }
             // The sheet's cameras and formats that say what it wasn't shot on ("Red Epic" for a film shot on film).
             let wrongNames = specs.specs.filter { !CraftIndex.shotOn($0).isDisjoint(with: known.hasNot) }.map(\.name)

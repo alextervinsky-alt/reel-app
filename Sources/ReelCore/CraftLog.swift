@@ -91,12 +91,19 @@ public enum CraftLog {
             lines.append("• dropped: \(dropped.shotOn.title) — \(dropped.reason)")
         }
         let next = index.retryAt.map { " Read again automatically after \(day.string(from: $0))." } ?? ""
-        if !index.unanswered.isEmpty {
-            lines.append("Incomplete: \(index.unanswered.joined(separator: ", ")) didn't answer.\(next)")
-        } else if index.isPartial {
-            lines.append("Incomplete: tags carried over from an earlier reading.\(next)")
-        } else {
-            lines.append("Complete: every source answered (rules \(index.version)).")
+        // Pages found and not examined, by why (each is named under NOT READ).
+        let unread = index.limits.filter { !$0.kind.retried }
+        let counts = Dictionary(grouping: unread, by: \.detail).sorted { $0.key < $1.key }.map { "\($0.value.count) \($0.key)" }
+        let limited = unread.isEmpty ? "" : " \(unread.count) page\(unread.count == 1 ? "" : "s") found couldn't be examined: " + counts.joined(separator: "; ") + "."
+        switch index.coverage {
+        case .partial where !index.unanswered.isEmpty:
+            lines.append("Incomplete: \(index.unanswered.joined(separator: ", ")) didn't answer.\(next)\(limited)")
+        case .partial:
+            lines.append("Incomplete: tags carried over from an earlier reading.\(next)\(limited)")
+        case .limited:
+            lines.append("Complete, with limits:\(limited) Not tried again until the film is next read (rules \(index.version)).")
+        case .full:
+            lines.append("Complete: every page found was read (rules \(index.version)).")
         }
         return lines.joined(separator: "\n") + "\n"
     }

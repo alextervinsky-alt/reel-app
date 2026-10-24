@@ -55,7 +55,12 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// film, then gear named), not the first read; films in general ("films that are shot on film")
     /// aren't this film; cited "http://" pages are read over HTTPS, and a page that's gone or refused
     /// doesn't leave the reading incomplete.
-    public static let currentVersion = 9
+    /// 10: a round-up's spec sheet only from this film's own entry (one sheet an entry, right after
+    /// its credits line where the round-up lays them out so); "It was shot…" after a sentence about
+    /// another film is that film; the reason ranked by how plainly it's said (in so many words, a
+    /// spec sheet, a mention), said as done over what would be used, naming the film, then gear
+    /// named; pages found and not examined kept with the reading (`limits`).
+    public static let currentVersion = 10
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
@@ -125,6 +130,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     public var discovery: Int
     /// Sites that didn't answer or asked Reel to wait while it was read: read again later.
     public var unanswered: [String] = []
+    /// The pages found for it that weren't read, and why (gone, not open to Reel, too little text,
+    /// didn't answer): what this reading couldn't examine, kept with it (see `coverage`).
+    public var limits: [SourceLimit] = []
     /// Readings in a row that were incomplete: a site unanswered, or a tag carried over.
     public var retries = 0
     /// When it's read again, when that's planned (a site didn't answer, a tag was carried over):
@@ -156,6 +164,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         evidence = try c.decodeIfPresent([Evidence].self, forKey: .evidence) ?? []
         sources = try c.decodeIfPresent(Int.self, forKey: .sources) ?? 0
         read = try c.decodeIfPresent([String].self, forKey: .read) ?? []
+        limits = try c.decodeIfPresent([SourceLimit].self, forKey: .limits) ?? []
         discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 1
         unanswered = try c.decodeIfPresent([String].self, forKey: .unanswered) ?? []
         retries = try c.decodeIfPresent(Int.self, forKey: .retries) ?? 0
@@ -188,12 +197,63 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// reading's sentence. Read again automatically (`retryAt`); Settings counts these.
     public var isPartial: Bool { !unanswered.isEmpty || evidence.contains(where: \.isCarried) }
 
+    /// How much of what was found for it this reading examined.
+    public enum Coverage: String, Sendable {
+        /// Every page found was read.
+        case full
+        /// Done, but some pages found couldn't be examined (gone, not open to Reel, too little text):
+        /// not tried again until the film is next read.
+        case limited
+        /// A site didn't answer, or a tag stands on an earlier reading: read again automatically.
+        case partial
+    }
+
+    public var coverage: Coverage {
+        if isPartial || limits.contains(where: \.kind.retried) { return .partial }
+        return limits.isEmpty ? .full : .limited
+    }
+
     /// To be read again because it's partial (Settings counts these).
     public var willReadAgain: Bool { retryAt != nil && isPartial }
 
     /// Read from the film's article alone (or nothing), or nothing found on what it was shot on:
     /// worth reading again when finding improves.
     public var isThin: Bool { sources <= 1 || shotOn.isEmpty }
+
+    /// A page found for the film that this reading couldn't examine.
+    public struct SourceLimit: Codable, Equatable, Sendable {
+        public enum Kind: String, Codable, Sendable {
+            /// Not found where it was asked for (404, 410, moved to the site's front page…).
+            case gone
+            /// There, but not open to Reel (a sign-in, a paywall, access denied, plain HTTP only).
+            case restricted
+            /// It loaded, but with too little text to read.
+            case thin
+            /// The site didn't answer, or asked Reel to wait: read again later.
+            case unanswered
+            /// Saved by a later Reel with a kind this one doesn't know: not taken for a page read.
+            case unknown
+
+            public init(from decoder: Decoder) throws {
+                self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+            }
+
+            public var retried: Bool { self == .unanswered }
+        }
+
+        public let site: String
+        public let url: String
+        public let kind: Kind
+        /// As the reading log says it: "not found over HTTPS (404)".
+        public let detail: String
+
+        public init(site: String, url: String, kind: Kind, detail: String) {
+            self.site = site
+            self.url = url
+            self.kind = kind
+            self.detail = detail
+        }
+    }
 
     /// "Wikipedia" for "Wikipedia: Roger Deakins": the site a source is on, as `unanswered` names it.
     public static func site(of source: String) -> String {
@@ -327,7 +387,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             }
         }
         var evidence: [ShotOn: Evidence] = [:]
-        var strength: [ShotOn: (Int, Int, Int)] = [:]
+        var strength: [ShotOn: (Int, Int, Int, Int, Int)] = [:]
         // Only what's said to have been shot with: the names alone are for the notes and search.
         for spec in specs.specs where spec.capture {
             for found in Self.shotOn(spec) {
@@ -347,11 +407,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 // The reason shown is the strongest sentence, in this order: how much of the film it
                 // says (the whole film in so many words, then a stated share such as "about 28
                 // minutes", then a sentence that only says it was filmed that way, then part of it);
-                // then a sentence saying in so many words that this film was shot with it (see
-                // `TechSpecs.Spec.direct`) over one that only says it was used; then gear named
-                // ("Kodak Vision3 250D") over Reel's own word ("Film"). Among equals, the first read
-                // (the magazines' interviews, then the film's article, then the cinematographer's).
-                let strong = (rank, spec.direct ? 1 : 0, spec.isFixedName ? 0 : 1)
+                // then how plainly it's said of this film: in so many words (see
+                // `TechSpecs.Spec.direct`), then this film's own spec sheet, then a mention; then said as
+                // done over said as what would be used; then a sentence naming the film over one that
+                // doesn't; and only then gear named ("Kodak Vision3 250D") over Reel's own word
+                // ("Film"). Among equals, the first read (the magazines' interviews, then the film's
+                // article, then the cinematographer's). Only sentences already found to be about this
+                // film, its own entry and its shooting take part (see `TechSpecs.read`).
+                let strong = (rank, spec.said, spec.intended ? 0 : 1, spec.namesFilm ? 1 : 0, spec.isFixedName ? 0 : 1)
                 if let known = strength[found], known >= strong { continue }
                 evidence[found] = said
                 strength[found] = strong

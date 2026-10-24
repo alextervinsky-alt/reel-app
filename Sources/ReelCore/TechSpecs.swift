@@ -32,9 +32,19 @@ public struct TechSpecs: Equatable, Sendable {
         /// Said of the whole film in so many words ("the entire film", "shot entirely in IMAX").
         public var wholeFilm = false
         /// Its sentence says in so many words that this film was shot with it ("Doe shot The Quiet
-        /// Harbour on Kodak 65mm…", "The film was mostly shot with…", "we shot it on…", a spec
-        /// sheet), not only that it was used somewhere in the telling: the stronger reason.
+        /// Harbour on Kodak 65mm…", "The film was mostly shot with…", "we shot the film on…"), not only
+        /// that it was used somewhere in the telling: the strongest reason.
         public var direct = false
+        /// Read from this film's spec sheet ("Cameras: … Lenses: …"): weaker than such a sentence,
+        /// stronger than a mention.
+        public var sheet = false
+        /// Said only as what would or was to be used ("lenses that would be used on the IMAX cameras").
+        public var intended = false
+        /// Its part of the sentence names the film ("…capturing Christopher Nolan's thriller,
+        /// Oppenheimer, in IMAX…").
+        public var namesFilm = false
+        /// How plainly it's said of this film: in so many words (2), a spec sheet (1), a mention (0).
+        public var said: Int { direct ? 2 : sheet ? 1 : 0 }
         /// Its sentence says this film was shot with it ("shot on", "chose", "his main camera", a
         /// spec list), not an opinion, a comparison, other work or a look: only these are Shot on tags.
         public var capture = false
@@ -172,10 +182,15 @@ public struct TechSpecs: Equatable, Sendable {
         for text in texts {
             let roundup = text.isInterview && !shortTitle.isEmpty && (text.isList || isRoundup(text, title: title ?? ""))
             if roundup { roundups.append(text.source ?? "Wikipedia") }
-            // In a round-up, a spec sheet ("Camera: … Lenses: …") is this film's only when it names the
-            // film, or follows the paragraph that does closely (one paragraph between at most, no other sheet
-            // between; a sheet in several paragraphs counts as one).
-            var sinceNamed: Int?, sheetSinceNamed = false, inOwnSheet = false
+            // In a round-up, a spec sheet ("Camera: … Lenses: …") is this film's only when it's in this
+            // film's own entry: it names the film, or (a round-up whose sheets come right after each
+            // entry's credits line, "Dir: …, DP: …") it comes right after this film's credits line, or
+            // (otherwise) it follows a paragraph naming the film closely (one paragraph between at most,
+            // no other sheet or entry between). An entry has one sheet (in several paragraphs it counts as
+            // one): once this film's sheet is read, a later one is the next entry's, however much the
+            // commentary between names this film.
+            let layout = roundup ? EntryLayout(text) : nil
+            var sinceNamed: Int?, sheetSinceNamed = false, inOwnSheet = false, ownSheetRead = false, afterOwnCredits = false
             for section in text.sections {
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
@@ -186,15 +201,30 @@ public struct TechSpecs: Equatable, Sendable {
                         let namesIt = paragraph.range(of: shortTitle, options: .caseInsensitive) != nil
                             || mentions(names, in: paragraph, generic: false)
                         if isSpecList(paragraph) {
-                            let own = namesIt || inOwnSheet || ((sinceNamed.map { $0 <= 1 } ?? false) && !sheetSinceNamed)
+                            let entry = layout?.sheetsFollowCredits == true ? afterOwnCredits
+                                : (sinceNamed.map { $0 <= 1 } ?? false) && !sheetSinceNamed
+                            let own = namesIt || inOwnSheet || (!ownSheetRead && entry)
                             sheetSinceNamed = true
                             inOwnSheet = own
+                            afterOwnCredits = false
                             if !own { continue }
                         } else {
+                            if inOwnSheet { ownSheetRead = true }
                             inOwnSheet = false
-                            if namesIt {
+                            let credits = EntryLayout.isCredits(paragraph)
+                            afterOwnCredits = credits && namesIt
+                            if credits && namesIt {
+                                // This film's entry begins (again).
                                 sinceNamed = 0
                                 sheetSinceNamed = false
+                                ownSheetRead = false
+                            } else if credits {
+                                // Another film's entry.
+                                sinceNamed = nil
+                                continue
+                            } else if namesIt {
+                                sinceNamed = 0
+                                if !ownSheetRead { sheetSinceNamed = false }
                             } else {
                                 sinceNamed = sinceNamed.map { $0 + 1 }
                                 continue
@@ -208,6 +238,9 @@ public struct TechSpecs: Equatable, Sendable {
                     // Inside the quote of an award speech ("…said: “Celluloid is alive and kicking. Four
                     // out of five nominated films were shot on celluloid…”"): not how this film was shot.
                     var speaking = false
+                    // "…their first collaboration, on his 2007 feature Youth Without Youth. It was shot
+                    // using Sony F900 cameras…": "It" is that film.
+                    var previousOtherFilm = false
                     for (index, sentence) in sentences.enumerated() {
                         let speech = speaking || matches(acceptanceSpeech, sentence)
                         speaking = speech && quoteStaysOpen(sentence, wasOpen: speaking)
@@ -227,6 +260,8 @@ public struct TechSpecs: Equatable, Sendable {
                         // Oppenheimer", "in 1993, employing a Sony F900"): no gear is read from it,
                         // and it's kept only as how the cinematographer and the director met.
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title)
+                            || (previousOtherFilm && matches(continuesAbout, sentence))
+                        previousOtherFilm = otherFilm
                         // "I performed some simple tests. I shot 35mm Double-X, 35mm color film and with the
                         // Arri Alexa.": what was tried, not what it was shot on (unless it says what was chosen).
                         let tried = index > 0 && matches(testsDone, sentences[index - 1]) && !matches(chosenAfter, sentences[index - 1])
@@ -255,7 +290,9 @@ public struct TechSpecs: Equatable, Sendable {
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(sentence.prefix(400)), source: text.source,
                                                       partial: part, share: share, wholeFilm: !part && saidOfWholeFilm(sentence, at: at),
-                                                      direct: saidDirectly(sentence, at: at, title: title),
+                                                      direct: saidDirectly(sentence, at: at, title: title), sheet: isSpecList(sentence),
+                                                      intended: saidAsIntended(sentence, at: at),
+                                                      namesFilm: namesTitle(segment(of: sentence, around: at), title: title),
                                                       capture: said.captured && !tried && !speech, aboutThisFilm: said.aboutThisFilm))
                                 }
                             }
@@ -632,8 +669,8 @@ public struct TechSpecs: Equatable, Sendable {
     static func tidy(_ specs: [Spec]) -> [Spec] {
         // Said to have been shot with it, about this film, how much of it, then said in so many words
         // (see `Spec.direct`); among equals the first read.
-        func rank(_ spec: Spec) -> (Int, Int, Int, Int) {
-            (spec.capture ? 1 : 0, spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.direct ? 1 : 0)
+        func rank(_ spec: Spec) -> (Int, Int, Int, Int, Int, Int) {
+            (spec.capture ? 1 : 0, spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.said, spec.intended ? 0 : 1, spec.namesFilm ? 1 : 0)
         }
         var best: [String: Spec] = [:]
         var order: [String] = []
@@ -772,7 +809,6 @@ public struct TechSpecs: Equatable, Sendable {
     /// "shot the film on…", "we shot it on…", or a spec sheet. Said only that they were used ("…discuss
     /// using custom optics, 65mm film negative…") isn't.
     static func saidDirectly(_ sentence: String, at range: Range<String.Index>, title: String?) -> Bool {
-        if isSpecList(sentence) { return true }
         // Magazines write "Schindler’s": read as "Schindler's".
         let part = segment(of: sentence, around: range).replacingOccurrences(of: "’", with: "'")
         var films = ["the (?:film|movie|feature|picture|production)"]
@@ -801,6 +837,29 @@ public struct TechSpecs: Equatable, Sendable {
             #"\b(?:we|i)\s+(?:"# + verbs + #")\s+the (?:whole |entire )?(?:film|movie|thing)\b(?!'s)"#,
         ]
         return patterns.contains { part.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
+    }
+
+    /// Said only as what would or was to be used, in the words' part of the sentence: "lenses… that
+    /// would be used on the IMAX cameras", "the Alexa was to be the main camera".
+    static func saidAsIntended(_ sentence: String, at range: Range<String.Index>) -> Bool {
+        segment(of: sentence, around: range).range(of: intendedUse, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    static let intendedUse = #"\b(?:would|could|might|should|was to|were to|is to|are to|was going to|were going to|intended to|meant to)\s+(?:\w+\s+){0,2}?(?:be\s+)?(?:used|use|shot|shoot|filmed|employed|fitted|mounted|captured|paired|the main)\b"#
+
+    /// Whether the text names the film by its title (or its title before a colon), as a whole word.
+    static func namesTitle(_ text: String, title: String?) -> Bool {
+        guard let title, !title.isEmpty else { return false }
+        let folded = text.replacingOccurrences(of: "’", with: "'")
+        var titles = [title]
+        if let short = title.split(separator: ":").first.map({ $0.trimmingCharacters(in: .whitespaces) }), short.count >= 3, short != title {
+            titles.append(short)
+        }
+        return titles.contains { name in
+            let escaped = NSRegularExpression.escapedPattern(for: name.replacingOccurrences(of: "’", with: "'"))
+            let pattern = #"(?<!\w)"# + (name.count <= 3 ? "(?-i:" + escaped + ")" : escaped) + #"(?!\w)"#
+            return folded.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+        }
     }
 
     /// The copy's verb, then (in the same clause, no verb of shooting after "to") what it went onto.
@@ -1121,6 +1180,9 @@ public struct TechSpecs: Equatable, Sendable {
         options: [.caseInsensitive])
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
+    /// A sentence going on about what the one before was about: "It was shot…", "They used…".
+    static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|They|This|That|Both)\b"#)
+
     static let filmsInGeneral = try! NSRegularExpression(
         pattern: #"\b(?:films|movies|pictures) (?:that|which) (?:are|were|get|got) (?:\w+ )?(?:shot|filmed|made|photographed)\b"#,
         options: [.caseInsensitive])
@@ -1440,4 +1502,31 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.finish, #"\b(?:FotoKem|Company\s+3|EFILM|Picture\s+Shop|Light\s+Iron|Cinelab|Kodak\s+Film\s+Lab|Technicolor\s+(?:lab|laboratory))\b|\bDeluxe\b(?=\s+(?:lab|laboratory|labs))"#,
              caseSensitive: true),
     ]
+}
+
+/// How a round-up lays out its entries: whether each film's spec sheet comes right after its credits
+/// line ("Dir: …, DP: … Category: Competition", then "Format: … Camera: … Lenses: …"), as in a
+/// festival's camera round-up. Then a sheet anywhere else (after an entry's commentary, its credits
+/// line missing from the page) is never taken for the film the commentary before it names.
+struct EntryLayout {
+    let sheetsFollowCredits: Bool
+
+    init(_ text: TechSpecs.Text) {
+        let paragraphs = text.sections.flatMap(\.paragraphs)
+        var sheets = 0, afterCredits = 0
+        for (index, paragraph) in paragraphs.enumerated() where TechSpecs.isSpecList(paragraph) {
+            // The first paragraph of each sheet.
+            guard index == 0 || !TechSpecs.isSpecList(paragraphs[index - 1]) else { continue }
+            sheets += 1
+            if index > 0, Self.isCredits(paragraphs[index - 1]) { afterCredits += 1 }
+        }
+        sheetsFollowCredits = sheets >= 2 && afterCredits * 2 > sheets
+    }
+
+    /// An entry's credits line: short, with a director's or cinematographer's credit.
+    static func isCredits(_ paragraph: String) -> Bool {
+        paragraph.count <= 200 && paragraph.range(of: credit, options: .regularExpression) != nil
+    }
+
+    static let credit = #"\b(?:Dir\.|Dir:|Directors?:|Directed by|DP:|DoP:|D\.P\.:|Cinematographer:|Director of Photography:)"#
 }

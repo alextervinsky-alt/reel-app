@@ -33,6 +33,11 @@ public enum CraftReader {
                                    year: details.year, title: details.title, otherTitles: otherTitles)
         var index = CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
         index.unanswered = reading?.unanswered ?? []
+        // What was found and couldn't be examined, kept with the reading (not only in the log).
+        index.limits = (reading?.skipped ?? []).compactMap { skipped in
+            skipped.limit.map { CraftIndex.SourceLimit(site: skipped.source.site, url: skipped.source.url.absoluteString, kind: $0,
+                                                       detail: skipped.reason) }
+        }
         // Where it was read, as its sentences' sources say it (what `CraftIndex.merge` compares).
         var read: [String] = []
         for text in texts where !read.contains(text.source ?? "Wikipedia") { read.append(text.source ?? "Wikipedia") }
@@ -78,6 +83,11 @@ public enum CraftReader {
         var read = evaluated.index
         // The film's own article didn't come: read again later too.
         if articleFailed, !read.unanswered.contains("Wikipedia") { read.unanswered.append("Wikipedia") }
+        if let articleTitle, article == nil {
+            read.limits.append(CraftIndex.SourceLimit(site: "Wikipedia", url: "https://en.wikipedia.org/wiki/" + articleTitle.replacingOccurrences(of: " ", with: "_"),
+                                                      kind: articleFailed ? .unanswered : .gone,
+                                                      detail: articleFailed ? "didn't answer (read again later)" : "no such article now"))
+        }
         return Reading(index: read, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
                                                        articleMissing: articleTitle != nil && article == nil && !articleFailed,
                                                        reading: reading, specs: evaluated.specs, index: read, now: now))
