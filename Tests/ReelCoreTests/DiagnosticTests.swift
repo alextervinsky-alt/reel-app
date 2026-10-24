@@ -3,7 +3,21 @@ import XCTest
 
 /// TEMPORARY (diag branch only): the structure of three public pages, for the 1.9.8 design.
 final class DiagnosticTests: XCTestCase {
-    private func say(_ s: String) { FileHandle.standardOutput.write(Data(("DIAG " + s + "\n").utf8)) }
+    private var lines: [String] = []
+    private func say(_ s: String) { lines.append(s.replacingOccurrences(of: "\n", with: " ")) }
+    private func flush(_ tag: String) {
+        // Annotations: a few long notices (GitHub keeps ten a step).
+        let joined = lines.joined(separator: " ¦ ")
+        var start = joined.startIndex
+        var part = 0
+        while start < joined.endIndex, part < 3 {
+            let end = joined.index(start, offsetBy: 3500, limitedBy: joined.endIndex) ?? joined.endIndex
+            FileHandle.standardOutput.write(Data(("::notice::DIAG \(tag) \(part): " + joined[start..<end] + "\n").utf8))
+            start = end
+            part += 1
+        }
+        lines = []
+    }
 
     func testStructure() async throws {
         let client = CameraSourcesClient()
@@ -21,6 +35,7 @@ final class DiagnosticTests: XCTestCase {
                 }
             }
         } else { say("IW failed \(String(describing: iw.failure))") }
+        flush("IW")
         // 2. American Cinematographer on Megalopolis: around the F900 sentence.
         let ac = await client.page(URL(string: "https://theasc.com/article/material-ecology-megalopolis/")!, site: "American Cinematographer", title: nil)
         if let paras = ac.source?.paragraphs {
@@ -31,10 +46,12 @@ final class DiagnosticTests: XCTestCase {
                 }
             }
         } else { say("AC failed \(String(describing: ac.failure))") }
+        flush("AC")
         // 3. Kodak on Oppenheimer: every sentence naming IMAX.
         let kodak = await client.page(URL(string: "https://www.kodak.com/en/motion/blog-post/oppenheimer/")!, site: "Kodak", title: nil)
         if let paras = kodak.source?.paragraphs {
             for p in paras { for x in Digest.sentences(in: p) where x.contains("IMAX") { say("KODAK :: \(String(x.prefix(200)))") } }
         } else { say("KODAK failed \(String(describing: kodak.failure))") }
+        flush("KODAK")
     }
 }
