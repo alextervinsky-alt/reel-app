@@ -88,6 +88,8 @@ jobs:
           echo "::notice::Shot on not counted (named, not said to be shot that way): ${uncounted:-none}"
           why=$(grep -E "^Shot on why: " shoton.log | sed -E 's/^Shot on why: //' | paste -sd '~' - | sed 's/~/ ¦ /g')
           echo "::notice::Shot on why (the 1.9.4 audit's films): ${why:-none}"
+          cams=$(grep -E "^Shot on cameras: " shoton.log | sed -E 's/^Shot on cameras: //' | paste -sd '~' - | sed 's/~/ ¦ /g')
+          echo "::notice::Shot on cameras (the audit's films): ${cams:-none}"
           # Reports only: the unit tests are what pass or fail a build.
           exit 0
 
