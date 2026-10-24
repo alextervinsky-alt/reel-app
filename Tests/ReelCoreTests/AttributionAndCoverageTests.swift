@@ -205,7 +205,9 @@ final class AttributionAndCoverageTests: XCTestCase {
         let teaser = CameraReading.Source(title: "Teaser", site: "Thin Weekly", url: URL(string: "https://thin.example/a")!, paragraphs: ["Subscribe."])
         XCTAssertEqual(CameraSources.limit(page: teaser, failure: nil, otherFilm: false), .thin)
         XCTAssertNil(CameraSources.limit(page: teaser, failure: nil, otherFilm: true), "another film's page isn't a limit")
-        XCTAssertNil(CameraSources.limit(page: readPage, failure: nil, otherFilm: false), "a page with text to read")
+        let full = CameraReading.Source(title: "Harbour light", site: "Lens Weekly", url: URL(string: "https://lens.example/b")!,
+                                        paragraphs: ["One.", "Two.", "Three."])
+        XCTAssertNil(CameraSources.limit(page: full, failure: nil, otherFilm: false), "a page with text to read, skipped for another reason")
         XCTAssertEqual(CameraSources.limit(page: nil, failure: nil, otherFilm: false), .unknown, "a failure Reel can't name isn't a read")
         let thin = reading(skipped: [CameraReading.Skipped(source: teaser, reason: "too little text to read", limit: .thin)])
         XCTAssertEqual(thin.index.coverage, .limited)
