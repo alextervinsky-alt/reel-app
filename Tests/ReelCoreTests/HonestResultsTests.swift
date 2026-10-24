@@ -282,10 +282,10 @@ final class HonestResultsTests: XCTestCase {
         XCTAssertEqual(storedTags(log), merged.index.shotOn.map { merged.index.label(for: $0) })
         let dropped = CraftLog.stored(CraftIndex.merging(old: earlier, new: reading([.film], read: ["Lens Weekly", "Wikipedia"]), now: now))
         XCTAssertTrue(dropped.contains("• dropped: Anamorphic — Lens Weekly was read again and, by rules \(CraftIndex.currentVersion), doesn't say so"), dropped)
-        XCTAssertTrue(dropped.contains("Complete: every page found was read"), dropped)
+        XCTAssertTrue(dropped.contains("Complete: no page found failed"), dropped)
         XCTAssertEqual(storedTags(dropped), ["Film"])
         XCTAssertEqual(CraftLog.stored(CraftIndex.merging(old: nil, new: reading([], read: ["Wikipedia"]), now: now)),
-                       "\nSTORED IN REEL\n• no Shot on\nComplete: every page found was read or deliberately left out (another film's, another craft's, more than the six read); none failed (rules \(CraftIndex.currentVersion)).\n")
+                       "\nSTORED IN REEL\n• no Shot on\nComplete: no page found failed to load or was too thin to read; pages left out on purpose (another film's, another craft's, more than the six read) are under NOT READ (rules \(CraftIndex.currentVersion)).\n")
     }
 
     /// The tags the log's STORED IN REEL section lists, as shown.

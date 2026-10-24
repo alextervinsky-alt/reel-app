@@ -463,18 +463,26 @@ public enum HTMLText {
         }
         guard let regex = try? NSRegularExpression(pattern: #"<p\b[^>]*>([\s\S]*?)</p>"#, options: [.caseInsensitive]) else { return [] }
         var seen = Set<String>()
-        return regex.matches(in: body, range: NSRange(body.startIndex..., in: body)).compactMap { match in
-            guard let range = Range(match.range(at: 1), in: body) else { return nil }
+        var kept: [String] = []
+        for match in regex.matches(in: body, range: NSRange(body.startIndex..., in: body)) {
+            guard let range = Range(match.range(at: 1), in: body) else { continue }
             let text = plain(String(body[range]))
-            // A round-up's credits line or spec sheet is short and may repeat: kept, as each marks an entry.
-            let entry = text.count >= 20 && text.count <= 600 && (EntryLayout.isCredits(text) || TechSpecs.isSpecList(text))
-            guard text.count >= 60 || entry, text.contains(" "), entry || seen.insert(text).inserted else { return nil }
+            // A round-up's credits line ("Dir: …, DP: …") or spec sheet ("Format: … Camera: …") is short:
+            // kept, as each marks an entry. Not a menu ("Home | Reviews | News").
+            let credits = EntryLayout.isCredits(text)
+            let entry = text.count >= 20 && text.count <= 600 && (credits || EntryLayout.isLabelledSheet(text))
+            guard text.count >= 60 || entry, text.contains(" ") else { continue }
+            // A repeat is dropped (a sidebar or print copy of the article's sheet), unless it's a sheet
+            // right after an entry's credits line: two entries of a festival may share a sheet.
+            let entrySheet = entry && !credits && kept.last.map(EntryLayout.isCredits) == true
+            guard seen.insert(text).inserted || entrySheet else { continue }
             // Newsletter boxes, credits lines and cookie notices.
             let lower = text.lowercased()
             if ["subscribe", "newsletter", "cookie", "all rights reserved", "sign up", "log in", "advertisement"].contains(where: lower.contains),
-               text.count < 220 { return nil }
-            return text
+               text.count < 220 { continue }
+            kept.append(text)
         }
+        return kept
     }
 
     /// Markup taken out, entities decoded, spaces tidied.

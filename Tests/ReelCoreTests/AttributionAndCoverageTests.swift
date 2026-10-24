@@ -95,6 +95,9 @@ final class AttributionAndCoverageTests: XCTestCase {
         let thisTime = read([text(["Doe shot Glass Rivers in 2007 on Super 16. This time she chose the ARRI Alexa 65 for The Quiet Harbour."], source: "Lens Weekly")])
         XCTAssertTrue(cameras(thisTime.specs).contains { $0.contains("alexa 65") })
         // A film named by its year in brackets is another production.
+        // "collaborated on <another film>" names another production too.
+        let together = read([text(["In 2007 Doe and Example collaborated on Glass Rivers. It was shot using Sony HDW-F900 CineAlta cameras."], source: "Lens Weekly")])
+        XCTAssertFalse(cameras(together.specs).contains { $0.contains("f900") || $0.contains("cinealta") }, "\(together.specs.names(.camera))")
         let bracket = read([text(["Doe's earlier work includes Glass Rivers (2007). It was shot on Sony HDW-F900 CineAlta cameras."], source: "Lens Weekly")])
         XCTAssertFalse(cameras(bracket.specs).contains { $0.contains("f900") || $0.contains("cinealta") }, "\(bracket.specs.names(.camera))")
     }
@@ -121,12 +124,26 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertTrue(EntryLayout.isOwn("Dir: Carl Example, DP: Mihai Malaimare Jr. Category: Competition", title: "Up",
                                         cinematographers: ["Mihai Mălaimare Jr."], directors: ["Carl Example"]))
         XCTAssertTrue(EntryLayout.isOwn("DP: Mihai Malaimare Jr.", title: "Up", cinematographers: ["Mihai Mălaimare Jr."], directors: ["Carl Example"]))
+        // The re-review of 1.9.8: names as festivals write them.
+        XCTAssertTrue(EntryLayout.isOwn("Dir: Francis Coppola, DP: Mihai Malaimare Jr", title: "Up",
+                                        cinematographers: ["Mihai Mălaimare Jr."], directors: ["Francis Ford Coppola"]))
+        XCTAssertTrue(EntryLayout.isOwn("Dir: C. Example, DP: Lukasz Zal", title: "Up", cinematographers: ["Łukasz Żal"], directors: ["Carl Example"]))
+        XCTAssertFalse(EntryLayout.isOwn("Dir: Dana Example, DP: Lukasz Zal", title: "Up", cinematographers: ["Łukasz Żal"], directors: ["Carl Example"]),
+                       "the same surname isn't the director")
+        XCTAssertTrue(EntryLayout.isOwn("Dir. of Photography: Jane Doe, Country: France", title: "Up", cinematographers: ["Jane Doe"], directors: ["Carl Example"]),
+                      "\"Dir. of Photography\" credits the cinematographer, not a director")
+        // A credits line, not prose crediting someone.
+        XCTAssertTrue(EntryLayout.isCredits("Dir: Carl Example, DP: Jane Doe"))
+        XCTAssertTrue(EntryLayout.isCredits("Directed by Carl Example Category: Competition"))
+        XCTAssertFalse(EntryLayout.isCredits("Cinematography by Doe leans on handheld Alexa Mini."))
     }
 
     /// The review of 1.9.8: what reaches the reading from a real page: a short credits line and sheet
     /// are kept (other short paragraphs aren't), so the page is still read entry by entry.
     func testARoundUpPageKeepsItsShortCreditsLines() {
-        let html = festival.map { "<p>" + $0 + "</p>" }.joined() + "<p>Share this</p><p>Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i</p>"
+        // The last entry's sheet is the same as the one before: each follows its own credits line.
+        let html = festival.map { "<p>" + $0 + "</p>" }.joined()
+            + "<p>Share this</p><p>Dir: Fay Example, DP: Gus Sample Category: Un Certain Regard</p><p>Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i</p>"
         let paragraphs = HTMLText.paragraphs(html)
         XCTAssertTrue(paragraphs.contains("Dir: Ann Example, DP: Bob Sample Category: Competition"))
         XCTAssertEqual(paragraphs.filter { $0 == "Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i" }.count, 2, "each entry's sheet")
@@ -134,6 +151,20 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertTrue(EntryLayout(text(paragraphs)).sheetsFollowCredits)
         let (specs, _) = read([text(paragraphs)])
         XCTAssertFalse(cameras(specs).contains { $0.contains("amira") || $0.contains("arricam") }, "\(specs.names(.camera))")
+    }
+
+    /// The re-review of 1.9.8: a one-film article printing its sheet twice (body and sidebar) isn't a
+    /// round-up, and a menu isn't a sheet.
+    func testARepeatedSheetAndAMenuAreNotEntries() {
+        let sheet = "Format: Digital Camera: Sony Venice 2 Lenses: Cooke S7/i"
+        let article = ["We wanted the harbour to feel cold and close, so we lit everything from the water.", "I shot it on the Sony Venice 2 with Cooke S7/i lenses, mostly handheld."]
+        let html = (["<p>Home | Reviews | News | Contact</p>", "<p>" + sheet + "</p>"] + article.map { "<p>" + $0 + "</p>" } + ["<p>" + sheet + "</p>"]).joined()
+        let paragraphs = HTMLText.paragraphs(html)
+        XCTAssertEqual(paragraphs.filter { $0 == sheet }.count, 1, "a sidebar copy of the sheet is dropped")
+        XCTAssertFalse(paragraphs.contains("Home | Reviews | News | Contact"))
+        let (specs, craft) = read([text(paragraphs, source: "Lens Weekly")])
+        XCTAssertTrue(specs.roundups.isEmpty)
+        XCTAssertEqual(craft.shotOn, [.digital])
     }
 
     func testOneFilmsOwnArticleIsReadInFull() {
@@ -219,7 +250,7 @@ final class AttributionAndCoverageTests: XCTestCase {
         let full = reading(skipped: [])
         XCTAssertEqual(full.index.coverage, .full)
         let merged = CraftIndex.merging(old: nil, new: full.index)
-        XCTAssertTrue(CraftLog.stored(merged).contains("Complete: every page found was read"))
+        XCTAssertTrue(CraftLog.stored(merged).contains("Complete: no page found failed"))
         // Another film's page, another craft's, one more than was read: not limits.
         let deliberate = reading(skipped: [CameraReading.Skipped(source: page("Lens Weekly", "lens.example/other"), reason: "another film of that title")])
         XCTAssertEqual(deliberate.index.coverage, .full)
@@ -238,7 +269,7 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertNil(merged.index.retryAt, "not retried soon: a page that isn't there")
         let log = CraftLog.stored(merged)
         XCTAssertTrue(log.contains("Complete, with limits: 2 pages found couldn't be examined: 2 gone: not found over HTTPS (404)."), log)
-        XCTAssertFalse(log.contains("every page found was read"))
+        XCTAssertFalse(log.contains("Complete: no page found failed"))
     }
 
     func testTimeoutsServerErrorsAndWaitsAreRetried() {
@@ -343,7 +374,7 @@ final class AttributionAndCoverageTests: XCTestCase {
         XCTAssertEqual(counted.limited, 1)
         XCTAssertEqual(counted.partial, 0)
         // Each film's log says what the counts say.
-        XCTAssertTrue(CraftLog.stored(CraftIndex.Merged(index: full, carried: [], dropped: [])).contains("Complete: every page found was read"))
+        XCTAssertTrue(CraftLog.stored(CraftIndex.Merged(index: full, carried: [], dropped: [])).contains("Complete: no page found failed"))
         XCTAssertTrue(CraftLog.stored(CraftIndex.Merged(index: limited, carried: [], dropped: [])).contains("Complete, with limits"))
         XCTAssertTrue(CraftLog.stored(CraftIndex.Merged(index: partial, carried: [], dropped: [])).contains("Incomplete"))
     }

@@ -1190,7 +1190,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// A sentence going on about what the one before was about: "It was shot…", "They used…".
     static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|That)\b(?!\s+time\b)|^\W*This\b(?!\s+(?:time|film|movie|picture|feature|one|project)\b)"#)
     /// Another production named: "his 2007 feature Glass Rivers", "her previous film", "Glass Rivers (2007)".
-    static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
+    static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
 
     static let filmsInGeneral = try! NSRegularExpression(
         pattern: #"\b(?:films|movies|pictures) (?:that|which) (?:are|were|get|got) (?:\w+ )?(?:shot|filmed|made|photographed)\b"#,
@@ -1533,24 +1533,57 @@ struct EntryLayout {
     }
 
     /// An entry's credits line: short, with a director's or cinematographer's credit.
+    /// A credits line, not prose that credits someone ("Cinematography by Doe leans on handheld…"):
+    /// two credits ("Dir: …, DP: …"), or one with the entry's section ("… Category: Competition").
     static func isCredits(_ paragraph: String) -> Bool {
-        paragraph.count <= 200 && paragraph.range(of: credit, options: [.regularExpression, .caseInsensitive]) != nil
+        guard paragraph.count <= 200 else { return false }
+        let credits = creditPattern.numberOfMatches(in: paragraph, range: NSRange(paragraph.startIndex..., in: paragraph))
+        return credits >= 2 || (credits == 1 && paragraph.range(of: section, options: [.regularExpression, .caseInsensitive]) != nil)
     }
 
-    static let credit = #"\b(?:Dir\.|Dir:|Directors?:|Directed by|DP:|DoP:|D\.P\.:|Cinematographers?:|Cinematography(?: by|:)|Director of Photography:)"#
-    static let directorCredit = #"\b(?:Dir\.|Dir:|Directors?:|Directed by)"#
-    static let photographyCredit = #"\b(?:DP:|DoP:|D\.P\.:|Cinematographers?:|Cinematography(?: by|:)|Director of Photography:)"#
+    /// A short spec sheet as a page prints it: two or more labels ("Format: … Camera: … Lenses: …").
+    static func isLabelledSheet(_ paragraph: String) -> Bool {
+        TechSpecs.specLabel.numberOfMatches(in: paragraph, range: NSRange(paragraph.startIndex..., in: paragraph)) >= 2
+    }
+
+    static let credit = #"\b(?:Dir\.(?!\s*of\b)|Dir:|Directors?:|Directed by|DP:|DoP:|D\.P\.:|Dir\. of Photography:|Cinematographers?:|Cinematography(?: by|:)|Director of Photography:)"#
+    static let creditPattern = try! NSRegularExpression(pattern: credit, options: .caseInsensitive)
+    static let section = #"\b(?:Category|Section|Country|Countries|Competition|Programme|Program|Sidebar|Strand|Runtime|Running time)\s*:"#
+    static let directorCredit = #"\b(?:Dir\.(?!\s*of\b)|Dir:|Directors?:|Directed by)"#
+    static let photographyCredit = #"\b(?:DP:|DoP:|D\.P\.:|Dir\. of Photography:|Cinematographers?:|Cinematography(?: by|:)|Director of Photography:)"#
 
     /// Whether a credits line is this film's: it names the film, or credits its director (by full
     /// name), or, where no director is credited, its cinematographer. The director decides, as the same
     /// cinematographer may shoot two entries of a festival. Accents aside ("Malaimare" for "Mălaimare").
     static func isOwn(_ credits: String, title: String, cinematographers: [String], directors: [String]) -> Bool {
         if TechSpecs.namesTitle(credits, title: title) { return true }
-        func fold(_ text: String) -> String { text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil) }
         let line = fold(credits)
-        func named(_ people: [String]) -> Bool { people.contains { $0.count > 3 && TechSpecs.namesTitle(line, title: fold($0)) } }
         let saysDirector = credits.range(of: directorCredit, options: [.regularExpression, .caseInsensitive]) != nil
-        if saysDirector, !directors.isEmpty { return named(directors) }
-        return named(cinematographers) || named(directors)
+        if saysDirector, !directors.isEmpty { return directors.contains { credited($0, in: line) } }
+        return (cinematographers + directors).contains { credited($0, in: line) }
+    }
+
+    /// Accents and letters written without them aside ("Lukasz Zal" for "Łukasz Żal"), lowercased.
+    static func fold(_ text: String) -> String {
+        var folded = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        for (letter, plain) in [("ł", "l"), ("ø", "o"), ("đ", "d"), ("ß", "ss"), ("æ", "ae"), ("œ", "oe"), ("ı", "i")] {
+            folded = folded.replacingOccurrences(of: letter, with: plain)
+        }
+        return folded
+    }
+
+    /// Whether a credits line (folded) credits the person: their first name (or its initial) and
+    /// surname as words, whatever is between ("Francis Coppola" for Francis Ford Coppola, "C. Example"),
+    /// "Jr." or not.
+    static func credited(_ person: String, in line: String) -> Bool {
+        let suffixes: Set<String> = ["jr", "sr", "ii", "iii", "iv"]
+        let parts = fold(person).split(whereSeparator: { $0 == " " || $0 == "," })
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }.filter { !$0.isEmpty && !suffixes.contains($0) }
+        guard let first = parts.first, let last = parts.last, last.count >= 2 else { return false }
+        func word(_ text: String) -> Bool {
+            line.range(of: #"(?<!\w)"# + NSRegularExpression.escapedPattern(for: text) + #"(?!\w)"#, options: .regularExpression) != nil
+        }
+        guard word(last) else { return false }
+        return parts.count == 1 || word(first) || word(String(first.prefix(1)) + ".")
     }
 }
