@@ -192,14 +192,17 @@ public struct TechSpecs: Equatable, Sendable {
             let layout = roundup ? EntryLayout(text) : nil
             var sinceNamed: Int?, sheetSinceNamed = false, inOwnSheet = false, ownSheetRead = false, afterOwnCredits = false
             // An interview's answers after a question about another production ("What can you tell us
-            // about Glass Rivers?") are about that production, until the next question.
-            var answeringAboutAnother = false
+            // about Glass Rivers?") are about that production: the next few paragraphs, until a question
+            // names this film or the section ends (a wrong guess costs a few answers, not the interview).
+            var answeringAboutAnother = 0
             for section in text.sections {
+                answeringAboutAnother = 0
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
                 let commentary = !offTopic.contains { heading.contains($0) } && !Spoilers.isAfterSection([section.title])
                 let visual = visualHeadings.contains { heading.contains($0) } && !heading.contains("effect")
                 for paragraph in section.paragraphs {
+                    if answeringAboutAnother > 0 { answeringAboutAnother -= 1 }
                     if roundup {
                         let namesIt = namesTitle(paragraph, title: shortTitle) || mentions(names, in: paragraph, generic: false)
                         if isSpecList(paragraph) {
@@ -263,9 +266,10 @@ public struct TechSpecs: Equatable, Sendable {
                             // a follow-up ("Did the lenses change?") leaves it as it was.
                             if !speaks(paragraph, people: cinematographers + directors) {
                                 if namesTitle(sentence, title: title) && !namesOnlyAsReference(sentence, title: title) {
-                                    answeringAboutAnother = false
+                                    answeringAboutAnother = 0
                                 } else if asksAboutAnother(sentence, title: title, people: names + directorNames) {
-                                    answeringAboutAnother = true
+                                    // This paragraph and the four after it.
+                                    answeringAboutAnother = 5
                                 }
                             }
                             continue
@@ -284,7 +288,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // Answering about another production, a sentence is this film's only when it says how
                         // this film was shot ("We shot Ex Machina on the F65"), not when it just names it.
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
-                            || (answeringAboutAnother && !(namesAsSubject && saysHowShot(sentence, title: title)))
+                            || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."
@@ -803,11 +807,12 @@ public struct TechSpecs: Equatable, Sendable {
     static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|(?:initially|originally|at first) (?:wanted|planned|intended|hoped)|tests? of|testing|tested|versus|vs|compared (?:to|with)|lack(?:ed)? of|shortage of|short of|too (?:many|few) [a-z ]{0,40}enough|unable to (?:get|find|source)|couldn't (?:get|find|source)|prefer(?:s|red)?\s+(?!to\b)[^,;]{1,60}?\s+to|(?:better |best )?suited to|inspired by|influenced by|reminiscent of|evocative of|akin to|similar to)\b|n't\b"#
 
     /// What the film was finished or shown on, said in the clause: not what it was shot on.
-    /// Film-out, the process of printing a digital finish back to film: written "film-out", or "film
-    /// out" with a word of that process after it in the clause (negative, print, recorder, laser, the
-    /// lab, a stock, "process"), or "printed/recorded back to film". "Called the film out as…",
-    /// "figure this film out" and "a film out on Friday" aren't it.
-    static let filmOut = #"\bfilm-out\b(?!-)|\bfilm(?:ed|ing)?\s+out\b(?=[^.;:,]{0,60}?\b(?:negative|internegative|interpositive|celluloid|prints?|recorders?|arrilaser|lasers?|fotokem|efilm|lab|stocks?|eastman|35\s?mm|65\s?mm|16\s?mm|process|pass)\b)|\b(?:printed|recorded)\s+(?:back\s+)?(?:to|on|onto)\s+film\b"#
+    /// Film-out, the process of printing a digital finish back to film: written "film-out"; "film
+    /// out" right before its process ("the film out process", "the film out was done at…") or
+    /// toward its medium, machine or lab ("film out to negative", "using an Arrilaser", "at EFILM");
+    /// or "printed/recorded back to film". "Called the film out as…", "figure this film out", "a film
+    /// out on Friday" and "singled the film out for its stock footage" aren't it.
+    static let filmOut = #"\bfilm-out\b(?!-)|\bfilm\s+out\s+(?:process|pass|print|recorder|recording|step|workflow)\b|\bfilm\s+out\s+(?:was|were|is)\s+(?:done|made|handled|recorded|struck)\b|\bfilm\s+out\s+(?:to|onto|at|via|using|on|through|with)\s+(?:an?\s+|the\s+)?(?:[\w\-]+\s+){0,2}?(?:negative|internegative|interpositive|celluloid|35\s?mm|65\s?mm|16\s?mm|prints?|stock|eastman|kodak|arrilaser|laser|recorder|fotokem|efilm|company\s+3|light\s+iron|technicolor|deluxe)\b|\b(?:printed|recorded)\s+(?:back\s+)?(?:to|on|onto)\s+film\b"#
 
     static let finishing = #"\b(?:finish(?:ing|ed)?|dcp|deliverables?|final outputs?|prints?|printed|restor(?:ation|ed|e)|remaster(?:ed|ing)?|digital intermediate|projected|projection|exhibition|screenings?)\b|"# + filmOut
 
@@ -872,7 +877,7 @@ public struct TechSpecs: Equatable, Sendable {
         ]
         // "The main shoot was with the F65…": the gear named right after.
         let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
-        if lead.range(of: #"\b(?:main|principal)\s+(?:shoot|photography)\s+(?:was|were)\s+(?:(?:shot|done)\s+)?(?:on|with)\s+(?:(?:the|a|an|two|three|several)\s+)?$"#,
+        if lead.range(of: #"\b(?:main|principal)\s+(?:shoot|photography)\s+(?:was|were)\s+(?:(?:shot|done)\s+)?(?:on|with)\s+(?:(?:the|a|an|two|three|several)\s+)?(?:\w+\s+)?$"#,
                       options: [.regularExpression, .caseInsensitive]) != nil { return true }
         return patterns.contains { part.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
     }
@@ -934,10 +939,11 @@ public struct TechSpecs: Equatable, Sendable {
     /// Whether the paragraph is the filmmakers' answer: it starts with one of their initials or
     /// names before a colon ("RH: …", "DEAKINS: …").
     static func speaks(_ paragraph: String, people: [String]) -> Bool {
-        guard let colon = paragraph.firstIndex(of: ":"), paragraph.distance(from: paragraph.startIndex, to: colon) <= 12 else { return false }
+        guard let colon = paragraph.firstIndex(of: ":"), paragraph.distance(from: paragraph.startIndex, to: colon) <= 30 else { return false }
         let tag = paragraph[..<colon].trimmingCharacters(in: .whitespaces)
         let names = Set(people.flatMap { $0.split(whereSeparator: { $0 == " " || $0 == "-" }).map { $0.uppercased() } })
         return initials(of: people).contains(tag) || names.contains(tag.uppercased())
+            || people.contains { $0.caseInsensitiveCompare(tag) == .orderedSame } || ["DP", "DOP", "A"].contains(tag.uppercased())
     }
 
     /// Whether the sentence says how this film was shot, with the film as its subject or object:
@@ -945,10 +951,17 @@ public struct TechSpecs: Equatable, Sendable {
     static func saysHowShot(_ sentence: String, title: String?) -> Bool {
         guard let title, !title.isEmpty else { return false }
         let folded = sentence.replacingOccurrences(of: "’", with: "'")
-        let escaped = NSRegularExpression.escapedPattern(for: title.replacingOccurrences(of: "’", with: "'"))
-        let verbs = "shot|filmed|photographed|lensed|captured"
-        return folded.range(of: #"(?<!\w)"# + escaped + #"(?!\w)"# + String(shotAfterTitle.dropFirst()), options: [.regularExpression, .caseInsensitive]) != nil
-            || folded.range(of: #"\b(?:"# + verbs + #"|shoot|shooting)\s+(?:"# + escaped + #")(?!\w)"#, options: [.regularExpression, .caseInsensitive]) != nil
+        var titles = [title]
+        if let short = title.split(separator: ":").first.map({ $0.trimmingCharacters(in: .whitespaces) }), short.count >= 3, short != title {
+            titles.append(short)
+        }
+        let verbs = "shot|filmed|photographed|lensed|captured|shoot|shooting"
+        return titles.contains { name in
+            let escaped = NSRegularExpression.escapedPattern(for: name.replacingOccurrences(of: "’", with: "'"))
+            let film = name.count <= 3 ? "(?-i:" + escaped + ")" : escaped
+            return folded.range(of: #"(?<!\w)"# + film + #"(?!\w)"# + String(shotAfterTitle.dropFirst()), options: [.regularExpression, .caseInsensitive]) != nil
+                || folded.range(of: #"\b(?:"# + verbs + #")\s+"# + film + #"(?!\w)"#, options: [.regularExpression, .caseInsensitive]) != nil
+        }
     }
 
     static let referenceBefore = #"(?:\bfrom\s+(?:my|our|his|her|their)\s+(?:work|time|experience|days)\s+(?:on|in|with)|\bas\s+(?:we\s+did\s+|i\s+did\s+)?(?:on|in|with)|\bunlike|\b(?:like|than)\s+(?:on|in|with))\s+$"#
@@ -973,17 +986,19 @@ public struct TechSpecs: Equatable, Sendable {
         // organisation ("Los Angeles", "Pinewood Studios", "American Cinematographer") isn't a production.
         let bare = words.map { $0.hasSuffix("'s") || $0.hasSuffix("’s") ? String($0.dropLast(2)) : $0 }
         if people.contains(where: { person in person.contains(" ") ? bare.joined(separator: " ").contains(person) : bare.contains(person) }) { return false }
-        if words.contains(where: { notProductions.contains($0.lowercased()) }) { return false }
+        if let first = words.first, placeStarts.contains(first.lowercased()) { return false }
+        if let last = words.last, organisationEnds.contains(last.lowercased()) { return false }
         if rules.contains(where: { !$0.found(in: phrase).isEmpty }) { return false }
         return true
     }
 
-    /// Words of a place, an organisation or a publication, not a film's title.
-    static let notProductions: Set<String> = ["los", "las", "san", "santa", "new", "city", "county", "island", "islands", "street",
-                                              "studios", "studio", "pictures", "films", "entertainment", "festival", "society", "magazine",
-                                              "cinematographer", "cinematographers", "academy", "awards", "university", "school", "institute",
-                                              "museum", "company", "productions", "netflix", "hbo", "amazon", "apple", "a24", "kodak", "arri",
-                                              "panavision", "imax"]
+    /// How a place's name starts ("Los Angeles", "San Sebastián") and an organisation's or
+    /// publication's ends ("Pinewood Studios", "American Cinematographer"); a title may hold such a
+    /// word elsewhere ("Gangs Of New York", "Shutter Island").
+    static let placeStarts: Set<String> = ["los", "las", "san", "santa", "rio", "buenos"]
+    static let organisationEnds: Set<String> = ["studios", "pictures", "entertainment", "festival", "magazine", "cinematographer",
+                                                "cinematographers", "awards", "university", "institute", "museum", "productions",
+                                                "netflix", "hbo", "imax", "kodak", "arri", "panavision"]
 
     /// The copy's verb, then (in the same clause, no verb of shooting after "to") what it went onto.
     static let transferredOnto = #"\b(?:transferr?(?:ed|ing|s)?|scann?(?:ed|ing)|print(?:ed|ing)|output(?:ted|ting)?|record(?:ed|ing)?\s+(?:out|back)|film(?:ed)?[- ]out|blown\s+up|blow(?:ing)?[- ]up)\b(?:(?!\b(?:we|they|he|she|i|switch\w*|decid\w*|went|go|chose|opted|moved|turned)\b)[^.;,]){0,80}?\b(?:onto|on to|to|into)\s+(?!(?:shoot|shooting|film|filming|use|using|capture|capturing|photograph|go|switch|turn|work|rely)\b)(?:[\w-]+\s+){0,3}$"#

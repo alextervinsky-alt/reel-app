@@ -356,6 +356,33 @@ final class IdentityEligibilityGearTests: XCTestCase {
         let (_, new) = craft(["How did you approach your new film?", "JD: We shot on the Sony Venice 2."])
         XCTAssertEqual(new.shotOn, [.digital])
         XCTAssertFalse(TechSpecs.asksAboutAnother("What can you tell us about Pinewood Studios?", title: "The Quiet Harbour", people: []))
+        // Titles that hold a place's or an organisation's word are still titles.
+        for question in ["What about Shutter Island?", "Tell us about Gangs Of New York?", "What can you tell us about Dead Poets Society?"] {
+            XCTAssertTrue(TechSpecs.asksAboutAnother(question, title: "The Quiet Harbour", people: []), question)
+        }
+        // The filmmakers' answers, however they're labelled, aren't the interviewer's questions.
+        for answer in ["RH: Why the F65?", "Rob Hardy: Why the F65?", "DP: Why the F65?", "HARDY: Why the F65?"] {
+            XCTAssertTrue(TechSpecs.speaks(answer, people: ["Rob Hardy"]), answer)
+        }
+        XCTAssertFalse(TechSpecs.speaks("BC: Why the F65?", people: ["Rob Hardy"]))
+        XCTAssertFalse(TechSpecs.speaks("What can you tell us about Testament Of Youth?", people: ["Rob Hardy"]))
+    }
+
+    /// The re-review of 1.9.9: a question wrongly taken to be about another production costs a few
+    /// answers, not the rest of the interview; a new section ends it too.
+    func testAWrongGuessAboutAnotherProductionLapses() {
+        let answers = ["What did you learn about Gordon Willis?", "JD: It's fine for some films.",
+                       "Let's go back. How did you light the interiors?", "JD: Mostly from the windows.", "JD: And practicals.", "JD: Some LED tubes."]
+        let (lost, _) = craft(answers + ["JD: The whole thing was shot on the Sony Venice 2."])
+        XCTAssertTrue(cameras(lost).contains { $0.contains("venice") }, "five paragraphs on, the answers are this film's again: \(lost.names(.camera))")
+        let (early, _) = craft(["What did you learn about Gordon Willis?", "JD: It's fine, and the Sony Venice 2 handles it."])
+        XCTAssertTrue(cameras(early).isEmpty, "right after the question, the answer is taken as the other's (the cost of a wrong guess)")
+        let sections = [FilmArticle.Section(id: 0, title: "Glass Rivers Of Home", paragraphs: ["What can you tell us about Glass Rivers Of Home?", "JD: The Alexa 35."]),
+                        FilmArticle.Section(id: 1, title: "Lighting", paragraphs: ["JD: We shot on the Sony Venice 2."])]
+        let specs = TechSpecs.read(texts: [TechSpecs.Text(source: "Lens Weekly", sections: sections, isInterview: true)],
+                                   cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2015, title: "The Quiet Harbour")
+        XCTAssertEqual(cameras(specs).filter { $0.contains("alexa") }, [])
+        XCTAssertTrue(cameras(specs).contains { $0.contains("venice") }, "a new section ends it")
     }
 
     // MARK: C. Film-out, the process
@@ -372,7 +399,10 @@ final class IdentityEligibilityGearTests: XCTestCase {
                       "Carl wanted to make a film out of the novel.", "The critics singled the film out of a crowded year.",
                       // The review of 1.9.9.
                       "Doe, whose latest is a film out on Friday, shot it in a week.", "We made a film out west with two Alexa Minis.",
-                      "It is a film-out-of-water comedy about a projectionist."] {
+                      "It is a film-out-of-water comedy about a projectionist.",
+                      // The re-review of 1.9.9.
+                      "Trying to figure this film out was quite a process for Doe.", "Critics singled the film out for its stock footage.",
+                      "She pulled the film out of the lab before the fire."] {
             XCTAssertFalse(finish([prose]).contains("Film-out"), prose)
         }
     }
@@ -383,7 +413,8 @@ final class IdentityEligibilityGearTests: XCTestCase {
                           "The team evaluated alternate processes that could be used in the film out process for The Quiet Harbour.",
                           "The Quiet Harbour was finished digitally and recorded back to film for its release prints.",
                           // The review of 1.9.9.
-                          "The film out was done at EFILM on an Arrilaser.", "We would film out to Eastman 5242 for the archive."] {
+                          "The film out was done at EFILM on an Arrilaser.", "We would film out to Eastman 5242 for the archive.",
+                          "We did a film out using an Arrilaser at Company 3."] {
             XCTAssertTrue(finish([technical]).contains("Film-out"), "\(technical): \(finish([technical]))")
         }
     }
