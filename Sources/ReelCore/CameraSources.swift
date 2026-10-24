@@ -260,25 +260,37 @@ public enum CameraSources {
 
     typealias Link = (url: URL, site: String, title: String?, cited: URL?)
 
-    /// The links to ask for, in order, each article once however its address is written; the
-    /// ones left out because they're another address of an article already listed (`aliases`; the
-    /// same address written another way, "http://" or "www.", is simply left out).
+    /// The links to ask for, in order, each article once however its address is written: of an
+    /// article's addresses, the publication's own (canonical) one is asked for, in the place of the
+    /// first found; the others are left out and listed (`aliases`). The same address written another
+    /// way ("http://", "www.") is simply left out.
     static func merge(_ links: [Link], adding more: [Link]) -> (links: [Link], aliases: [Link]) {
-        var kept = links, aliases: [Link] = []
-        for link in more {
-            guard let same = kept.first(where: { identity($0.url) == identity(link.url) }) else {
+        var kept: [Link] = [], aliases: [Link] = []
+        for link in links + more {
+            guard let index = kept.firstIndex(where: { identity($0.url) == identity(link.url) }) else {
                 kept.append(link)
                 continue
             }
-            if addressIdentity(same.url) != addressIdentity(link.url) { aliases.append(link) }
+            let same = kept[index]
+            guard addressIdentity(same.url) != addressIdentity(link.url) else { continue }
+            if !isCanonical(same.url), isCanonical(link.url) {
+                aliases.append(same)
+                kept[index] = (url: link.url, site: link.site, title: link.title ?? same.title, cited: link.cited)
+            } else {
+                aliases.append(link)
+            }
         }
         return (kept, aliases)
     }
 
+    /// Whether the address is the article's own (not another address it's known by).
+    static func isCanonical(_ url: URL) -> Bool { addressIdentity(url) == identity(url) }
+
     /// Why another address of an article already listed wasn't asked for itself (what became of
-    /// that article is said under its own address).
-    static func aliasReason(of article: URL, read: Bool) -> String {
-        "the same article as \(article.absoluteString)" + (read ? ", which was read" : "")
+    /// that article is said under its own address). `asked`: whether that address was asked for
+    /// (only the first eight links are).
+    static func aliasReason(of article: URL, read: Bool, asked: Bool = true) -> String {
+        "the same article as \(article.absoluteString)" + (read ? ", which was read" : asked ? "" : ", not among the pages asked for")
     }
 
     /// Why a page found and not read wasn't examined, when that's why: it didn't load (`failure`), or
@@ -346,7 +358,9 @@ public enum CameraSources {
             let path = url.path.lowercased()
             // Front pages, tags and searches aren't articles.
             guard path.count > 8, !path.contains("/tag/"), !path.contains("/search"), !path.contains("/category/") else { continue }
-            guard seen.insert(identity(url)).inserted else { continue }
+            // The same address written another way ("http://", "www."): once. Another address of the
+            // same article is kept here, for `merge` to choose and list.
+            guard seen.insert(addressIdentity(url)).inserted else { continue }
             let cited = url == given ? nil : given
             let namesThem = surnames.contains { path.contains($0) }
             if let site = craftSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }) {
@@ -610,9 +624,18 @@ public struct CameraSourcesClient: Sendable {
         async let person = cinematographer(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
         // then what Wikipedia cites; each page once, however its address is written.
-        var links = (await asc).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
+        let searchedLinks = (await asc).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
         let fromSites = (await british).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
-        let fromArticle = await cited
+        return await reading(searched: searchedLinks, fromSites: fromSites, fromArticle: await cited, stories: await stories,
+                             person: await person, cinematographers: cinematographers, directors: directors, year: year, unanswered: unanswered)
+    }
+
+    /// The pages found, read: each article once (see `CameraSources.merge`), at most eight asked
+    /// for and six read, and why each of the rest wasn't.
+    func reading(searched searchedLinks: [CameraSources.Link], fromSites: [CameraSources.Link], fromArticle: [CameraSources.Link],
+                 stories storiesRead: [CameraReading.Source], person: CameraReading.Cinematographer?, cinematographers: [String],
+                 directors: [String], year: Int?, unanswered: UnansweredSites) async -> CameraReading {
+        var links = searchedLinks
         // Found by searching the magazines for the title (not cited by the film's own article):
         // read only when the page names the film's people or year.
         let searched = Set((links + fromSites).map { CameraSources.identity($0.url) })
@@ -635,7 +658,6 @@ public struct CameraSourcesClient: Sendable {
         }
         // An interview with the editor or the composer isn't read for the camera (still listed).
         // Kodak's and No Film School's stories come after the magazines.
-        let storiesRead = await stories
         // Another film's article (same title) isn't read, nor offered as a link.
         let otherFilm = Set(pages.compactMap { $0.1 }.filter {
             searched.contains(CameraSources.identity($0.url)) && !CameraSources.namesFilm($0.paragraphs, cinematographers: cinematographers,
@@ -667,8 +689,9 @@ public struct CameraSourcesClient: Sendable {
             guard let kept = links.first(where: { CameraSources.identity($0.url) == CameraSources.identity(alias.url) }) else { continue }
             var source = CameraReading.Source(title: alias.title ?? alias.site, site: alias.site, url: alias.url, paragraphs: [])
             source.cited = alias.cited
-            skipped.append(CameraReading.Skipped(source: source, reason: CameraSources.aliasReason(of: kept.url,
-                                                                                               read: read.contains { CameraSources.identity($0.url) == CameraSources.identity(kept.url) })))
+            let asked = pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(kept.url) }
+            skipped.append(CameraReading.Skipped(source: source, reason: CameraSources.aliasReason(
+                of: kept.url, read: read.contains { CameraSources.identity($0.url) == CameraSources.identity(kept.url) }, asked: asked)))
         }
         for story in storiesRead where !read.contains(where: { $0.url == story.url })
             && !pages.contains(where: { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }) {
@@ -676,7 +699,7 @@ public struct CameraSourcesClient: Sendable {
             skipped.append(CameraReading.Skipped(source: story, reason: own ? reason(story) : "the same page as one already found",
                                                  limit: own ? CameraSources.limit(page: story, failure: nil, otherFilm: false) : nil))
         }
-        return CameraReading(sources: read, more: more, cinematographer: await person, unanswered: await unanswered.all(), skipped: skipped)
+        return CameraReading(sources: read, more: more, cinematographer: person, unanswered: await unanswered.all(), skipped: skipped)
     }
 
     /// The external links of the film's Wikipedia article (its references), picked for the craft.

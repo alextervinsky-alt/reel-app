@@ -133,6 +133,77 @@ final class IdentityEligibilityGearTests: XCTestCase {
         XCTAssertTrue(reading.log.contains("— the same article as \(current.absoluteString)\n"), "not said to have been read")
     }
 
+    // MARK: A, through the client (stand-in sites)
+
+    private func client() -> CameraSourcesClient {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StandInSite.self]
+        return CameraSourcesClient(session: URLSession(configuration: config))
+    }
+
+    private let page = "<html><head><title>Uncanny Valley</title></head><body>"
+        + "<p>Doe shot The Quiet Harbour on the ARRI Alexa XT with Master Primes, mostly single camera, in the harbour itself.</p>"
+        + "<p>The night exteriors were lit with a single large source on a crane, far above the harbour wall and the boats.</p>"
+        + "<p>Doe and the director spent a month testing lenses before choosing a set of old spherical primes for the film.</p></body></html>"
+
+    private func link(_ url: URL, cited: URL? = nil) -> CameraSources.Link {
+        (url: url, site: "American Cinematographer", title: nil, cited: cited)
+    }
+
+    /// The magazine's search finds the article at its own address; Wikipedia cites the old one,
+    /// which doesn't answer. Only the article's own address is asked for, and the reading is whole.
+    func testTheClientAsksForTheArticleOnceAndSaysWhy() async {
+        StandInSite.answer("theasc.com", status: 200, body: page)
+        StandInSite.fail("ascmag.com", code: -1001)
+        let reading = await client().reading(searched: [link(current)], fromSites: [],
+                                             fromArticle: [link(legacy, cited: URL(string: "http://ascmag.com/articles/uncanny-valley-blade-runner-2049"))],
+                                             stories: [], person: nil, cinematographers: ["Jane Doe"], directors: [], year: 2017,
+                                             unanswered: UnansweredSites())
+        XCTAssertEqual(StandInSite.asked(of: "ascmag.com"), [], "the other address isn't asked for")
+        XCTAssertEqual(StandInSite.asked(of: "theasc.com").count, 1)
+        XCTAssertEqual(reading.sources.map(\.url), [current])
+        XCTAssertEqual(reading.unanswered, [])
+        let alias = reading.skipped.first { $0.source.url == legacy }
+        XCTAssertEqual(alias?.reason, "the same article as \(current.absoluteString), which was read")
+        XCTAssertNil(alias?.limit)
+        XCTAssertEqual(alias?.source.cited?.absoluteString, "http://ascmag.com/articles/uncanny-valley-blade-runner-2049")
+        let index = CraftReader.reading(of: details(), articleTitle: nil, article: nil, reading: reading, colour: nil).index
+        XCTAssertEqual(index.coverage, .full)
+        XCTAssertEqual(index.shotOn, [.digital])
+    }
+
+    /// The article's own address doesn't answer: incomplete and read again, said of that address;
+    /// the other address isn't said to have been read.
+    func testTheClientIsHonestWhenTheArticleDidntAnswer() async {
+        StandInSite.fail("theasc.com", code: -1001)
+        StandInSite.answer("ascmag.com", status: 200, body: page)
+        let reading = await client().reading(searched: [link(current)], fromSites: [], fromArticle: [link(legacy)], stories: [], person: nil,
+                                             cinematographers: ["Jane Doe"], directors: [], year: 2017, unanswered: UnansweredSites())
+        XCTAssertEqual(reading.unanswered, ["American Cinematographer"])
+        XCTAssertEqual(reading.skipped.first { $0.source.url == current }?.limit, .unanswered)
+        XCTAssertEqual(reading.skipped.first { $0.source.url == legacy }?.reason, "the same article as \(current.absoluteString)")
+        let index = CraftIndex.merging(old: nil, new: CraftReader.reading(of: details(), articleTitle: nil, article: nil, reading: reading, colour: nil).index).index
+        XCTAssertEqual(index.coverage, .partial)
+        XCTAssertNotNil(index.retryAt)
+    }
+
+    /// Found only at the old address first: the article's own address, cited later, is the one asked for.
+    func testTheArticlesOwnAddressIsTheOneAskedFor() async {
+        StandInSite.answer("theasc.com", status: 200, body: page)
+        StandInSite.fail("ascmag.com", code: -1001)
+        let reading = await client().reading(searched: [], fromSites: [], fromArticle: [link(legacy), link(current)], stories: [], person: nil,
+                                             cinematographers: ["Jane Doe"], directors: [], year: 2017, unanswered: UnansweredSites())
+        XCTAssertEqual(StandInSite.asked(of: "ascmag.com"), [])
+        XCTAssertEqual(reading.sources.map(\.url), [current])
+        XCTAssertEqual(reading.unanswered, [])
+        XCTAssertEqual(CameraSources.merge([link(legacy)], adding: [link(current)]).links.map(\.url), [current])
+        // Wikipedia's links: both addresses kept for the merge to choose (the same address written
+        // another way still once).
+        let picked = CameraSources.pick([legacy.absoluteString, "http://www.ascmag.com/articles/uncanny-valley-blade-runner-2049/", current.absoluteString],
+                                        cinematographers: ["Jane Doe"])
+        XCTAssertEqual(picked.map(\.url), [legacy, current])
+    }
+
     // MARK: B. Whose production a sentence is about
 
     private func craft(_ paragraphs: [String], title: String = "The Quiet Harbour", people: [String] = ["Jane Doe"],
@@ -208,6 +279,10 @@ final class IdentityEligibilityGearTests: XCTestCase {
                          "Since The Quiet Harbour was shot on film, the grain was part of the look.",
                          "It looks like The Quiet Harbour, which was shot on 35mm film.",
                          "Shortly after The Quiet Harbour was shot, Doe moved to London.",
+                         // The review of 1.9.9: "since" as "because", and the speaker's own work on this film.
+                         "Since The Quiet Harbour takes place at night, Doe chose the Venice 2 for its low-light sensitivity.",
+                         "In my work on The Quiet Harbour I shot with the Sony F65.",
+                         "From The Quiet Harbour onwards, the F65 was Doe's camera.",
                          "Footage from The Quiet Harbour was scanned at 4K.",
                          "Like on The Quiet Harbour, we shot on film, and The Quiet Harbour itself was all 35mm."] {
             XCTAssertFalse(TechSpecs.namesOnlyAsReference(sentence, title: "The Quiet Harbour"), sentence)
@@ -241,7 +316,7 @@ final class IdentityEligibilityGearTests: XCTestCase {
         XCTAssertEqual(craft.evidence(for: .imax)?.text, "Some 30 percent of the footage was shot with IMAX cameras.")
     }
 
-    /// Questions that aren't about another production don't change what the answers are about.
+    /// Which questions are about another production.
     func testQuestionsAboutPeopleGearOrNothingInParticular() {
         let people = ["Jane Doe", "Jane", "Doe"], directors = ["Carl Example", "Carl", "Example"]
         XCTAssertTrue(TechSpecs.asksAboutAnother("What can you tell us about Testament Of Youth?", title: "Ex Machina", people: people))
@@ -258,6 +333,31 @@ final class IdentityEligibilityGearTests: XCTestCase {
         XCTAssertTrue(cameras(specs).isEmpty)
     }
 
+    /// The review of 1.9.9: what an interview's answers are about changes with a question that names
+    /// this film or another production, not with a follow-up or the filmmaker's own question.
+    func testWhatTheAnswersAreAboutHoldsThroughFollowUps() {
+        let (specs, _) = craft(["Thanks for this. What can you tell us about Glass Rivers Of Home?",
+                                "JD: We shot it on the Alexa 35.",
+                                "Did the lenses change?",
+                                "JD: We used the Alexa Mini LF for the car scenes.",
+                                "JD: After The Quiet Harbour, we took the Alexa 65 north."])
+        XCTAssertTrue(cameras(specs).isEmpty, "\(specs.names(.camera))")
+        let (_, back) = craft(["What can you tell us about Glass Rivers Of Home?",
+                               "JD: Why the Alexa 35? Because it was light.",
+                               "And how did you shoot The Quiet Harbour?",
+                               "JD: Why the Venice? We shot it on the Sony Venice 2 for its colour."])
+        XCTAssertEqual(back.shotOn, [.digital])
+        // Answering about the other film, this film said to have been shot so is still this film's.
+        let (_, said) = craft(["What can you tell us about Glass Rivers Of Home?", "JD: We shot The Quiet Harbour on the Sony Venice 2."])
+        XCTAssertEqual(said.shotOn, [.digital])
+        // A place, and "your new film" (this one, in a press interview), aren't another production.
+        let (_, place) = craft(["What do you like about Los Angeles?", "JD: The light, and we used the Sony Venice 2 there."])
+        XCTAssertEqual(place.shotOn, [.digital])
+        let (_, new) = craft(["How did you approach your new film?", "JD: We shot on the Sony Venice 2."])
+        XCTAssertEqual(new.shotOn, [.digital])
+        XCTAssertFalse(TechSpecs.asksAboutAnother("What can you tell us about Pinewood Studios?", title: "The Quiet Harbour", people: []))
+    }
+
     // MARK: C. Film-out, the process
 
     private func finish(_ sentences: [String], interview: Bool = true) -> [String] {
@@ -269,7 +369,10 @@ final class IdentityEligibilityGearTests: XCTestCase {
         XCTAssertFalse(finish(["The invitations called the film out as “a gonzo, stylized horror fever-dream” (Variety)."]).contains("Film-out"))
         XCTAssertFalse(finish(["“Carl exhausted every option to crack this code and try to figure this film out,” adds Doe."]).contains("Film-out"))
         for prose in ["The studio put the film out in theaters for a week.", "They rushed to get the film out to audiences before the festival.",
-                      "Carl wanted to make a film out of the novel.", "The critics singled the film out of a crowded year."] {
+                      "Carl wanted to make a film out of the novel.", "The critics singled the film out of a crowded year.",
+                      // The review of 1.9.9.
+                      "Doe, whose latest is a film out on Friday, shot it in a week.", "We made a film out west with two Alexa Minis.",
+                      "It is a film-out-of-water comedy about a projectionist."] {
             XCTAssertFalse(finish([prose]).contains("Film-out"), prose)
         }
     }
@@ -278,7 +381,9 @@ final class IdentityEligibilityGearTests: XCTestCase {
         for technical in ["We did a film-out using an Arrilaser at FotoKem and did a contact print from that.",
                           "You do your DI and grade your movie, then you film out to negative, then you print that negative.",
                           "The team evaluated alternate processes that could be used in the film out process for The Quiet Harbour.",
-                          "The Quiet Harbour was finished digitally and recorded back to film for its release prints."] {
+                          "The Quiet Harbour was finished digitally and recorded back to film for its release prints.",
+                          // The review of 1.9.9.
+                          "The film out was done at EFILM on an Arrilaser.", "We would film out to Eastman 5242 for the archive."] {
             XCTAssertTrue(finish([technical]).contains("Film-out"), "\(technical): \(finish([technical]))")
         }
     }

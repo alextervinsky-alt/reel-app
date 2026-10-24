@@ -285,7 +285,7 @@ final class HonestResultsTests: XCTestCase {
         XCTAssertTrue(dropped.contains("Complete: no page found failed"), dropped)
         XCTAssertEqual(storedTags(dropped), ["Film"])
         XCTAssertEqual(CraftLog.stored(CraftIndex.merging(old: nil, new: reading([], read: ["Wikipedia"]), now: now)),
-                       "\nSTORED IN REEL\n• no Shot on\nComplete: no page found failed to load or was too thin to read; pages left out on purpose (another film's, another craft's, more than the six read) are under NOT READ (rules \(CraftIndex.currentVersion)).\n")
+                       "\nSTORED IN REEL\n• no Shot on\nComplete: no page found failed to load or was too thin to read; pages left out on purpose (another film's, another craft's, more than the six read, another address of an article) are under NOT READ (rules \(CraftIndex.currentVersion)).\n")
     }
 
     /// The tags the log's STORED IN REEL section lists, as shown.
