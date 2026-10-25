@@ -332,12 +332,14 @@ final class StandInSite: URLProtocol {
     static func answer(_ host: String, status: Int, body: String) {
         lock.lock(); defer { lock.unlock() }
         answers[host] = Answer(status: status, body: body, error: nil)
+        routes.removeAll { $0.host == host }
         requests.removeAll { $0.host == host }
     }
 
     static func fail(_ host: String, code: Int) {
         lock.lock(); defer { lock.unlock() }
         answers[host] = Answer(status: 0, body: "", error: code)
+        routes.removeAll { $0.host == host }
         requests.removeAll { $0.host == host }
     }
 

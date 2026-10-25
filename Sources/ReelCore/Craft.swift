@@ -66,12 +66,19 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// about another production, aren't this film's; "the main shoot was with…" says how it was
     /// shot; film-out only as the process, not "figure this film out".
     public static let currentVersion = 11
-    /// Bump when finding what to read improves: films read from too little (their article alone,
-    /// or nothing on what they were shot on) are read again; the rest keep their reading.
+    /// Bump when finding what to read improves, or what a reading's log says of it: films read
+    /// from too little (their article alone, or nothing on what they were shot on) and the films of
+    /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
     /// 3: nothing found differently; each reading's log says how its pages were found (DISCOVERY), so
-    /// the thin readings are read once more to have it.
+    /// those films are read once more to have it, their tags kept or dropped by the usual rules
+    /// (`findingChanged`).
     public static let currentDiscovery = 3
+    /// The last discovery version that changed what's found: a reading found by an earlier one is
+    /// replaced whole by a newer one (what it no longer reads is gone). From there on, a newer
+    /// discovery version only adds to the log, and a tag not found again is carried or dropped as
+    /// for any reading (its site didn't answer: carried).
+    public static let findingChanged = 2
     /// Read again after half a year (new interviews appear).
     public static let maxAge: TimeInterval = 182 * 86_400
 
@@ -314,7 +321,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 let misses = (evidence.misses ?? 0) + 1
                 let carry: Bool
                 let reason: String
-                if new.discovery > old.discovery {
+                if new.discovery > old.discovery && old.discovery < findingChanged {
                     carry = false
                     reason = "found again a better way, which no longer reads its source"
                 } else if !fromPage {

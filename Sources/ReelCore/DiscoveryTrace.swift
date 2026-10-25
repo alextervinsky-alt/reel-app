@@ -26,7 +26,7 @@ public struct DiscoveryTrace: Equatable, Sendable {
         case notAboutFilm = "doesn't name the film in its title or address"
         case otherFilm = "about another film of its collection"
         case notAnAddress = "not an address Reel reads"
-        case duplicate = "the same address twice"
+        case duplicate = "the same page twice (or another address of it)"
         case overLimit = "over the limit"
         case navigation = "a front, tag, search or category page"
         case unlistedSite = "not a site Reel reads"
@@ -49,6 +49,8 @@ public struct DiscoveryTrace: Equatable, Sendable {
         public var hits: [Hit] = []
         /// At most this many kept.
         public let limit: Int
+        /// The most results Reel asks the site for (it may have more).
+        public var requestLimit: Int? = nil
     }
 
     /// The film's Wikipedia article's external links.
@@ -102,6 +104,8 @@ public struct DiscoveryTrace: Equatable, Sendable {
         public var asked: [String] = []
         /// Not asked for: over the limit of pages asked for.
         public var overLimit: [String] = []
+        /// Story pages found by guessing and not among those asked for (read with them).
+        public var guessed = 0
         public var askLimit = 8
         public var readLimit = 6
     }
@@ -122,7 +126,11 @@ public struct DiscoveryTrace: Equatable, Sendable {
     public func lines() -> [String] {
         var lines: [String] = []
         for search in searches {
-            lines.append("• \(search.site) search for “\(search.query)”: " + Self.describe(search.outcome, kept: search.hits, limit: search.limit))
+            var line = "• \(search.site) search for “\(search.query)”: " + Self.describe(search.outcome, kept: search.hits, limit: search.limit)
+            if case .answered(let count) = search.outcome, let most = search.requestLimit, count >= most {
+                line += " (Reel asks for at most \(most); the site may have more)"
+            }
+            lines.append(line)
             lines += Self.hitLines(search.hits)
         }
         if let cited {
@@ -152,7 +160,7 @@ public struct DiscoveryTrace: Equatable, Sendable {
             switch person {
             case .notAttempted(let why): text = "not looked up: \(why)"
             case .failed(let why): text = "couldn't be reached: \(why)"
-            case .noArticle(let name): text = "\(name) — no article found"
+            case .noArticle(let name): text = "\(name) — no article found (or none with text Reel reads)"
             case .notACinematographer(let name): text = "\(name) — an article of that name, not a cinematographer's: left out"
             case .found(let name, let count):
                 text = count == 0 ? "\(name) — no paragraph names the film"
@@ -165,6 +173,7 @@ public struct DiscoveryTrace: Equatable, Sendable {
         if !a.foundTwice.isEmpty { pages += "; \(a.foundTwice.count) found twice, asked for once" }
         if !a.otherAddresses.isEmpty { pages += "; \(a.otherAddresses.count) another address of an article kept (under NOT READ)" }
         pages += "; \(a.asked.count) asked for"
+        if a.guessed > 0 { pages += "; \(a.guessed) story page\(a.guessed == 1 ? "" : "s") found by guessing, read with them" }
         pages += a.overLimit.isEmpty ? "" : "; \(a.overLimit.count) not asked for, over the limit of \(a.askLimit)"
         pages += "; at most \(a.readLimit) read (see READ and NOT READ)"
         lines.append(pages)

@@ -352,12 +352,16 @@ public enum CameraSources {
     /// those naming the cinematographer before the rest. At most `limit`.
     /// Each is read over HTTPS (see `secure`), and the same page cited twice ("http://www…" and
     /// "https://…") once; `cited` is the address as cited when it isn't the one read.
-    public static func pick(_ links: [String], cinematographers: [String], limit: Int = 8) -> [(url: URL, site: String, cited: URL?)] {
+    /// At most this many of Wikipedia's cited links kept; at most this many pages found asked for;
+    /// at most this many read. The log (DISCOVERY) states the same values.
+    public static let citedLimit = 8, askLimit = 8, readLimit = 6
+
+    public static func pick(_ links: [String], cinematographers: [String], limit: Int = citedLimit) -> [(url: URL, site: String, cited: URL?)] {
         pickDecisions(links, cinematographers: cinematographers, limit: limit).picked
     }
 
     /// `pick`, with what became of every link, in the given order (for the discovery trace).
-    static func pickDecisions(_ links: [String], cinematographers: [String], limit: Int = 8)
+    static func pickDecisions(_ links: [String], cinematographers: [String], limit: Int = citedLimit)
         -> (picked: [(url: URL, site: String, cited: URL?)], decisions: [DiscoveryTrace.Hit]) {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map { $0.lowercased() } }
             .filter { $0.count >= 3 }
@@ -693,7 +697,7 @@ public struct CameraSourcesClient: Sendable {
         let merged = CameraSources.merge(links, adding: fromSites + fromArticle)
         links = merged.links
         let pages = await withTaskGroup(of: (Int, CameraReading.Source?, CameraReading.Source, SourceFailure?).self) { group in
-            for (index, link) in links.prefix(8).enumerated() {
+            for (index, link) in links.prefix(CameraSources.askLimit).enumerated() {
                 group.addTask {
                     var fallback = CameraReading.Source(title: link.title ?? link.site, site: link.site, url: link.url, paragraphs: [])
                     fallback.cited = link.cited
@@ -716,7 +720,7 @@ public struct CameraSourcesClient: Sendable {
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) } }
         let readable = found.filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
-        let read = Array(readable.prefix(6))
+        let read = Array(readable.prefix(CameraSources.readLimit))
         let more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
         // Why each page found wasn't read.
         func reason(_ page: CameraReading.Source) -> String {
@@ -754,19 +758,21 @@ public struct CameraSourcesClient: Sendable {
             trace.assembly.candidates = searchedLinks.count + fromSites.count + fromArticle.count
             trace.assembly.foundTwice = merged.foundTwice.map(\.url.absoluteString)
             trace.assembly.otherAddresses = merged.aliases.map(\.url.absoluteString)
-            trace.assembly.asked = links.prefix(8).map(\.url.absoluteString)
-            trace.assembly.overLimit = links.dropFirst(8).map(\.url.absoluteString)
+            trace.assembly.asked = links.prefix(CameraSources.askLimit).map(\.url.absoluteString)
+            trace.assembly.overLimit = links.dropFirst(CameraSources.askLimit).map(\.url.absoluteString)
+            trace.assembly.askLimit = CameraSources.askLimit
+            trace.assembly.readLimit = CameraSources.readLimit
+            // Story pages found by guessing that aren't among the pages asked for: read with them.
+            trace.assembly.guessed = storiesRead.filter { story in
+                !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }
+            }.count
             reading.discovery = trace
         }
         return reading
     }
 
-    /// The external links of the film's Wikipedia article (its references), picked for the craft.
-    func citedLinks(articleTitle: String?, cinematographers: [String]) async -> [(url: URL, site: String, title: String?, cited: URL?)] {
-        await citedSearch(articleTitle: articleTitle, cinematographers: cinematographers).links
-    }
-
-    /// `citedLinks`, with what became of each link (for the discovery trace).
+    /// The external links of the film's Wikipedia article (its references), picked for the craft,
+    /// with what became of each link (for the discovery trace).
     func citedSearch(articleTitle: String?, cinematographers: [String]) async
         -> (links: [(url: URL, site: String, title: String?, cited: URL?)], trace: DiscoveryTrace.Cited) {
         struct Response: Decodable {
@@ -787,23 +793,39 @@ public struct CameraSourcesClient: Sendable {
             }
             let query: Query?
         }
-        var trace = DiscoveryTrace.Cited(outcome: .notAttempted("no Wikipedia article for the film"), requestLimit: 500, limit: 8)
+        var trace = DiscoveryTrace.Cited(outcome: .notAttempted("no Wikipedia article for the film"), requestLimit: 500,
+                                         limit: CameraSources.citedLimit)
         guard let articleTitle else { return ([], trace) }
         let response: Response
         do {
+            // format=json without formatversion=2: "missing" is a string ("") when there's no such article.
             response = try await Wikimedia.get("https://en.wikipedia.org/w/api.php", [
                 "action": "query", "prop": "extlinks", "titles": articleTitle, "ellimit": "500", "redirects": "1", "format": "json",
             ], session: session)
         } catch {
-            trace.outcome = .failed(Self.describe(error))
+            trace.outcome = .failed(Self.notRetried(Self.describe(error)))
             return ([], trace)
         }
         let links = (response.query?.pages?.values.first?.extlinks ?? []).compactMap { $0.url ?? $0.star }
-        let picked = CameraSources.pickDecisions(links, cinematographers: cinematographers)
-        trace.outcome = response.query?.pages?.values.first?.missing != nil ? .answeredNone("Wikipedia has no article of that title now")
-            : .answered(links.count)
+        let picked = CameraSources.pickDecisions(links, cinematographers: cinematographers, limit: CameraSources.citedLimit)
+        if let page = response.query?.pages?.values.first {
+            trace.outcome = page.missing != nil ? .answeredNone("Wikipedia has no article of that title now") : .answered(links.count)
+        } else {
+            // An answer without the article (an error, maintenance): taken as no links, as before,
+            // but not said to be "no links".
+            trace.outcome = .failed(Self.notRetried("an answer without the article's links"))
+        }
         trace.links = picked.decisions
         return (picked.picked.map { ($0.url, $0.site, nil, $0.cited) }, trace)
+    }
+
+    /// A failure's words for a look-up that a site not answering doesn't hold up: Wikipedia's links,
+    /// the cinematographer's article, the guessed story pages. Nothing is noted to read again,
+    /// so the log doesn't promise it.
+    static func notRetried(_ reason: String) -> String {
+        let later = " (read again later)"
+        guard reason.hasSuffix(later) else { return reason + " (not tried again until the film is next read)" }
+        return String(reason.dropLast(later.count)) + " (not tried again until the film is next read)"
     }
 
     /// What went wrong with a request that threw, in the log's words.
@@ -821,7 +843,9 @@ public struct CameraSourcesClient: Sendable {
     /// `ascArticles`, with what the search brought and what became of each result.
     func ascSearch(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async
         -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
-        var trace = DiscoveryTrace.Search(site: "American Cinematographer", query: filmTitle, outcome: .notAttempted("no address"), limit: 3)
+        let limit = 3, perPage = 20
+        var trace = DiscoveryTrace.Search(site: "American Cinematographer", query: filmTitle, outcome: .notAttempted("no address"),
+                                          limit: limit, requestLimit: perPage)
         struct Hit: Decodable {
             let title: String
             let url: String
@@ -831,7 +855,7 @@ public struct CameraSourcesClient: Sendable {
         // articles, and the posts and news where its interviews also appear ("Roger Deakins, ASC,
         // BSC: Lighting Sicario" is a post). Not its pages or videos, which have little to read.
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
-        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
+        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "\(perPage)")]
         guard let url = components.url else { return ([], trace) }
         let data: Data
         switch await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting) {
@@ -851,12 +875,16 @@ public struct CameraSourcesClient: Sendable {
         let kinds = ["article", "post", "news"]
         let wanted = hits.filter { kinds.contains($0.subtype ?? "") }
         let decided = CameraSources.aboutDecisions(filmTitle, in: wanted.map { (title: $0.title, link: $0.url) }, site: "American Cinematographer",
-                                                   limit: 3, otherTitles: otherTitles)
-        // Every result in the site's order: the wrong kinds left out first, the rest as `about` decided.
-        var verdicts = decided.decisions.makeIterator()
+                                                   limit: limit, otherTitles: otherTitles)
+        // Every result in the site's order: the wrong kinds left out first, the rest as `about`
+        // decided (one decision for each result it was given, in order).
+        var next = 0
         trace.hits = hits.map { hit in
-            kinds.contains(hit.subtype ?? "") ? verdicts.next()!
-                : DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.url, rejected: .wrongKind)
+            guard kinds.contains(hit.subtype ?? ""), next < decided.decisions.count else {
+                return DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.url, rejected: .wrongKind)
+            }
+            defer { next += 1 }
+            return decided.decisions[next]
         }
         return (decided.found, trace)
     }
@@ -869,7 +897,9 @@ public struct CameraSourcesClient: Sendable {
     /// `britishCinematographer`, with what the search brought and what became of each result.
     func britishSearch(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async
         -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
-        var trace = DiscoveryTrace.Search(site: "British Cinematographer", query: filmTitle, outcome: .notAttempted("no address"), limit: 2)
+        let limit = 2, perPage = 20
+        var trace = DiscoveryTrace.Search(site: "British Cinematographer", query: filmTitle, outcome: .notAttempted("no address"),
+                                          limit: limit, requestLimit: perPage)
         struct Hit: Decodable {
             struct Rendered: Decodable { let rendered: String }
             let title: Rendered
@@ -877,7 +907,7 @@ public struct CameraSourcesClient: Sendable {
         }
         // Most relevant first (by date, the newest posts that merely mention the title came first).
         var components = URLComponents(string: "https://britishcinematographer.co.uk/wp-json/wp/v2/posts")!
-        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
+        components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "\(perPage)"),
                                  URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
         guard let url = components.url else { return ([], trace) }
         let data: Data
@@ -895,7 +925,7 @@ public struct CameraSourcesClient: Sendable {
         }
         trace.outcome = .answered(hits.count)
         let decided = CameraSources.aboutDecisions(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
-                                                   site: "British Cinematographer", limit: 2, otherTitles: otherTitles)
+                                                   site: "British Cinematographer", limit: limit, otherTitles: otherTitles)
         trace.hits = decided.decisions
         return (decided.found, trace)
     }
@@ -904,11 +934,7 @@ public struct CameraSourcesClient: Sendable {
     /// cinematography, at the addresses those sites give them ("kodak.com/en/motion/blog-post/
     /// the-brutalist", "nofilmschool.com/dune-cinematography"). A page is kept only when it names
     /// the cinematographer (the same title may be another film).
-    func storyPages(filmTitle: String, cinematographers: [String]) async -> [CameraReading.Source] {
-        await storySearch(filmTitle: filmTitle, cinematographers: cinematographers).found
-    }
-
-    /// `storyPages`, with what became of each guess (or why none was tried).
+    /// With what became of each guess (or why none was tried).
     func storySearch(filmTitle: String, cinematographers: [String]) async
         -> (found: [CameraReading.Source], guesses: [DiscoveryTrace.Guess], notAttempted: String?) {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
@@ -926,7 +952,7 @@ public struct CameraSourcesClient: Sendable {
                     guard let url = URL(string: guess.0) else { return (index, nil, nil) }
                     let got = await page(url, site: guess.1, title: nil)
                     guard let found = got.source else {
-                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(got.failure?.reason ?? "couldn't be read")))
+                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(Self.notRetried(got.failure?.reason ?? "couldn't be read"))))
                     }
                     guard found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else {
                         return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .doesntNameCinematographer))
@@ -964,12 +990,8 @@ public struct CameraSourcesClient: Sendable {
         case failed(SourceFailure)
     }
 
-    /// The cinematographer's Wikipedia article: its opening and the paragraphs naming the film.
-    func cinematographer(_ name: String?, filmTitle: String) async -> CameraReading.Cinematographer? {
-        await cinematographerSearch(name, filmTitle: filmTitle).person
-    }
-
-    /// `cinematographer`, with what became of the look-up.
+    /// The cinematographer's Wikipedia article: its opening and the paragraphs naming the film,
+    /// with what became of the look-up.
     func cinematographerSearch(_ name: String?, filmTitle: String) async
         -> (person: CameraReading.Cinematographer?, trace: DiscoveryTrace.Person) {
         guard let name else { return (nil, .notAttempted("no cinematographer known")) }
@@ -977,7 +999,7 @@ public struct CameraSourcesClient: Sendable {
         do {
             extract = try await WikipediaClient(session: session).extract(title: name)
         } catch {
-            return (nil, .failed(Self.describe(error)))
+            return (nil, .failed(Self.notRetried(Self.describe(error))))
         }
         guard let text = extract, !text.isEmpty else { return (nil, .noArticle(name)) }
         let paragraphs = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }

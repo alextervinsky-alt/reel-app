@@ -39,10 +39,34 @@ extension DiscoveryFixtures {
     }
 }
 
+extension DiscoveryFixtures {
+    // MARK: Cold Front (2021), shot by Eva Nord: Wikipedia and a story guess not answering.
+
+    static func coldFront() {
+        StandInSite.reset()
+        StandInSite.route("theasc.com", "wp-json/wp/v2/search", body: "[]")
+        StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: "[]")
+        StandInSite.routeFail("en.wikipedia.org", "prop=extlinks", code: -1001)
+        StandInSite.routeFail("en.wikipedia.org", "prop=extracts", code: -1001)
+        StandInSite.routeFail("www.kodak.com", "blog-post/cold-front", code: -1001)
+        StandInSite.route("www.kodak.com", "page/cold-front", body: page("Cold Front", [
+            "Cold Front is a winter campaign for our new range of film stocks, shown at trade fairs this year.",
+            "Visitors to the stand can try the stocks in a small studio built for the fair, with a lab on site.",
+            "The campaign ends in the spring, when the range goes on sale to laboratories around the world.",
+        ]))
+        StandInSite.route("nofilmschool.com", "cold-front-cinematography", status: 404, body: "<p>Not here</p>")
+    }
+}
+
 /// Reel 1.10.0: the discovery trace records what each way of finding pages decided, from the
 /// decisions themselves, and the reading log says it (DISCOVERY). The same fixtures as
 /// `DiscoveryFunnelTests`, whose assertions (written before the trace) still hold unchanged.
 final class DiscoveryTraceTests: XCTestCase {
+    override func tearDown() {
+        StandInSite.reset()
+        super.tearDown()
+    }
+
     private func client() -> CameraSourcesClient {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StandInSite.self]
@@ -244,16 +268,89 @@ final class DiscoveryTraceTests: XCTestCase {
         XCTAssertTrue(trace.lines().contains { $0.hasSuffix("(Reel asks for at most 500; the article may cite more)") })
     }
 
-    /// The filters say what they decided; what they return is what they returned before.
-    func testTheFiltersDecisionsAreTheirOwn() {
+    /// The filters' decisions, one for each link or result given, in order.
+    func testTheFiltersDecideOncePerInput() {
         let links = ["https://theasc.com/article/a-film-jane-doe/", "https://example.org/2015/05/a-film-review/", "https://www.indiewire.com/tag/x/"]
         let both = CameraSources.pickDecisions(links, cinematographers: ["Jane Doe"])
-        XCTAssertEqual(both.picked.map(\.url), CameraSources.pick(links, cinematographers: ["Jane Doe"]).map(\.url))
+        XCTAssertEqual(both.picked.map(\.url.absoluteString), ["https://theasc.com/article/a-film-jane-doe/"])
+        XCTAssertEqual(both.decisions.map(\.url), links)
         XCTAssertEqual(both.decisions.map(\.rejected), [nil, .unlistedSite, .navigation])
         let hits = [(title: "A Film", link: "https://theasc.com/article/a-film/"), (title: "Other", link: "https://theasc.com/article/other/")]
         let about = CameraSources.aboutDecisions("A Film", in: hits, site: "American Cinematographer", limit: 3)
-        XCTAssertEqual(about.found.map(\.url), CameraSources.about("A Film", in: hits, site: "American Cinematographer", limit: 3).map(\.url))
+        XCTAssertEqual(about.found.map(\.url.absoluteString), ["https://theasc.com/article/a-film/"])
         XCTAssertEqual(about.decisions.map(\.rejected), [nil, .notAboutFilm])
+    }
+
+    /// The requests themselves, parameter for parameter, as 1.9.9 sent them (the search and API
+    /// requests; the pages are asserted in `DiscoveryFunnelTests`).
+    func testTheSameRequestsAreSent() async {
+        DiscoveryFixtures.quietHarbour()
+        _ = await client().read(articleTitle: "The Quiet Harbour", filmTitle: "The Quiet Harbour", cinematographers: ["Jane Doe"],
+                                directors: ["Carl Example"], year: 2015, otherTitles: ["The Quiet Harbour II: Return"])
+        let asked = Set(StandInSite.allAsked().map(\.absoluteString))
+        for url in [
+            "https://theasc.com/wp-json/wp/v2/search?search=The%20Quiet%20Harbour&per_page=20",
+            "https://britishcinematographer.co.uk/wp-json/wp/v2/posts?search=The%20Quiet%20Harbour&per_page=20&orderby=relevance&_fields=title,link",
+            "https://en.wikipedia.org/w/api.php?action=query&ellimit=500&format=json&prop=extlinks&redirects=1&titles=The%20Quiet%20Harbour",
+            "https://en.wikipedia.org/w/api.php?action=query&explaintext=1&exsectionformat=wiki&format=json&prop=extracts&redirects=1&titles=Jane%20Doe",
+        ] {
+            XCTAssertTrue(asked.contains(url), "\(url) not in \(asked.sorted())")
+        }
+        XCTAssertEqual(StandInSite.allAsked().count, 13, "\(StandInSite.allAsked())")
+    }
+
+    /// Look-ups that a site not answering doesn't hold up say so, and promise no retry.
+    func testLookUpsThatDidntAnswerPromiseNoRetry() async {
+        DiscoveryFixtures.coldFront()
+        let reading = await client().read(articleTitle: "Cold Front (film)", filmTitle: "Cold Front", cinematographers: ["Eva Nord"],
+                                          directors: [], year: 2021)
+        guard let trace = reading.discovery else { return XCTFail("no trace") }
+        let notRetried = "didn't answer: timed out (not tried again until the film is next read)"
+        XCTAssertEqual(trace.cited?.outcome, .failed(notRetried))
+        XCTAssertEqual(trace.person, .failed(notRetried))
+        XCTAssertEqual(trace.guesses.map(\.result), [.failed(notRetried), .doesntNameCinematographer, .failed("gone: not found over HTTPS (404)")])
+        // As before: none of these makes the reading incomplete.
+        XCTAssertEqual(reading.unanswered, [])
+        XCTAssertTrue(reading.sources.isEmpty)
+        let lines = trace.lines()
+        XCTAssertTrue(lines.contains("• Wikipedia's cited links: " + notRetried), "\(lines)")
+        XCTAssertTrue(lines.contains("  Kodak: https://www.kodak.com/en/motion/page/cold-front/ — found, but it doesn't name the cinematographer: left out"))
+        XCTAssertTrue(lines.contains("• The cinematographer's Wikipedia article: couldn't be reached: " + notRetried))
+        XCTAssertFalse(lines.joined().contains("read again later"))
+    }
+
+    /// An answer from Wikipedia without the article isn't said to be "no links".
+    func testAnAnswerWithoutTheArticleIsNotNoLinks() async {
+        StandInSite.reset()
+        StandInSite.route("theasc.com", "wp-json/wp/v2/search", body: "[]")
+        StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: "[]")
+        StandInSite.route("en.wikipedia.org", "prop=extlinks", body: #"{"error":{"code":"maxlag","info":"Waiting for a database server"}}"#)
+        let reading = await client().read(articleTitle: "Salt Flats", filmTitle: "Salt Flats", cinematographers: [], directors: [], year: 2010)
+        XCTAssertEqual(reading.discovery?.cited?.outcome, .failed("an answer without the article's links (not tried again until the film is next read)"))
+        XCTAssertTrue(reading.sources.isEmpty, "taken as no links, as before")
+    }
+
+    /// Discovery 3 adds to the log only: a tag it couldn't read again because its site didn't
+    /// answer is carried, not dropped as "found again a better way" (which discovery 2 still does
+    /// for readings from before it).
+    func testDiscoveryThreeKeepsATagWhoseSiteDidntAnswer() {
+        let anamorphic = CraftIndex.Evidence(shotOn: .anamorphic, text: "Doe used Cooke anamorphic/i lenses on The Quiet Harbour.",
+                                             source: "British Cinematographer")
+        var old = CraftIndex(shotOn: [.film, .anamorphic], names: [], evidence: [anamorphic], sources: 4, discovery: 2)
+        let new = CraftIndex(shotOn: [.film], names: [], sources: 3, unanswered: ["British Cinematographer"])
+        XCTAssertEqual(new.discovery, 3)
+        let merged = CraftIndex.merging(old: old, new: new)
+        XCTAssertEqual(Set(merged.index.shotOn), [.film, .anamorphic])
+        XCTAssertEqual(merged.carried.map(\.shotOn), [.anamorphic])
+        XCTAssertEqual(merged.dropped, [])
+        // Not found again with every site answering: carried as for any reading (same rules), not dropped whole.
+        let answered = CraftIndex.merging(old: old, new: CraftIndex(shotOn: [.film], names: [], sources: 3))
+        XCTAssertEqual(answered.carried.map(\.shotOn), [.anamorphic])
+        // A reading found before discovery 2 is still replaced whole.
+        old.discovery = 1
+        let replaced = CraftIndex.merging(old: old, new: new)
+        XCTAssertEqual(replaced.index.shotOn, [.film])
+        XCTAssertEqual(replaced.dropped.map(\.reason), ["found again a better way, which no longer reads its source"])
     }
 
     /// Discovery 3: the thin readings and collection films are read again, the rest aren't.

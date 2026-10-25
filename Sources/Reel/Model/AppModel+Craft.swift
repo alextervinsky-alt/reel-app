@@ -194,7 +194,8 @@ extension AppModel {
         let merged = CraftIndex.merging(old: current, new: read.index)
         // The same as kept: nothing to write (the log already says what's stored, and opening the
         // tab again doesn't put off a planned reading).
-        if let current, current.version == merged.index.version, current.shotOn == merged.index.shotOn,
+        if let current, current.version == merged.index.version, current.discovery == merged.index.discovery,
+           current.shotOn == merged.index.shotOn,
            current.names == merged.index.names, current.evidence == merged.index.evidence,
            current.unanswered == merged.index.unanswered, current.limits == merged.index.limits {
             return
