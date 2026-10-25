@@ -326,7 +326,7 @@ final class DiscoveryTraceTests: XCTestCase {
         StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: "[]")
         StandInSite.route("en.wikipedia.org", "prop=extlinks", body: #"{"error":{"code":"maxlag","info":"Waiting for a database server"}}"#)
         let reading = await client().read(articleTitle: "Salt Flats", filmTitle: "Salt Flats", cinematographers: [], directors: [], year: 2010)
-        XCTAssertEqual(reading.discovery?.cited?.outcome, .failed("an answer without the article's links (not tried again until the film is next read)"))
+        XCTAssertEqual(reading.discovery?.cited?.outcome, .failed("an answer without the article's links"))
         XCTAssertTrue(reading.sources.isEmpty, "taken as no links, as before")
     }
 

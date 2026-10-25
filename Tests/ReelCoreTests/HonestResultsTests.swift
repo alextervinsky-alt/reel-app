@@ -246,9 +246,11 @@ final class HonestResultsTests: XCTestCase {
     }
 
     func testAReadingFoundABetterWayReplacesTheOld() {
-        let new = CraftIndex(shotOn: [.film], names: [], sources: 1, read: ["Wikipedia"], discovery: CraftIndex.currentDiscovery + 1,
-                             unanswered: ["Lens Weekly"])
-        XCTAssertEqual(CraftIndex.merging(old: earlier, new: new, now: now).index.shotOn, [.film])
+        // Found before the last change to what's found (`findingChanged`): replaced whole.
+        var old = earlier
+        old.discovery = CraftIndex.findingChanged - 1
+        let new = CraftIndex(shotOn: [.film], names: [], sources: 1, read: ["Wikipedia"], unanswered: ["Lens Weekly"])
+        XCTAssertEqual(CraftIndex.merging(old: old, new: new, now: now).index.shotOn, [.film])
     }
 
     func testWhatWikidataSaidIsWorkedOutAgain() {
