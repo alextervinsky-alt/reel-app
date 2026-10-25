@@ -299,7 +299,34 @@ final class StandInSite: URLProtocol {
 
     private static let lock = NSLock()
     private static var answers: [String: Answer] = [:]
+    private static var routes: [(host: String, contains: String, answer: Answer)] = []
     private static var requests: [URL] = []
+
+    /// How one address of `host` answers: the first route whose text the address contains, before
+    /// the host's own answer.
+    static func route(_ host: String, _ contains: String, status: Int = 200, body: String) {
+        lock.lock(); defer { lock.unlock() }
+        routes.append((host, contains, Answer(status: status, body: body, error: nil)))
+    }
+
+    static func routeFail(_ host: String, _ contains: String, code: Int) {
+        lock.lock(); defer { lock.unlock() }
+        routes.append((host, contains, Answer(status: 0, body: "", error: code)))
+    }
+
+    /// Every answer and route forgotten, and what was asked.
+    static func reset() {
+        lock.lock(); defer { lock.unlock() }
+        answers.removeAll()
+        routes.removeAll()
+        requests.removeAll()
+    }
+
+    /// Everything asked for, in the order asked.
+    static func allAsked() -> [URL] {
+        lock.lock(); defer { lock.unlock() }
+        return requests
+    }
 
     /// How `host` answers from now on (and what it was asked before is forgotten).
     static func answer(_ host: String, status: Int, body: String) {
@@ -326,7 +353,8 @@ final class StandInSite: URLProtocol {
         guard let url = request.url else { return }
         Self.lock.lock()
         Self.requests.append(url)
-        let answer = Self.answers[url.host ?? ""]
+        let answer = Self.routes.first(where: { $0.host == url.host && url.absoluteString.contains($0.contains) })?.answer
+            ?? Self.answers[url.host ?? ""]
         Self.lock.unlock()
         guard let answer, answer.error == nil else {
             client?.urlProtocol(self, didFailWithError: NSError(domain: NSURLErrorDomain, code: answer?.error ?? -1003))
