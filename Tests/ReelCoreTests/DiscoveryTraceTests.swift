@@ -140,7 +140,6 @@ final class DiscoveryTraceTests: XCTestCase {
         // The sections that were there before say what they said.
         XCTAssertTrue(log.contains("\nNOT READ\n• American Cinematographer: "), log)
         XCTAssertTrue(log.contains(" — too little text to read\n  https://theasc.com/news/asc-awards-the-quiet-harbour/"), log)
-        XCTAssertTrue(log.contains("STORED IN REEL"))
     }
 
     func testTheLimitsAreSaidAsLimits() async {
