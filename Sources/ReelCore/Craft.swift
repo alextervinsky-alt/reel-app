@@ -69,7 +69,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// Bump when finding what to read improves: films read from too little (their article alone,
     /// or nothing on what they were shot on) are read again; the rest keep their reading.
     /// 2: the magazines' searches sorted by relevance, and American Cinematographer's posts too.
-    public static let currentDiscovery = 2
+    /// 3: nothing found differently; each reading's log says how its pages were found (DISCOVERY), so
+    /// the thin readings are read once more to have it.
+    public static let currentDiscovery = 3
     /// Read again after half a year (new interviews appear).
     public static let maxAge: TimeInterval = 182 * 86_400
 

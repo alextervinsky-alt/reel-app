@@ -43,6 +43,9 @@ public struct CameraReading: Equatable, Sendable {
     /// read is kept, and the film is read again later.
     public var unanswered: [String] = []
 
+    /// How the pages were found (for the reading log); nil when not found by `CameraSourcesClient`.
+    public var discovery: DiscoveryTrace? = nil
+
     /// A page found but not read, and why (for the reading log).
     public struct Skipped: Equatable, Sendable {
         public let source: Source
@@ -264,15 +267,18 @@ public enum CameraSources {
     /// article's addresses, the publication's own (canonical) one is asked for, in the place of the
     /// first found; the others are left out and listed (`aliases`). The same address written another
     /// way ("http://", "www.") is simply left out.
-    static func merge(_ links: [Link], adding more: [Link]) -> (links: [Link], aliases: [Link]) {
-        var kept: [Link] = [], aliases: [Link] = []
+    static func merge(_ links: [Link], adding more: [Link]) -> (links: [Link], aliases: [Link], foundTwice: [Link]) {
+        var kept: [Link] = [], aliases: [Link] = [], foundTwice: [Link] = []
         for link in links + more {
             guard let index = kept.firstIndex(where: { identity($0.url) == identity(link.url) }) else {
                 kept.append(link)
                 continue
             }
             let same = kept[index]
-            guard addressIdentity(same.url) != addressIdentity(link.url) else { continue }
+            guard addressIdentity(same.url) != addressIdentity(link.url) else {
+                foundTwice.append(link)
+                continue
+            }
             if !isCanonical(same.url), isCanonical(link.url) {
                 aliases.append(same)
                 kept[index] = (url: link.url, site: link.site, title: link.title ?? same.title, cited: link.cited)
@@ -280,7 +286,7 @@ public enum CameraSources {
                 aliases.append(link)
             }
         }
-        return (kept, aliases)
+        return (kept, aliases, foundTwice)
     }
 
     /// Whether the address is the article's own (not another address it's known by).
@@ -347,30 +353,48 @@ public enum CameraSources {
     /// Each is read over HTTPS (see `secure`), and the same page cited twice ("http://www…" and
     /// "https://…") once; `cited` is the address as cited when it isn't the one read.
     public static func pick(_ links: [String], cinematographers: [String], limit: Int = 8) -> [(url: URL, site: String, cited: URL?)] {
+        pickDecisions(links, cinematographers: cinematographers, limit: limit).picked
+    }
+
+    /// `pick`, with what became of every link, in the given order (for the discovery trace).
+    static func pickDecisions(_ links: [String], cinematographers: [String], limit: Int = 8)
+        -> (picked: [(url: URL, site: String, cited: URL?)], decisions: [DiscoveryTrace.Hit]) {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map { $0.lowercased() } }
             .filter { $0.count >= 3 }
         var seen = Set<String>()
-        var picked: [(url: URL, site: String, cited: URL?, rank: Int)] = []
+        var picked: [(url: URL, site: String, cited: URL?, rank: Int, index: Int)] = []
+        var rejected: [Int: DiscoveryTrace.Rejection] = [:]
         for (index, link) in links.enumerated() {
             guard let given = URL(string: link), let scheme = given.scheme?.lowercased(), scheme == "http" || scheme == "https",
-                  let host = given.host?.lowercased() else { continue }
+                  let host = given.host?.lowercased() else { rejected[index] = .notAnAddress; continue }
             let url = secure(given)
             let path = url.path.lowercased()
             // Front pages, tags and searches aren't articles.
-            guard path.count > 8, !path.contains("/tag/"), !path.contains("/search"), !path.contains("/category/") else { continue }
+            guard path.count > 8, !path.contains("/tag/"), !path.contains("/search"), !path.contains("/category/") else {
+                rejected[index] = .navigation
+                continue
+            }
             // The same address written another way ("http://", "www."): once. Another address of the
             // same article is kept here, for `merge` to choose and list.
-            guard seen.insert(addressIdentity(url)).inserted else { continue }
+            guard seen.insert(addressIdentity(url)).inserted else { rejected[index] = .duplicate; continue }
             let cited = url == given ? nil : given
             let namesThem = surnames.contains { path.contains($0) }
             if let site = craftSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }) {
-                picked.append((url, site.name, cited, (namesThem ? 0 : 100) + index))
-            } else if let site = newsSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }),
-                      namesThem || craftWords.contains(where: { path.contains($0) }) {
-                picked.append((url, site.name, cited, (namesThem ? 200 : 300) + index))
+                picked.append((url, site.name, cited, (namesThem ? 0 : 100) + index, index))
+            } else if let site = newsSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }) {
+                if namesThem || craftWords.contains(where: { path.contains($0) }) {
+                    picked.append((url, site.name, cited, (namesThem ? 200 : 300) + index, index))
+                } else {
+                    rejected[index] = .newsNotCamera
+                }
+            } else {
+                rejected[index] = .unlistedSite
             }
         }
-        return picked.sorted { $0.rank < $1.rank }.prefix(limit).map { ($0.url, $0.site, $0.cited) }
+        let sorted = picked.sorted { $0.rank < $1.rank }
+        for over in sorted.dropFirst(limit) { rejected[over.index] = .overLimit }
+        let decisions = links.enumerated().map { index, link in DiscoveryTrace.Hit(title: "", url: link, rejected: rejected[index]) }
+        return (sorted.prefix(limit).map { ($0.url, $0.site, $0.cited) }, decisions)
     }
 
     /// A title as sites write it in their addresses: "The Brutalist" → "the-brutalist",
@@ -411,13 +435,29 @@ public enum CameraSources {
     /// each once, at most `limit`.
     static func about(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
                       limit: Int, otherTitles: [String] = []) -> [(url: URL, site: String, title: String?)] {
+        aboutDecisions(filmTitle, in: hits, site: site, limit: limit, otherTitles: otherTitles).found
+    }
+
+    /// `about`, with what became of every result, in the site's order (for the discovery trace).
+    static func aboutDecisions(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
+                               limit: Int, otherTitles: [String] = [])
+        -> (found: [(url: URL, site: String, title: String?)], decisions: [DiscoveryTrace.Hit]) {
         var found: [(url: URL, site: String, title: String?)] = []
-        for hit in hits where isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link)
-            && !namesOtherFilm(hit.title, link: hit.link, film: filmTitle, otherTitles: otherTitles) {
-            guard let link = URL(string: hit.link).map(secure), !found.contains(where: { identity($0.url) == identity(link) }) else { continue }
+        var rejected: [Int: DiscoveryTrace.Rejection] = [:]
+        var foundAt: [Int] = []
+        for (index, hit) in hits.enumerated() {
+            guard isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link) else { rejected[index] = .notAboutFilm; continue }
+            guard !namesOtherFilm(hit.title, link: hit.link, film: filmTitle, otherTitles: otherTitles) else { rejected[index] = .otherFilm; continue }
+            guard let link = URL(string: hit.link).map(secure) else { rejected[index] = .notAnAddress; continue }
+            guard !found.contains(where: { identity($0.url) == identity(link) }) else { rejected[index] = .duplicate; continue }
             found.append((link, site, HTMLText.plain(hit.title)))
+            foundAt.append(index)
         }
-        return Array(found.prefix(limit))
+        for index in foundAt.dropFirst(limit) { rejected[index] = .overLimit }
+        let decisions = hits.enumerated().map { index, hit in
+            DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.link, rejected: rejected[index])
+        }
+        return (Array(found.prefix(limit)), decisions)
     }
 
     /// Whether a search result is about another film of the collection, by its title or its
@@ -617,24 +657,34 @@ public struct CameraSourcesClient: Sendable {
     public func read(articleTitle: String?, filmTitle: String, cinematographers: [String], directors: [String] = [],
                      year: Int? = nil, otherTitles: [String] = []) async -> CameraReading {
         let unanswered = UnansweredSites()
-        async let cited = citedLinks(articleTitle: articleTitle, cinematographers: cinematographers)
-        async let asc = ascArticles(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
-        async let british = britishCinematographer(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
-        async let stories = storyPages(filmTitle: filmTitle, cinematographers: cinematographers)
-        async let person = cinematographer(cinematographers.first, filmTitle: filmTitle)
+        async let cited = citedSearch(articleTitle: articleTitle, cinematographers: cinematographers)
+        async let asc = ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
+        async let british = britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
+        async let stories = storySearch(filmTitle: filmTitle, cinematographers: cinematographers)
+        async let person = cinematographerSearch(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
         // then what Wikipedia cites; each page once, however its address is written.
-        let searchedLinks = (await asc).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
-        let fromSites = (await british).map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
-        return await reading(searched: searchedLinks, fromSites: fromSites, fromArticle: await cited, stories: await stories,
-                             person: await person, cinematographers: cinematographers, directors: directors, year: year, unanswered: unanswered)
+        let ascFound = await asc, britishFound = await british
+        let searchedLinks = ascFound.found.map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
+        let fromSites = britishFound.found.map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
+        // Asked for in the same order as before the trace: Wikipedia's links, the stories, the person.
+        let citedFound = await cited, storiesFound = await stories, personFound = await person
+        var trace = DiscoveryTrace()
+        trace.searches = [ascFound.trace, britishFound.trace]
+        trace.cited = citedFound.trace
+        trace.guessesNotAttempted = storiesFound.notAttempted
+        trace.guesses = storiesFound.guesses
+        trace.person = personFound.trace
+        return await reading(searched: searchedLinks, fromSites: fromSites, fromArticle: citedFound.links, stories: storiesFound.found,
+                             person: personFound.person, cinematographers: cinematographers, directors: directors, year: year,
+                             unanswered: unanswered, trace: trace)
     }
 
     /// The pages found, read: each article once (see `CameraSources.merge`), at most eight asked
     /// for and six read, and why each of the rest wasn't.
     func reading(searched searchedLinks: [CameraSources.Link], fromSites: [CameraSources.Link], fromArticle: [CameraSources.Link],
                  stories storiesRead: [CameraReading.Source], person: CameraReading.Cinematographer?, cinematographers: [String],
-                 directors: [String], year: Int?, unanswered: UnansweredSites) async -> CameraReading {
+                 directors: [String], year: Int?, unanswered: UnansweredSites, trace: DiscoveryTrace? = nil) async -> CameraReading {
         var links = searchedLinks
         // Found by searching the magazines for the title (not cited by the film's own article):
         // read only when the page names the film's people or year.
@@ -699,11 +749,26 @@ public struct CameraSourcesClient: Sendable {
             skipped.append(CameraReading.Skipped(source: story, reason: own ? reason(story) : "the same page as one already found",
                                                  limit: own ? CameraSources.limit(page: story, failure: nil, otherFilm: false) : nil))
         }
-        return CameraReading(sources: read, more: more, cinematographer: person, unanswered: await unanswered.all(), skipped: skipped)
+        var reading = CameraReading(sources: read, more: more, cinematographer: person, unanswered: await unanswered.all(), skipped: skipped)
+        if var trace {
+            trace.assembly.candidates = searchedLinks.count + fromSites.count + fromArticle.count
+            trace.assembly.foundTwice = merged.foundTwice.map(\.url.absoluteString)
+            trace.assembly.otherAddresses = merged.aliases.map(\.url.absoluteString)
+            trace.assembly.asked = links.prefix(8).map(\.url.absoluteString)
+            trace.assembly.overLimit = links.dropFirst(8).map(\.url.absoluteString)
+            reading.discovery = trace
+        }
+        return reading
     }
 
     /// The external links of the film's Wikipedia article (its references), picked for the craft.
     func citedLinks(articleTitle: String?, cinematographers: [String]) async -> [(url: URL, site: String, title: String?, cited: URL?)] {
+        await citedSearch(articleTitle: articleTitle, cinematographers: cinematographers).links
+    }
+
+    /// `citedLinks`, with what became of each link (for the discovery trace).
+    func citedSearch(articleTitle: String?, cinematographers: [String]) async
+        -> (links: [(url: URL, site: String, title: String?, cited: URL?)], trace: DiscoveryTrace.Cited) {
         struct Response: Decodable {
             struct Query: Decodable {
                 struct Page: Decodable {
@@ -716,20 +781,47 @@ public struct CameraSourcesClient: Sendable {
                         }
                     }
                     let extlinks: [Link]?
+                    let missing: String?
                 }
                 let pages: [String: Page]?
             }
             let query: Query?
         }
-        guard let articleTitle, let response: Response = try? await Wikimedia.get("https://en.wikipedia.org/w/api.php", [
-            "action": "query", "prop": "extlinks", "titles": articleTitle, "ellimit": "500", "redirects": "1", "format": "json",
-        ], session: session) else { return [] }
+        var trace = DiscoveryTrace.Cited(outcome: .notAttempted("no Wikipedia article for the film"), requestLimit: 500, limit: 8)
+        guard let articleTitle else { return ([], trace) }
+        let response: Response
+        do {
+            response = try await Wikimedia.get("https://en.wikipedia.org/w/api.php", [
+                "action": "query", "prop": "extlinks", "titles": articleTitle, "ellimit": "500", "redirects": "1", "format": "json",
+            ], session: session)
+        } catch {
+            trace.outcome = .failed(Self.describe(error))
+            return ([], trace)
+        }
         let links = (response.query?.pages?.values.first?.extlinks ?? []).compactMap { $0.url ?? $0.star }
-        return CameraSources.pick(links, cinematographers: cinematographers).map { ($0.url, $0.site, nil, $0.cited) }
+        let picked = CameraSources.pickDecisions(links, cinematographers: cinematographers)
+        trace.outcome = response.query?.pages?.values.first?.missing != nil ? .answeredNone("Wikipedia has no article of that title now")
+            : .answered(links.count)
+        trace.links = picked.decisions
+        return (picked.picked.map { ($0.url, $0.site, nil, $0.cited) }, trace)
+    }
+
+    /// What went wrong with a request that threw, in the log's words.
+    static func describe(_ error: Error) -> String {
+        if case TMDBError.badStatus(let status) = error { return "the site answered \(status)" }
+        if error is DecodingError { return "an answer Reel couldn't read" }
+        return SourceFailure.of(error: error).reason
     }
 
     /// American Cinematographer's articles about the film (its site has a free WordPress API).
     func ascArticles(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async -> [(url: URL, site: String, title: String?)] {
+        await ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: noting).found
+    }
+
+    /// `ascArticles`, with what the search brought and what became of each result.
+    func ascSearch(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async
+        -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
+        var trace = DiscoveryTrace.Search(site: "American Cinematographer", query: filmTitle, outcome: .notAttempted("no address"), limit: 3)
         struct Hit: Decodable {
             let title: String
             let url: String
@@ -740,20 +832,44 @@ public struct CameraSourcesClient: Sendable {
         // BSC: Lighting Sicario" is a post). Not its pages or videos, which have little to read.
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20")]
-        guard let url = components.url,
-              case .page(let data, _) = await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting)
-        else { return [] }
+        guard let url = components.url else { return ([], trace) }
+        let data: Data
+        switch await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting) {
+        case .failed(let failure):
+            trace.outcome = .failed(failure.reason)
+            return ([], trace)
+        case .page(let answer, _):
+            data = answer
+        }
         // An answer that isn't the search's (a page in its place): not "nothing written", read again later.
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
             await noting?.add("American Cinematographer")
-            return []
+            trace.outcome = .notASearchAnswer
+            return ([], trace)
         }
-        return CameraSources.about(filmTitle, in: hits.filter { ["article", "post", "news"].contains($0.subtype ?? "") }
-            .map { (title: $0.title, link: $0.url) }, site: "American Cinematographer", limit: 3, otherTitles: otherTitles)
+        trace.outcome = .answered(hits.count)
+        let kinds = ["article", "post", "news"]
+        let wanted = hits.filter { kinds.contains($0.subtype ?? "") }
+        let decided = CameraSources.aboutDecisions(filmTitle, in: wanted.map { (title: $0.title, link: $0.url) }, site: "American Cinematographer",
+                                                   limit: 3, otherTitles: otherTitles)
+        // Every result in the site's order: the wrong kinds left out first, the rest as `about` decided.
+        var verdicts = decided.decisions.makeIterator()
+        trace.hits = hits.map { hit in
+            kinds.contains(hit.subtype ?? "") ? verdicts.next()!
+                : DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.url, rejected: .wrongKind)
+        }
+        return (decided.found, trace)
     }
 
     /// British Cinematographer's articles about the film (its site has a free WordPress API).
     func britishCinematographer(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async -> [(url: URL, site: String, title: String?)] {
+        await britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: noting).found
+    }
+
+    /// `britishCinematographer`, with what the search brought and what became of each result.
+    func britishSearch(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async
+        -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
+        var trace = DiscoveryTrace.Search(site: "British Cinematographer", query: filmTitle, outcome: .notAttempted("no address"), limit: 2)
         struct Hit: Decodable {
             struct Rendered: Decodable { let rendered: String }
             let title: Rendered
@@ -763,15 +879,25 @@ public struct CameraSourcesClient: Sendable {
         var components = URLComponents(string: "https://britishcinematographer.co.uk/wp-json/wp/v2/posts")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "20"),
                                  URLQueryItem(name: "orderby", value: "relevance"), URLQueryItem(name: "_fields", value: "title,link")]
-        guard let url = components.url,
-              case .page(let data, _) = await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting)
-        else { return [] }
+        guard let url = components.url else { return ([], trace) }
+        let data: Data
+        switch await fetch(url, accept: "application/json", site: "British Cinematographer", noting: noting) {
+        case .failed(let failure):
+            trace.outcome = .failed(failure.reason)
+            return ([], trace)
+        case .page(let answer, _):
+            data = answer
+        }
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
             await noting?.add("British Cinematographer")
-            return []
+            trace.outcome = .notASearchAnswer
+            return ([], trace)
         }
-        return CameraSources.about(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
-                                   site: "British Cinematographer", limit: 2, otherTitles: otherTitles)
+        trace.outcome = .answered(hits.count)
+        let decided = CameraSources.aboutDecisions(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
+                                                   site: "British Cinematographer", limit: 2, otherTitles: otherTitles)
+        trace.hits = decided.decisions
+        return (decided.found, trace)
     }
 
     /// Kodak's stories of films shot on its stock and No Film School's pieces on a film's
@@ -779,26 +905,40 @@ public struct CameraSourcesClient: Sendable {
     /// the-brutalist", "nofilmschool.com/dune-cinematography"). A page is kept only when it names
     /// the cinematographer (the same title may be another film).
     func storyPages(filmTitle: String, cinematographers: [String]) async -> [CameraReading.Source] {
+        await storySearch(filmTitle: filmTitle, cinematographers: cinematographers).found
+    }
+
+    /// `storyPages`, with what became of each guess (or why none was tried).
+    func storySearch(filmTitle: String, cinematographers: [String]) async
+        -> (found: [CameraReading.Source], guesses: [DiscoveryTrace.Guess], notAttempted: String?) {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
         let slug = CameraSources.slug(filmTitle)
-        guard !slug.isEmpty, !surnames.isEmpty else { return [] }
+        guard !slug.isEmpty else { return ([], [], "the title has no letters or numbers for an address") }
+        guard !surnames.isEmpty else { return ([], [], "no cinematographer known (a page is kept only when it names them)") }
         let guesses: [(String, String)] = [
             ("https://www.kodak.com/en/motion/blog-post/\(slug)/", "Kodak"),
             ("https://www.kodak.com/en/motion/page/\(slug)/", "Kodak"),
             ("https://nofilmschool.com/\(slug)-cinematography", "No Film School"),
         ]
-        return await withTaskGroup(of: (Int, CameraReading.Source?).self) { group in
+        let results = await withTaskGroup(of: (Int, CameraReading.Source?, DiscoveryTrace.Guess?).self) { group in
             for (index, guess) in guesses.enumerated() {
                 group.addTask {
-                    guard let url = URL(string: guess.0), let found = await page(url, site: guess.1, title: nil).source,
-                          found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else { return (index, nil) }
-                    return (index, found)
+                    guard let url = URL(string: guess.0) else { return (index, nil, nil) }
+                    let got = await page(url, site: guess.1, title: nil)
+                    guard let found = got.source else {
+                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(got.failure?.reason ?? "couldn't be read")))
+                    }
+                    guard found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else {
+                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .doesntNameCinematographer))
+                    }
+                    return (index, found, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .found))
                 }
             }
-            var results: [(Int, CameraReading.Source?)] = []
+            var results: [(Int, CameraReading.Source?, DiscoveryTrace.Guess?)] = []
             for await result in group { results.append(result) }
-            return results.sorted { $0.0 < $1.0 }.compactMap { $0.1 }
+            return results.sorted { $0.0 < $1.0 }
         }
+        return (results.compactMap { $0.1 }, results.compactMap { $0.2 }, nil)
     }
 
     /// One page's title and paragraphs, or why it couldn't be read. Asked for over HTTPS.
@@ -826,17 +966,34 @@ public struct CameraSourcesClient: Sendable {
 
     /// The cinematographer's Wikipedia article: its opening and the paragraphs naming the film.
     func cinematographer(_ name: String?, filmTitle: String) async -> CameraReading.Cinematographer? {
-        guard let name, let text = try? await WikipediaClient(session: session).extract(title: name), !text.isEmpty else { return nil }
+        await cinematographerSearch(name, filmTitle: filmTitle).person
+    }
+
+    /// `cinematographer`, with what became of the look-up.
+    func cinematographerSearch(_ name: String?, filmTitle: String) async
+        -> (person: CameraReading.Cinematographer?, trace: DiscoveryTrace.Person) {
+        guard let name else { return (nil, .notAttempted("no cinematographer known")) }
+        let extract: String?
+        do {
+            extract = try await WikipediaClient(session: session).extract(title: name)
+        } catch {
+            return (nil, .failed(Self.describe(error)))
+        }
+        guard let text = extract, !text.isEmpty else { return (nil, .noArticle(name)) }
         let paragraphs = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.count >= 40 && !$0.hasPrefix("=") }
-        guard let lead = paragraphs.first else { return nil }
+        guard let lead = paragraphs.first else { return (nil, .noArticle(name)) }
         // The right person: a cinematographer, not someone else of the same name.
         let opening = lead.lowercased()
-        guard ["cinematographer", "director of photography", "photographer", "filmmaker"].contains(where: opening.contains) else { return nil }
+        guard ["cinematographer", "director of photography", "photographer", "filmmaker"].contains(where: opening.contains) else {
+            return (nil, .notACinematographer(name))
+        }
         let about = paragraphs.dropFirst().filter { $0.localizedCaseInsensitiveContains(filmTitle) }
         let encoded = name.replacingOccurrences(of: " ", with: "_").addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        guard let url = URL(string: "https://en.wikipedia.org/wiki/\(encoded)") else { return nil }
-        return CameraReading.Cinematographer(name: name, lead: Digest.lead(of: [lead], limit: 360), aboutThisFilm: Array(about.prefix(4)), url: url)
+        guard let url = URL(string: "https://en.wikipedia.org/wiki/\(encoded)") else { return (nil, .noArticle(name)) }
+        let kept = Array(about.prefix(4))
+        return (CameraReading.Cinematographer(name: name, lead: Digest.lead(of: [lead], limit: 360), aboutThisFilm: kept, url: url),
+                .found(name, paragraphs: kept.count))
     }
 
     /// Spaces the requests to each site and pauses a site that asks Reel to wait.

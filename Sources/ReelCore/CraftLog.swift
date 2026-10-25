@@ -14,6 +14,12 @@ public enum CraftLog {
         if !details.cinematographers.isEmpty { lines.append("Cinematography: " + details.cinematographers.joined(separator: ", ")) }
         if !details.directors.isEmpty { lines.append("Directed by: " + details.directors.joined(separator: ", ")) }
 
+        if let discovery = reading.discovery {
+            lines.append("")
+            lines.append("DISCOVERY (how pages were found; what was read is under READ, what wasn't under NOT READ)")
+            lines += discovery.lines()
+        }
+
         lines.append("")
         lines.append("READ")
         for source in reading.sources {
