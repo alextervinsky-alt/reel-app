@@ -824,7 +824,7 @@ public struct CameraSourcesClient: Sendable {
     /// so the log doesn't promise it.
     static func notRetried(_ reason: String) -> String {
         let later = " (read again later)"
-        guard reason.hasSuffix(later) else { return reason + " (not tried again until the film is next read)" }
+        guard reason.hasSuffix(later) else { return reason }
         return String(reason.dropLast(later.count)) + " (not tried again until the film is next read)"
     }
 
