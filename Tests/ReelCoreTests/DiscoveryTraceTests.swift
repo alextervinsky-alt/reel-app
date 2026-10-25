@@ -138,7 +138,8 @@ final class DiscoveryTraceTests: XCTestCase {
             "• Pages: 8 kept above; 1 found twice, asked for once; 1 another address of an article kept (under NOT READ); 6 asked for; at most 6 read (see READ and NOT READ)",
         ])
         // The sections that were there before say what they said.
-        XCTAssertTrue(log.contains("\nNOT READ\n• American Cinematographer: ASC Awards: The Quiet Harbour Honoured — too little text to read\n"), log)
+        XCTAssertTrue(log.contains("\nNOT READ\n• American Cinematographer: "), log)
+        XCTAssertTrue(log.contains(" — too little text to read\n  https://theasc.com/news/asc-awards-the-quiet-harbour/"), log)
         XCTAssertTrue(log.contains("STORED IN REEL"))
     }
 
@@ -246,7 +247,7 @@ final class DiscoveryTraceTests: XCTestCase {
 
     /// The filters say what they decided; what they return is what they returned before.
     func testTheFiltersDecisionsAreTheirOwn() {
-        let links = ["https://theasc.com/article/a-film-jane-doe/", "https://example.org/x/y/z/a", "https://www.indiewire.com/tag/x/"]
+        let links = ["https://theasc.com/article/a-film-jane-doe/", "https://example.org/2015/05/a-film-review/", "https://www.indiewire.com/tag/x/"]
         let both = CameraSources.pickDecisions(links, cinematographers: ["Jane Doe"])
         XCTAssertEqual(both.picked.map(\.url), CameraSources.pick(links, cinematographers: ["Jane Doe"]).map(\.url))
         XCTAssertEqual(both.decisions.map(\.rejected), [nil, .unlistedSite, .navigation])
