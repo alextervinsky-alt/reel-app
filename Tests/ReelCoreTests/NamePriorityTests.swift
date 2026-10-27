@@ -164,11 +164,11 @@ final class NamePriorityTests: XCTestCase {
     // MARK: D. Name matching
 
     func testHowPlainlyAResultNamesTheCinematographer() {
-        func names(_ title: String, _ link: String = "https://example.org/a/", _ who: [String]) -> Int {
+        func names(_ title: String, _ who: [String], link: String = "https://example.org/a/") -> Int {
             CameraSources.namesCinematographer(title: title, link: link, cinematographers: who)
         }
         XCTAssertEqual(names("Rodrigo Prieto ASC AMC / Barbie", ["Rodrigo Prieto"]), 2, "the whole name")
-        XCTAssertEqual(names("Interview / Barbie", "https://britishcinematographer.co.uk/rodrigo-prieto-asc-amc-barbie/", ["Rodrigo Prieto"]), 2,
+        XCTAssertEqual(names("Interview / Barbie", ["Rodrigo Prieto"], link: "https://britishcinematographer.co.uk/rodrigo-prieto-asc-amc-barbie/"), 2,
                        "the whole name in the address")
         XCTAssertEqual(names("Prieto on the pinks of Barbie", ["Rodrigo Prieto"]), 1, "the surname alone")
         XCTAssertEqual(names("R. PRIETO, ASC, AMC: Barbie", ["Rodrigo Prieto"]), 1, "an initial, capitals, punctuation")
@@ -178,7 +178,7 @@ final class NamePriorityTests: XCTestCase {
         XCTAssertEqual(names("Kyung-pyo on Hope", ["Hong Kyung-pyo"]), 1)
         XCTAssertEqual(names("Hollywood Reporter roundtable: Green Book", ["Sean Porter"]), 0, "not part of another word")
         XCTAssertEqual(names("Portering the Green Book", ["Sean Porter"]), 0)
-        XCTAssertEqual(names("Barbie", "https://example.org/prietolux-barbie/", ["Rodrigo Prieto"]), 0)
+        XCTAssertEqual(names("Barbie", ["Rodrigo Prieto"], link: "https://example.org/prietolux-barbie/"), 0)
         XCTAssertEqual(names("Ed on Barbie", ["Rodrigo Ed"]), 0, "a surname under three letters isn't a name of its own")
         XCTAssertEqual(names("Rodrigo Prieto / Barbie", []), 0, "no cinematographer known")
         XCTAssertEqual(names("Linus Sandgren and Rodrigo Prieto / Barbie", ["Linus Sandgren", "Rodrigo Prieto"]), 2, "either of two")
