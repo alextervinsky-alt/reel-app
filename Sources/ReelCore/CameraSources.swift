@@ -480,23 +480,26 @@ public enum CameraSources {
             .min(by: { naming[$0] != naming[$1] ? naming[$0] > naming[$1] : $0 < $1 }) {
             kept.append(last)
         }
-        var promoted: Set<Int> = []
         for (place, index) in foundAt.enumerated() where !kept.contains(place) { rejected[index] = .overLimit }
-        // Kept ahead of a result the site ranked higher.
-        if let last = kept.last, last >= limit { promoted.insert(foundAt[last]) }
+        // Kept for the last place ahead of the result the site ranked there (a place past it in
+        // `found`), and that result.
+        var promoted: Int?, displaced: Int?
+        if let last = kept.last, last >= limit { promoted = foundAt[last]; displaced = foundAt[limit - 1] }
         let decisions = hits.enumerated().map { index, hit in
             DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.link, rejected: rejected[index],
-                               namesCinematographer: promoted.contains(index))
+                               promotedForName: index == promoted, displacedForName: index == displaced)
         }
         return (kept.map { found[$0] }, decisions)
     }
 
     /// How plainly a search result's title or address names one of the film's cinematographers:
-    /// 2 for the whole name ("Rodrigo Prieto ASC AMC / Barbie", ".../claudio-miranda-asc-acc-f1-…",
-    /// "Hong Kyung-pyo"), 1 for the surname alone as a word of its own ("Prieto on Barbie"; the
-    /// family name too when it comes first, "Hong"; a one-word name), 0 for neither. Words are
-    /// compared without regard to case, accents or punctuation, never as parts of other words
-    /// ("Porter" isn't in "Hollywood Reporter"). Only which result is asked for depends on it.
+    /// 2 for the whole name, in the title or the address ("Rodrigo Prieto ASC AMC / Barbie",
+    /// ".../claudio-miranda-asc-acc-f1-…", "Hong Kyung-pyo"); 1 for the surname alone, only in the
+    /// title and only of four letters or more ("Prieto on Barbie"; the family name too when it comes
+    /// first, "Hong"; a one-word name): a short surname alone is too often another word or person
+    /// ("Tim" of "Tim Maurice-Jones", "Ed"); 0 for neither. Words are compared without regard to
+    /// case, accents or punctuation, never as parts of other words ("Porter" isn't in "Hollywood
+    /// Reporter"). Only which result is asked for depends on it.
     public static func namesCinematographer(title: String, link: String, cinematographers: [String]) -> Int {
         let heading = " " + fold(HTMLText.plain(title)) + " "
         let address = " " + fold(URL(string: link)?.path ?? "") + " "
@@ -509,10 +512,8 @@ public enum CameraSources {
             let whole = words.joined(separator: " ")
             var surnames = [last]
             if words.count == 2, last.contains(" ") { surnames.append(words[0]) }
-            for text in [heading, address] {
-                if words.count > 1, text.contains(" " + whole + " ") { best = max(best, 2) }
-                if surnames.contains(where: { $0.count >= 3 && text.contains(" " + $0 + " ") }) { best = max(best, 1) }
-            }
+            for text in [heading, address] where words.count > 1 && text.contains(" " + whole + " ") { best = max(best, 2) }
+            if surnames.contains(where: { $0.count >= 4 && heading.contains(" " + $0 + " ") }) { best = max(best, 1) }
         }
         return best
     }

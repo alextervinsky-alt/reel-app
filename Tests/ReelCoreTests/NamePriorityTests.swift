@@ -95,7 +95,7 @@ final class NamePriorityTests: XCTestCase {
         XCTAssertEqual(british.outcome, .answered(4))
         // The site's first kept as before; the interview for the last place, the awards item over the limit.
         XCTAssertEqual(reasons(british.hits), [nil, .overLimit, .notAboutFilm, nil])
-        XCTAssertEqual(british.hits.map(\.namesCinematographer), [false, false, false, true])
+        XCTAssertEqual(british.hits.map(\.promotedForName), [false, false, false, true])
         XCTAssertEqual(british.hits.filter { $0.rejected == nil }.count, 2, "still at most two")
         // The same number of requests as before: one search, two pages.
         XCTAssertEqual(asked("britishcinematographer.co.uk").count, 3)
@@ -109,7 +109,8 @@ final class NamePriorityTests: XCTestCase {
         // The log says what was chosen and why.
         let lines = reading.discovery?.lines() ?? []
         XCTAssertTrue(lines.contains("  kept, ahead of the site's order for naming the cinematographer: Rodrigo Prieto ASC AMC / Barbie — https://britishcinematographer.co.uk/rodrigo-prieto-asc-amc-barbie/"), "\(lines)")
-        XCTAssertTrue(lines.contains("  left out (over the limit): Barbie and Ahsoka take home top honours at ICG Publicists Awards — https://britishcinematographer.co.uk/barbie-and-ahsoka-take-home-top-honours-at-icg-publicists-awards/"))
+        XCTAssertTrue(lines.contains("  left out (over the limit): Barbie and Ahsoka take home top honours at ICG Publicists Awards — https://britishcinematographer.co.uk/barbie-and-ahsoka-take-home-top-honours-at-icg-publicists-awards/ (its place went to a result naming the cinematographer)"), "\(lines)")
+        XCTAssertEqual(british.hits.map(\.displacedForName), [false, true, false, false])
         // Nothing from the other film's page.
         var details = TMDBMovieDetails(id: 41, title: "Barbie", releaseDate: "2023-07-21")
         details.credits = TMDBCredits(cast: [], crew: [TMDBCrewMember(name: "Rodrigo Prieto", job: "Director of Photography")])
@@ -126,12 +127,12 @@ final class NamePriorityTests: XCTestCase {
         guard let trace = reading.discovery else { return XCTFail("no trace") }
         // British Cinematographer: the interview in place of the awards item.
         XCTAssertEqual(reasons(trace.searches[1].hits), [nil, .overLimit, nil])
-        XCTAssertEqual(trace.searches[1].hits.map(\.namesCinematographer), [false, false, true])
+        XCTAssertEqual(trace.searches[1].hits.map(\.promotedForName), [false, false, true])
         // American Cinematographer: no result names Miranda, so the order is the site's, as before.
         // "On the Fast Track for F1: The Movie" names the film but not him: still over the limit
         // (reading it would take another request, not this change).
         XCTAssertEqual(reasons(trace.searches[0].hits), [nil, nil, nil, .overLimit])
-        XCTAssertEqual(trace.searches[0].hits.map(\.namesCinematographer), [false, false, false, false])
+        XCTAssertEqual(trace.searches[0].hits.map(\.promotedForName), [false, false, false, false])
         XCTAssertFalse(asked("theasc.com").contains { $0.contains("on-the-fast-track") })
         // Requests: one search and three pages there, one search and two pages here, as before.
         XCTAssertEqual(asked("theasc.com").count, 4)
@@ -161,6 +162,85 @@ final class NamePriorityTests: XCTestCase {
         XCTAssertEqual(index.shotOn, [], "a name in a title is never evidence")
     }
 
+    // MARK: E. Blade Runner 2049: the article that doesn't name Deakins
+
+    /// American Cinematographer's search for "Blade Runner 2049" as the site answered it on
+    /// 27 October 2026 (titles, addresses and kinds; the pages aren't needed). Its own article,
+    /// "Uncanny Valley", names the film but not Deakins; several results after it name him.
+    static let bladeRunnerSearch: [(title: String, url: String, subtype: String)] = [
+        ("Deakins Honored with BSC Award for Blade Runner 2049", "https://theasc.com/news/deakins-honored-with-bsc-award-for-blade-runner-2049/", "news"),
+        ("Uncanny Valley: Blade Runner 2049", "https://theasc.com/article/uncanny-valley-blade-runner-2049/", "article"),
+        ("Dive Deeper into Blade Runner 2049 with Roger Deakins, ASC, BSC", "https://theasc.com/article/deakins-blade-runner-2049/", "article"),
+    ] + [1, 2, 7, 6, 3, 5, 4].map {
+        ("Blade Runner 2049: Roger Deakins, ASC, BSC – Part \($0)", "https://theasc.com/video/clubhouse-conversation-with-roger-deakins-cbe-asc-bsc-part-\($0)/", "video")
+    } + [
+        ("Watch Blade Runner 2049 Discussion with Roger Deakins, ASC, BSC", "https://theasc.com/article/roger-deakins-asc-bsc-blade-runner-2049-discussion/", "article"),
+        ("Roger Deakins, ASC, BSC at Clubhouse for Blade Runner 2049 Discussion", "https://theasc.com/news/roger-deakins-at-clubhouse-for-blade-runner-2049-discussion/", "news"),
+        ("Join Roger Deakins, ASC, BSC at Clubhouse for Blade Runner 2049 Discussion", "https://theasc.com/news/join-roger-deakins-asc-bsc-at-clubhouse-for-blade-runner-2049-discussion/", "news"),
+        ("Blade Runner 2049: Designing the Future", "https://theasc.com/article/blade-runner-2049-designing-the-future/", "article"),
+        ("Dive Deep in Blade Runner 2047 with Roger Deakins, ASC, BSC", "https://theasc.com/article/deakins/", "article"),
+        ("Deakins Receives 2nd Annual Sue Gibson, BSC Cinematography Award", "https://theasc.com/news/deakins-receives-the-sue-gibson-bsc-cinematography-award/", "news"),
+        ("Roger Deakins, ASC, BSC on his Eclair NPR Camera", "https://theasc.com/video/roger-deakins-asc-bsc-on-his-eclair-npr-camera/", "video"),
+        ("Details on Upcoming December Issue of AC", "https://theasc.com/article/details-on-upcoming-december-issue-of-ac/", "article"),
+        ("Picture Shop, Sony Collaborate on Signature LUT", "https://theasc.com/article/picture-shop-sony-collaborate-on-signature-lut/", "article"),
+        ("Universal Translator: Arrival", "https://theasc.com/article/arrival-cinematography-bradford-young/", "article"),
+    ]
+
+    func testBladeRunner2049KeepsItsOwnArticleInTheSitesOrder() async {
+        StandInSite.reset()
+        StandInSite.route("theasc.com", "wp-json/wp/v2/search", body: DiscoveryFixtures.ascHits(Self.bladeRunnerSearch))
+        let found = await client().ascSearch(filmTitle: "Blade Runner 2049", otherTitles: ["Blade Runner"], cinematographers: ["Roger Deakins"])
+        // The first three that name the film, as before: the third names Deakins anyway.
+        XCTAssertEqual(found.found.map(\.url.absoluteString), [
+            "https://theasc.com/news/deakins-honored-with-bsc-award-for-blade-runner-2049/",
+            "https://theasc.com/article/uncanny-valley-blade-runner-2049/",
+            "https://theasc.com/article/deakins-blade-runner-2049/",
+        ])
+        XCTAssertEqual(found.trace.hits.map(\.rejected), [nil, nil, nil] + Array(repeating: .wrongKind, count: 7)
+                       + [.overLimit, .overLimit, .overLimit, .overLimit, .notAboutFilm, .notAboutFilm, .wrongKind, .notAboutFilm, .notAboutFilm, .notAboutFilm])
+        XCTAssertFalse(found.trace.hits.contains { $0.promotedForName || $0.displacedForName })
+        // Without names, the same three.
+        let plain = await client().ascSearch(filmTitle: "Blade Runner 2049", otherTitles: ["Blade Runner"])
+        XCTAssertEqual(plain.found.map(\.url), found.found.map(\.url))
+    }
+
+    /// The risk this change takes: when the site ranks the film's own article last of three and a
+    /// result naming the cinematographer comes after it, the article is left over the limit, and
+    /// the log says so.
+    func testAnArticleInTheLastPlaceCanBeLeftOutForOneNamingTheCinematographer() {
+        let hits = [
+            (title: "Deakins Honored with BSC Award for Blade Runner 2049", link: "https://theasc.com/news/deakins-honored-with-bsc-award-for-blade-runner-2049/"),
+            (title: "Blade Runner 2049: Designing the Future", link: "https://theasc.com/article/blade-runner-2049-designing-the-future/"),
+            (title: "Uncanny Valley: Blade Runner 2049", link: "https://theasc.com/article/uncanny-valley-blade-runner-2049/"),
+            (title: "Watch Blade Runner 2049 Discussion with Roger Deakins, ASC, BSC", link: "https://theasc.com/article/roger-deakins-asc-bsc-blade-runner-2049-discussion/"),
+        ]
+        let decided = CameraSources.aboutDecisions("Blade Runner 2049", in: hits, site: "AC", limit: 3, cinematographers: ["Roger Deakins"])
+        XCTAssertEqual(decided.decisions.map(\.rejected), [nil, nil, .overLimit, nil])
+        XCTAssertEqual(decided.decisions.map(\.displacedForName), [false, false, true, false])
+        XCTAssertEqual(decided.decisions.map(\.promotedForName), [false, false, false, true])
+        let lines = DiscoveryTrace.hitLines(decided.decisions)
+        XCTAssertTrue(lines.contains("  left out (over the limit): Uncanny Valley: Blade Runner 2049 — https://theasc.com/article/uncanny-valley-blade-runner-2049/ (its place went to a result naming the cinematographer)"), "\(lines)")
+    }
+
+    /// A page left over the limit that gave a tag before: the tag is carried, the reading read
+    /// again, and the tag dropped only after `maxRetries` readings without its page (the usual rule
+    /// for a page not found again), never at once.
+    func testATagFromAPageLeftOverTheLimitIsCarriedThenDropped() {
+        let film = CraftIndex.Evidence(shotOn: .film, text: "The film was shot on 35mm.", source: "American Cinematographer")
+        let old = CraftIndex(shotOn: [.film], names: [], evidence: [film], sources: 3, read: ["Wikipedia", "American Cinematographer"], discovery: 3)
+        let new = CraftIndex(shotOn: [], names: [], sources: 2, read: ["Wikipedia", "British Cinematographer"])
+        let first = CraftIndex.merging(old: old, new: new)
+        XCTAssertEqual(first.index.shotOn, [.film])
+        XCTAssertEqual(first.carried.first?.misses, 1)
+        XCTAssertTrue(first.index.isPartial, "read again later")
+        var last = old
+        last.evidence = [CraftIndex.Evidence(shotOn: .film, text: film.text, source: film.source, carriedFrom: Date(), carriedRules: 11,
+                                             misses: CraftIndex.maxRetries)]
+        let dropped = CraftIndex.merging(old: last, new: new)
+        XCTAssertEqual(dropped.index.shotOn, [])
+        XCTAssertEqual(dropped.dropped.map(\.reason), ["American Cinematographer wasn't found again in \(CraftIndex.maxRetries) readings"])
+    }
+
     // MARK: D. Name matching
 
     func testHowPlainlyAResultNamesTheCinematographer() {
@@ -171,6 +251,10 @@ final class NamePriorityTests: XCTestCase {
         XCTAssertEqual(names("Interview / Barbie", ["Rodrigo Prieto"], link: "https://britishcinematographer.co.uk/rodrigo-prieto-asc-amc-barbie/"), 2,
                        "the whole name in the address")
         XCTAssertEqual(names("Prieto on the pinks of Barbie", ["Rodrigo Prieto"]), 1, "the surname alone")
+        XCTAssertEqual(names("Interview / Barbie", ["Rodrigo Prieto"], link: "https://example.org/prieto-barbie/"), 0,
+                       "the surname alone counts only in the title")
+        XCTAssertEqual(names("Tim Burton interview: Snatch remake", ["Tim Maurice-Jones"]), 0, "a given name of three letters alone is no name")
+        XCTAssertEqual(names("Hong on Hope", ["Hong Kyung-pyo"]), 1, "the family name first, four letters")
         XCTAssertEqual(names("R. PRIETO, ASC, AMC: Barbie", ["Rodrigo Prieto"]), 1, "an initial, capitals, punctuation")
         XCTAssertEqual(names("Tim Maurice Jones BSC / Snatch", ["Tim Maurice-Jones"]), 2, "a hyphen written as a space")
         XCTAssertEqual(names("Łukasz Żal PSC / The Zone of Interest", ["Lukasz Zal"]), 2, "accents")
@@ -209,7 +293,7 @@ final class NamePriorityTests: XCTestCase {
         // Results within the limit are kept whatever the name: none moves ahead of them.
         let three = CameraSources.aboutDecisions("F1", in: Array(hits.prefix(3)), site: "AC", limit: 3, cinematographers: ["Claudio Miranda"])
         XCTAssertEqual(three.decisions.map(\.rejected), [nil, nil, nil])
-        XCTAssertEqual(three.decisions.map(\.namesCinematographer), [false, false, false])
+        XCTAssertEqual(three.decisions.map(\.promotedForName), [false, false, false])
     }
 
     // MARK: E. The filters before the name

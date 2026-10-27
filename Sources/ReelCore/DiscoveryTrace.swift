@@ -40,7 +40,10 @@ public struct DiscoveryTrace: Equatable, Sendable {
         public let rejected: Rejection?
         /// Kept for the last place ahead of a result the site ranked higher, for naming the film's
         /// cinematographer (`CameraSources.aboutDecisions`).
-        public var namesCinematographer = false
+        public var promotedForName = false
+        /// The result the site ranked in the last place, left over the limit for one that names
+        /// the film's cinematographer.
+        public var displacedForName = false
     }
 
     /// A magazine's own search.
@@ -210,13 +213,16 @@ public struct DiscoveryTrace: Equatable, Sendable {
     static func hitLines(_ hits: [Hit], titled: Bool = true) -> [String] {
         var lines: [String] = []
         for hit in hits where hit.rejected == nil {
-            let label = hit.namesCinematographer ? "  kept, ahead of the site's order for naming the cinematographer: " : "  kept: "
+            let label = hit.promotedForName ? "  kept, ahead of the site's order for naming the cinematographer: " : "  kept: "
             lines.append(label + (titled && !hit.title.isEmpty ? "\(hit.title) — " : "") + hit.url)
         }
         for reason in Rejection.allCases {
             let left = hits.filter { $0.rejected == reason }
-            for hit in left.prefix(examples) {
-                lines.append("  left out (\(reason.rawValue)): " + (titled && !hit.title.isEmpty ? "\(hit.title) — " : "") + hit.url)
+            // The result whose place went to one naming the cinematographer, always listed.
+            let shown = left.filter(\.displacedForName) + left.filter { !$0.displacedForName }.prefix(examples - left.filter(\.displacedForName).count)
+            for hit in shown {
+                lines.append("  left out (\(reason.rawValue)): " + (titled && !hit.title.isEmpty ? "\(hit.title) — " : "") + hit.url
+                             + (hit.displacedForName ? " (its place went to a result naming the cinematographer)" : ""))
             }
             if left.count > examples { lines.append("  … and \(left.count - examples) more \(reason.rawValue)") }
         }
