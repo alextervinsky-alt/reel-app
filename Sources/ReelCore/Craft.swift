@@ -73,11 +73,16 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 3: nothing found differently; each reading's log says how its pages were found (DISCOVERY), so
     /// those films are read once more to have it, their tags kept or dropped by the usual rules
     /// (`findingChanged`).
-    public static let currentDiscovery = 3
-    /// The last discovery version that changed what's found: a reading found by an earlier one is
-    /// replaced whole by a newer one (what it no longer reads is gone). From there on, a newer
-    /// discovery version only adds to the log, and a tag not found again is carried or dropped as
-    /// for any reading (its site didn't answer: carried).
+    /// 4: of the magazines' search results that name the film, the last place goes to one naming
+    /// the film's cinematographer, when one is beyond it (`CameraSources.aboutDecisions`); read
+    /// again by the usual rules too.
+    public static let currentDiscovery = 4
+    /// A reading found before this discovery version is replaced whole by a newer one (what it no
+    /// longer reads is gone): finding changed then in ways the rules for one tag couldn't follow.
+    /// From there on, a reading read again by a newer discovery version is merged tag by tag like
+    /// any other: a tag not found again is carried while its site didn't answer or its page isn't
+    /// found again (up to `maxRetries` readings), and dropped when its page was read again and
+    /// doesn't say so, so a site that's down never costs a tag.
     public static let findingChanged = 2
     /// Read again after half a year (new interviews appear).
     public static let maxAge: TimeInterval = 182 * 86_400

@@ -438,30 +438,83 @@ public enum CameraSources {
     /// Search results whose title (or address) names the film, and no other film of its collection,
     /// each once, at most `limit`.
     static func about(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
-                      limit: Int, otherTitles: [String] = []) -> [(url: URL, site: String, title: String?)] {
-        aboutDecisions(filmTitle, in: hits, site: site, limit: limit, otherTitles: otherTitles).found
+                      limit: Int, otherTitles: [String] = [], cinematographers: [String] = []) -> [(url: URL, site: String, title: String?)] {
+        aboutDecisions(filmTitle, in: hits, site: site, limit: limit, otherTitles: otherTitles, cinematographers: cinematographers).found
     }
 
     /// `about`, with what became of every result, in the site's order (for the discovery trace).
+    /// The results kept: those that name the film and no other film of its collection, each
+    /// article once, in the site's order; then, when there are more than `limit`, the first
+    /// `limit - 1` as the site ranked them and, for the last place, the one that names the film's
+    /// cinematographer most plainly (`namesCinematographer`: the whole name over the surname alone),
+    /// the earliest among equals. With no such result the last place goes to the next in the
+    /// site's order, as before. The name only decides which of the results already kept is asked
+    /// for: it never keeps a result the rules above leave out, and the page is still read only
+    /// when it names the film's people or year (`namesFilm`).
     static func aboutDecisions(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
-                               limit: Int, otherTitles: [String] = [])
+                               limit: Int, otherTitles: [String] = [], cinematographers: [String] = [])
         -> (found: [(url: URL, site: String, title: String?)], decisions: [DiscoveryTrace.Hit]) {
         var found: [(url: URL, site: String, title: String?)] = []
         var rejected: [Int: DiscoveryTrace.Rejection] = [:]
         var foundAt: [Int] = []
+        // How plainly each result kept names the cinematographer (another address of the same
+        // article, left out as a duplicate, lends it its own).
+        var naming: [Int] = []
         for (index, hit) in hits.enumerated() {
             guard isAbout(title: filmTitle, articleTitle: hit.title, url: hit.link) else { rejected[index] = .notAboutFilm; continue }
             guard !namesOtherFilm(hit.title, link: hit.link, film: filmTitle, otherTitles: otherTitles) else { rejected[index] = .otherFilm; continue }
             guard let link = URL(string: hit.link).map(secure) else { rejected[index] = .notAnAddress; continue }
-            guard !found.contains(where: { identity($0.url) == identity(link) }) else { rejected[index] = .duplicate; continue }
+            let names = namesCinematographer(title: hit.title, link: hit.link, cinematographers: cinematographers)
+            if let same = found.firstIndex(where: { identity($0.url) == identity(link) }) {
+                rejected[index] = .duplicate
+                naming[same] = max(naming[same], names)
+                continue
+            }
             found.append((link, site, HTMLText.plain(hit.title)))
             foundAt.append(index)
+            naming.append(names)
         }
-        for index in foundAt.dropFirst(limit) { rejected[index] = .overLimit }
+        // Which of them are kept (by their place among those found).
+        var kept = Array(found.indices.prefix(max(limit - 1, 0)))
+        if kept.count < limit, let last = found.indices.dropFirst(kept.count)
+            .min(by: { naming[$0] != naming[$1] ? naming[$0] > naming[$1] : $0 < $1 }) {
+            kept.append(last)
+        }
+        var promoted: Set<Int> = []
+        for (place, index) in foundAt.enumerated() where !kept.contains(place) { rejected[index] = .overLimit }
+        // Kept ahead of a result the site ranked higher.
+        if let last = kept.last, last >= limit { promoted.insert(foundAt[last]) }
         let decisions = hits.enumerated().map { index, hit in
-            DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.link, rejected: rejected[index])
+            DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.link, rejected: rejected[index],
+                               namesCinematographer: promoted.contains(index))
         }
-        return (Array(found.prefix(limit)), decisions)
+        return (kept.map { found[$0] }, decisions)
+    }
+
+    /// How plainly a search result's title or address names one of the film's cinematographers:
+    /// 2 for the whole name ("Rodrigo Prieto ASC AMC / Barbie", ".../claudio-miranda-asc-acc-f1-…",
+    /// "Hong Kyung-pyo"), 1 for the surname alone as a word of its own ("Prieto on Barbie"; the
+    /// family name too when it comes first, "Hong"; a one-word name), 0 for neither. Words are
+    /// compared without regard to case, accents or punctuation, never as parts of other words
+    /// ("Porter" isn't in "Hollywood Reporter"). Only which result is asked for depends on it.
+    public static func namesCinematographer(title: String, link: String, cinematographers: [String]) -> Int {
+        let heading = " " + fold(HTMLText.plain(title)) + " "
+        let address = " " + fold(URL(string: link)?.path ?? "") + " "
+        var best = 0
+        for person in cinematographers {
+            // Each written word of the name, folded ("Kyung-pyo" → "kyung pyo"), without "Jr.".
+            let words = person.split(separator: " ").map { fold(String($0)) }
+                .filter { !$0.isEmpty && !["jr", "sr", "ii", "iii", "iv"].contains($0) }
+            guard let last = words.last else { continue }
+            let whole = words.joined(separator: " ")
+            var surnames = [last]
+            if words.count == 2, last.contains(" ") { surnames.append(words[0]) }
+            for text in [heading, address] {
+                if words.count > 1, text.contains(" " + whole + " ") { best = max(best, 2) }
+                if surnames.contains(where: { $0.count >= 3 && text.contains(" " + $0 + " ") }) { best = max(best, 1) }
+            }
+        }
+        return best
     }
 
     /// Whether a search result is about another film of the collection, by its title or its
@@ -662,8 +715,8 @@ public struct CameraSourcesClient: Sendable {
                      year: Int? = nil, otherTitles: [String] = []) async -> CameraReading {
         let unanswered = UnansweredSites()
         async let cited = citedSearch(articleTitle: articleTitle, cinematographers: cinematographers)
-        async let asc = ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
-        async let british = britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: unanswered)
+        async let asc = ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, cinematographers: cinematographers, noting: unanswered)
+        async let british = britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, cinematographers: cinematographers, noting: unanswered)
         async let stories = storySearch(filmTitle: filmTitle, cinematographers: cinematographers)
         async let person = cinematographerSearch(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
@@ -836,12 +889,13 @@ public struct CameraSourcesClient: Sendable {
     }
 
     /// American Cinematographer's articles about the film (its site has a free WordPress API).
-    func ascArticles(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async -> [(url: URL, site: String, title: String?)] {
-        await ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: noting).found
+    func ascArticles(filmTitle: String, otherTitles: [String] = [], cinematographers: [String] = [], noting: UnansweredSites? = nil) async
+        -> [(url: URL, site: String, title: String?)] {
+        await ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, cinematographers: cinematographers, noting: noting).found
     }
 
     /// `ascArticles`, with what the search brought and what became of each result.
-    func ascSearch(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async
+    func ascSearch(filmTitle: String, otherTitles: [String] = [], cinematographers: [String] = [], noting: UnansweredSites? = nil) async
         -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
         let limit = 3, perPage = 20
         var trace = DiscoveryTrace.Search(site: "American Cinematographer", query: filmTitle, outcome: .notAttempted("no address"),
@@ -875,7 +929,7 @@ public struct CameraSourcesClient: Sendable {
         let kinds = ["article", "post", "news"]
         let wanted = hits.filter { kinds.contains($0.subtype ?? "") }
         let decided = CameraSources.aboutDecisions(filmTitle, in: wanted.map { (title: $0.title, link: $0.url) }, site: "American Cinematographer",
-                                                   limit: limit, otherTitles: otherTitles)
+                                                   limit: limit, otherTitles: otherTitles, cinematographers: cinematographers)
         // Every result in the site's order: the wrong kinds left out first, the rest as `about`
         // decided (one decision for each result it was given, in order).
         var next = 0
@@ -890,12 +944,13 @@ public struct CameraSourcesClient: Sendable {
     }
 
     /// British Cinematographer's articles about the film (its site has a free WordPress API).
-    func britishCinematographer(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async -> [(url: URL, site: String, title: String?)] {
-        await britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, noting: noting).found
+    func britishCinematographer(filmTitle: String, otherTitles: [String] = [], cinematographers: [String] = [], noting: UnansweredSites? = nil) async
+        -> [(url: URL, site: String, title: String?)] {
+        await britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, cinematographers: cinematographers, noting: noting).found
     }
 
     /// `britishCinematographer`, with what the search brought and what became of each result.
-    func britishSearch(filmTitle: String, otherTitles: [String] = [], noting: UnansweredSites? = nil) async
+    func britishSearch(filmTitle: String, otherTitles: [String] = [], cinematographers: [String] = [], noting: UnansweredSites? = nil) async
         -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
         let limit = 2, perPage = 20
         var trace = DiscoveryTrace.Search(site: "British Cinematographer", query: filmTitle, outcome: .notAttempted("no address"),
@@ -925,7 +980,8 @@ public struct CameraSourcesClient: Sendable {
         }
         trace.outcome = .answered(hits.count)
         let decided = CameraSources.aboutDecisions(filmTitle, in: hits.map { (title: $0.title.rendered, link: $0.link) },
-                                                   site: "British Cinematographer", limit: limit, otherTitles: otherTitles)
+                                                   site: "British Cinematographer", limit: limit, otherTitles: otherTitles,
+                                                   cinematographers: cinematographers)
         trace.hits = decided.decisions
         return (decided.found, trace)
     }

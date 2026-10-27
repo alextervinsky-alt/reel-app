@@ -38,6 +38,9 @@ public struct DiscoveryTrace: Equatable, Sendable {
         public let url: String
         /// Nil when kept.
         public let rejected: Rejection?
+        /// Kept for the last place ahead of a result the site ranked higher, for naming the film's
+        /// cinematographer (`CameraSources.aboutDecisions`).
+        public var namesCinematographer = false
     }
 
     /// A magazine's own search.
@@ -207,7 +210,8 @@ public struct DiscoveryTrace: Equatable, Sendable {
     static func hitLines(_ hits: [Hit], titled: Bool = true) -> [String] {
         var lines: [String] = []
         for hit in hits where hit.rejected == nil {
-            lines.append("  kept: " + (titled && !hit.title.isEmpty ? "\(hit.title) — " : "") + hit.url)
+            let label = hit.namesCinematographer ? "  kept, ahead of the site's order for naming the cinematographer: " : "  kept: "
+            lines.append(label + (titled && !hit.title.isEmpty ? "\(hit.title) — " : "") + hit.url)
         }
         for reason in Rejection.allCases {
             let left = hits.filter { $0.rejected == reason }

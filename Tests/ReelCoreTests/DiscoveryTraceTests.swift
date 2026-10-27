@@ -338,7 +338,7 @@ final class DiscoveryTraceTests: XCTestCase {
                                              source: "British Cinematographer")
         var old = CraftIndex(shotOn: [.film, .anamorphic], names: [], evidence: [anamorphic], sources: 4, discovery: 2)
         let new = CraftIndex(shotOn: [.film], names: [], sources: 3, unanswered: ["British Cinematographer"])
-        XCTAssertEqual(new.discovery, 3)
+        XCTAssertEqual(new.discovery, CraftIndex.currentDiscovery)
         let merged = CraftIndex.merging(old: old, new: new)
         XCTAssertEqual(Set(merged.index.shotOn), [.film, .anamorphic])
         XCTAssertEqual(merged.carried.map(\.shotOn), [.anamorphic])
@@ -346,6 +346,9 @@ final class DiscoveryTraceTests: XCTestCase {
         // Not found again with every site answering: carried as for any reading (same rules), not dropped whole.
         let answered = CraftIndex.merging(old: old, new: CraftIndex(shotOn: [.film], names: [], sources: 3))
         XCTAssertEqual(answered.carried.map(\.shotOn), [.anamorphic])
+        // Nor from discovery 3 (1.10.0) to 4.
+        old.discovery = 3
+        XCTAssertEqual(CraftIndex.merging(old: old, new: new).carried.map(\.shotOn), [.anamorphic])
         // A reading found before discovery 2 is still replaced whole.
         old.discovery = 1
         let replaced = CraftIndex.merging(old: old, new: new)
@@ -353,14 +356,14 @@ final class DiscoveryTraceTests: XCTestCase {
         XCTAssertEqual(replaced.dropped.map(\.reason), ["found again a better way, which no longer reads its source"])
     }
 
-    /// Discovery 3: the thin readings and collection films are read again, the rest aren't.
-    func testDiscoveryThreeReadsAgainOnlyThinReadingsAndCollectionFilms() {
-        XCTAssertEqual(CraftIndex.currentDiscovery, 3)
+    /// Discovery 4 (as 3 before it): the thin readings and collection films are read again, the rest aren't.
+    func testANewDiscoveryReadsAgainOnlyThinReadingsAndCollectionFilms() {
+        XCTAssertEqual(CraftIndex.currentDiscovery, 4)
         XCTAssertEqual(CraftIndex.currentVersion, 11, "no rule changed")
         let now = Date()
         func reading(sources: Int, tags: [ShotOn]) -> CraftIndex {
             var index = CraftIndex(version: 11, readAt: now, shotOn: tags, names: [], sources: sources)
-            index.discovery = 2
+            index.discovery = 3
             return index
         }
         let wikipediaOnly = reading(sources: 1, tags: [.film]), untagged = reading(sources: 4, tags: []), full = reading(sources: 4, tags: [.film])
