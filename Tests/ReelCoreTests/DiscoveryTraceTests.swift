@@ -160,6 +160,7 @@ final class DiscoveryTraceTests: XCTestCase {
             "  No Film School: https://nofilmschool.com/the-quiet-harbour-cinematography — gone: not found over HTTPS (404)",
             "• The cinematographer's Wikipedia article: Jane Doe — 1 paragraph naming the film, read with the rest",
             "• Pages: 8 kept above; 1 found twice, asked for once; 1 another address of an article kept (under NOT READ); 6 asked for; at most 6 read (see READ and NOT READ)",
+            "• American Cinematographer, one more result (only when every result kept was another film's; kept: 1 another film's, 1 read, 1 too little text): not asked for: not every result kept was another film's",
         ])
         // The sections that were there before say what they said.
         XCTAssertTrue(log.contains("\nNOT READ\n• American Cinematographer: "), log)
@@ -358,12 +359,12 @@ final class DiscoveryTraceTests: XCTestCase {
 
     /// Discovery 4 (as 3 before it): the thin readings and collection films are read again, the rest aren't.
     func testANewDiscoveryReadsAgainOnlyThinReadingsAndCollectionFilms() {
-        XCTAssertEqual(CraftIndex.currentDiscovery, 4)
+        XCTAssertEqual(CraftIndex.currentDiscovery, 5)
         XCTAssertEqual(CraftIndex.currentVersion, 11, "no rule changed")
         let now = Date()
         func reading(sources: Int, tags: [ShotOn]) -> CraftIndex {
             var index = CraftIndex(version: 11, readAt: now, shotOn: tags, names: [], sources: sources)
-            index.discovery = 3
+            index.discovery = 4
             return index
         }
         let wikipediaOnly = reading(sources: 1, tags: [.film]), untagged = reading(sources: 4, tags: []), full = reading(sources: 4, tags: [.film])

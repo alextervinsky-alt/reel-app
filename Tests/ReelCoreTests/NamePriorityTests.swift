@@ -52,6 +52,8 @@ enum NamePriorityFixtures {
             ("On the Fast Track for F1: The Movie", "https://theasc.com/article/on-the-fast-track-for-f1-the-movie/", "article"),
         ]))
         StandInSite.route("theasc.com", "viltrox", body: F.page("Viltrox", standIn("Lens news")))
+        // Asked for from 1.10.2 on, when the three kept are all another film's (FallbackTests).
+        StandInSite.route("theasc.com", "on-the-fast-track", body: F.page("On the Fast Track", standIn("Claudio Miranda ASC ACC on F1")))
         StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: F.bcHits([
             ("LK Samyang expands Prima Series with new AF 35mm F1.8 P FE lens",
              "https://britishcinematographer.co.uk/lk-samyang-expands-prima-series-with-new-af-35mm-f1-8-p-fe-lens/"),
@@ -129,16 +131,16 @@ final class NamePriorityTests: XCTestCase {
         XCTAssertEqual(reasons(trace.searches[1].hits), [nil, .overLimit, nil])
         XCTAssertEqual(trace.searches[1].hits.map(\.promotedForName), [false, false, true])
         // American Cinematographer: no result names Miranda, so the order is the site's, as before.
-        // "On the Fast Track for F1: The Movie" names the film but not him: still over the limit
-        // (reading it would take another request, not this change).
+        // "On the Fast Track for F1: The Movie" names the film but not him: over the limit for the
+        // name; from 1.10.2 it's the one further result asked for (FallbackTests).
         XCTAssertEqual(reasons(trace.searches[0].hits), [nil, nil, nil, .overLimit])
         XCTAssertEqual(trace.searches[0].hits.map(\.promotedForName), [false, false, false, false])
-        XCTAssertFalse(asked("theasc.com").contains { $0.contains("on-the-fast-track") })
-        // Requests: one search and three pages there, one search and two pages here, as before.
-        XCTAssertEqual(asked("theasc.com").count, 4)
+        // Requests: one search and three pages there (and the one further result), one search and two pages here.
+        XCTAssertEqual(asked("theasc.com").count, 5)
         XCTAssertEqual(asked("britishcinematographer.co.uk").count, 3)
         XCTAssertEqual(trace.assembly.asked.count, 5)
-        XCTAssertEqual(reading.sources.map(\.url.absoluteString), ["https://britishcinematographer.co.uk/claudio-miranda-asc-acc-f1-the-movie/"])
+        XCTAssertEqual(reading.sources.map(\.url.absoluteString), ["https://britishcinematographer.co.uk/claudio-miranda-asc-acc-f1-the-movie/",
+                                                                   "https://theasc.com/article/on-the-fast-track-for-f1-the-movie/"])
         // The lens news is still left out after it's read: it doesn't name Miranda.
         XCTAssertEqual(reading.skipped.filter { $0.reason.hasPrefix("another film of that title") }.count, 4)
     }
@@ -152,7 +154,7 @@ final class NamePriorityTests: XCTestCase {
         ])
         let reading = await client().read(articleTitle: nil, filmTitle: "F1", cinematographers: ["Claudio Miranda"],
                                           directors: ["Joseph Kosinski"], year: 2025)
-        XCTAssertTrue(reading.sources.isEmpty)
+        XCTAssertFalse(reading.sources.contains { $0.url.absoluteString.contains("claudio-miranda") })
         XCTAssertTrue(reading.skipped.contains {
             $0.source.url.absoluteString.contains("claudio-miranda") && $0.reason.hasPrefix("another film of that title")
         })

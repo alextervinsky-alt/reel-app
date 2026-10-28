@@ -76,7 +76,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 4: of the magazines' search results that name the film, the last place goes to one naming
     /// the film's cinematographer, when one is beyond it (`CameraSources.aboutDecisions`); read
     /// again by the usual rules too.
-    public static let currentDiscovery = 4
+    /// 5: when every result American Cinematographer's search kept turns out to be another film's,
+    /// the next result naming the film is asked for (one page, from the same answer;
+    /// `CameraSourcesClient.furtherResult`).
+    public static let currentDiscovery = 5
     /// A reading found before this discovery version is replaced whole by a newer one (what it no
     /// longer reads is gone): finding changed then in ways the rules for one tag couldn't follow.
     /// From there on, a reading read again by a newer discovery version is merged tag by tag like

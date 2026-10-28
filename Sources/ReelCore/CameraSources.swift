@@ -453,7 +453,8 @@ public enum CameraSources {
     /// when it names the film's people or year (`namesFilm`).
     static func aboutDecisions(_ filmTitle: String, in hits: [(title: String, link: String)], site: String,
                                limit: Int, otherTitles: [String] = [], cinematographers: [String] = [])
-        -> (found: [(url: URL, site: String, title: String?)], decisions: [DiscoveryTrace.Hit]) {
+        -> (found: [(url: URL, site: String, title: String?)], decisions: [DiscoveryTrace.Hit],
+            spare: [(url: URL, site: String, title: String?)]) {
         var found: [(url: URL, site: String, title: String?)] = []
         var rejected: [Int: DiscoveryTrace.Rejection] = [:]
         var foundAt: [Int] = []
@@ -489,7 +490,9 @@ public enum CameraSources {
             DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.link, rejected: rejected[index],
                                promotedForName: index == promoted, displacedForName: index == displaced)
         }
-        return (kept.map { found[$0] }, decisions)
+        // The rest that name the film, left out only by the limit, in the site's order.
+        let spare = found.indices.filter { !kept.contains($0) }.map { found[$0] }
+        return (kept.map { found[$0] }, decisions, spare)
     }
 
     /// How plainly a search result's title or address names one of the film's cinematographers:
@@ -724,6 +727,7 @@ public struct CameraSourcesClient: Sendable {
         // then what Wikipedia cites; each page once, however its address is written.
         let ascFound = await asc, britishFound = await british
         let searchedLinks = ascFound.found.map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
+        let spare = ascFound.spare.map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
         let fromSites = britishFound.found.map { (url: $0.url, site: $0.site, title: $0.title, cited: URL?.none) }
         // Asked for in the same order as before the trace: Wikipedia's links, the stories, the person.
         let citedFound = await cited, storiesFound = await stories, personFound = await person
@@ -735,14 +739,88 @@ public struct CameraSourcesClient: Sendable {
         trace.person = personFound.trace
         return await reading(searched: searchedLinks, fromSites: fromSites, fromArticle: citedFound.links, stories: storiesFound.found,
                              person: personFound.person, cinematographers: cinematographers, directors: directors, year: year,
-                             unanswered: unanswered, trace: trace)
+                             unanswered: unanswered, trace: trace, spare: spare)
+    }
+
+    /// American Cinematographer's next result. When every result its search kept was fetched and
+    /// turned out to be another film's (the page doesn't name the film's cinematographer, director
+    /// or year: lens news for "F1", another "Hope"), the first result after them that names the film
+    /// too, left out only by the limit, is asked for: one page, from the same answer, no new search;
+    /// not an address already among the pages found; only while fewer than eight pages were asked
+    /// for and six read. It's read like any page found by searching, or left out like one. Nothing
+    /// else starts it: a page read (tag or no tag), too thin, about another craft, gone, refused or
+    /// not answering means the search's choice wasn't shown wrong. A page that doesn't answer isn't
+    /// noted to read again: it's this reading's second choice.
+    func furtherResult(searched: [CameraSources.Link], spare: [CameraSources.Link],
+                       pages: [(Int, CameraReading.Source?, CameraReading.Source, SourceFailure?)], otherFilm: Set<URL>,
+                       read: [CameraReading.Source], known: [CameraSources.Link], cinematographers: [String], directors: [String],
+                       year: Int?) async
+        -> (read: CameraReading.Source?, more: CameraReading.Source?, skipped: CameraReading.Skipped?, trace: DiscoveryTrace.Fallback?) {
+        guard !searched.isEmpty else { return (nil, nil, nil, nil) }
+        // What became of each result the search kept, as the reading decided.
+        let picks: [DiscoveryTrace.Fallback.Pick] = searched.map { link in
+            guard let page = pages.first(where: { CameraSources.identity($0.2.url) == CameraSources.identity(link.url) }) else { return .notAsked }
+            guard let source = page.1 else { return .notLoaded }
+            if otherFilm.contains(source.url) { return .anotherFilm }
+            if read.contains(where: { $0.url == source.url }) { return .read }
+            if source.paragraphs.count < 3 { return .thin }
+            if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers) { return .otherCraft }
+            return .beyondReadLimit
+        }
+        var trace = DiscoveryTrace.Fallback(picks: picks, result: .notTried("not every result kept was another film's"))
+        guard picks.allSatisfy({ $0 == .anotherFilm }) else { return (nil, nil, nil, trace) }
+        let knownIdentities = Set(known.map { CameraSources.identity($0.url) })
+        let passedOver = spare.filter { knownIdentities.contains(CameraSources.identity($0.url)) }
+        trace.alreadyFound = passedOver.map(\.url.absoluteString)
+        guard let link = spare.first(where: { !knownIdentities.contains(CameraSources.identity($0.url)) }) else {
+            trace.result = .notTried(spare.isEmpty ? "no other result naming the film beyond the limit"
+                                                   : "the other results naming the film are already among the pages found")
+            return (nil, nil, nil, trace)
+        }
+        trace.title = link.title ?? ""
+        trace.url = link.url.absoluteString
+        guard pages.count < CameraSources.askLimit else {
+            trace.result = .notTried("the \(CameraSources.askLimit) pages to ask for were all asked for")
+            return (nil, nil, nil, trace)
+        }
+        guard read.count < CameraSources.readLimit else {
+            trace.result = .notTried("\(CameraSources.readLimit) pages were already read")
+            return (nil, nil, nil, trace)
+        }
+        let note = " (a further result, asked for because every result the search kept was another film's)"
+        var stand = CameraReading.Source(title: link.title ?? link.site, site: link.site, url: link.url, paragraphs: [])
+        stand.cited = link.cited
+        let got = await page(link.url, site: link.site, title: link.title)
+        guard let source = got.source else {
+            let why = Self.notRetried(got.failure?.reason ?? "couldn't be read")
+            trace.result = .unavailable(why)
+            // A page that doesn't answer isn't kept as a limit to read again for (nothing would
+            // plan it); one that's gone or refused is, like any page found.
+            let limit: CraftIndex.SourceLimit.Kind? = got.failure.map { $0.limit.retried ? nil : $0.limit } ?? .unknown
+            return (nil, stand, CameraReading.Skipped(source: stand, reason: why + note, limit: limit), trace)
+        }
+        if !CameraSources.namesFilm(source.paragraphs, cinematographers: cinematographers, directors: directors, year: year) {
+            trace.result = .anotherFilm
+            return (nil, nil, CameraReading.Skipped(source: source, reason: "another film of that title: it doesn't name the film's cinematographer, director or year" + note), trace)
+        }
+        if source.paragraphs.count < 3 {
+            trace.result = .notRead("too little text to read")
+            return (nil, source, CameraReading.Skipped(source: source, reason: "too little text to read" + note, limit: .thin), trace)
+        }
+        if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers) {
+            trace.result = .notRead("an interview about another craft")
+            return (nil, source, CameraReading.Skipped(source: source, reason: "an interview about another craft (editing, music, design)" + note), trace)
+        }
+        trace.result = .read
+        return (source, nil, nil, trace)
     }
 
     /// The pages found, read: each article once (see `CameraSources.merge`), at most eight asked
     /// for and six read, and why each of the rest wasn't.
     func reading(searched searchedLinks: [CameraSources.Link], fromSites: [CameraSources.Link], fromArticle: [CameraSources.Link],
                  stories storiesRead: [CameraReading.Source], person: CameraReading.Cinematographer?, cinematographers: [String],
-                 directors: [String], year: Int?, unanswered: UnansweredSites, trace: DiscoveryTrace? = nil) async -> CameraReading {
+                 directors: [String], year: Int?, unanswered: UnansweredSites, trace: DiscoveryTrace? = nil,
+                 spare: [CameraSources.Link] = []) async -> CameraReading {
         var links = searchedLinks
         // Found by searching the magazines for the title (not cited by the film's own article):
         // read only when the page names the film's people or year.
@@ -774,8 +852,8 @@ public struct CameraSourcesClient: Sendable {
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) } }
         let readable = found.filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
-        let read = Array(readable.prefix(CameraSources.readLimit))
-        let more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
+        var read = Array(readable.prefix(CameraSources.readLimit))
+        var more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
         // Why each page found wasn't read.
         func reason(_ page: CameraReading.Source) -> String {
             if otherFilm.contains(page.url) { return "another film of that title: it doesn't name the film's cinematographer, director or year" }
@@ -791,6 +869,14 @@ public struct CameraSourcesClient: Sendable {
             skipped.append(CameraReading.Skipped(source: page ?? fallback,
                                                  reason: page.map(reason) ?? failure?.reason ?? "couldn't be read", limit: limit))
         }
+        // American Cinematographer's next result, when every one its search kept was another film's.
+        let further = await furtherResult(searched: searchedLinks, spare: spare, pages: pages, otherFilm: otherFilm, read: read,
+                                          known: links + merged.aliases + merged.foundTwice + storiesRead.map {
+                                              (url: $0.url, site: $0.site, title: $0.title, cited: $0.cited) },
+                                          cinematographers: cinematographers, directors: directors, year: year)
+        if let page = further.read { read.append(page) }
+        if let more1 = further.more { more.append(more1) }
+        if let skip = further.skipped { skipped.append(skip) }
         // The same article under another address: not asked for again, with what became of the one
         // that was (read, or its own failure or limit, which stands for both).
         for alias in merged.aliases {
@@ -820,6 +906,7 @@ public struct CameraSourcesClient: Sendable {
             trace.assembly.guessed = storiesRead.filter { story in
                 !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }
             }.count
+            trace.fallback = further.trace
             reading.discovery = trace
         }
         return reading
@@ -897,7 +984,8 @@ public struct CameraSourcesClient: Sendable {
 
     /// `ascArticles`, with what the search brought and what became of each result.
     func ascSearch(filmTitle: String, otherTitles: [String] = [], cinematographers: [String] = [], noting: UnansweredSites? = nil) async
-        -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search) {
+        -> (found: [(url: URL, site: String, title: String?)], trace: DiscoveryTrace.Search,
+            spare: [(url: URL, site: String, title: String?)]) {
         let limit = 3, perPage = 20
         var trace = DiscoveryTrace.Search(site: "American Cinematographer", query: filmTitle, outcome: .notAttempted("no address"),
                                           limit: limit, requestLimit: perPage)
@@ -911,12 +999,12 @@ public struct CameraSourcesClient: Sendable {
         // BSC: Lighting Sicario" is a post). Not its pages or videos, which have little to read.
         var components = URLComponents(string: "https://theasc.com/wp-json/wp/v2/search")!
         components.queryItems = [URLQueryItem(name: "search", value: filmTitle), URLQueryItem(name: "per_page", value: "\(perPage)")]
-        guard let url = components.url else { return ([], trace) }
+        guard let url = components.url else { return ([], trace, []) }
         let data: Data
         switch await fetch(url, accept: "application/json", site: "American Cinematographer", noting: noting) {
         case .failed(let failure):
             trace.outcome = .failed(failure.reason)
-            return ([], trace)
+            return ([], trace, [])
         case .page(let answer, _):
             data = answer
         }
@@ -924,7 +1012,7 @@ public struct CameraSourcesClient: Sendable {
         guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
             await noting?.add("American Cinematographer")
             trace.outcome = .notASearchAnswer
-            return ([], trace)
+            return ([], trace, [])
         }
         trace.outcome = .answered(hits.count)
         let kinds = ["article", "post", "news"]
@@ -941,7 +1029,7 @@ public struct CameraSourcesClient: Sendable {
             defer { next += 1 }
             return decided.decisions[next]
         }
-        return (decided.found, trace)
+        return (decided.found, trace, decided.spare)
     }
 
     /// British Cinematographer's articles about the film (its site has a free WordPress API).

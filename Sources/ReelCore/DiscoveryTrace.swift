@@ -123,6 +123,66 @@ public struct DiscoveryTrace: Equatable, Sendable {
     public var guesses: [Guess] = []
     public var person: Person?
     public var assembly = Assembly()
+    /// American Cinematographer's next result, asked for only when every result its search kept
+    /// turned out to be another film's (`CameraSourcesClient.furtherResult`).
+    public var fallback: Fallback?
+
+    public struct Fallback: Equatable, Sendable {
+        /// What became of a result the search kept.
+        public enum Pick: String, Equatable, Sendable {
+            case anotherFilm = "another film's"
+            case read = "read"
+            case thin = "too little text"
+            case otherCraft = "another craft"
+            case notLoaded = "didn't load"
+            case beyondReadLimit = "beyond the six read"
+            case notAsked = "not asked for"
+
+            static let allKinds: [Pick] = [.anotherFilm, .read, .thin, .otherCraft, .notLoaded, .beyondReadLimit, .notAsked]
+        }
+        public enum Result: Equatable, Sendable {
+            /// Not asked for, and why (the search's choices weren't all another film's, no result
+            /// left, the pages to ask for or read used up).
+            case notTried(String)
+            /// Asked for, and it didn't load (the failure's own words).
+            case unavailable(String)
+            /// Loaded, and another film's too: no further result is tried.
+            case anotherFilm
+            /// Loaded, about the film, not read (too thin, another craft).
+            case notRead(String)
+            case read
+        }
+        public var picks: [Pick]
+        /// The result asked for, or that would have been.
+        public var title: String?
+        public var url: String?
+        /// Further results passed over: already among the pages found, by address or article.
+        public var alreadyFound: [String] = []
+        public var result: Result
+
+        public init(picks: [Pick], result: Result) {
+            self.picks = picks
+            self.result = result
+        }
+
+        func lines() -> [String] {
+            let counts = Pick.allKinds.compactMap { kind -> String? in
+                let n = picks.filter { $0 == kind }.count
+                return n == 0 ? nil : "\(n) \(kind.rawValue)"
+            }
+            var head = "• American Cinematographer, one more result (only when every result kept was another film's; kept: "
+                + counts.joined(separator: ", ") + "): "
+            let page = url.map { (title.map { $0.isEmpty ? "" : "\($0) — " } ?? "") + $0 } ?? ""
+            switch result {
+            case .notTried(let why): head += "not asked for: \(why)" + (page.isEmpty ? "" : " (it would have been \(page))")
+            case .unavailable(let why): head += "\(page): \(why)"
+            case .anotherFilm: head += "\(page): another film's too; no further result tried"
+            case .notRead(let why): head += "\(page): \(why), not read"
+            case .read: head += "\(page): read (see READ)"
+            }
+            return [head] + alreadyFound.map { "  passed over (already among the pages found): \($0)" }
+        }
+    }
 
     public init() {}
 
@@ -185,6 +245,7 @@ public struct DiscoveryTrace: Equatable, Sendable {
         lines.append(pages)
         for url in a.overLimit.prefix(Self.examples) { lines.append("  not asked for (over the limit): \(url)") }
         if a.overLimit.count > Self.examples { lines.append("  … and \(a.overLimit.count - Self.examples) more") }
+        if let fallback { lines += fallback.lines() }
         return lines
     }
 
