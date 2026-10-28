@@ -11,7 +11,7 @@ enum FallbackFixtures {
     typealias F = DiscoveryFixtures
 
     enum Answer {
-        case lens, about, thin
+        case lens, shortLens, about, thin
         case status(Int)
         case fail(Int)
     }
@@ -29,6 +29,12 @@ enum FallbackFixtures {
         let path = URL(string: url)!.path
         switch answer {
         case .lens: StandInSite.route(host, path, body: F.page("Lens news", NamePriorityFixtures.standIn("Lens news")))
+        // As the real Viltrox items are: two paragraphs long enough to read, and a price line.
+        case .shortLens: StandInSite.route(host, path, body: F.page("Lens news", [
+            "The made-up lens in this news item is a fast prime for mirrorless cameras, shown at a trade fair.",
+            "It has fifteen elements in ten groups, a quiet focusing motor and a de-clickable aperture ring for video.",
+            "It lists for $999.",
+        ]))
         case .about: StandInSite.route(host, path, body: F.page("F1", NamePriorityFixtures.standIn("Claudio Miranda ASC ACC on F1")))
         case .thin: StandInSite.route(host, path, body: F.page("F1", ["Claudio Miranda ASC ACC on F1, in one made-up paragraph standing in for a short page."]))
         case .status(let code): StandInSite.route(host, path, status: code, body: "<p>Not here</p>")
@@ -110,6 +116,15 @@ final class FallbackTests: XCTestCase {
         var details = TMDBMovieDetails(id: 42, title: "F1", releaseDate: "2025-06-27")
         details.credits = TMDBCredits(cast: [], crew: [TMDBCrewMember(name: "Claudio Miranda", job: "Director of Photography")])
         XCTAssertEqual(CraftReader.reading(of: details, articleTitle: nil, article: nil, reading: reading, colour: nil).index.shotOn, [])
+    }
+
+    /// The real lens-news items are short (two paragraphs Reel reads): still another film's, so
+    /// the further result is asked for.
+    func testShortLensNewsStillCountsAsAnotherFilms() async {
+        FallbackFixtures.f1(picks: [.shortLens, .shortLens, .shortLens])
+        let reading = await readF1()
+        XCTAssertEqual(reading.discovery?.fallback?.picks, [.anotherFilm, .anotherFilm, .anotherFilm])
+        XCTAssertEqual(reading.discovery?.fallback?.result, .read)
     }
 
     // MARK: B. A page read: no further result

@@ -763,8 +763,9 @@ public struct CameraSourcesClient: Sendable {
         let picks: [DiscoveryTrace.Fallback.Pick] = searched.map { link in
             guard let page = pages.first(where: { CameraSources.identity($0.2.url) == CameraSources.identity(link.url) }) else { return .notAsked }
             guard let source = page.1 else { return .notLoaded }
-            // Too little text to tell whose it is (an empty page, a sign-in), not shown to be another film's.
-            if otherFilm.contains(source.url) { return source.paragraphs.count < 3 ? .thin : .anotherFilm }
+            // No text to tell whose it is (an empty page, a sign-in): not shown to be another film's.
+            // A short page is (American Cinematographer's lens news runs to two paragraphs Reel reads).
+            if otherFilm.contains(source.url) { return source.paragraphs.isEmpty ? .thin : .anotherFilm }
             if read.contains(where: { $0.url == source.url }) { return .read }
             if source.paragraphs.count < 3 { return .thin }
             if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers) { return .otherCraft }
