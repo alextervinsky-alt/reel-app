@@ -163,13 +163,17 @@ final class FallbackTests: XCTestCase {
 
     /// Of the further results, one naming the cinematographer before the site's order.
     func testTheFurtherResultNamingTheCinematographerComesFirst() async {
-        let hits = FallbackFixtures.lensNews.map { ($0.title, $0.url, "article") } + [
+        // The last place already went to a result naming him (1.10.1), whose page turned out to be
+        // lens news; of the two left, the one naming him is asked for, not the site's next.
+        let hits = FallbackFixtures.lensNews.prefix(2).map { ($0.title, $0.url, "article") } + [
+            ("Claudio Miranda picks his F1.2 primes", "https://theasc.com/article/miranda-picks-f1-2-primes/", "article"),
             ("F1.4 primes compared", "https://theasc.com/article/f1-4-primes-compared/", "article"),
             ("Claudio Miranda, ASC, ACC on F1", "https://theasc.com/article/claudio-miranda-f1/", "article"),
         ]
         StandInSite.reset()
         StandInSite.route("theasc.com", "wp-json/wp/v2/search", body: DiscoveryFixtures.ascHits(hits))
-        for hit in FallbackFixtures.lensNews { FallbackFixtures.route(hit.url, .lens) }
+        for hit in FallbackFixtures.lensNews.prefix(2) { FallbackFixtures.route(hit.url, .lens) }
+        FallbackFixtures.route("https://theasc.com/article/miranda-picks-f1-2-primes/", .lens)
         FallbackFixtures.route("https://theasc.com/article/claudio-miranda-f1/", .about)
         StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: "[]")
         StandInSite.route("en.wikipedia.org", "prop=extracts", body: DiscoveryFixtures.missingArticle)
