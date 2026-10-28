@@ -44,6 +44,8 @@ public struct DiscoveryTrace: Equatable, Sendable {
         /// The result the site ranked in the last place, left over the limit for one that names
         /// the film's cinematographer.
         public var displacedForName = false
+        /// Over the limit, then asked for as American Cinematographer's one further result.
+        public var askedAsFurther = false
     }
 
     /// A magazine's own search.
@@ -159,6 +161,9 @@ public struct DiscoveryTrace: Equatable, Sendable {
         /// Further results passed over: already among the pages found, by address or article.
         public var alreadyFound: [String] = []
         public var result: Result
+
+        /// Whether the further result was asked for (whatever became of it).
+        public var wasAsked: Bool { if case .notTried = result { return false } else { return true } }
 
         public init(picks: [Pick], result: Result) {
             self.picks = picks
@@ -280,10 +285,12 @@ public struct DiscoveryTrace: Equatable, Sendable {
         for reason in Rejection.allCases {
             let left = hits.filter { $0.rejected == reason }
             // The result whose place went to one naming the cinematographer, always listed.
-            let shown = left.filter(\.displacedForName) + left.filter { !$0.displacedForName }.prefix(examples - left.filter(\.displacedForName).count)
+            let marked = left.filter { $0.displacedForName || $0.askedAsFurther }
+            let shown = marked + left.filter { !$0.displacedForName && !$0.askedAsFurther }.prefix(max(examples - marked.count, 0))
             for hit in shown {
                 lines.append("  left out (\(reason.rawValue)): " + (titled && !hit.title.isEmpty ? "\(hit.title) — " : "") + hit.url
-                             + (hit.displacedForName ? " (its place went to a result naming the cinematographer)" : ""))
+                             + (hit.displacedForName ? " (its place went to a result naming the cinematographer)" : "")
+                             + (hit.askedAsFurther ? " (then asked for as the one further result: see below)" : ""))
             }
             if left.count > examples { lines.append("  … and \(left.count - examples) more \(reason.rawValue)") }
         }

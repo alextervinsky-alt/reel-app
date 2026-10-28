@@ -490,8 +490,10 @@ public enum CameraSources {
             DiscoveryTrace.Hit(title: HTMLText.plain(hit.title), url: hit.link, rejected: rejected[index],
                                promotedForName: index == promoted, displacedForName: index == displaced)
         }
-        // The rest that name the film, left out only by the limit, in the site's order.
-        let spare = found.indices.filter { !kept.contains($0) }.map { found[$0] }
+        // The rest that name the film, left out only by the limit: those naming the cinematographer
+        // most plainly first, then in the site's order.
+        let spare = found.indices.filter { !kept.contains($0) }
+            .sorted { naming[$0] != naming[$1] ? naming[$0] > naming[$1] : $0 < $1 }.map { found[$0] }
         return (kept.map { found[$0] }, decisions, spare)
     }
 
@@ -754,14 +756,15 @@ public struct CameraSourcesClient: Sendable {
     func furtherResult(searched: [CameraSources.Link], spare: [CameraSources.Link],
                        pages: [(Int, CameraReading.Source?, CameraReading.Source, SourceFailure?)], otherFilm: Set<URL>,
                        read: [CameraReading.Source], known: [CameraSources.Link], cinematographers: [String], directors: [String],
-                       year: Int?) async
+                       year: Int?, unanswered: UnansweredSites? = nil) async
         -> (read: CameraReading.Source?, more: CameraReading.Source?, skipped: CameraReading.Skipped?, trace: DiscoveryTrace.Fallback?) {
         guard !searched.isEmpty else { return (nil, nil, nil, nil) }
         // What became of each result the search kept, as the reading decided.
         let picks: [DiscoveryTrace.Fallback.Pick] = searched.map { link in
             guard let page = pages.first(where: { CameraSources.identity($0.2.url) == CameraSources.identity(link.url) }) else { return .notAsked }
             guard let source = page.1 else { return .notLoaded }
-            if otherFilm.contains(source.url) { return .anotherFilm }
+            // Too little text to tell whose it is (an empty page, a sign-in), not shown to be another film's.
+            if otherFilm.contains(source.url) { return source.paragraphs.count < 3 ? .thin : .anotherFilm }
             if read.contains(where: { $0.url == source.url }) { return .read }
             if source.paragraphs.count < 3 { return .thin }
             if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers) { return .otherCraft }
@@ -769,6 +772,11 @@ public struct CameraSourcesClient: Sendable {
         }
         var trace = DiscoveryTrace.Fallback(picks: picks, result: .notTried("not every result kept was another film's"))
         guard picks.allSatisfy({ $0 == .anotherFilm }) else { return (nil, nil, nil, trace) }
+        // Nothing to know the film's page by: no further result could be shown to be its.
+        guard !cinematographers.isEmpty || (year != nil && !directors.isEmpty) else {
+            trace.result = .notTried("no cinematographer, or director and year, to know the film's page by")
+            return (nil, nil, nil, trace)
+        }
         let knownIdentities = Set(known.map { CameraSources.identity($0.url) })
         let passedOver = spare.filter { knownIdentities.contains(CameraSources.identity($0.url)) }
         trace.alreadyFound = passedOver.map(\.url.absoluteString)
@@ -790,13 +798,12 @@ public struct CameraSourcesClient: Sendable {
         let note = " (a further result, asked for because every result the search kept was another film's)"
         var stand = CameraReading.Source(title: link.title ?? link.site, site: link.site, url: link.url, paragraphs: [])
         stand.cited = link.cited
-        let got = await page(link.url, site: link.site, title: link.title)
+        // Like any page asked for: a site that doesn't answer is noted, and the film read again later.
+        let got = await page(link.url, site: link.site, title: link.title, noting: unanswered)
         guard let source = got.source else {
-            let why = Self.notRetried(got.failure?.reason ?? "couldn't be read")
+            let why = got.failure?.reason ?? "couldn't be read"
             trace.result = .unavailable(why)
-            // A page that doesn't answer isn't kept as a limit to read again for (nothing would
-            // plan it); one that's gone or refused is, like any page found.
-            let limit: CraftIndex.SourceLimit.Kind? = got.failure.map { $0.limit.retried ? nil : $0.limit } ?? .unknown
+            let limit = CameraSources.limit(page: nil, failure: got.failure, otherFilm: false)
             return (nil, stand, CameraReading.Skipped(source: stand, reason: why + note, limit: limit), trace)
         }
         if !CameraSources.namesFilm(source.paragraphs, cinematographers: cinematographers, directors: directors, year: year) {
@@ -873,7 +880,7 @@ public struct CameraSourcesClient: Sendable {
         let further = await furtherResult(searched: searchedLinks, spare: spare, pages: pages, otherFilm: otherFilm, read: read,
                                           known: links + merged.aliases + merged.foundTwice + storiesRead.map {
                                               (url: $0.url, site: $0.site, title: $0.title, cited: $0.cited) },
-                                          cinematographers: cinematographers, directors: directors, year: year)
+                                          cinematographers: cinematographers, directors: directors, year: year, unanswered: unanswered)
         if let page = further.read { read.append(page) }
         if let more1 = further.more { more.append(more1) }
         if let skip = further.skipped { skipped.append(skip) }
@@ -907,6 +914,14 @@ public struct CameraSourcesClient: Sendable {
                 !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) }
             }.count
             trace.fallback = further.trace
+            // The search's own line for the result asked for as the further one.
+            if let asked = further.trace, asked.wasAsked, let url = asked.url, !trace.searches.isEmpty {
+                trace.searches[0].hits = trace.searches[0].hits.map { hit in
+                    var hit = hit
+                    if URL(string: hit.url).map(CameraSources.identity) == URL(string: url).map(CameraSources.identity) { hit.askedAsFurther = true }
+                    return hit
+                }
+            }
             reading.discovery = trace
         }
         return reading

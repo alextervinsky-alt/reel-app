@@ -43,6 +43,12 @@ enum FallbackFixtures {
     static func f1(picks: [Answer] = [.lens, .lens, .lens], titles: [String]? = nil, spare: [Answer] = [.about, .about],
                    stories: Answer = .status(404)) {
         StandInSite.reset()
+        f1Search(picks: picks, titles: titles, spare: spare, stories: stories)
+    }
+
+    /// `f1` without starting again (routes added before it come first).
+    static func f1Search(picks: [Answer] = [.lens, .lens, .lens], titles: [String]? = nil, spare: [Answer] = [.about, .about],
+                         stories: Answer = .status(404)) {
         let kept = lensNews.enumerated().map { index, hit in (title: titles?[index] ?? hit.title, url: hit.url) }
         let further = Array([fastTrack, fastTrack2].prefix(spare.count))
         StandInSite.route("theasc.com", "wp-json/wp/v2/search", body: F.ascHits((kept + further).map { ($0.title, $0.url, "article") }))
@@ -98,6 +104,7 @@ final class FallbackTests: XCTestCase {
         XCTAssertEqual(reading.discovery?.assembly.asked.count, 3)
         // The log says why and what became of it.
         let lines = reading.discovery?.lines() ?? []
+        XCTAssertTrue(lines.contains("  left out (over the limit): On the Fast Track for F1: The Movie — https://theasc.com/article/on-the-fast-track-for-f1-the-movie/ (then asked for as the one further result: see below)"), "\(lines)")
         XCTAssertTrue(lines.contains("• American Cinematographer, one more result (only when every result kept was another film's; kept: 3 another film's): On the Fast Track for F1: The Movie — https://theasc.com/article/on-the-fast-track-for-f1-the-movie/: read (see READ)"), "\(lines)")
         // Nothing made up for it: the stand-in page says nothing of how F1 was shot.
         var details = TMDBMovieDetails(id: 42, title: "F1", releaseDate: "2025-06-27")
@@ -141,6 +148,52 @@ final class FallbackTests: XCTestCase {
         XCTAssertEqual(pagesAsked().count, 3)
     }
 
+    /// Pages with too little text to tell whose they are don't show the search chose wrong; and
+    /// with nothing to know the film's page by, no further result could be shown to be its.
+    func testNoFurtherResultWithoutGroundsForIt() async {
+        FallbackFixtures.f1(picks: [.lens, .lens, .status(200)])  // a page with no text to read
+        let empty = await readF1()
+        XCTAssertEqual(empty.discovery?.fallback?.picks.last, .thin)
+        XCTAssertFalse(pagesAsked().contains(FallbackFixtures.fastTrack.url))
+        FallbackFixtures.f1()
+        let unknown = await client().read(articleTitle: nil, filmTitle: "F1", cinematographers: [], directors: [], year: 2025)
+        XCTAssertEqual(unknown.discovery?.fallback?.result, .notTried("no cinematographer, or director and year, to know the film's page by"))
+        XCTAssertFalse(pagesAsked().contains(FallbackFixtures.fastTrack.url))
+    }
+
+    /// Of the further results, one naming the cinematographer before the site's order.
+    func testTheFurtherResultNamingTheCinematographerComesFirst() async {
+        let hits = FallbackFixtures.lensNews.map { ($0.title, $0.url, "article") } + [
+            ("F1.4 primes compared", "https://theasc.com/article/f1-4-primes-compared/", "article"),
+            ("Claudio Miranda, ASC, ACC on F1", "https://theasc.com/article/claudio-miranda-f1/", "article"),
+        ]
+        StandInSite.reset()
+        StandInSite.route("theasc.com", "wp-json/wp/v2/search", body: DiscoveryFixtures.ascHits(hits))
+        for hit in FallbackFixtures.lensNews { FallbackFixtures.route(hit.url, .lens) }
+        FallbackFixtures.route("https://theasc.com/article/claudio-miranda-f1/", .about)
+        StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: "[]")
+        StandInSite.route("en.wikipedia.org", "prop=extracts", body: DiscoveryFixtures.missingArticle)
+        for url in FallbackFixtures.storyPages { FallbackFixtures.route(url, .status(404)) }
+        let reading = await readF1()
+        XCTAssertEqual(reading.discovery?.fallback?.url, "https://theasc.com/article/claudio-miranda-f1/")
+        XCTAssertEqual(reading.discovery?.fallback?.result, .read)
+        XCTAssertFalse(pagesAsked().contains("https://theasc.com/article/f1-4-primes-compared/"))
+    }
+
+    /// Other sources read don't stop it: the search's choice was still wrong (F1: British
+    /// Cinematographer's interview read, American Cinematographer's lens news not).
+    func testOtherSourcesReadDontStopIt() async {
+        StandInSite.reset()
+        StandInSite.route("britishcinematographer.co.uk", "wp-json/wp/v2/posts", body: DiscoveryFixtures.bcHits([
+            ("Claudio Miranda ASC ACC / F1: The Movie", "https://britishcinematographer.co.uk/claudio-miranda-asc-acc-f1-the-movie/")]))
+        FallbackFixtures.route("https://britishcinematographer.co.uk/claudio-miranda-asc-acc-f1-the-movie/", .about)
+        FallbackFixtures.f1Search()
+        let reading = await readF1()
+        XCTAssertEqual(reading.sources.first?.site, "British Cinematographer")
+        XCTAssertEqual(reading.discovery?.fallback?.result, .read)
+        XCTAssertEqual(reading.sources.count, 2)
+    }
+
     // MARK: D. The further result fails too
 
     func testAFurtherResultThatFailsIsTheLast() async {
@@ -157,17 +210,27 @@ final class FallbackTests: XCTestCase {
         XCTAssertEqual(gone.discovery?.fallback?.result, .unavailable("gone: not found over HTTPS (404)"))
         XCTAssertEqual(gone.skipped.last?.limit, .gone)
         XCTAssertFalse(pagesAsked().contains(FallbackFixtures.fastTrack2.url))
-        // Not answering: not noted to read again, so no retry is planned for it.
+        // Not answering: like any page asked for, the site is noted and the film read again later
+        // (never "Complete"), on the usual schedule; and still no second further result.
         FallbackFixtures.f1(spare: [.fail(-1001), .about])
         let quiet = await readF1()
-        XCTAssertEqual(quiet.discovery?.fallback?.result, .unavailable("didn't answer: timed out (not tried again until the film is next read)"))
-        XCTAssertEqual(quiet.unanswered, [])
-        XCTAssertNil(quiet.skipped.last?.limit)
+        XCTAssertEqual(quiet.discovery?.fallback?.result, .unavailable("didn't answer: timed out (read again later)"))
+        XCTAssertEqual(quiet.unanswered, ["American Cinematographer"])
+        XCTAssertEqual(quiet.skipped.last?.limit, .unanswered)
+        XCTAssertFalse(pagesAsked().contains(FallbackFixtures.fastTrack2.url))
         var details = TMDBMovieDetails(id: 42, title: "F1", releaseDate: "2025-06-27")
         details.credits = TMDBCredits(cast: [], crew: [TMDBCrewMember(name: "Claudio Miranda", job: "Director of Photography")])
         let index = CraftReader.reading(of: details, articleTitle: nil, article: nil, reading: quiet, colour: nil).index
-        XCTAssertNotEqual(index.coverage, .partial)
-        XCTAssertNil(index.retryAt)
+        XCTAssertEqual(index.coverage, .partial)
+        let stored = CraftIndex.merging(old: CraftIndex(shotOn: [], names: [], sources: 1, discovery: 4), new: index).index
+        XCTAssertNotNil(stored.retryAt, "read again later, on the usual schedule")
+        XCTAssertEqual(CraftQueue.state(craft: stored, attempt: nil, hasFacts: true, inCollection: true, now: Date()), .partial)
+        XCTAssertFalse(CraftQueue.isDue(craft: stored, attempt: nil, hasFacts: true, inCollection: true, now: Date()), "not every launch")
+        // Refused: kept as a limit, no retry.
+        FallbackFixtures.f1(spare: [.status(403), .about])
+        let refused = await readF1()
+        XCTAssertEqual(refused.skipped.last?.limit, .restricted)
+        XCTAssertEqual(refused.unanswered, [])
         // Too thin: not read, and said so.
         FallbackFixtures.f1(spare: [.thin, .about])
         let thin = await readF1()
