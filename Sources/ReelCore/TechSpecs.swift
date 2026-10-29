@@ -935,7 +935,10 @@ public struct TechSpecs: Equatable, Sendable {
         // A part of a shoot alone ("Interiors", "Night 2"), not a title that starts with the word
         // ("Days of Heaven", "Half Nelson").
         let words = bare.split(separator: " ").map(String.init)
-        if let lone = words.first, shootParts.contains(lone), words.count == 1 || (words.count == 2 && words[1].allSatisfy(\.isNumber)) {
+        let counted: Set<String> = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "first", "second", "third",
+                                    "fourth", "fifth", "last", "final", "unit", "photography"]
+        if let lone = words.first, shootParts.contains(lone),
+           words.count == 1 || (words.count == 2 && (words[1].allSatisfy(\.isNumber) || counted.contains(words[1]))) {
             return false
         }
         if lowered.hasPrefix("the film") || lowered.hasPrefix("the movie") || lowered.hasPrefix("the shoot") { return false }
@@ -943,14 +946,22 @@ public struct TechSpecs: Equatable, Sendable {
         // a title that starts like gear ("The Master", "Superman").
         let brands: Set<String> = ["arri", "alexa", "sony", "venice", "panavision", "panaflex", "kodak", "eastman", "cooke", "zeiss", "canon",
                                    "leica", "imax", "fuji", "fujifilm", "steadicam", "technocrane", "hawk", "dxl", "primo", "ektachrome",
-                                   "double-x", "arriflex", "arricam", "cinealta", "angenieux", "angénieux", "vistavision"]
+                                   "double-x", "arriflex", "arricam", "cinealta", "angenieux", "angénieux", "vistavision", "cinemascope",
+                                   "techniscope", "technirama", "todd-ao", "sphero"]
         if let lead = words.first, brands.contains(lead) || companies.contains(lead) { return false }
+        // A word that's gear only with its number or model after it: "Super 16", "Ultra Panavision 70",
+        // "Vision3 500T", "Master Primes" (not "The Master", "Superman").
+        let models: Set<String> = ["panavision", "primes", "prime", "anamorphic", "anamorphics", "xl", "xl2", "dxl", "orion", "zooms"]
+        if words.count >= 2, ["super", "ultra", "vision", "vision3", "master", "signature", "atlas", "millennium"].contains(words[0]),
+           words[1].first?.isNumber == true || models.contains(words[1]) {
+            return false
+        }
         if words.count >= 2, words[0] == "red", ["one", "epic", "dragon", "komodo", "monstro", "helium", "raptor", "v-raptor", "gemini"].contains(words[1]) {
             return false
         }
         if companies.contains(first), words.count >= 2 { return false }
         // "On 35mm, …", "On Super 16, …": a gauge.
-        if lowered.range(of: #"^\d+\s?(?:mm|k)\b|^\d{1,3}$"#, options: .regularExpression) != nil { return false }
+        if lowered.range(of: #"^\d+\s?(?:mm|k)\b|^\d{1,3}$|^super\s?\d+"#, options: .regularExpression) != nil { return false }
         return true
     }
 

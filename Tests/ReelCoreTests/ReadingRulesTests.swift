@@ -176,6 +176,10 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertEqual(setAside("The Master was the touchstone, which was shot on Kodak 65mm film.", "65mm film", title: q), .reference)
         XCTAssertEqual(setAside("On Days of Heaven, they shot at magic hour on Kodak 35mm film.", "35mm film", title: q), .otherProduction)
         XCTAssertEqual(setAside("On IMAX, we shot on Kodak 65mm film.", "65mm film", title: q), nil)
+        // Gear and days of the shoot opening a clause aren't titles.
+        XCTAssertNil(setAside("On Ultra Panavision 70, we shot with Hawk anamorphic lenses.", "anamorphic", title: q))
+        XCTAssertNil(setAside("On Super 16, we shot handheld on the Aaton XTR.", "Aaton", title: q))
+        XCTAssertNil(setAside("On Day One, we shot on Kodak 35mm film.", "35mm film", title: q))
         // This film's cinematographer ends the opening.
         XCTAssertNil(setAside("On Glass Rivers, we shot 35mm and Doe chose the ARRI Alexa 65.", "ARRI Alexa 65", title: q,
                               people: ["Jane Doe", "Jane", "Doe"]))
