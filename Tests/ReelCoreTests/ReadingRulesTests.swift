@@ -99,6 +99,20 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertEqual(setAside("On Glass Rivers, I shot on Kodak 35mm film.", "35mm film", title: "The Quiet Harbour"), .otherProduction)
     }
 
+    /// Two films in one sentence: each part is its own film's.
+    func testInASentenceAboutTwoFilmsEachPartIsItsOwnFilms() {
+        let both = "Glass Rivers was shot on Kodak 65mm film, but The Quiet Harbour was shot on the ARRI Alexa 35."
+        XCTAssertEqual(setAside(both, "65mm film", title: "The Quiet Harbour"), .comparison)
+        XCTAssertNil(setAside(both, "ARRI Alexa 35", title: "The Quiet Harbour"))
+        XCTAssertEqual(quiet([both]).index.shotOn, [.digital])
+        // A comparison that says how this film was shot is evidence for it.
+        XCTAssertEqual(quiet(["Like Glass Rivers, The Quiet Harbour was shot on Kodak 35mm film."]).index.shotOn, [.film])
+        // Without this film named elsewhere, a capitalised subject isn't taken for another film.
+        XCTAssertNil(setAside("Everything was shot on Kodak 35mm film.", "35mm film", title: "The Quiet Harbour"))
+        // Wording that doesn't say whose: no tag from it.
+        XCTAssertEqual(quiet(["Some people still swear by 65mm film for landscapes."]).index.shotOn, [])
+    }
+
     /// "That film was…" only opening a clause: "he argued that film was too slow" is the medium.
     func testThatFilmIsTheOneJustNamedOnlyOpeningAClause() {
         XCTAssertEqual(setAside("We loved Glass Rivers — that film was shot on Kodak 65mm film.", "65mm film", title: "The Quiet Harbour"),
@@ -147,6 +161,17 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertTrue(allNames(quiet(["Tight spaces prompted the crew to use a DJI Ronin 4D in the cars."]).specs).contains("DJI Ronin 4D"))
         // Still not: wanting to, or what would have been used.
         XCTAssertFalse(allNames(quiet(["Doe wanted to use the ARRI Alexa 35."]).specs).contains("ARRI Alexa 35"))
+    }
+
+    func testAConsideredCameraIsNotGear() {
+        let reading = quiet(["We considered the ARRI Alexa 65, but Doe shot The Quiet Harbour on Kodak 35mm film."])
+        XCTAssertFalse(allNames(reading.specs).contains("ARRI Alexa 65"), "\(allNames(reading.specs))")
+        XCTAssertEqual(reading.index.shotOn, [.film])
+        // Gear used on this film, of every kind, stays.
+        let used = quiet(["Doe shot The Quiet Harbour on the ARRI Alexa 35 with Cooke S4 lenses, lighting with natural light and a Steadicam."])
+        for name in ["ARRI Alexa 35", "Natural light", "Steadicam"] {
+            XCTAssertTrue(allNames(used.specs).contains(name), "\(name) not in \(allNames(used.specs))")
+        }
     }
 
     func testFootageWatchedIsNotGearUsed() {
@@ -198,6 +223,13 @@ final class ReadingRulesTests: XCTestCase {
         }
     }
 
+    /// Part of the film, when that's all there is: the reason, and the tag in part.
+    func testAPartialStatementAloneIsTheReasonInPart() {
+        let reading = quiet(["The flashbacks were shot on Ektachrome."])
+        XCTAssertEqual(reading.index.shotOn, [.film])
+        XCTAssertEqual(reading.index.evidence(for: .film)?.text, "The flashbacks were shot on Ektachrome.")
+    }
+
     /// Main coverage never outranks a sentence about the whole film, nor makes part of it the whole.
     func testMainCoverageDoesNotOutrankTheWholeFilm() {
         let reading = quiet(["The ARRI Alexa Mini was the main camera for the car scenes.",
@@ -241,6 +273,7 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertEqual(reading.index.shotOn, [.digital])
         XCTAssertTrue(reading.index.evidence(for: .digital)?.text.contains("traditional coverage") ?? false)
         let names = allNames(reading.specs)
+        print("F1 as read: tags \(reading.index.shotOn), names \(names), set aside \(reading.specs.mentioned.map(\.name))")
         for wrong in ["Super Panavision 70", "6K", "1.43:1", "Drone", "24 frames per second", "IPhone 12"] {
             XCTAssertFalse(names.contains(wrong), "\(wrong) in \(names)")
         }
@@ -305,6 +338,16 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertEqual(merged.index.shotOn, [.digital])
         XCTAssertEqual(merged.dropped.map(\.reason),
                        ["found by rules 11; American Cinematographer wasn't found again to read by rules 12"])
+    }
+
+    /// A rules-11 reading, as 1.10.2 stored it, still decodes.
+    func testAnOlderReadingStillDecodes() throws {
+        var old = stored()
+        old.limits = [CraftIndex.SourceLimit(site: "American Cinematographer", url: "https://theasc.com/article/x/", kind: .gone, detail: "404")]
+        let data = try JSONEncoder().encode(old)
+        let back = try JSONDecoder().decode(CraftIndex.self, from: data)
+        XCTAssertEqual(back.version, 11)
+        XCTAssertEqual(back.evidence, old.evidence)
     }
 
     // MARK: H. Protected cases

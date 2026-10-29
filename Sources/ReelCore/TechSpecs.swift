@@ -858,9 +858,22 @@ public struct TechSpecs: Equatable, Sendable {
            !mentionsThisFilm(since(found, in: unbracketed), title: title) {
             return .otherProduction
         }
+        // "Glass Rivers was shot on 65mm film, but The Quiet Harbour was shot on…": another title as
+        // what its part of the sentence says was shot, set against this film named in another part.
+        let part = segmentRange(of: sentence, around: range)
+        let partLead = String(sentence[part.lowerBound..<range.lowerBound])
+        if let match = otherTitleShot.firstMatch(in: partLead, range: NSRange(partLead.startIndex..., in: partLead)),
+           let named = Range(match.range(at: 1), in: partLead), isOtherTitle(String(partLead[named]), title: title),
+           namesTitle(String(sentence[..<part.lowerBound]) + " " + String(sentence[part.upperBound...]), title: title) {
+            return .comparison
+        }
         if viewed(sentence, at: range) { return .reference }
         return nil
     }
+
+    /// A part of a sentence opening with a title said to have been shot: "Glass Rivers was shot on…".
+    static let otherTitleShot = try! NSRegularExpression(
+        pattern: #"^\W*(?:(?i:and|while|whereas|but)\s+)?((?:The\s+)?[A-Z0-9][\w'’.&-]*(?:\s+(?:(?:of|the|and|a|an|in)\s+)?[A-Z0-9][\w'’.&-]*)*(?::\s+[A-Z0-9][\w'’.&-]*(?:\s+[A-Z0-9][\w'’.&-]*)*)?)\s+(?:was|were|had been)\s+(?:(?:mostly|mainly|largely|entirely|all|also)\s+)?(?:shot|filmed|photographed|lensed|captured)\b"#)
 
     /// This film in what comes after an opening about another: its title, or "this film".
     static func mentionsThisFilm(_ text: String, title: String?) -> Bool {
