@@ -236,7 +236,7 @@ final class NamePriorityTests: XCTestCase {
         XCTAssertEqual(first.carried.first?.misses, 1)
         XCTAssertTrue(first.index.isPartial, "read again later")
         var last = old
-        last.evidence = [CraftIndex.Evidence(shotOn: .film, text: film.text, source: film.source, carriedFrom: Date(), carriedRules: 11,
+        last.evidence = [CraftIndex.Evidence(shotOn: .film, text: film.text, source: film.source, carriedFrom: Date(), carriedRules: CraftIndex.currentVersion,
                                              misses: CraftIndex.maxRetries)]
         let dropped = CraftIndex.merging(old: last, new: new)
         XCTAssertEqual(dropped.index.shotOn, [])

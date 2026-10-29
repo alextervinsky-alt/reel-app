@@ -947,7 +947,7 @@ public struct TechSpecs: Equatable, Sendable {
         // Magazines write "didn’t": read as "didn't". Same length, so positions carry over.
         let lowered = sentence.lowercased().replacingOccurrences(of: "’", with: "'")
         let end = sentence.distance(from: sentence.startIndex, to: range.upperBound)
-        let chars = Array(lowered)
+        let chars = ratiosKept(Array(lowered))
         guard chars.count == sentence.count, end <= chars.count else { return false }
         // Up to the end of what was matched: a rule's words can come before the name ("shot
         // digitally rather than in IMAX" is one match for IMAX).
@@ -975,6 +975,19 @@ public struct TechSpecs: Equatable, Sendable {
             if let found = after.range(of: mark), found.lowerBound < clauseEnd { clauseEnd = found.lowerBound }
         }
         return String(after[..<clauseEnd]).range(of: deniedAfter, options: .regularExpression) != nil
+    }
+
+    /// A ratio's colon ("1.43:1", "2.39 : 1", "17:9") isn't a clause break: "We're not hitting the
+    /// 1.43:1 ratio" is one clause. Written as "∶" (one character, so positions carry over).
+    static func ratiosKept(_ chars: [Character]) -> [Character] {
+        var out = chars
+        for i in chars.indices where chars[i] == ":" {
+            var before = i - 1, after = i + 1
+            if before >= 0, chars[before] == " " { before -= 1 }
+            if after < chars.count, chars[after] == " " { after += 1 }
+            if before >= 0, after < chars.count, chars[before].isNumber, chars[after].isNumber { out[i] = "∶" }
+        }
+        return out
     }
 
     static let clauseBreaks = [",", ";", ":", " — ", " – ", "(", ")", ". ", " but ", " while ", " whereas ", " although ", " though "]
@@ -1536,7 +1549,8 @@ public struct TechSpecs: Equatable, Sendable {
         let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
         let chars = Array(lowered)
         guard chars.count == sentence.count, end <= chars.count else { return nil }
-        let before = String(chars[..<start]), after = String(chars[end...])
+        let kept = ratiosKept(chars)
+        let before = String(kept[..<start]), after = String(kept[end...])
         var clauseStart = before.startIndex
         for mark in breaks {
             if let found = before.range(of: mark, options: .backwards), found.upperBound > clauseStart { clauseStart = found.upperBound }
@@ -1545,7 +1559,9 @@ public struct TechSpecs: Equatable, Sendable {
         for mark in breaks {
             if let found = after.range(of: mark), found.lowerBound < clauseEnd { clauseEnd = found.lowerBound }
         }
-        return String(before[clauseStart...]) + String(chars[start..<end]) + String(after[..<clauseEnd])
+        // As written (a ratio's colon back).
+        return (String(before[clauseStart...]) + String(chars[start..<end]) + String(after[..<clauseEnd]))
+            .replacingOccurrences(of: "∶", with: ":")
     }
 
     /// Whether a sentence is about another film: one years apart from this one ("in 1993"), or one
