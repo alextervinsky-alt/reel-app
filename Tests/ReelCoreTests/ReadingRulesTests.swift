@@ -273,7 +273,8 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertEqual(reading.index.shotOn, [.digital])
         XCTAssertTrue(reading.index.evidence(for: .digital)?.text.contains("traditional coverage") ?? false)
         let names = allNames(reading.specs)
-        print("F1 as read: tags \(reading.index.shotOn), names \(names), set aside \(reading.specs.mentioned.map(\.name))")
+        // Shown in CI's annotations: what the fixtures read as.
+        print("::notice title=F1 as read::tags \(reading.index.shotOn.map(\.rawValue)); reason \(reading.index.evidence(for: .digital)?.text.prefix(80) ?? ""); names \(names); named, not this film's \(reading.specs.mentioned.map(\.name))")
         for wrong in ["Super Panavision 70", "6K", "1.43:1", "Drone", "24 frames per second", "IPhone 12"] {
             XCTAssertFalse(names.contains(wrong), "\(wrong) in \(names)")
         }
