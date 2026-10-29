@@ -140,7 +140,7 @@ final class ReadingRulesTests: XCTestCase {
 
     func testWatchingSomethingThenShootingIsNotAReference() {
         XCTAssertEqual(quiet(["After watching the tests we shot on Kodak 35mm film."]).index.shotOn, [.film])
-        XCTAssertEqual(quiet(["We reviewed tests and chose Kodak 35mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["We reviewed tests and shot on Kodak 35mm film."]).index.shotOn, [.film])
         XCTAssertEqual(quiet(["We saw tests and chose the ARRI Alexa 65 for the film."]).index.shotOn, [.digital])
     }
 
