@@ -338,7 +338,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     // up to 1.43:1": not this film's (see `Attribution`).
                                     if setAside(sentence, at: at, title: title, people: names + directorNames) != nil { continue }
                                     // "Barbie was her first digital shooting experience": only with the title.
-                                    if rule.needsTitle, !namesTitle(segment(of: sentence, around: at), title: title) { continue }
+                                    if rule.needsTitle, !titleGoverns(sentence, at: at, title: title) { continue }
                                     // "hybrid photochemical finishing", "70 mm prints": how it was
                                     // finished or shown, not what it was shot on.
                                     if rule.kind != .finish, aboutFinishing(sentence, at: at) { continue }
@@ -352,7 +352,11 @@ public struct TechSpecs: Equatable, Sendable {
                                     if rule.isGauge, !filmGauge(sentence, at: at) { continue }
                                     gearNamed += 1
                                     if !namedHere.contains(name) { namedHere.append(name) }
-                                    let said = reading(sentence, at: at, title: title, otherTitles: otherTitles, people: names + directorNames)
+                                    var said = reading(sentence, at: at, title: title, otherTitles: otherTitles, people: names + directorNames,
+                                                       kind: rule.kind)
+                                    // "Barbie was her first digital shooting experience": the title's own
+                                    // statement (checked above) says how it was shot.
+                                    if rule.needsTitle, said.aboutThisFilm { said.captured = true }
                                     let share = saidOfShare(sentence, at: at)
                                     let part = share || saidOfPart(sentence, at: at)
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
@@ -833,20 +837,27 @@ public struct TechSpecs: Equatable, Sendable {
                                                                  options: .regularExpression) != nil }
         }
         let nsLead = NSRange(lead.startIndex..., in: lead)
-        // "On Top Gun: Maverick, we opened up to…": the clause after an opening naming another title.
-        for match in onAnotherTitle.matches(in: lead, range: nsLead).reversed() {
-            guard let whole = Range(match.range, in: lead), let named = Range(match.range(at: 1), in: lead) else { continue }
-            if isOtherTitle(String(lead[named]), title: title), !mentionsThisFilm(since(whole, in: lead), title: title) {
+        let part = segmentRange(of: sentence, around: range)
+        // "— on Top Gun: Maverick, we opened up to…": the clause after an opening naming another title,
+        // in the words' own part of the sentence (not past "but", ";"…), until this film comes back
+        // ("this time", "here", its title). "We" there is that production's crew.
+        let partLead = String(sentence[part.lowerBound..<range.lowerBound]).replacingOccurrences(of: "’", with: "'")
+        for match in onAnotherTitle.matches(in: partLead, range: NSRange(partLead.startIndex..., in: partLead)).reversed() {
+            guard let whole = Range(match.range, in: partLead), let named = Range(match.range(at: 1), in: partLead) else { continue }
+            let after = since(whole, in: partLead)
+            if isOtherTitle(String(partLead[named]), title: title), !mentionsThisFilm(after, title: title),
+               after.range(of: #"\b(?:this time|here|now)\b"#, options: [.regularExpression, .caseInsensitive]) == nil {
                 return .otherProduction
             }
         }
         // "Grand Prix is the touchstone — …": what's said after it, of that film.
         for match in referenceTitle.matches(in: lead, range: nsLead).reversed() {
             guard let whole = Range(match.range, in: lead), let named = Range(match.range(at: 1), in: lead) else { continue }
-            // Only where what follows goes on about that film ("— [that film was] shot at…"), not
-            // "Daylight was the main reference, so the HMIs…".
-            let after = since(whole, in: lead)
-            let ofThatFilm = after.range(of: #"\b(?:that|it|which|they)\b|\b(?:shot|filmed|photographed|made|lensed)\b"#,
+            // Only where what follows says in so many words it's about that film ("— [that film was]
+            // shot at…", "which was shot…"), not "Daylight was the main reference, so the HMIs…" or
+            // "Heat was an influence, so they filmed anamorphic" (they: this film's makers).
+            let after = since(whole, in: lead).replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
+            let ofThatFilm = after.range(of: #"\bthat (?:film|movie|picture|one)\b|\bwhich (?:was|were|had been)\b|\bits (?:makers|cinematographer|crew|camera|cameras|lenses|format)\b"#,
                                          options: [.regularExpression, .caseInsensitive]) != nil
             if ofThatFilm, isOtherTitle(String(lead[named]), title: title), !backToThisFilm(after) { return .reference }
         }
@@ -860,11 +871,12 @@ public struct TechSpecs: Equatable, Sendable {
         }
         // "Glass Rivers was shot on 65mm film, but The Quiet Harbour was shot on…": another title as
         // what its part of the sentence says was shot, set against this film named in another part.
-        let part = segmentRange(of: sentence, around: range)
-        let partLead = String(sentence[part.lowerBound..<range.lowerBound])
-        if let match = otherTitleShot.firstMatch(in: partLead, range: NSRange(partLead.startIndex..., in: partLead)),
-           let named = Range(match.range(at: 1), in: partLead), isOtherTitle(String(partLead[named]), title: title),
-           namesTitle(String(sentence[..<part.lowerBound]) + " " + String(sentence[part.upperBound...]), title: title) {
+        // (Only where that other part says how this film was shot: not "Interiors were shot on…, while
+        // exteriors for <title>'s finale used…".)
+        let shotLead = String(sentence[part.lowerBound..<range.lowerBound])
+        if let match = otherTitleShot.firstMatch(in: shotLead, range: NSRange(shotLead.startIndex..., in: shotLead)),
+           let named = Range(match.range(at: 1), in: shotLead), isOtherTitle(String(shotLead[named]), title: title),
+           saysHowShot(String(sentence[..<part.lowerBound]) + " " + String(sentence[part.upperBound...]), title: title) {
             return .comparison
         }
         if viewed(sentence, at: range) { return .reference }
@@ -874,6 +886,23 @@ public struct TechSpecs: Equatable, Sendable {
     /// A part of a sentence opening with a title said to have been shot: "Glass Rivers was shot on…".
     static let otherTitleShot = try! NSRegularExpression(
         pattern: #"^\W*(?:(?i:and|while|whereas|but)\s+)?((?:The\s+)?[A-Z0-9][\w'’.&-]*(?:\s+(?:(?:of|the|and|a|an|in)\s+)?[A-Z0-9][\w'’.&-]*)*(?::\s+[A-Z0-9][\w'’.&-]*(?:\s+[A-Z0-9][\w'’.&-]*)*)?)\s+(?:was|were|had been)\s+(?:(?:mostly|mainly|largely|entirely|all|also)\s+)?(?:shot|filmed|photographed|lensed|captured)\b"#)
+
+    /// The title is what the words are said of: "<title> was her first digital feature", "As well as
+    /// being Gerwig's first digital shooting experience, <title> was…"; not "…his first digital shoot
+    /// on The Irishman, shot <title> on 35mm".
+    static func titleGoverns(_ sentence: String, at range: Range<String.Index>, title: String?) -> Bool {
+        guard let title, !title.isEmpty else { return false }
+        let part = segmentRange(of: sentence, around: range)
+        let before = String(sentence[part.lowerBound..<range.lowerBound]).replacingOccurrences(of: "’", with: "'")
+        let after = String(sentence[range.upperBound..<part.upperBound]).replacingOccurrences(of: "’", with: "'")
+        // Said of another production: "…first digital shoot on The Irishman".
+        if after.range(of: #"^\s+(?:on|for|with|in)\s+(?:the\s+)?[A-Z0-9]"#, options: .regularExpression) != nil { return false }
+        let escaped = NSRegularExpression.escapedPattern(for: title.replacingOccurrences(of: "’", with: "'"))
+        let subject = #"(?<!\w)"# + escaped + #"(?!\w)\s+(?:was|is|became|marked|remains)\s+(?:also\s+)?(?:[\w'-]+\s+){0,3}$"#
+        if before.range(of: subject, options: [.regularExpression, .caseInsensitive]) != nil { return true }
+        let opening = #"^[^,;]{0,60},\s+"# + escaped + #"(?!\w)\s+(?:was|is|became|marked)\b"#
+        return after.range(of: opening, options: [.regularExpression, .caseInsensitive]) != nil
+    }
 
     /// This film in what comes after an opening about another: its title, or "this film".
     static func mentionsThisFilm(_ text: String, title: String?) -> Bool {
@@ -887,15 +916,25 @@ public struct TechSpecs: Equatable, Sendable {
         let own = (title ?? "").lowercased()
         let short = own.split(separator: ":").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? own
         if !own.isEmpty, lowered == own || lowered == short || lowered.hasPrefix(own + ":") { return false }
+        // Its subtitle alone ("Fury Road" for Mad Max: Fury Road, "Part Two" for Dune: Part Two).
+        if let colon = own.firstIndex(of: ":") {
+            let subtitle = own[own.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if subtitle.count >= 3, lowered == subtitle || lowered == "the " + subtitle { return false }
+        }
+        let bare = lowered.hasPrefix("the ") ? String(lowered.dropFirst(4)) : lowered
         let first = lowered.split(separator: " ").first.map(String.init) ?? lowered
         let notTitles: Set<String> = ["it", "this", "that", "these", "those", "he", "she", "they", "we", "i", "you", "one", "another",
                                       "our", "his", "her", "their", "my", "its", "here", "there", "set", "stage", "location", "day",
                                       "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "january",
                                       "february", "march", "april", "may", "june", "july", "august", "september", "october",
-                                      "november", "december", "average", "camera", "film", "digital", "steadicam"]
+                                      "november", "december", "average", "camera", "film", "digital", "steadicam", "interiors", "interior",
+                                      "exteriors", "exterior", "night", "nights", "days", "most", "half", "all", "both", "some",
+                                      "scenes", "sequences", "flashbacks", "everything", "nothing", "much", "parts", "rest", "principal",
+                                      "additional", "second", "reshoots", "pickups", "inserts", "plates", "tests", "phantom", "gopro",
+                                      "dji", "tri-x", "eterna", "red", "blackmagic", "bolex", "aaton", "technocrane", "moviecam"]
         if notTitles.contains(first) || (first.hasSuffix("s") && notTitles.contains(String(first.dropLast()))) { return false }
         if lowered.hasPrefix("the film") || lowered.hasPrefix("the movie") || lowered.hasPrefix("the shoot") { return false }
-        if gearWords.contains(where: { lowered.hasPrefix($0) }) || companies.contains(first) { return false }
+        if gearWords.contains(where: { lowered.hasPrefix($0) || bare.hasPrefix($0) }) || companies.contains(first) { return false }
         // "On 35mm, …", "On Super 16, …": a gauge.
         if lowered.range(of: #"^\d+\s?(?:mm|k)\b|^\d{1,3}$"#, options: .regularExpression) != nil { return false }
         return true
@@ -904,7 +943,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// An opening naming a title, ended by a comma, at the start of a clause: "— on Top Gun:
     /// Maverick, we…", "On Carol, I…". Group 1: the title.
     static let onAnotherTitle = try! NSRegularExpression(
-        pattern: #"(?:^|[—–;:(]\s*|,\s+|\.\s+)(?i:on)\s+((?:The\s+)?[A-Z0-9][\w'.&-]*(?:\s+(?:(?:of|the|and|a|an|in|to|for|at|on)\s+)?[A-Z0-9][\w'.&-]*)*(?::\s+[A-Z0-9][\w'.&-]*(?:\s+[A-Z0-9][\w'.&-]*)*)?)\s*,"#)
+        pattern: #"(?:^[\W]*|[—–;:(]\s*|,\s+|\.\s+)(?i:on)\s+((?:The\s+)?[A-Z0-9][\w'.&-]*(?:\s+(?:(?:of|the|and|a|an|in|to|for|at|on)\s+)?[A-Z0-9][\w'.&-]*)*(?::\s+[A-Z0-9][\w'.&-]*(?:\s+[A-Z0-9][\w'.&-]*)*)?)\s*,"#)
 
     /// "<Title> is the touchstone", "<Title> was our main reference": group 1, the title.
     static let referenceTitle = try! NSRegularExpression(
@@ -915,13 +954,21 @@ public struct TechSpecs: Equatable, Sendable {
     static func viewed(_ sentence: String, at range: Range<String.Index>) -> Bool {
         let lowered = sentence.lowercased()
         let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
+        let end = sentence.distance(from: sentence.startIndex, to: range.upperBound)
         let chars = Array(lowered)
         guard chars.count == sentence.count else { return false }
         let lead = String(chars[..<start])
-        guard lead.range(of: #"\b(?:watch(?:ed|ing)?|saw|seen|view(?:ed|ing)|studied|studying|looked at|screened|screening|reviewed)\s+(?:[\w'’-]+\s+){0,4}$"#,
-                         options: .regularExpression) != nil else { return false }
-        let what = String(chars[start..<min(chars.count, sentence.distance(from: sentence.startIndex, to: range.upperBound) + 30)])
-        return what.range(of: #"\b(?:footage|films?|movies?|clips?|videos?|reels?|examples?|references?)\b"#, options: .regularExpression) != nil
+        // The verb, then at most four words with no new action between ("after watching the tests we
+        // shot on film": "we" starts what was done).
+        guard let verb = lead.range(of: #"\b(?:watch(?:ed|ing)?|saw|view(?:ed|ing)|studied|studying|looked at|reviewed)\s+((?:[\w'’-]+\s+){0,4})$"#,
+                                    options: .regularExpression) else { return false }
+        let between = String(lead[verb.lowerBound...])
+        if between.range(of: #"\s(?:and|then|so|we|i|they|he|she|but|before|after|to|chose|shot|used|decided)\s"#,
+                         options: .regularExpression) != nil { return false }
+        // What was watched is footage, by its noun: in the words matched or right after them (not
+        // the gear's own word, "35mm film").
+        let what = String(chars[start..<min(chars.count, end + 12)])
+        return what.range(of: #"\b(?:footage|clips?|videos?|reels?|examples|showreels?)\b"#, options: .regularExpression) != nil
     }
 
     /// How `denied` words are set aside: drawn on ("inspired by"), set against something ("unlike",
@@ -938,7 +985,8 @@ public struct TechSpecs: Equatable, Sendable {
     /// back to 24 frames per second", "conformed to 24fps"): not how it was shot.
     static func conversionTarget(_ sentence: String, at range: Range<String.Index>) -> Bool {
         let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
-        return lead.range(of: #"\b(?:convert|conform|smooth|retim|interpolat|resampl|down-?convert|up-?convert)\w*\b[^.;,]{0,40}?\b(?:back\s+)?(?:to|into)\s+$"#,
+        // The verb ("smooth it", not "moves smoothly", "a smooth transition").
+        return lead.range(of: #"(?<!\ba\s)(?<!\bthe\s)(?<!\bvery\s)\b(?:convert(?:s|ed|ing)?|conform(?:s|ed|ing)?|smooth(?:s|ed|ing)?|retim(?:e|es|ed|ing)|interpolat(?:e|es|ed|ing)|resampl(?:e|es|ed|ing)|(?:down|up)-?convert(?:s|ed|ing)?)\b[^.;,]{0,40}?\b(?:back\s+)?(?:to|into)\s+$"#,
                           options: [.regularExpression, .caseInsensitive]) != nil
     }
 
@@ -948,7 +996,7 @@ public struct TechSpecs: Equatable, Sendable {
         return text.range(of: principalCoverage, options: .regularExpression) != nil
     }
 
-    static let principalCoverage = #"\b(?:traditional|main|primary|principal|conventional)\s+coverage\b|\b(?:main|primary|principal)[- ](?:production\s+)?cameras?\b|\ba-cameras?\b|\b(?:main|first)\s+unit\b|\bmost\s+(?:of\s+(?:the\s+)?)?(?:[\w’'-]+\s+){0,2}?(?:scenes|sequences|shots|footage|coverage|filming|photography|shooting)\b|\b(?:mostly|mainly|primarily|predominantly|largely)\s+(?:shot|filmed|captured|photographed|in|on|with)\b|\b(?:the\s+)?(?:bulk|majority)\s+of\b|\bworkhorse\b|\bcamera of choice\b"#
+    static let principalCoverage = #"\b(?:traditional|main|primary|principal|conventional)\s+coverage\b|\b(?:main|primary|principal)[- ](?:production\s+)?cameras?\b|\ba-cameras?\b|\b(?:main|first)\s+unit\b|\bmost\s+(?:of\s+(?:the\s+)?)?(?:[\w’'-]+\s+){0,2}?(?:scenes|sequences|shots|footage|coverage|filming|photography|shooting)\b|\b(?:mostly|mainly|primarily|predominantly|largely)\s+(?:shot|filmed|captured|photographed)\b|\b(?:the\s+)?(?:bulk|majority)\s+of\s+(?:the\s+)?(?:film|movie|footage|scenes|shots|shoot|shooting|photography|coverage)\b|\bworkhorse\b|\bcamera of choice\b"#
 
     // MARK: Said not to have been used
 
@@ -996,8 +1044,10 @@ public struct TechSpecs: Equatable, Sendable {
         var out = chars
         for i in chars.indices where chars[i] == ":" {
             var before = i - 1, after = i + 1
-            if before >= 0, chars[before] == " " { before -= 1 }
-            if after < chars.count, chars[after] == " " { after += 1 }
+            // "2.39:1", "2.39 : 1", not "Camera 1: 35mm".
+            let spaced = before >= 0 && chars[before] == " "
+            if spaced != (after < chars.count && chars[after] == " ") { continue }
+            if spaced { before -= 1; after += 1 }
             if before >= 0, after < chars.count, chars[before].isNumber, chars[after].isNumber { out[i] = "∶" }
         }
         return out
@@ -1311,7 +1361,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Whether the words at `range` are about this film (not other work, another film or gear in
     /// general), and whether they're said to have been shot with (see `saysCaptured`).
     static func reading(_ sentence: String, at range: Range<String.Index>, title: String?, otherTitles: [String],
-                        people: [String]) -> (aboutThisFilm: Bool, captured: Bool) {
+                        people: [String], kind: Kind? = nil) -> (aboutThisFilm: Bool, captured: Bool) {
         if isSpecList(sentence) { return (true, true) }
         let whole = segmentRange(of: sentence, around: range)
         let part = String(sentence[whole])
@@ -1326,7 +1376,13 @@ public struct TechSpecs: Equatable, Sendable {
         // Films in general ("films that are shot on film feel different"), not "one of the few films
         // that were shot entirely on 65mm", which is this one.
         let general = matches(filmsInGeneral, lead) && !matches(oneOfTheFilms, lead)
-        let about = !matches(otherWork, lead) && !general && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
+        // "relying on natural light whenever possible" is how this film was lit; "shoots on 35mm film
+        // whenever possible" is still a habit, not this film.
+        let practice = [Kind.light, .support, .filter].contains { $0 == kind }
+            ? lead.replacingOccurrences(of: #"\bwhenever\s+(?:possible|feasible|practical|we could|they could|he could|she could|i could|we can|they can)\b"#,
+                                        with: "", options: [.regularExpression, .caseInsensitive])
+            : lead
+        let about = !matches(otherWork, practice) && !general && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
             && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.upperBound]), title: title)
         // Said while accepting an award: advice to others, not how this film was shot.
@@ -1514,7 +1570,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Saying it was shot, chosen or used: the verbs, a camera's role, a camera package, "the lens
     /// was usually a…".
     static let captureCue = try! NSRegularExpression(
-        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|employed|features|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:led|leading|prompted|persuaded|allowed|enabled|forced)\s+(?:[\w’'-]+\s+){0,3}?to\s+use|(?:decided|chose|opted|elected|went on|had|got)\s+to\s+use|ended up (?:using|with)|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
+        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|employed|features|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:(?-i:led)|leading|prompted|persuaded|allowed|enabled|forced)\s+(?:[\w’'-]+\s+){0,3}?to\s+use|(?:decided|chose|opted|elected|went on|had)\s+to\s+use|ended up using|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
         options: [.caseInsensitive])
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
@@ -1530,7 +1586,7 @@ public struct TechSpecs: Equatable, Sendable {
         pattern: #"\b(?:one|some|among) (?:of )?the (?:[\w-]+ ){0,3}(?:films|movies|pictures) (?:that|which)\b"#,
         options: [.caseInsensitive])
     static let otherWork = try! NSRegularExpression(
-        pattern: #"\b(?:nominated films|(?:\w+\s+)?out of (?:the )?(?:\w+\s+){0,2}(?:films|movies|features|nominees)|commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever(?!\s+(?:possible|feasible|practical|we could|they could|he could|she could|i could|it was possible|we can|they can))|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
+        pattern: #"\b(?:nominated films|(?:\w+\s+)?out of (?:the )?(?:\w+\s+){0,2}(?:films|movies|features|nominees)|commercials?|music videos?|adverts?|(?:TV|television) (?:series|shows?)|(?:his|her|their|my|our) (?:other |earlier |previous |next |later |last )?(?:films|movies|features|projects)|several of (?:his|her|their|my|our)|had (?:previously |already |also |once )?(?:shot|filmed|photographed)|as a (?:kid|child|boy|girl|teen|teenager|student)|when (?:i|he|she|we) (?:was|were) (?:a )?(?:kid|child|young|little|boy|girl|teen|teenager|student)|(?:i|he|she|we) grew up|(?:in|on|for) the (?:first|original|previous|last|earlier) (?:film|movie|one|instal?lment|chapter)|in general|generally speaking|i (?:love|adore|like|prefer)|in my opinion|(?:i|we) (?:think|believe|feel)|you (?:have to|need to|tend to|necessarily|can|could|would|will|get)|you['’]ll|tends? to|especially when|talked about|spoke about|discussed|what kind of|which cameras|whenever|every film|any film|most films|all films|(?:beautifully|gorgeously|stunningly|exquisitely|lovingly|brilliantly|wonderfully|handsomely|lushly|superbly|magnificently|expertly|impeccably) (?:shot|filmed|photographed|lensed))\b"#,
         options: [.caseInsensitive])
     /// A look made in the grade or copied, not how it was shot: "the Ektachrome LUT", "emulate
     /// 35mm film", "the three-strip Technicolor look".

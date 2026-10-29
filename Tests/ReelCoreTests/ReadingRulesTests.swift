@@ -66,7 +66,7 @@ final class ReadingRulesTests: XCTestCase {
     func testAReferenceEndsWhereThisFilmComesBack() {
         let q = ["Jane Doe", "Jane", "Doe", "Carl Example", "Carl", "Example"]
         // What follows goes on about the reference.
-        XCTAssertEqual(setAside("Glass Rivers was our main reference — it was shot on Kodak 65mm film.", "65mm film",
+        XCTAssertEqual(setAside("Glass Rivers was our main reference, which was shot on Kodak 65mm film.", "65mm film",
                                 title: "The Quiet Harbour", people: q), .reference)
         // This film comes back: its title, "we", its cinematographer.
         XCTAssertNil(setAside("Glass Rivers is the touchstone, and Doe shot The Quiet Harbour on 35mm film.", "35mm film",
@@ -134,6 +134,60 @@ final class ReadingRulesTests: XCTestCase {
         XCTAssertEqual(ronin?.attribution, .direct)
         let light = f1([("British Cinematographer", [Self.naturalLight])]).specs.specs.first { $0.name == "Natural light" }
         XCTAssertEqual(light?.attribution, .ambiguous)
+    }
+
+    // MARK: The review's counter-examples: this film's evidence that must stay
+
+    func testWatchingSomethingThenShootingIsNotAReference() {
+        XCTAssertEqual(quiet(["After watching the tests we shot on Kodak 35mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["We reviewed tests and chose Kodak 35mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["We saw tests and chose the ARRI Alexa 65 for the film."]).index.shotOn, [.digital])
+    }
+
+    func testAnOpeningAboutAnotherFilmEndsWhereTheSentenceTurns() {
+        let q = "The Quiet Harbour"
+        let turn = "On Glass Rivers, I shot 35mm film, but this time we chose the ARRI Alexa 65."
+        XCTAssertEqual(setAside(turn, "35mm film", title: q), .otherProduction)
+        XCTAssertNil(setAside(turn, "ARRI Alexa 65", title: q))
+        XCTAssertEqual(quiet([turn]).index.shotOn, [.digital])
+        // Its own subtitle is this film.
+        XCTAssertNil(setAside("On Fury Road, we shot on the ARRI Alexa Mini.", "ARRI Alexa Mini", title: "Mad Max: Fury Road"))
+        // Inside a quote.
+        XCTAssertEqual(setAside("“On Glass Rivers, we shot on Kodak 35mm film,” Doe says.", "35mm film", title: q), .otherProduction)
+        // Gear and parts of a shoot aren't titles.
+        XCTAssertNil(setAside("On Phantom Flex, we shot at 1000 fps with the ARRI Alexa Mini.", "ARRI Alexa Mini", title: q))
+        XCTAssertNil(setAside("Interiors were shot on the ARRI Alexa Mini, while exteriors for The Quiet Harbour's finale used 65mm film.",
+                              "ARRI Alexa Mini", title: q))
+    }
+
+    func testAMovementOrAnInfluenceIsNotAReferenceFilmsShoot() {
+        XCTAssertNil(setAside("Neorealism was the touchstone, so they shot handheld on the ARRI Alexa Mini.", "ARRI Alexa Mini",
+                              title: "The Quiet Harbour"))
+        XCTAssertNil(setAside("Heat was a major influence, so they filmed with Panavision anamorphic lenses.", "anamorphic",
+                              title: "The Quiet Harbour"))
+    }
+
+    func testAHabitWheneverPossibleIsStillAHabit() {
+        XCTAssertEqual(quiet(["Though Doe shoots on 35mm film whenever possible, The Quiet Harbour was shot digitally."]).index.shotOn,
+                       [.digital])
+    }
+
+    func testFirstDigitalOnlyWhereTheTitleIsWhatItsSaidOf() {
+        func read(_ sentence: String, title: String) -> [ShotOn] {
+            let specs = TechSpecs.read(texts: [TechSpecs.Text(source: "British Cinematographer", paragraphs: [sentence])],
+                                       cinematographers: ["Rodrigo Prieto"], directors: [], title: title)
+            return CraftIndex.make(from: specs, colour: nil, keywords: []).shotOn
+        }
+        XCTAssertEqual(read("Prieto, who had his first digital shoot on The Irishman, shot Killers of the Flower Moon on 35mm film.",
+                            title: "Killers of the Flower Moon"), [.film])
+        XCTAssertEqual(read("Barbie was Gerwig’s first digital feature.", title: "Barbie"), [.digital])
+    }
+
+    func testOnlyAConversionVerbMakesATarget() {
+        let smooth = "The picture was shot in 2.39:1 and moves smoothly into IMAX for the battle sequences."
+        XCTAssertFalse(TechSpecs.conversionTarget(smooth, at: smooth.range(of: "IMAX")!))
+        let smoothed = "We shot at 50 frames per second and smoothed it back to 24 frames per second."
+        XCTAssertTrue(TechSpecs.conversionTarget(smoothed, at: smoothed.range(of: "24 frames per second")!))
     }
 
     // MARK: B. Numbers and negation
