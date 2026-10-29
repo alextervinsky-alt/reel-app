@@ -845,7 +845,9 @@ public struct TechSpecs: Equatable, Sendable {
         for match in onAnotherTitle.matches(in: partLead, range: NSRange(partLead.startIndex..., in: partLead)).reversed() {
             guard let whole = Range(match.range, in: partLead), let named = Range(match.range(at: 1), in: partLead) else { continue }
             let after = since(whole, in: partLead)
-            if isOtherTitle(String(partLead[named]), title: title), !mentionsThisFilm(after, title: title),
+            let theirs = people.contains { $0.count >= 3 && after.range(of: "\\b" + NSRegularExpression.escapedPattern(for: $0) + "\\b",
+                                                                        options: .regularExpression) != nil }
+            if isOtherTitle(String(partLead[named]), title: title), !mentionsThisFilm(after, title: title), !theirs,
                after.range(of: #"\b(?:this time|here|now)\b"#, options: [.regularExpression, .caseInsensitive]) == nil {
                 return .otherProduction
             }
@@ -857,14 +859,14 @@ public struct TechSpecs: Equatable, Sendable {
             // shot at…", "which was shot…"), not "Daylight was the main reference, so the HMIs…" or
             // "Heat was an influence, so they filmed anamorphic" (they: this film's makers).
             let after = since(whole, in: lead).replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
-            let ofThatFilm = after.range(of: #"\bthat (?:film|movie|picture|one)\b|\bwhich (?:was|were|had been)\b|\bits (?:makers|cinematographer|crew|camera|cameras|lenses|format)\b"#,
+            let ofThatFilm = after.range(of: #"\bthat (?:film|movie|picture|one)\b|\bwhich (?:was|were|had been)\s+(?:\w+\s+)?(?:shot|filmed|photographed|lensed|made)\b|^\s*[—–,:]\s*(?:shot|filmed|photographed|lensed)\b|\bits (?:makers|cinematographer|crew|camera|cameras|lenses|format)\b"#,
                                          options: [.regularExpression, .caseInsensitive]) != nil
             if ofThatFilm, isOtherTitle(String(lead[named]), title: title), !backToThisFilm(after) { return .reference }
         }
         // "— [that film was] shot at real events in…": "that film", opening a clause, is the one just
         // named (not "he argued that film was too slow", where film is the medium).
         let unbracketed = lead.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
-        if let found = unbracketed.range(of: #"(?:^|[—–;:(]\s*|,\s+|\.\s+)that (?:film|movie|picture)\s+(?:was|were|had been)\b"#,
+        if let found = unbracketed.range(of: #"(?:^[\W]*|[—–;:(]\s*|,\s+|\.\s+)that (?:film|movie|picture)\s+(?:was|were|had been)\b"#,
                                          options: [.regularExpression, .caseInsensitive]),
            !mentionsThisFilm(since(found, in: unbracketed), title: title) {
             return .otherProduction
@@ -924,21 +926,38 @@ public struct TechSpecs: Equatable, Sendable {
         let bare = lowered.hasPrefix("the ") ? String(lowered.dropFirst(4)) : lowered
         let first = lowered.split(separator: " ").first.map(String.init) ?? lowered
         let notTitles: Set<String> = ["it", "this", "that", "these", "those", "he", "she", "they", "we", "i", "you", "one", "another",
-                                      "our", "his", "her", "their", "my", "its", "here", "there", "set", "stage", "location", "day",
+                                      "our", "his", "her", "their", "my", "its", "here", "there", "set", "stage", "location",
                                       "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "january",
                                       "february", "march", "april", "may", "june", "july", "august", "september", "october",
-                                      "november", "december", "average", "camera", "film", "digital", "steadicam", "interiors", "interior",
-                                      "exteriors", "exterior", "night", "nights", "days", "most", "half", "all", "both", "some",
-                                      "scenes", "sequences", "flashbacks", "everything", "nothing", "much", "parts", "rest", "principal",
-                                      "additional", "second", "reshoots", "pickups", "inserts", "plates", "tests", "phantom", "gopro",
-                                      "dji", "tri-x", "eterna", "red", "blackmagic", "bolex", "aaton", "technocrane", "moviecam"]
+                                      "november", "december", "average", "camera", "film", "digital", "steadicam", "phantom", "gopro",
+                                      "dji", "tri-x", "eterna", "blackmagic", "bolex", "aaton", "technocrane", "moviecam"]
         if notTitles.contains(first) || (first.hasSuffix("s") && notTitles.contains(String(first.dropLast()))) { return false }
+        // A part of a shoot alone ("Interiors", "Night 2"), not a title that starts with the word
+        // ("Days of Heaven", "Half Nelson").
+        let words = bare.split(separator: " ").map(String.init)
+        if let lone = words.first, shootParts.contains(lone), words.count == 1 || (words.count == 2 && words[1].allSatisfy(\.isNumber)) {
+            return false
+        }
         if lowered.hasPrefix("the film") || lowered.hasPrefix("the movie") || lowered.hasPrefix("the shoot") { return false }
-        if gearWords.contains(where: { lowered.hasPrefix($0) || bare.hasPrefix($0) }) || companies.contains(first) { return false }
+        // Gear by its whole first word and a model after it ("Sony Venice 2", "The ARRI Alexa 65"), not
+        // a title that starts like gear ("The Master", "Superman").
+        let brands: Set<String> = ["arri", "alexa", "sony", "venice", "panavision", "panaflex", "kodak", "eastman", "cooke", "zeiss", "canon",
+                                   "leica", "imax", "fuji", "fujifilm", "steadicam", "technocrane", "hawk", "dxl", "primo", "ektachrome",
+                                   "double-x", "arriflex", "arricam", "cinealta", "angenieux", "angénieux", "vistavision"]
+        if let lead = words.first, brands.contains(lead) || companies.contains(lead) { return false }
+        if words.count >= 2, words[0] == "red", ["one", "epic", "dragon", "komodo", "monstro", "helium", "raptor", "v-raptor", "gemini"].contains(words[1]) {
+            return false
+        }
+        if companies.contains(first), words.count >= 2 { return false }
         // "On 35mm, …", "On Super 16, …": a gauge.
         if lowered.range(of: #"^\d+\s?(?:mm|k)\b|^\d{1,3}$"#, options: .regularExpression) != nil { return false }
         return true
     }
+
+    /// Parts of a shoot, which open a sentence as its subject ("Interiors were shot on…").
+    static let shootParts: Set<String> = ["interiors", "interior", "exteriors", "exterior", "night", "nights", "day", "days", "most", "half", "all",
+                                          "both", "some", "scenes", "sequences", "flashbacks", "everything", "nothing", "much", "parts",
+                                          "rest", "principal", "additional", "second", "reshoots", "pickups", "inserts", "plates", "tests"]
 
     /// An opening naming a title, ended by a comma, at the start of a clause: "— on Top Gun:
     /// Maverick, we…", "On Carol, I…". Group 1: the title.
@@ -986,7 +1005,7 @@ public struct TechSpecs: Equatable, Sendable {
     static func conversionTarget(_ sentence: String, at range: Range<String.Index>) -> Bool {
         let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
         // The verb ("smooth it", not "moves smoothly", "a smooth transition").
-        return lead.range(of: #"(?<!\ba\s)(?<!\bthe\s)(?<!\bvery\s)\b(?:convert(?:s|ed|ing)?|conform(?:s|ed|ing)?|smooth(?:s|ed|ing)?|retim(?:e|es|ed|ing)|interpolat(?:e|es|ed|ing)|resampl(?:e|es|ed|ing)|(?:down|up)-?convert(?:s|ed|ing)?)\b[^.;,]{0,40}?\b(?:back\s+)?(?:to|into)\s+$"#,
+        return lead.range(of: #"\b(?:(?:convert|conform|smooth|retim|interpolat|resampl|(?:down|up)-?convert)(?:ed|ing)|(?:convert|conform|smooth|retime|interpolate|resample|(?:down|up)-?convert)s?\s+(?:it|them|this|that|everything|(?:the\s+|their\s+|our\s+)?(?:footage|plates?|frames?|material|images?|shots?)))\b[^.;,]{0,40}?\b(?:back\s+)?(?:to|into)\s+$"#,
                           options: [.regularExpression, .caseInsensitive]) != nil
     }
 
@@ -1570,7 +1589,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Saying it was shot, chosen or used: the verbs, a camera's role, a camera package, "the lens
     /// was usually a…".
     static let captureCue = try! NSRegularExpression(
-        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|employed|features|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:(?-i:led)|leading|prompted|persuaded|allowed|enabled|forced)\s+(?:[\w’'-]+\s+){0,3}?to\s+use|(?:decided|chose|opted|elected|went on|had)\s+to\s+use|ended up using|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
+        pattern: #"\b(?:shot|shoot|shoots|shooting|filmed|filming|film (?:in|on|with)|photographed|photographing|photography (?:was|used|on|with|in|began|took place)|(?:was|were) made (?:on|with)|captured|capturing|capture|lensed|recorded|recording|rolled|rolling|used|using|uses|employed|features|employing|chose|chosen|choose|chooses|choosing|selected|opted for|opt for|opting for|went (?:with|for)|go with|settled on|relied on|turned to|turn (?:again )?to|carried|paired|pairing|fitted|outfitted|equipped|supplied|provided|secured|rented|deployed|operating|operated|handholding|pushed|rated at|exposed|made us|built us|(?:main|primary|production|principal|(?-i:[AB])) cameras?|camera package|workhorse|camera of choice|(?:(?-i:led)|leading|prompted|persuaded|allowed|enabled|forced)\s+(?:[\w’'-]+\s+){0,3}?to\s+use|(?:decided|chose|opted|elected|went on)\s+to\s+use|ended up using|(?:the|our|his|her|their) (?:lens|lenses|camera|cameras|stock|stocks|format) (?:was|were))\b"#,
         options: [.caseInsensitive])
     /// Other work, gear in general or praise: commercials, a TV series, "his films", "I had
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".

@@ -167,6 +167,25 @@ final class ReadingRulesTests: XCTestCase {
                               title: "The Quiet Harbour"))
     }
 
+    /// Round 2: the reference's own shapes, and titles that start like gear or a part of a shoot.
+    func testReferenceShapesAndTitlesThatLookLikeWords() {
+        let q = "The Quiet Harbour"
+        XCTAssertEqual(setAside("Grand Prix is the touchstone — shot at real events in a beautiful Super Panavision 70 widescreen format.",
+                                "Super Panavision 70"), .reference)
+        XCTAssertNil(setAside("Heat was an influence, which was why they filmed with Panavision anamorphic lenses.", "anamorphic", title: q))
+        XCTAssertEqual(setAside("The Master was the touchstone, which was shot on Kodak 65mm film.", "65mm film", title: q), .reference)
+        XCTAssertEqual(setAside("On Days of Heaven, they shot at magic hour on Kodak 35mm film.", "35mm film", title: q), .otherProduction)
+        XCTAssertEqual(setAside("On IMAX, we shot on Kodak 65mm film.", "65mm film", title: q), nil)
+        // This film's cinematographer ends the opening.
+        XCTAssertNil(setAside("On Glass Rivers, we shot 35mm and Doe chose the ARRI Alexa 65.", "ARRI Alexa 65", title: q,
+                              people: ["Jane Doe", "Jane", "Doe"]))
+        // The adjective isn't a conversion.
+        let smooth = "Its smooth transition to IMAX comes at the halfway mark."
+        XCTAssertFalse(TechSpecs.conversionTarget(smooth, at: smooth.range(of: "IMAX")!))
+        let conformed = "The plates were conformed to 24 fps."
+        XCTAssertTrue(TechSpecs.conversionTarget(conformed, at: conformed.range(of: "24 fps")!))
+    }
+
     func testAHabitWheneverPossibleIsStillAHabit() {
         XCTAssertEqual(quiet(["Though Doe shoots on 35mm film whenever possible, The Quiet Harbour was shot digitally."]).index.shotOn,
                        [.digital])
