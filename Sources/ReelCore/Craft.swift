@@ -65,7 +65,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// only as earlier work ("from my work on <title>"), and an interview's answers to a question
     /// about another production, aren't this film's; "the main shoot was with…" says how it was
     /// shot; film-out only as the process, not "figure this film out".
-    public static let currentVersion = 11
+    /// 12: whose a sentence's gear is (`TechSpecs.Attribution`): what "<another title> is the
+    /// touchstone" or "— [that film was] shot…" goes on to say is that film's, an opening "on
+    /// <another title>," makes its clause that production's, and footage watched is a reference;
+    /// "led the filmmakers to use…" says it was used; what footage was converted to afterwards ("smooth
+    /// it back to 24 frames per second") isn't how it was shot; "8.6K" isn't "6K"; "whenever possible"
+    /// is this film's; "<title> was her first digital shoot" says digital; the reason prefers a
+    /// sentence giving the film's main coverage (`TechSpecs.Spec.principal`); "iPhone" as written.
+    public static let currentVersion = 12
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
@@ -409,7 +416,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             }
         }
         var evidence: [ShotOn: Evidence] = [:]
-        var strength: [ShotOn: (Int, Int, Int, Int, Int)] = [:]
+        var strength: [ShotOn: (Int, Int, Int, Int, Int, Int)] = [:]
         // Only what's said to have been shot with: the names alone are for the notes and search.
         for spec in specs.specs where spec.capture {
             for found in Self.shotOn(spec) {
@@ -431,12 +438,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 // minutes", then a sentence that only says it was filmed that way, then part of it);
                 // then how plainly it's said of this film: in so many words (see
                 // `TechSpecs.Spec.direct`), then this film's own spec sheet, then a mention; then said as
-                // done over said as what would be used; then a sentence naming the film over one that
+                // the film's main coverage ("Sony Venice 2 bodies for traditional coverage", "most scenes
+                // were shot with…", `TechSpecs.Spec.principal`) over gear for something else (an
+                // on-board camera); then said as done over said as what would be used; then a sentence naming the film over one that
                 // doesn't; and only then gear named ("Kodak Vision3 250D") over Reel's own word
                 // ("Film"). Among equals, the first read (the magazines' interviews, then the film's
                 // article, then the cinematographer's). Only sentences already found to be about this
                 // film, its own entry and its shooting take part (see `TechSpecs.read`).
-                let strong = (rank, spec.said, spec.intended ? 0 : 1, spec.namesFilm ? 1 : 0, spec.isFixedName ? 0 : 1)
+                let strong = (rank, spec.said, spec.principal ? 1 : 0, spec.intended ? 0 : 1, spec.namesFilm ? 1 : 0, spec.isFixedName ? 0 : 1)
                 if let known = strength[found], known >= strong { continue }
                 evidence[found] = said
                 strength[found] = strong
