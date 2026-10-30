@@ -61,7 +61,7 @@ final class TestFootageTests: XCTestCase {
         let turn = quiet(["The tests were shot in black-and-white, but the film was shot in colour on Kodak 35mm film."])
         XCTAssertEqual(turn.index.shotOn, [.film])
         XCTAssertEqual(quiet(["We shot tests on 35mm and 65mm and the film on 65mm film."]).index.shotOn, [.film])
-        XCTAssertEqual(quiet(["Tests of the format were so good that The Quiet Harbour was shot on Kodak 65mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["After tests of the format, Doe shot The Quiet Harbour on Kodak 65mm film."]).index.shotOn, [.film])
         XCTAssertEqual(quiet(["The night shoot was an acid test, and Doe shot it on Kodak 35mm film."]).index.shotOn, [.film])
         XCTAssertEqual(quiet(["The look has stood the test of time: Doe shot The Quiet Harbour on Kodak 35mm film."]).index.shotOn, [.film])
     }
