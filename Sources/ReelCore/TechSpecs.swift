@@ -1011,7 +1011,8 @@ public struct TechSpecs: Equatable, Sendable {
     /// Where the tests are what the sentence is about, not a word in it ("after the tests, Doe shot
     /// the film on 35mm" says how the film was shot).
     static func testedOnly(_ sentence: String, at range: Range<String.Index>) -> Bool {
-        let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
+        // Up to the end of the words: a rule's words can hold the verb ("[shot on 16mm film]").
+        let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.upperBound])
         guard matches(testsShot, lead) else { return false }
         return !matches(chosenAfter, sentence)
     }
