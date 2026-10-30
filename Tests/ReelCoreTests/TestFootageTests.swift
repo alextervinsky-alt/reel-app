@@ -62,6 +62,11 @@ final class TestFootageTests: XCTestCase {
         XCTAssertEqual(turn.index.shotOn, [.film])
         XCTAssertEqual(quiet(["We shot tests on 35mm and 65mm and the film on 65mm film."]).index.shotOn, [.film])
         XCTAssertEqual(quiet(["After tests of the format, Doe shot The Quiet Harbour on Kodak 65mm film."]).index.shotOn, [.film])
+        // Choosing to test isn't choosing what was tested; a choice after a turn is its own.
+        XCTAssertEqual(quiet(["The team decided to shoot camera tests on the ARRI Alexa 65 and 35mm film."]).index.shotOn, [])
+        let decided = quiet(["Tests were shot on 65mm film, but Doe ultimately decided on the ARRI Alexa 35."])
+        XCTAssertEqual(decided.index.shotOn, [.digital])
+        XCTAssertFalse(decided.specs.specs.contains { $0.name == "65 mm" })
         XCTAssertEqual(quiet(["The night shoot was an acid test, and Doe shot it on Kodak 35mm film."]).index.shotOn, [.film])
         XCTAssertEqual(quiet(["The look has stood the test of time: Doe shot The Quiet Harbour on Kodak 35mm film."]).index.shotOn, [.film])
     }

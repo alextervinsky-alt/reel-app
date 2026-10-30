@@ -300,7 +300,7 @@ final class AppModel {
     @ObservationIgnored var notesWritable = true
     /// False when Library.json is there but couldn't be opened, or a newer Reel wrote it: not
     /// written this session (see `LibraryOpening`).
-    @ObservationIgnored var libraryWritable = true
+    var libraryWritable = true
     @ObservationIgnored var settingsWritable = true
     @ObservationIgnored var warnedNotesReadOnly = false
 

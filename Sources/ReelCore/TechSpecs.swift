@@ -1015,9 +1015,11 @@ public struct TechSpecs: Equatable, Sendable {
         let part = segmentRange(of: sentence, around: range)
         let lead = String(sentence[part.lowerBound..<range.upperBound])
         guard matches(testsShot, lead) else { return false }
-        // Chosen in so many words, from the tests on ("…and in the end we chose it"): not "the film
-        // was shot in colour" after a turn, nor "for the film" or "before principal photography".
-        return !matches(testAdopted, String(sentence[part.lowerBound...]))
+        // Chosen in so many words ("…and in the end we chose it"): not "the film was shot in colour"
+        // after a turn, nor "for the film" or "before principal photography".
+        // After the words and before the sentence turns: "…tests on 16mm and 35mm, and in the end chose
+        // 35mm", not "decided to shoot camera tests on…" nor "…, but Doe ultimately decided on 35mm".
+        return !matches(testAdopted, String(sentence[range.upperBound..<part.upperBound]))
     }
 
     static let testAdopted = try! NSRegularExpression(
