@@ -1033,7 +1033,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// Tests as what was shot: "…tests were shot in", "test footage was filmed on", "we shot tests on"
     /// (the words may begin with the verb: "tests were [shot in black-and-white]").
     static let testsShot = try! NSRegularExpression(
-        pattern: #"\b(?:tests?|test\s+(?:footage|shots?|reels?|scenes?|material))(?:\s+(?:for|of)\s+[^.;,]{1,25}?)?\s+(?:was|were|had been|are|is|got)\s+(?:(?:all|also|first|initially|mostly)\s+)?(?:(?:shot|filmed|photographed|captured|lensed|recorded)\b"# + testTail + #")?$|\b(?:shot|filmed|ran|did|conducted|performed|photographed)\s+(?:(?:some|our|the|a|several|extensive|early|camera|lens|stock|film|screen|make-?up|wardrobe|hair)\s+){0,3}(?:tests?|test\s+footage)\s+(?:on|in|with|using)\b"# + testTail + #"$"#,
+        pattern: #"\b(?:tests?|test\s+(?:footage|shots?|reels?|scenes?|material))(?:\s+(?:for|of)\s+[^.;,]{1,25}?)?\s+(?:was|were|had been|are|is|got)\s+(?:(?:all|also|first|initially|mostly)\s+)?(?:(?:shot|filmed|photographed|captured|lensed|recorded)\b"# + testTail + #")?$|\b(?:shot|shoot|shooting|filmed|film|filming|ran|run|running|did|do|doing|conducted|conduct|performed|perform|photographed)\s+(?:(?:some|our|the|a|several|extensive|early|camera|lens|stock|film|screen|make-?up|wardrobe|hair)\s+){0,3}(?:tests?|test\s+footage)\s+(?:on|in|with|using)\b"# + testTail + #"$"#,
         options: [.caseInsensitive])
 
     /// How `denied` words are set aside: drawn on ("inspired by"), set against something ("unlike",
