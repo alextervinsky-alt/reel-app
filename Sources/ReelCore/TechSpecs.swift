@@ -327,6 +327,8 @@ public struct TechSpecs: Equatable, Sendable {
                         // Arri Alexa.": what was tried, not what it was shot on (unless it says what was chosen).
                         let tried = index > 0 && matches(testsDone, sentences[index - 1]) && !matches(chosenAfter, sentences[index - 1])
                             && !matches(chosenAfter, sentence)
+                        // "Initially, the traditional hair-and-make up tests were shot in black-and-white."
+                        // is how the tests were shot, not the film (checked at each name below).
                         if !otherFilm, triggers.contains(where: { lowered.contains($0) }) {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
@@ -366,9 +368,10 @@ public struct TechSpecs: Equatable, Sendable {
                                                       intended: saidAsIntended(sentence, at: at),
                                                       namesFilm: namesTitle(segment(of: sentence, around: at), title: title),
                                                       principal: saidAsPrincipal(sentence, at: at),
-                                                      capture: said.captured && !tried && !speech, aboutThisFilm: said.aboutThisFilm,
+                                                      capture: said.captured && !tried && !speech && !testedOnly(sentence, at: at),
+                                                      aboutThisFilm: said.aboutThisFilm,
                                                       attribution: !said.aboutThisFilm ? .otherProduction
-                                                        : said.captured && !tried && !speech ? .direct : .ambiguous))
+                                                        : said.captured && !tried && !speech && !testedOnly(sentence, at: at) ? .direct : .ambiguous))
                                 }
                             }
                         }
@@ -1000,6 +1003,24 @@ public struct TechSpecs: Equatable, Sendable {
         let what = String(chars[start..<min(chars.count, end + 12)])
         return what.range(of: #"\b(?:footage|clips?|videos?|reels?|examples|showreels?)\b"#, options: .regularExpression) != nil
     }
+
+    /// The words are what tests were shot on, in their own part of the sentence, and the sentence
+    /// doesn't say it was then chosen: "Initially, the traditional hair-and-make up tests were shot
+    /// in black-and-white", "we shot camera tests on 16mm and 35mm". Test footage isn't the film (a
+    /// test that led to the choice is: "…tests on 65mm, and in the end we chose it for the shoot").
+    /// Where the tests are what the sentence is about, not a word in it ("after the tests, Doe shot
+    /// the film on 35mm" says how the film was shot).
+    static func testedOnly(_ sentence: String, at range: Range<String.Index>) -> Bool {
+        let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.lowerBound])
+        guard matches(testsShot, lead) else { return false }
+        return !matches(chosenAfter, sentence)
+    }
+
+    /// Tests as what was shot: "…tests were shot in", "test footage was filmed on", "we shot tests on"
+    /// (the words may begin with the verb: "tests were [shot in black-and-white]").
+    static let testsShot = try! NSRegularExpression(
+        pattern: #"\b(?:tests?|test\s+(?:footage|shots?|reels?|scenes?|material))(?:\s+(?:for|of)\s+[^.;,]{1,60}?)?\s+(?:was|were|had been|are|is|got)\s+(?:(?:all|also|first|initially|mostly)\s+)?(?:(?:shot|filmed|photographed|captured|lensed|recorded)\b[^.;]*)?$|\b(?:shot|filmed|ran|did|conducted|performed|photographed)\s+(?:(?:some|our|the|a|several|extensive|early|camera|lens|stock|film|screen|make-?up|wardrobe|hair)\s+){0,3}(?:tests?|test\s+footage)\s+(?:on|in|with|using)\b[^.;]*$"#,
+        options: [.caseInsensitive])
 
     /// How `denied` words are set aside: drawn on ("inspired by"), set against something ("unlike",
     /// "compared with"), or not used (the rest: "not", "considered", "tested", "rather than").

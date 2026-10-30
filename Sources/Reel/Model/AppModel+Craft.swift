@@ -7,42 +7,36 @@ import ReelCore
 /// gear and techniques are kept, with the sentence behind each Shot on (see `CraftIndex`).
 extension AppModel {
     /// Reads the films not read yet, read by older rules or long ago, and those whose last reading
-    /// was incomplete when it's due again (see `CraftQueue`). Runs after film info is looked up;
-    /// stops when offline, and carries on next time: what's due is worked out from what's stored.
+    /// was incomplete when it's due again (see `CraftQueue`). Runs after film info is looked up, when
+    /// a planned retry comes due (`scheduleCraftWake`), and when the network comes back or the Mac
+    /// wakes (`resumeMaintenance`); stops when offline, and carries on next time: what's due is worked
+    /// out from what's stored. Every decision is `CraftRun`'s; this fetches and writes.
     func readCraft() async {
         guard !craftRunning else { return }
         craftRunning = true
+        var run = CraftRun()
+        craftRun = run
         defer {
+            craftRun = nil
             craftRunning = false
             if craftPending != 0 { craftPending = 0 }
+            scheduleCraftWake()
         }
-        var attempted = Set<Int>()
-        var failedInARow = 0
-        // The films of the latest failures in a row: when they end the run (offline), they aren't
-        // put back for hours, as one film that can't be reached is.
-        var failingRun: [Int] = []
         // Kept and written in batches: the library is rebuilt once per batch, not per film.
-        var read: [Int: CraftIndex] = [:]
-        var failed: [Int: CraftAttempt] = [:]
-        var lastWrite = Date()
-        func write() {
-            guard !read.isEmpty || !failed.isEmpty else { return }
-            let batch = read, tries = failed
-            read = [:]
-            failed = [:]
-            lastWrite = Date()
-            storeCraft(batch, failed: tries)
+        func write(force: Bool) {
+            if let writes = run.takeWrites(force: force) { storeCraft(writes.read, failed: writes.failed) }
+            craftRun = run
         }
-        defer { write() }
+        defer { write(force: true) }
         while !Task.isCancelled {
             // Films whose info and Wikipedia facts are in (the article's title comes with the facts),
-            // one for each film, the longest since tried first.
-            let due = CraftQueue.due(films, attempted: attempted)
-            if craftPending != due.count + read.count { craftPending = due.count + read.count }
-            // Two films at a time (each reads its article and camera sources side by side).
-            let batch = Array(due.prefix(2))
+            // one for each film, the longest since tried first; two at a time (each reads its article
+            // and camera sources side by side).
+            let batch = run.nextBatch(films)
+            let pending = run.pending(films) + batch.count
+            if craftPending != pending { craftPending = pending }
+            craftRun = run
             guard !batch.isEmpty else { return }
-            for film in batch { if let id = film.tmdb?.id { attempted.insert(id) } }
             // Their collections first (cached for two weeks), so a sequel's articles aren't read.
             for film in batch { if let details = film.tmdb { await loadCollection(of: details) } }
             var unknownCollection = Set<Int>()
@@ -67,33 +61,45 @@ extension AppModel {
             for (id, reading, logName) in results {
                 // As it is now (the tab may have stored a reading meanwhile), its newest copy.
                 let film = CraftQueue.representatives(of: films.filter { $0.tmdb?.id == id }).first
-                if let reading {
-                    var found = reading.index
-                    if unknownCollection.contains(id) { found.discovery = CraftIndex.currentDiscovery - 1 }
-                    // Tag by tag: what a site that didn't answer said before is carried over, marked
-                    // so, and read again later (see `CraftIndex.merge`).
-                    let merged = CraftIndex.merging(old: film?.craft, new: found)
-                    read[id] = merged.index
+                var found = reading?.index
+                if unknownCollection.contains(id) { found?.discovery = CraftIndex.currentDiscovery - 1 }
+                // Tag by tag: what a site that didn't answer said before is carried over, marked so,
+                // and read again later (see `CraftIndex.merge`). Nothing reached: tried again later
+                // (its log still says what's stored), so it doesn't come first again next time.
+                if let merged = run.record(id, stored: film, reading: found), let reading {
                     // What was read and why, and what's stored, beside the library (see `CraftLog`).
                     writeCraftLog(reading.log + CraftLog.stored(merged), named: logName)
-                    failedInARow = 0
-                    failingRun = []
-                } else {
-                    // Nothing could be reached: tried again later (its log still says what's stored),
-                    // so it doesn't come first again next time.
-                    failed[id] = CraftAttempt.failed(after: film?.craftAttempt)
-                    failedInARow += 1
-                    failingRun.append(id)
                 }
             }
-            // Several in a row: offline, not these films. The rest wait for the next run.
-            if failedInARow >= 6 {
-                for id in failingRun { failed[id] = nil }
-                return
-            }
-            if read.count + failed.count >= 9 || Date().timeIntervalSince(lastWrite) > 30 { write() }
+            craftRun = run
+            // Several in a row: offline, not these films. The rest wait for the network (or the next run).
+            if run.offline { return }
+            write(force: false)
             // A short pause between batches, whatever the size of the library.
             try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    /// Writes the readings a run has made and not written yet: when Reel quits mid-run they're kept
+    /// rather than read again.
+    func flushCraft() {
+        guard var run = craftRun, let writes = run.takeWrites(force: true) else { return }
+        craftRun = run
+        storeCraft(writes.read, failed: writes.failed)
+    }
+
+    /// Wakes the queue when the next planned reading comes due (a site that didn't answer, a try
+    /// that came to nothing), rather than at the next six-hourly refresh. One wake at a time; each
+    /// run plans the next. Beyond six hours the regular refresh comes first.
+    func scheduleCraftWake() {
+        craftWake?.cancel()
+        guard let next = CraftQueue.nextDue(films) else { return }
+        let wait = max(60, next.timeIntervalSinceNow + 5)
+        guard wait < 6 * 3600 else { return }
+        craftWake = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            await self?.readCraft()
         }
     }
 
@@ -155,20 +161,10 @@ extension AppModel {
     func storeCraft(_ batch: [Int: CraftIndex], failed: [Int: CraftAttempt] = [:]) {
         guard !batch.isEmpty || !failed.isEmpty else { return }
         var changes: [CraftChange] = []
-        var noted = Set<Int>()
         mutateFilms { list in
-            for i in list.indices {
-                guard let id = list[i].tmdb?.id else { continue }
-                if let index = batch[id] {
-                    let before = list[i].craft?.shotOn
-                    if let before, before != index.shotOn, noted.insert(id).inserted {
-                        changes.append(CraftChange(title: list[i].displayTitle, before: before, after: index.shotOn))
-                    }
-                    list[i].craft = index
-                    list[i].craftAttempt = nil
-                } else if let attempt = failed[id] {
-                    list[i].craftAttempt = attempt
-                }
+            for change in CraftRun.apply(read: batch, failed: failed, to: &list) {
+                changes.append(CraftChange(title: list[change.index].displayTitle, before: change.before,
+                                           after: list[change.index].craft?.shotOn ?? []))
             }
         }
         if !changes.isEmpty { craftChanges = Array((changes + craftChanges).prefix(200)) }

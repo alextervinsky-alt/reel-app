@@ -33,6 +33,8 @@ extension AppModel {
                 scheduleSave(.library)
                 return
             }
+            // One that's there and couldn't be used isn't replaced (see `LibraryOpening`).
+            guard libraryWritable else { return }
             let snapshot = LibraryFile(films: films)
             writer.enqueue {
                 do { try JSONStore.save(snapshot, to: folder.library) } catch { report(error) }

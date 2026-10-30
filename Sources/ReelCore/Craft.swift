@@ -72,7 +72,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// it back to 24 frames per second") isn't how it was shot; "8.6K" isn't "6K"; "whenever possible"
     /// is this film's; "<title> was her first digital shoot" says digital; the reason prefers a
     /// sentence giving the film's main coverage (`TechSpecs.Spec.principal`); "iPhone" as written.
-    public static let currentVersion = 12
+    /// 13: what tests were shot on isn't how the film was ("the hair-and-make up tests were shot in
+    /// black-and-white"), unless the sentence says it was then chosen (`TechSpecs.testedOnly`).
+    public static let currentVersion = 13
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.

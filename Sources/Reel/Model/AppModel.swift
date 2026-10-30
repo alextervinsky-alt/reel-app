@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Network
 import Observation
 import ReelCore
 
@@ -241,6 +242,13 @@ final class AppModel {
     @ObservationIgnored var craftRunning = false
     /// How many films are still to be read for searching by craft (0 when done).
     var craftPending = 0
+    /// The Shot on run under way, with the readings it hasn't written yet (written when Reel quits).
+    @ObservationIgnored var craftRun: CraftRun?
+    /// Wakes the Shot on queue when its next planned reading is due (see `scheduleCraftWake`).
+    @ObservationIgnored var craftWake: Task<Void, Never>?
+    /// Starts background work again when the network comes back or the Mac wakes.
+    @ObservationIgnored var resumeTrigger = ResumeTrigger()
+    @ObservationIgnored var pathMonitor: NWPathMonitor?
     /// Free bytes on each connected drive, for the sidebar.
     var freeSpace: [String: Int64] = [:]
     @ObservationIgnored var rerunRequested = false
@@ -284,6 +292,9 @@ final class AppModel {
     @ObservationIgnored let writer = FileWriter()
     /// False when a file exists but couldn't be opened: Reel then never writes over it.
     @ObservationIgnored var notesWritable = true
+    /// False when Library.json is there but couldn't be opened, or a newer Reel wrote it: not
+    /// written this session (see `LibraryOpening`).
+    @ObservationIgnored var libraryWritable = true
     @ObservationIgnored var settingsWritable = true
     @ObservationIgnored var warnedNotesReadOnly = false
 
@@ -366,8 +377,11 @@ final class AppModel {
     private func openLibrary() async {
         let libraryURL = folder.library
         let knownDrives = drives
-        let (library, legacy, found, prebuilt) = await Task.detached(priority: .userInitiated) {
-            let library = JSONStore.load(LibraryFile.self, from: libraryURL)
+        let (opening, legacy, found, prebuilt) = await Task.detached(priority: .userInitiated) {
+            // A library that's there and can't be used is never replaced by an empty one (see
+            // `LibraryOpening`).
+            let opening = LibraryOpening.open(libraryURL)
+            let library = opening.file
             let legacy = knownDrives.isEmpty && library?.drives == nil ? JSONStore.load(LegacyLibrary.self, from: libraryURL) : nil
             let found = DriveLocator.locate(knownDrives)
             // The grid's items are built here too (main drives first, as `rebuild` does), so the
@@ -378,8 +392,10 @@ final class AppModel {
             let prebuilt = AppModel.makeItems(films: ordered, online: Set(found.keys)) { film in
                 film.tmdb.map { MoodClassifier.moods(genres: $0.genreNames, keywords: $0.keywordNames, runtime: $0.runtime) } ?? []
             }.items
-            return (library, legacy, found, prebuilt)
+            return (opening, legacy, found, prebuilt)
         }.value
+        let library = opening.file
+        applyLibraryOpening(opening)
 
         var loaded = library?.films ?? []
         // Lookups that failed or found nothing last time are retried (the file-name reader may
@@ -436,12 +452,46 @@ final class AppModel {
         }
     }
 
+    /// The network came back or the Mac woke: film info is looked up again (only what's due), and
+    /// Shot on readings follow it (see `ResumeTrigger`: not more than once every two minutes).
+    func resumeMaintenance(_ event: ResumeTrigger.Event) {
+        guard isLoaded, resumeTrigger.shouldStart(event) else { return }
+        Task { await lookUpPending() }
+        // Without a TMDB token film info isn't looked up, but readings that are due still are.
+        if !hasToken { Task { await readCraft() } }
+    }
+
     /// Loads a file the user can't easily recreate.
     /// - Missing: fine, start empty.
     /// - Can't be opened (e.g. a disk error or an iCloud file not downloaded): left untouched and
     ///   not written to during this session.
     /// - Opened but not readable as Reel data: moved aside under a dated name (never deleted),
     ///   and a fresh file is started.
+    /// Says how Library.json was found when it isn't simply there and readable, sets a damaged one
+    /// aside (never deleted), and stops this session from writing one it mustn't replace.
+    private func applyLibraryOpening(_ opening: LibraryOpening) {
+        libraryWritable = opening.writable
+        switch opening {
+        case .missing, .loaded:
+            break
+        case .unopenable:
+            notice = "“Library.json” couldn't be opened, so Reel won't change it this time. Quit and reopen Reel to try again."
+        case .newer(let version, _):
+            notice = "“Library.json” was saved by a newer version of Reel (format \(version)), so this version won't change it. Install the newer Reel to keep it up to date."
+        case .damaged:
+            let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
+                .replacingOccurrences(of: ":", with: "")
+            let aside = folder.root.appendingPathComponent("Library (unreadable \(stamp)).json")
+            do {
+                try FileManager.default.moveItem(at: folder.library, to: aside)
+                notice = "“Library.json” couldn't be read, so it was set aside as “\(aside.lastPathComponent)” and the library is being rebuilt from your drives."
+            } catch {
+                libraryWritable = false
+                notice = "“Library.json” couldn't be read, so Reel won't change it this time."
+            }
+        }
+    }
+
     private func readProtected<T: Decodable>(_ type: T.Type, from url: URL, label: String) -> (value: T?, writable: Bool) {
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path) else { return (nil, true) }
@@ -467,6 +517,18 @@ final class AppModel {
 
     private func observeSystem() {
         let workspace = NSWorkspace.shared.notificationCenter
+        // Back from sleep: what came due meanwhile is done now, not at the next six-hourly refresh.
+        observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeMaintenance(.wake) }
+        })
+        // The network back after it was gone: film info and Shot on readings that stopped carry on.
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let reachable = path.status == .satisfied
+            Task { @MainActor in self?.resumeMaintenance(.network(reachable: reachable)) }
+        }
+        monitor.start(queue: DispatchQueue(label: "Reel.network"))
+        pathMonitor = monitor
         for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification, NSWorkspace.didRenameVolumeNotification] {
             observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.refreshMounts() }
@@ -475,7 +537,11 @@ final class AppModel {
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.saveAllNow() }
+            MainActor.assumeIsolated {
+                // Readings made and not written yet are kept, not read again next time.
+                self?.flushCraft()
+                self?.saveAllNow()
+            }
         })
         // Back from the player: ask whether the film was finished.
         observers.append(NotificationCenter.default.addObserver(

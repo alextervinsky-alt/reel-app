@@ -360,7 +360,7 @@ final class DiscoveryTraceTests: XCTestCase {
     /// Discovery 4 (as 3 before it): the thin readings and collection films are read again, the rest aren't.
     func testANewDiscoveryReadsAgainOnlyThinReadingsAndCollectionFilms() {
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)
-        XCTAssertEqual(CraftIndex.currentVersion, 12, "1.10.3's reading rules")
+        XCTAssertEqual(CraftIndex.currentVersion, 13, "1.10.4: tests aren't the film")
         let now = Date()
         func reading(sources: Int, tags: [ShotOn]) -> CraftIndex {
             var index = CraftIndex(version: CraftIndex.currentVersion, readAt: now, shotOn: tags, names: [], sources: sources)

@@ -8,7 +8,7 @@ extension AppModel {
         omdbKey.isEmpty ? nil : OMDbClient(key: omdbKey)
     }
 
-    static let offlineMessage = "Reel is offline. Film info will be fetched next time Reel opens or when you press ⌘R."
+    static let offlineMessage = "Reel is offline. Film info will be fetched when the connection is back, or when you press ⌘R."
     static let tokenMessage = "TMDB didn't accept the token. You can replace it in Settings (⌘,)."
 
     /// Looks up every pending film, six at a time (each file once, even when it is on two drives:

@@ -74,6 +74,67 @@ public struct ReelFolder: Sendable {
     """
 }
 
+/// How Library.json was found at launch, and whether Reel may write it this session. The library is
+/// a cache (rebuilt by scanning the drives), but rebuilding it loses every film's info and Shot on
+/// reading, so a file that's there and can't be used is never replaced by an empty library:
+/// - missing: start empty, write as usual;
+/// - there but can't be opened (a disk error, an iCloud file not downloaded): left untouched and not
+///   written this session;
+/// - opened but not Reel's library (damaged): set aside under a dated name by the app, never
+///   deleted, and a new one started;
+/// - written by a newer Reel (a higher `version`): read if it can be, never written, so this older
+///   Reel can't drop what the newer one keeps.
+public enum LibraryOpening: Equatable, Sendable {
+    case missing
+    case loaded(LibraryFile)
+    case unopenable
+    case damaged
+    case newer(version: Int, LibraryFile?)
+
+    /// The library's films to start from.
+    public var films: [FilmEntry] {
+        switch self {
+        case .loaded(let file): return file.films
+        case .newer(_, let file): return file?.films ?? []
+        case .missing, .unopenable, .damaged: return []
+        }
+    }
+
+    public var file: LibraryFile? {
+        switch self {
+        case .loaded(let file): return file
+        case .newer(_, let file): return file
+        case .missing, .unopenable, .damaged: return nil
+        }
+    }
+
+    /// Whether Reel may write Library.json this session (after a damaged one is set aside: yes).
+    public var writable: Bool {
+        switch self {
+        case .missing, .loaded, .damaged: return true
+        case .unopenable, .newer: return false
+        }
+    }
+
+    public static func open(_ url: URL) -> LibraryOpening {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        guard let data = try? Data(contentsOf: url) else { return .unopenable }
+        return decide(data)
+    }
+
+    public static func decide(_ data: Data) -> LibraryOpening {
+        // Read once in the usual case; only a file that isn't this Reel's library is looked at again.
+        if let file = try? JSONStore.decode(LibraryFile.self, from: data) {
+            return file.version > LibraryFile.currentVersion ? .newer(version: file.version, file) : .loaded(file)
+        }
+        struct Header: Decodable { let version: Int? }
+        if let version = (try? JSONStore.decode(Header.self, from: data))?.version, version > LibraryFile.currentVersion {
+            return .newer(version: version, nil)
+        }
+        return .damaged
+    }
+}
+
 public enum JSONStore {
     public static func load<T: Decodable>(_ type: T.Type, from url: URL) -> T? {
         guard let data = try? Data(contentsOf: url) else { return nil }

@@ -550,8 +550,12 @@ public struct LibraryFile: Codable, Equatable, Sendable {
     /// Only present in files written by Reel 0.3. Drives now live in Settings.json.
     public var drives: [Drive]?
 
+    /// The format this Reel writes. A file with a higher version is a newer Reel's: never written
+    /// over (see `LibraryOpening`).
+    public static let currentVersion = 3
+
     public init(films: [FilmEntry] = []) {
-        self.version = 3
+        self.version = LibraryFile.currentVersion
         self.films = films
         self.drives = nil
     }

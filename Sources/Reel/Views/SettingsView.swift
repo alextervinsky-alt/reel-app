@@ -182,6 +182,12 @@ struct SettingsView: View {
                         Text(coverage.partial.formatted()).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
+                // When Reel reads them again on its own (nothing to press).
+                if coverage.partial > 0, let next = CraftQueue.nextDue(model.films), next < Date().addingTimeInterval(45 * 86_400) {
+                    LabeledContent("Next reading planned (automatic)") {
+                        Text(next.formatted(.relative(presentation: .named))).foregroundStyle(.secondary)
+                    }
+                }
             } header: {
                 Text("Shot On")
             } footer: {
