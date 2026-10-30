@@ -248,6 +248,12 @@ final class AppModel {
     @ObservationIgnored var craftWake: Task<Void, Never>?
     /// Starts background work again when the network comes back or the Mac wakes.
     @ObservationIgnored var resumeTrigger = ResumeTrigger()
+    /// A resumed pass planned for later (see `ResumeTrigger`).
+    @ObservationIgnored var resumePlanned: Task<Void, Never>?
+    /// A Shot on run was asked for while one was under way: it goes round once more.
+    @ObservationIgnored var craftRerunRequested = false
+    /// Runs in a row that stopped offline (how long until the next try; see `CraftRun.offlineRetryDelay`).
+    @ObservationIgnored var craftOfflineStops = 0
     @ObservationIgnored var pathMonitor: NWPathMonitor?
     /// Free bytes on each connected drive, for the sidebar.
     var freeSpace: [String: Int64] = [:]
@@ -455,10 +461,31 @@ final class AppModel {
     /// The network came back or the Mac woke: film info is looked up again (only what's due), and
     /// Shot on readings follow it (see `ResumeTrigger`: not more than once every two minutes).
     func resumeMaintenance(_ event: ResumeTrigger.Event) {
-        guard isLoaded, resumeTrigger.shouldStart(event) else { return }
-        Task { await lookUpPending() }
-        // Without a TMDB token film info isn't looked up, but readings that are due still are.
-        if !hasToken { Task { await readCraft() } }
+        // Every signal is noted, before the library is open too; only the start waits for it.
+        switch resumeTrigger.handle(event) {
+        case .none:
+            return
+        case .now:
+            resumePlanned?.cancel()
+            startResumedPass()
+        case .at(let when):
+            resumePlanned?.cancel()
+            resumePlanned = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(max(0, when.timeIntervalSinceNow)))
+                guard !Task.isCancelled, let self, self.resumeTrigger.fire() else { return }
+                self.startResumedPass()
+            }
+        }
+    }
+
+    /// Film info that's due (and Shot on after it), and Shot on readings that are due either way.
+    private func startResumedPass() {
+        // Before the library is open, launch does its own pass.
+        guard isLoaded else { return }
+        Task {
+            await lookUpPending()
+            await readCraft()
+        }
     }
 
     /// Loads a file the user can't easily recreate.
@@ -522,12 +549,14 @@ final class AppModel {
             MainActor.assumeIsolated { self?.resumeMaintenance(.wake) }
         })
         // The network back after it was gone: film info and Shot on readings that stopped carry on.
+        // Reported on the main queue, in order; the first report too (before the library is open), so
+        // a launch while offline sees the network come back.
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             let reachable = path.status == .satisfied
-            Task { @MainActor in self?.resumeMaintenance(.network(reachable: reachable)) }
+            MainActor.assumeIsolated { self?.resumeMaintenance(.network(reachable: reachable)) }
         }
-        monitor.start(queue: DispatchQueue(label: "Reel.network"))
+        monitor.start(queue: .main)
         pathMonitor = monitor
         for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification, NSWorkspace.didRenameVolumeNotification] {
             observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in

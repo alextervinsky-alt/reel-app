@@ -12,15 +12,32 @@ extension AppModel {
     /// wakes (`resumeMaintenance`); stops when offline, and carries on next time: what's due is worked
     /// out from what's stored. Every decision is `CraftRun`'s; this fetches and writes.
     func readCraft() async {
-        guard !craftRunning else { return }
+        guard !craftRunning else {
+            // A run is under way: it goes round once more when it ends, so this ask isn't lost
+            // (the network came back while the run was failing).
+            craftRerunRequested = true
+            return
+        }
         craftRunning = true
+        craftRerunRequested = false
         var run = CraftRun()
         craftRun = run
         defer {
             craftRun = nil
             craftRunning = false
             if craftPending != 0 { craftPending = 0 }
-            scheduleCraftWake()
+            if craftRerunRequested {
+                craftRerunRequested = false
+                Task { await readCraft() }
+            } else if run.offline {
+                // Stopped offline: tried again in minutes, then hourly, even when nothing says the
+                // network is back (it may have been up all along, with every source failing).
+                craftOfflineStops += 1
+                scheduleCraftWake(after: CraftRun.offlineRetryDelay(craftOfflineStops))
+            } else {
+                craftOfflineStops = 0
+                scheduleCraftWake()
+            }
         }
         // Kept and written in batches: the library is rebuilt once per batch, not per film.
         func write(force: Bool) {
@@ -71,6 +88,7 @@ extension AppModel {
                     writeCraftLog(reading.log + CraftLog.stored(merged), named: logName)
                 }
             }
+            run.endBatch()
             craftRun = run
             // Several in a row: offline, not these films. The rest wait for the network (or the next run).
             if run.offline { return }
@@ -91,11 +109,17 @@ extension AppModel {
     /// Wakes the queue when the next planned reading comes due (a site that didn't answer, a try
     /// that came to nothing), rather than at the next six-hourly refresh. One wake at a time; each
     /// run plans the next. Beyond six hours the regular refresh comes first.
-    func scheduleCraftWake() {
+    func scheduleCraftWake(after delay: TimeInterval? = nil) {
         craftWake?.cancel()
-        guard let next = CraftQueue.nextDue(films) else { return }
-        let wait = max(60, next.timeIntervalSinceNow + 5)
-        guard wait < 6 * 3600 else { return }
+        let wait: TimeInterval
+        if let delay {
+            wait = delay
+        } else {
+            guard let next = CraftQueue.nextDue(films) else { return }
+            wait = max(60, next.timeIntervalSinceNow + 5)
+            // A little over six hours too: a retry planned six hours after a run's last films.
+            guard wait <= 6 * 3600 + 900 else { return }
+        }
         craftWake = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait))
             guard !Task.isCancelled else { return }

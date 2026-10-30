@@ -74,6 +74,7 @@ final class AutonomyTests: XCTestCase {
                 run.record(id, stored: stored, reading: reading(source(id), now: now), now: now)
                 if let quitAfter, order.count >= quitAfter { return order }
             }
+            run.endBatch()
             if run.offline { break }
             if let writes = run.takeWrites(now: now) { CraftRun.apply(read: writes.read, failed: writes.failed, to: &films) }
         }
@@ -131,8 +132,8 @@ final class AutonomyTests: XCTestCase {
         XCTAssertTrue(films.allSatisfy { $0.craftAttempt == nil && $0.craft == nil })
         XCTAssertEqual(CraftQueue.due(films, now: start).count, 146, "still due, from what's stored")
         var trigger = ResumeTrigger()
-        XCTAssertFalse(trigger.shouldStart(.network(reachable: false), now: start))
-        XCTAssertTrue(trigger.shouldStart(.network(reachable: true), now: start.addingTimeInterval(600)), "back online: a pass starts")
+        XCTAssertEqual(trigger.handle(.network(reachable: false), now: start), .none)
+        XCTAssertEqual(trigger.handle(.network(reachable: true), now: start.addingTimeInterval(600)), .now, "back online: a pass starts")
         XCTAssertEqual(run(&films, at: start.addingTimeInterval(600)) { .found(self.film($0)) }.count, 146)
     }
 
@@ -221,17 +222,73 @@ final class AutonomyTests: XCTestCase {
         XCTAssertEqual(Set(seen).count, 6)
     }
 
-    /// The network flapping, or waking with it: one pass, not one for each signal.
-    func testSignalsToResumeStartOnePass() {
+    /// Launched while offline: the very first report (before the library is open) is noted, so the
+    /// network's return starts a pass.
+    func testLaunchedOfflineTheNetworksReturnStartsAPass() {
         var trigger = ResumeTrigger()
-        XCTAssertFalse(trigger.shouldStart(.network(reachable: true), now: start), "the first report only notes it")
-        XCTAssertFalse(trigger.shouldStart(.network(reachable: true), now: start.addingTimeInterval(10)), "no change")
-        XCTAssertTrue(trigger.shouldStart(.wake, now: start.addingTimeInterval(20)))
-        XCTAssertFalse(trigger.shouldStart(.network(reachable: false), now: start.addingTimeInterval(30)))
-        XCTAssertFalse(trigger.shouldStart(.network(reachable: true), now: start.addingTimeInterval(40)), "too soon after the last")
-        XCTAssertFalse(trigger.shouldStart(.network(reachable: false), now: start.addingTimeInterval(50)))
-        XCTAssertFalse(trigger.shouldStart(.wake, now: start.addingTimeInterval(400)), "asleep and offline: nothing to start")
-        XCTAssertTrue(trigger.shouldStart(.network(reachable: true), now: start.addingTimeInterval(500)))
+        XCTAssertEqual(trigger.handle(.network(reachable: false), now: start), .none)
+        XCTAssertTrue(trigger.isOffline)
+        XCTAssertEqual(trigger.handle(.network(reachable: true), now: start.addingTimeInterval(300)), .now)
+        // Launched online: the first report starts nothing (launch does its own pass).
+        var online = ResumeTrigger()
+        XCTAssertEqual(online.handle(.network(reachable: true), now: start), .none)
+        XCTAssertEqual(online.handle(.network(reachable: true), now: start.addingTimeInterval(10)), .none, "no change")
+    }
+
+    /// Woken: the pass waits for the network to settle; the network dropping and coming back
+    /// meanwhile starts it then, once.
+    func testAWakeWaitsForTheNetworkAndItsReturnIsntLost() {
+        var trigger = ResumeTrigger()
+        _ = trigger.handle(.network(reachable: true), now: start)
+        XCTAssertEqual(trigger.handle(.wake, now: start), .at(start.addingTimeInterval(ResumeTrigger.settle)))
+        XCTAssertEqual(trigger.handle(.network(reachable: false), now: start.addingTimeInterval(1)), .none)
+        // Back up before the planned start: now (the app cancels the planned one).
+        XCTAssertEqual(trigger.handle(.network(reachable: true), now: start.addingTimeInterval(4)), .now)
+        // Down and up again a minute later: not dropped, put off to the end of the gap.
+        _ = trigger.handle(.network(reachable: false), now: start.addingTimeInterval(60))
+        XCTAssertEqual(trigger.handle(.network(reachable: true), now: start.addingTimeInterval(70)),
+                       .at(start.addingTimeInterval(4 + ResumeTrigger.minimumGap)))
+        // More signals before then: still the one planned start.
+        XCTAssertEqual(trigger.handle(.wake, now: start.addingTimeInterval(80)), .none)
+        XCTAssertTrue(trigger.fire(now: start.addingTimeInterval(124)))
+        // A wake while the network is known to be gone starts nothing; its return will.
+        _ = trigger.handle(.network(reachable: false), now: start.addingTimeInterval(500))
+        XCTAssertEqual(trigger.handle(.wake, now: start.addingTimeInterval(600)), .none)
+        XCTAssertEqual(trigger.handle(.network(reachable: true), now: start.addingTimeInterval(700)), .now)
+        // A planned start that falls due while offline doesn't start.
+        var later = ResumeTrigger()
+        _ = later.handle(.network(reachable: true), now: start)
+        _ = later.handle(.wake, now: start)
+        _ = later.handle(.network(reachable: false), now: start.addingTimeInterval(2))
+        XCTAssertFalse(later.fire(now: start.addingTimeInterval(10)))
+    }
+
+    /// Offline is judged per batch: films come back in any order, and one that was read means the
+    /// network is there; when it is offline, no film of the failing run is blamed.
+    func testOfflineIsJudgedPerBatch() {
+        let films = library(films: 20, twice: 0)
+        func outcome(_ pattern: [Bool]) -> CraftRun {
+            var run = CraftRun(now: start)
+            var results = pattern[...]
+            while !run.offline, !results.isEmpty, case let batch = run.nextBatch(films, now: start), !batch.isEmpty {
+                for entry in batch {
+                    guard let ok = results.popFirst() else { break }
+                    run.record(entry.tmdb!.id, stored: entry, reading: ok ? reading(.nothing, now: start) : nil, now: start)
+                }
+                run.endBatch()
+            }
+            return run
+        }
+        // read, failed | failed, failed | failed, failed | failed, read: the sixth failure comes
+        // first in its batch and the other film was read: not offline.
+        let mixed = outcome([true, false, false, false, false, false, false, true])
+        XCTAssertFalse(mixed.offline)
+        // read, failed | then six more failures: offline, and none of the seven blamed.
+        let down = outcome([true, false, false, false, false, false, false, false])
+        XCTAssertTrue(down.offline)
+        XCTAssertEqual(down.failed, [:])
+        XCTAssertEqual(CraftRun.offlineRetryDelay(1), 300)
+        XCTAssertEqual(CraftRun.offlineRetryDelay(9), 3600)
     }
 
     // MARK: The library file

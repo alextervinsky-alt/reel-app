@@ -53,6 +53,19 @@ final class TestFootageTests: XCTestCase {
         XCTAssertEqual(quiet(["Test footage was shot on the ARRI Alexa 65."]).index.shotOn, [])
     }
 
+    /// The review's sentences: "for the film" and "principal photography" don't make tests the film;
+    /// a turn to the film's own photography is the film's; "test" in other senses isn't tests.
+    func testTestsInTheirOwnWords() {
+        XCTAssertEqual(quiet(["The hair-and-make up tests for the film were shot in black-and-white."]).index.shotOn, [])
+        XCTAssertEqual(quiet(["Camera tests were shot on 65mm film two weeks before principal photography."]).index.shotOn, [])
+        let turn = quiet(["The tests were shot in black-and-white, but the film was shot in colour on Kodak 35mm film."])
+        XCTAssertEqual(turn.index.shotOn, [.film])
+        XCTAssertEqual(quiet(["We shot tests on 35mm and 65mm and the film on 65mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["Tests of the format were so good that The Quiet Harbour was shot on Kodak 65mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["The night shoot was an acid test, and Doe shot it on Kodak 35mm film."]).index.shotOn, [.film])
+        XCTAssertEqual(quiet(["The look has stood the test of time: Doe shot The Quiet Harbour on Kodak 35mm film."]).index.shotOn, [.film])
+    }
+
     /// Camera tests next to the film's own photography: each sentence for what it says.
     func testTestsAndTheFilmsPhotographyInOneArticle() {
         let reading = quiet(["Test footage was shot on the ARRI Alexa 65.", "Principal photography used Kodak 35mm film."])

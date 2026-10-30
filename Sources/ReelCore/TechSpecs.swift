@@ -1012,15 +1012,26 @@ public struct TechSpecs: Equatable, Sendable {
     /// the film on 35mm" says how the film was shot).
     static func testedOnly(_ sentence: String, at range: Range<String.Index>) -> Bool {
         // Up to the end of the words: a rule's words can hold the verb ("[shot on 16mm film]").
-        let lead = String(sentence[segmentRange(of: sentence, around: range).lowerBound..<range.upperBound])
+        let part = segmentRange(of: sentence, around: range)
+        let lead = String(sentence[part.lowerBound..<range.upperBound])
         guard matches(testsShot, lead) else { return false }
-        return !matches(chosenAfter, sentence)
+        // Chosen in so many words, from the tests on ("…and in the end we chose it"): not "the film
+        // was shot in colour" after a turn, nor "for the film" or "before principal photography".
+        return !matches(testAdopted, String(sentence[part.lowerBound...]))
     }
+
+    static let testAdopted = try! NSRegularExpression(
+        pattern: #"\b(?:in the end|ultimately|finally|eventually|chose|chosen|choose|decided|settled on|went with|opted|selected|adopted)\b"#,
+        options: [.caseInsensitive])
+
+    /// What follows the tests up to the words: short, no comma, and not the film itself ("…tests on
+    /// 35mm and 65mm and the film on 65mm").
+    static let testTail = #"(?![^.;,]*\b(?:the (?:film|movie|feature|shoot|production|picture)|principal|main unit)\b)[^.;,]{0,40}"#
 
     /// Tests as what was shot: "…tests were shot in", "test footage was filmed on", "we shot tests on"
     /// (the words may begin with the verb: "tests were [shot in black-and-white]").
     static let testsShot = try! NSRegularExpression(
-        pattern: #"\b(?:tests?|test\s+(?:footage|shots?|reels?|scenes?|material))(?:\s+(?:for|of)\s+[^.;,]{1,60}?)?\s+(?:was|were|had been|are|is|got)\s+(?:(?:all|also|first|initially|mostly)\s+)?(?:(?:shot|filmed|photographed|captured|lensed|recorded)\b[^.;]*)?$|\b(?:shot|filmed|ran|did|conducted|performed|photographed)\s+(?:(?:some|our|the|a|several|extensive|early|camera|lens|stock|film|screen|make-?up|wardrobe|hair)\s+){0,3}(?:tests?|test\s+footage)\s+(?:on|in|with|using)\b[^.;]*$"#,
+        pattern: #"\b(?:tests?|test\s+(?:footage|shots?|reels?|scenes?|material))(?:\s+(?:for|of)\s+[^.;,]{1,25}?)?\s+(?:was|were|had been|are|is|got)\s+(?:(?:all|also|first|initially|mostly)\s+)?(?:(?:shot|filmed|photographed|captured|lensed|recorded)\b"# + testTail + #")?$|\b(?:shot|filmed|ran|did|conducted|performed|photographed)\s+(?:(?:some|our|the|a|several|extensive|early|camera|lens|stock|film|screen|make-?up|wardrobe|hair)\s+){0,3}(?:tests?|test\s+footage)\s+(?:on|in|with|using)\b"# + testTail + #"$"#,
         options: [.caseInsensitive])
 
     /// How `denied` words are set aside: drawn on ("inspired by"), set against something ("unlike",

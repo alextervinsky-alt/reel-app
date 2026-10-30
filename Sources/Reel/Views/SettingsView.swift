@@ -13,6 +13,14 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            // Stays here all session (a notice can be replaced by the next one).
+            if !model.libraryWritable {
+                Section {
+                    Label("Reel isn't saving the library this session: Library.json couldn't be opened, or a newer Reel saved it. Nothing in it is changed. Quit and reopen Reel to try again.",
+                          systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+            }
             Section("Film information") {
                 LabeledContent("TMDB") {
                     Text(model.hasToken ? "Connected" : "Not connected")
