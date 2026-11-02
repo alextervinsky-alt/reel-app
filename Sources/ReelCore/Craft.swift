@@ -74,7 +74,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// sentence giving the film's main coverage (`TechSpecs.Spec.principal`); "iPhone" as written.
     /// 13: what tests were shot on isn't how the film was ("the hair-and-make up tests were shot in
     /// black-and-white"), unless the sentence says it was then chosen (`TechSpecs.testedOnly`).
-    public static let currentVersion = 13
+    /// 14: only the article's own paragraphs are read from a page, not every paragraph on it (a
+    /// related article's teaser, a news ticker; see `ArticleReader`); a page whose article can't be
+    /// told apart isn't read, and what its site said before is kept meanwhile.
+    public static let currentVersion = 14
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
@@ -321,6 +324,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         var merged = new
         let tries = (old?.retries ?? 0) + 1
         var carried: [Evidence] = [], dropped: [Dropped] = []
+        // A page on the site whose article couldn't be told apart (an extraction that failed, not a
+        // reading that found nothing).
+        func unbounded(_ site: String) -> Bool {
+            new.limits.contains { $0.site == site && $0.detail.contains(CameraSources.unboundedArticle) }
+        }
         if let old {
             for kind in old.shotOn where !new.shotOn.contains(kind) {
                 guard let evidence = old.evidence(for: kind) else {
@@ -350,6 +358,12 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 } else if readAgain {
                     carry = false
                     reason = "\(evidence.source) was read again and, by rules \(new.version), doesn't say so"
+                } else if unbounded(site), misses <= maxRetries {
+                    // Its site's page was found but its article couldn't be told apart from the rest of
+                    // the page (see `ArticleReader`): not read, so not a sign the tag is wrong. Kept,
+                    // as a page not found again is, for up to `maxRetries` readings, by any rules.
+                    carry = true
+                    reason = ""
                 } else if !sameRules {
                     carry = false
                     reason = "found by rules \(evidence.carriedRules ?? old.version); \(evidence.source) wasn't found again to read by rules \(new.version)"

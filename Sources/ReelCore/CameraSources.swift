@@ -21,6 +21,12 @@ public struct CameraReading: Equatable, Sendable {
         public var cited: URL? = nil
         /// Where the site sent Reel, when it redirected.
         public var landed: URL? = nil
+        /// How its article was told apart from the rest of the page, and how many prose paragraphs
+        /// on the page were left out as not the article's (see `ArticleReader`). For the log.
+        public var boundary: ArticleReader.Boundary? = nil
+        public var leftOut = 0
+        /// The address the page gives for itself, when it has one.
+        public var canonical: URL? = nil
         public var id: URL { url }
     }
 
@@ -307,6 +313,9 @@ public enum CameraSources {
         guard let page else { return failure?.limit ?? .unknown }
         return !otherFilm && page.paragraphs.count < 3 ? .thin : nil
     }
+
+    /// Why a page whose article couldn't be told apart from the rest of the page wasn't read.
+    public static let unboundedArticle = "the article couldn't be told apart from the rest of the page (menus, other articles, teasers)"
 
     /// A page asked for by its own address that ends on the site's front page: what it was is gone.
     public static func isFrontPage(_ landed: URL, for requested: URL) -> Bool {
@@ -616,35 +625,46 @@ public enum HTMLText {
         return nil
     }
 
-    /// The page's paragraphs (`<p>`), long enough to be prose, with no markup.
+    /// The paragraphs of the page's article (see `ArticleReader`): long enough to be prose, with no
+    /// markup. Empty when the article couldn't be told apart from the rest of the page.
     public static func paragraphs(_ html: String) -> [String] {
-        // Scripts, styles, menus and footers hold no article text.
-        var body = html
-        for tag in ["script", "style", "noscript", "nav", "footer", "aside", "figcaption"] {
-            body = body.replacingOccurrences(of: "<\(tag)\\b[\\s\\S]*?</\(tag)>", with: " ", options: [.regularExpression, .caseInsensitive])
-        }
-        guard let regex = try? NSRegularExpression(pattern: #"<p\b[^>]*>([\s\S]*?)</p>"#, options: [.caseInsensitive]) else { return [] }
+        ArticleReader.read(html).paragraphs
+    }
+
+    /// Whether a paragraph's text is read at all: prose, or a round-up's short credits line or spec
+    /// sheet ("Dir: …, DP: …", "Format: … Camera: …"), which marks an entry. Not a menu
+    /// ("Home | Reviews | News").
+    static func counts(_ text: String) -> Bool {
+        let entry = text.count >= 20 && text.count <= 600 && (EntryLayout.isCredits(text) || EntryLayout.isLabelledSheet(text))
+        return (text.count >= 60 || entry) && text.contains(" ")
+    }
+
+    /// The article's paragraphs as read: each once (a repeat is a sidebar or print copy, unless it's
+    /// a sheet right after an entry's credits line: two entries of a festival may share a sheet),
+    /// without newsletter boxes, credits lines and cookie notices.
+    static func keep(_ texts: [String]) -> [String] {
         var seen = Set<String>()
         var kept: [String] = []
-        for match in regex.matches(in: body, range: NSRange(body.startIndex..., in: body)) {
-            guard let range = Range(match.range(at: 1), in: body) else { continue }
-            let text = plain(String(body[range]))
-            // A round-up's credits line ("Dir: …, DP: …") or spec sheet ("Format: … Camera: …") is short:
-            // kept, as each marks an entry. Not a menu ("Home | Reviews | News").
+        for text in texts where counts(text) {
             let credits = EntryLayout.isCredits(text)
             let entry = text.count >= 20 && text.count <= 600 && (credits || EntryLayout.isLabelledSheet(text))
-            guard text.count >= 60 || entry, text.contains(" ") else { continue }
-            // A repeat is dropped (a sidebar or print copy of the article's sheet), unless it's a sheet
-            // right after an entry's credits line: two entries of a festival may share a sheet.
             let entrySheet = entry && !credits && kept.last.map(EntryLayout.isCredits) == true
             guard seen.insert(text).inserted || entrySheet else { continue }
-            // Newsletter boxes, credits lines and cookie notices.
             let lower = text.lowercased()
             if ["subscribe", "newsletter", "cookie", "all rights reserved", "sign up", "log in", "advertisement"].contains(where: lower.contains),
                text.count < 220 { continue }
             kept.append(text)
         }
         return kept
+    }
+
+    /// The address the page gives for itself (`<link rel="canonical">`).
+    public static func canonical(_ html: String) -> URL? {
+        let patterns = [#"<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']"#, #"<link[^>]+href=["']([^"']+)["'][^>]+rel=["']canonical["']"#]
+        for pattern in patterns {
+            if let found = first(pattern, in: html), let url = URL(string: decodeEntities(found)), url.scheme != nil { return url }
+        }
+        return nil
     }
 
     /// Markup taken out, entities decoded, spaces tidied.
@@ -1138,9 +1158,16 @@ public struct CameraSourcesClient: Sendable {
             guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
                 return (nil, .gone("not a readable page"))
             }
+            // Only the article's own paragraphs (see `ArticleReader`). A page whose article can't be
+            // told apart from the rest isn't read whole: it's not open to Reel this time.
+            let article = ArticleReader.read(html)
+            guard let boundary = article.boundary else { return (nil, .restricted(CameraSources.unboundedArticle)) }
             var source = CameraReading.Source(title: title ?? HTMLText.title(html) ?? site, site: site, url: CameraSources.secure(url),
-                                              paragraphs: HTMLText.paragraphs(html))
+                                              paragraphs: article.paragraphs)
             source.landed = landed
+            source.boundary = boundary
+            source.leftOut = article.leftOut
+            source.canonical = article.canonical
             return (source, nil)
         }
     }

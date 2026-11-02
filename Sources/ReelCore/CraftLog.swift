@@ -86,7 +86,9 @@ public enum CraftLog {
         for kind in index.shotOn {
             guard let why = index.evidence(for: kind) else { continue }
             if let from = why.carriedFrom {
-                let how = index.unanswered.contains(why.site) ? "\(why.site) didn't answer this time" : "its page wasn't read this time"
+                let unbounded = index.limits.contains { $0.site == why.site && $0.detail.contains(CameraSources.unboundedArticle) }
+                let how = index.unanswered.contains(why.site) ? "\(why.site) didn't answer this time"
+                    : unbounded ? "its article couldn't be told apart on \(why.site)'s page this time" : "its page wasn't read this time"
                 lines.append("• \(index.label(for: kind)) — carried from the reading of \(day.string(from: from)) (rules \(why.carriedRules ?? index.version)), "
                              + "\(how): \(why.source): “\(why.text.prefix(300))”")
             } else {
@@ -119,6 +121,16 @@ public enum CraftLog {
         var notes: [String] = []
         if let cited = source.cited { notes.append("cited as " + cited.absoluteString) }
         if let landed = source.landed { notes.append("the site sent Reel to " + landed.absoluteString) }
+        // How its article was told apart from the rest of the page (a plain page of paragraphs,
+        // nothing left out, says nothing).
+        if let boundary = source.boundary, boundary != .region || source.leftOut > 0 {
+            var how = "article found by " + boundary.rawValue
+            if source.leftOut > 0 {
+                how += source.leftOut == 1 ? "; 1 paragraph on the page left out as not the article's"
+                    : "; \(source.leftOut) paragraphs on the page left out as not the article's"
+            }
+            notes.append(how)
+        }
         return notes.isEmpty ? "" : "  (" + notes.joined(separator: "; ") + ")"
     }
 
