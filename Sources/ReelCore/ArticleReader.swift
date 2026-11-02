@@ -14,7 +14,9 @@ import Foundation
 /// 2. a publishing system's article container (`entry-content`, `post-content`,
 ///    `theme-post-content`, `article-body`…);
 /// 3. the page's own `<article>` (one not inside another), the one holding the page's headline
-///    when there are several;
+///    when there are several; a list of `<article>` entries side by side holding most of the
+///    page's prose is a round-up, read as one (`TechSpecs` then reads only this film's entry),
+///    and one holding little of it is a row of cards, left out;
 /// 4. the page's `<main>`;
 /// 5. otherwise the one region that holds most of the page's prose.
 ///
@@ -41,6 +43,7 @@ public enum ArticleReader {
         case articleBody = "the page's article-body mark"
         case container = "the site's article container"
         case article = "the page's article element"
+        case entries = "the page's list of entries (a round-up)"
         case main = "the page's main content"
         case region = "the region holding the page's prose"
     }
@@ -102,8 +105,11 @@ public enum ArticleReader {
         let headlineAncestors = Set(headline.map { ancestors($0) } ?? [])
         // An element that isn't the article: a component by its tag or name (unless it holds the
         // page's headline: a wrapper "has-sidebar" around the article), or an article inside another.
+        // Cards found to be a row of other articles' teasers (see below).
+        var cards = Set<Int>()
         func isComponent(_ j: Int) -> Bool {
             let element = elements[j]
+            if cards.contains(j) { return true }
             if element.tag == "html" || element.tag == "body" || headlineAncestors.contains(j) { return false }
             if componentTags.contains(element.tag) { return true }
             if element.tag == "article", ancestors(j).contains(where: { elements[$0].tag == "article" }) { return true }
@@ -113,7 +119,7 @@ public enum ArticleReader {
             return words.contains(where: componentWords.contains)
         }
         // Prose paragraphs not inside any component.
-        let open = paragraphIndices.filter { i in isProse(i) && !ancestors(i).contains(where: isComponent) }
+        var open = paragraphIndices.filter { i in isProse(i) && !ancestors(i).contains(where: isComponent) }
         let leftOutOnPage = paragraphIndices.filter(isProse).count
         // Nothing on the page reads as prose: an empty article (too little text), not a failure.
         guard !open.isEmpty else {
@@ -130,6 +136,19 @@ public enum ArticleReader {
             return Article(paragraphs: kept, boundary: boundary, leftOut: leftOutOnPage - chosen.count, canonical: canonical)
         }
         let unbounded = Article(paragraphs: [], boundary: nil, leftOut: leftOutOnPage, canonical: canonical)
+        /// Three or more of the page's own articles holding prose, none with the headline, in one
+        /// list: each in an item of the same element, or directly in the same element.
+        func entryList(_ articles: [Int]) -> (container: Int?, entries: [Int])? {
+            let top = articles.filter { j in !ancestors(j).contains { elements[$0].tag == "article" } && !paragraphs(in: j).isEmpty }
+            guard top.count >= 3, !top.contains(where: headlineAncestors.contains) else { return nil }
+            func holder(_ j: Int) -> Int? {
+                guard let parent = elements[j].parent else { return nil }
+                return elements[parent].tag == "li" ? elements[parent].parent : parent
+            }
+            let holders = Set(top.map(holder))
+            guard holders.count == 1, let container = holders.first else { return nil }
+            return (container, top)
+        }
         /// One of the candidates, when it's clear which: the outermost ones holding prose, one alone,
         /// the one holding the headline, or one with at least twice the prose of any other. Nil:
         /// none; `.some(nil)`: more than one and no telling (ambiguous).
@@ -153,6 +172,17 @@ public enum ArticleReader {
             (.main, { $0.tag == "main" || $0.id.lowercased() == "main-content" }),
         ]
         for (boundary, matches) in tiers {
+            // Several of the page's own articles side by side in one list (an `<article>` in each
+            // item, or directly in one element): a round-up's entries when they hold most of the
+            // page's prose, a row of cards when they don't.
+            if boundary == .article, let list = entryList(elements.indices.filter { matches(elements[$0]) }) {
+                if 2 * weight(list.entries.flatMap { paragraphs(in: $0) }) >= weight(open) {
+                    return done(list.container, .entries)
+                }
+                cards.formUnion(list.entries)
+                open = open.filter { i in !ancestors(i).contains(where: cards.contains) }
+                continue
+            }
             switch pick(elements.indices.filter { matches(elements[$0]) }) {
             case .none: continue
             case .some(.none): return unbounded
