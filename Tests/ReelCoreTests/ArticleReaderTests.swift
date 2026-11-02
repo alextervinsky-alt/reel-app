@@ -572,6 +572,16 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(ArticleReader.read(column).paragraphs, short)
     }
 
+    /// No Film School (live, found by a CI probe): the article body's own class carries "-ads" in
+    /// another of its names ("article-body main-article-body-ads"). The body's mark wins.
+    func testAnArticleBodyWhoseClassAlsoNamesAds() {
+        let html: String = "<html><body><h1>The piece</h1><div class=\"mb-2 article-body main-article-body-ads\">" + Self.body.map(Self.p).joined()
+            + "</div><div class=\"ads-slot\"><p>Advertisement: the best camera bags of the year, reviewed and ranked for you here.</p></div></body></html>"
+        let read = ArticleReader.read(html)
+        XCTAssertEqual(read.boundary, .container)
+        XCTAssertEqual(read.paragraphs, Self.body)
+    }
+
     func testRulesVersion() {
         XCTAssertEqual(CraftIndex.currentVersion, 14)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)

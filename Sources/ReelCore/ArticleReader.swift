@@ -86,6 +86,11 @@ public enum ArticleReader {
                                  "article-body", "article__body", "articlebody", "article-content", "article__content",
                                  "story-body", "post-body", "single-content"]
 
+    /// A publishing system's article container, by its class.
+    static func isContainer(_ element: Element) -> Bool {
+        element.classes.contains { name in containerNames.contains { name.lowercased().contains($0) } }
+    }
+
     struct Element {
         let tag: String
         let classes: [String]
@@ -177,6 +182,9 @@ public enum ArticleReader {
                 if element.tag == "header", chains[j].contains(where: { elements[$0].tag == "article" }) { return false }  // an article's own header
                 if componentTags.contains(element.tag) { return !(["form", "header"].contains(element.tag) && holdsMost(j)) }
                 if element.tag == "article", chains[j].contains(where: { elements[$0].tag == "article" }) { return !nestedEntries.contains(j) }
+                // The page's own mark of its article body is never a component for a word in another
+                // of its classes (No Film School's "article-body main-article-body-ads").
+                if element.itemprop.lowercased() == "articlebody" || isContainer(element) { return false }
                 let kinds = componentKinds(j)
                 guard !kinds.isEmpty else { return false }
                 // Only a layout word ("sidebar") can name the page's layout; related posts, teasers,
@@ -246,7 +254,7 @@ public enum ArticleReader {
             }
             let tiers: [(Boundary, (Element) -> Bool)] = [
                 (.articleBody, { $0.itemprop.lowercased() == "articlebody" }),
-                (.container, { element in element.classes.contains { name in containerNames.contains { name.lowercased().contains($0) } } }),
+                (.container, isContainer),
                 (.article, { $0.tag == "article" }),
                 (.main, { $0.tag == "main" || $0.id.lowercased() == "main-content" }),
             ]
