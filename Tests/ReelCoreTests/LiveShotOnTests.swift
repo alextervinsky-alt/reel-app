@@ -74,10 +74,10 @@ final class LiveShotOnTests: XCTestCase {
         if chosen == 0 || chosen == nil {
             for address in ["https://www.indiewire.com/gallery/cannes-2024-cameras-arri-furiosa/megalopolis-mihai-malaimare-jr-dp/",
                             "https://www.thewrap.com/the-batman-cinematography-greig-fraser-interview/"] {
-                ArticleReader.debug = { say("::notice::PROBE \(address.prefix(40)): " + $0) }
+                ArticleReader.debug = { say("Shot on not counted: PROBE " + $0) }
                 let got = await CameraSourcesClient().page(URL(string: address)!, site: "probe", title: nil)
                 ArticleReader.debug = nil
-                say("::notice::PROBE result \(address.prefix(40)): failure=\(String(describing: got.failure)) paragraphs=\(got.source?.paragraphs.count ?? -1) boundary=\(String(describing: got.source?.boundary)) leftOut=\(got.source?.leftOut ?? -1)")
+                say("Shot on not counted: PROBE result \(address.prefix(40)): failure=\(String(describing: got.failure)) paragraphs=\(got.source?.paragraphs.count ?? -1) boundary=\(String(describing: got.source?.boundary)) leftOut=\(got.source?.leftOut ?? -1)")
             }
         }
         let reading = chosen.map { films.indices.contains($0) ? [films[$0]] : [] } ?? films
