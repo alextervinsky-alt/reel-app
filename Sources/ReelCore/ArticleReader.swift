@@ -179,6 +179,15 @@ public enum ArticleReader {
             func isComponent(_ j: Int) -> Bool { component[j] }
             func inComponent(_ i: Int) -> Bool { chains[i].contains { component[$0] } }
             var open = allProse.filter { !inComponent($0) }
+            if !layout {
+                var why: [String: Int] = [:]
+                for i in allProse where inComponent(i) {
+                    if let j = chains[i].last(where: { component[$0] }) {
+                        why[elements[j].tag + "." + elements[j].classes.joined(separator: ".") + "#" + elements[j].id, default: 0] += 1
+                    }
+                }
+                debug?("excluded by: " + why.sorted { $0.value > $1.value }.prefix(6).map { "\($0.key.prefix(90))=\($0.value)" }.joined(separator: " | "))
+            }
             guard !open.isEmpty else { return unbounded }
             // Each element's open paragraphs, in page order.
             var under: [Int: [Int]] = [:]

@@ -72,8 +72,7 @@ final class LiveShotOnTests: XCTestCase {
         func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
         if chosen == 0 || chosen == nil {
-            for address in ["https://www.indiewire.com/gallery/cannes-2024-cameras-arri-furiosa/megalopolis-mihai-malaimare-jr-dp/",
-                            "https://www.thewrap.com/the-batman-cinematography-greig-fraser-interview/"] {
+            for address in ["https://www.thewrap.com/the-batman-cinematography-greig-fraser-interview/"] {
                 ArticleReader.debug = { say("Shot on not counted: PROBE " + $0) }
                 let got = await CameraSourcesClient().page(URL(string: address)!, site: "probe", title: nil)
                 ArticleReader.debug = nil
