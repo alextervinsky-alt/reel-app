@@ -23,9 +23,9 @@ import Foundation
 /// The page's headline is its `<h1>` matching the page's title (else the first not in a ticker
 /// or menu). A block named only "sidebar" (or a `<form>`, a `<header>`) that holds most of the
 /// page's prose is taken for the page's layout only when the page's structure alone finds no
-/// article, or only an unmarked region, and that then finds one the page marks (a column of post
-/// cards isn't a round-up there) or one holding at least twice the prose. "has-sidebar" names a
-/// wrapper with a sidebar, not a sidebar.
+/// article, or only an unmarked region, and that then finds one holding at least twice the prose
+/// (a column of post cards isn't a round-up there). "has-sidebar" names a wrapper with a sidebar,
+/// not a sidebar.
 ///
 /// Where the page has prose but no one article can be told apart (two regions of equal weight, two
 /// article bodies, every paragraph inside a component), nothing is read: the page is reported as not readable (see
@@ -78,6 +78,10 @@ public enum ArticleReader {
                                               "sidebar", "comments", "comment", "share", "sharing", "sharedaddy", "social",
                                               "popular", "trending", "breadcrumb", "breadcrumbs", "readmore", "readnext",
                                               "morefrom", "youmaylike", "youmightlike"]
+    /// "has-sidebar", "with-left-sidebar": a wrapper that has a sidebar.
+    static let wrapperOfSidebar = #"(^|[-_])(has|with)[-_]([a-z0-9]+[-_])?sidebar([-_]|$)"#
+    /// Readers' comments: never the article, never the page's layout.
+    static let readerWords: Set<String> = ["comments", "comment"]
     /// Component words that can also name a page's layout column: a block so named that holds most
     /// of the page's prose may be the article's column (IndieWire's "_sidebar_…" gallery).
     static let layoutWords: Set<String> = ["sidebar"]
@@ -130,10 +134,29 @@ public enum ArticleReader {
         // has a sidebar (TheWrap's interview sits in "content-wrapper--has-sidebar"), not a sidebar.
         func componentKinds(_ j: Int) -> [String] {
             var kinds = words[j].filter(componentWords.contains)
-            if words[j].contains("has") || words[j].contains("with") { kinds.removeAll { $0 == "sidebar" } }
+            // Only where "has"/"with" is part of the same name, right before it ("has-sidebar",
+            // "with-left-sidebar"), never "sidebar has-background".
+            let names = elements[j].classes + [elements[j].id]
+            let sidebarNames = names.filter { $0.lowercased().range(of: #"(^|[-_])sidebar([-_]|$)"#, options: .regularExpression) != nil }
+            if !sidebarNames.isEmpty, sidebarNames.allSatisfy({ $0.lowercased().range(of: wrapperOfSidebar, options: .regularExpression) != nil }) {
+                kinds.removeAll { $0 == "sidebar" }
+            }
             return kinds
         }
         func named(_ j: Int) -> Bool { !componentKinds(j).isEmpty }
+        // The page's own mark of its article body: a class that is a container name itself
+        // ("article-body"), where every other name carrying a component word is a modifier of it
+        // ("main-article-body-ads"), never readers' comments. Not "related-post-content", not
+        // "swiper-slide post-content".
+        func ownBodyMark(_ j: Int) -> Bool {
+            let names = elements[j].classes.map { $0.lowercased() }
+            guard let mark = names.first(where: containerNames.contains) else { return false }
+            guard !words[j].contains(where: readerWords.contains) else { return false }
+            return names.allSatisfy { name in
+                let named = name.split(whereSeparator: { $0 == "-" || $0 == "_" }).contains { componentWords.contains(String($0)) }
+                return !named || name.contains(mark)
+            }
+        }
         // The page's headline: the `<h1>` that matches the page's title, else the first not in a
         // block named like a component or in a menu (a ticker's or slider's `<h1>`), else the first.
         let h1s = elements.indices.filter { elements[$0].tag == "h1" }
@@ -184,7 +207,7 @@ public enum ArticleReader {
                 if element.tag == "article", chains[j].contains(where: { elements[$0].tag == "article" }) { return !nestedEntries.contains(j) }
                 // The page's own mark of its article body is never a component for a word in another
                 // of its classes (No Film School's "article-body main-article-body-ads").
-                if element.itemprop.lowercased() == "articlebody" || isContainer(element) { return false }
+                if element.itemprop.lowercased() == "articlebody" || ownBodyMark(j) { return false }
                 let kinds = componentKinds(j)
                 guard !kinds.isEmpty else { return false }
                 // Only a layout word ("sidebar") can name the page's layout; related posts, teasers,
@@ -321,10 +344,9 @@ public enum ArticleReader {
         let second = resolve(layout: true)
         if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
         guard second.boundary != nil else { return first }
-        // An unmarked region from what the layout column left over: the column's reading, when the
-        // page marks it, or when it holds at least twice the prose.
+        // An unmarked region from what the layout column left over: the column's reading when it
+        // holds at least twice the prose.
         func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
-        if second.boundary != .region { return second }
         return weight(second) >= 2 * weight(first) ? second : first
     }
 
