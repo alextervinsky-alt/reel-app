@@ -23,8 +23,8 @@ import Foundation
 /// The page's headline is its `<h1>` matching the page's title (else the first not in a ticker
 /// or menu). A block named only "sidebar" (or a `<form>`, a `<header>`) that holds most of the
 /// page's prose is taken for the page's layout only when the page's structure alone finds no
-/// article, or only an unmarked region, and that then finds one the page marks or one holding at
-/// least twice the prose.
+/// article, only an unmarked region, or too little to read, and that then finds one the page marks
+/// or one holding at least twice the prose.
 ///
 /// Where the page has prose but no one article can be told apart (two regions of equal weight, two
 /// article bodies, every paragraph inside a component), nothing is read: the page is reported as not readable (see
@@ -296,14 +296,17 @@ public enum ArticleReader {
         // region, is a large block named like a component taken for the page's layout, and then
         // only if that finds an article the page marks as one.
         let first = resolve(layout: false)
-        guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
+        let thin = first.paragraphs.count < 3
+        guard first.boundary == nil || first.boundary == .region || thin else { return first }
         let second = resolve(layout: true)
         if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
         guard second.boundary != nil else { return first }
-        // An unmarked region from what the layout column left over: the column's reading, when the
+        // An unmarked region, or too little to read, from what the layout column left over (TheWrap
+        // wraps its interview in "content-wrapper--has-sidebar"): the column's reading, when the
         // page marks it, or when it holds at least twice the prose.
         func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
-        return second.boundary != .region || weight(second) >= 2 * weight(first) ? second : first
+        if first.boundary == .region, second.boundary != .region { return second }
+        return weight(second) >= 2 * weight(first) ? second : first
     }
 
     /// The page's elements, with where each one's content starts and ends in `text` (the page with

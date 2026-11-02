@@ -553,6 +553,23 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(read.paragraphs.count, 5)
     }
 
+    /// TheWrap's shape (live, found by CI): the headline in a hero `<article>` with one line, the
+    /// interview in a wrapper named "content-wrapper--has-sidebar" beside a real sidebar. The
+    /// wrapper is the page's layout, the sidebar isn't read.
+    func testAnInterviewInAHasSidebarWrapper() {
+        let more: [String] = ["A fourth paragraph of the interview itself, so the body holds most of the page's prose by far.",
+                              "And a fifth paragraph of the interview, for good measure, saying more about how it was all shot."]
+        let side = "Most read: a festival round-up of cameras and lenses, with every lens listed for each film."
+        let html: String = "<html><head><title>The piece | Lens Weekly</title></head><body><article class=\"hero\"><h1>The piece</h1>"
+            + "<p>A short line under the headline, introducing the piece at some length.</p></article>"
+            + "<div class=\"content-wrapper content-wrapper--has-sidebar\"><div class=\"story\">" + (Self.body + more).map(Self.p).joined()
+            + "</div><aside class=\"sidebar\"><p>" + side + "</p></aside></div></body></html>"
+        let read = ArticleReader.read(html)
+        XCTAssertGreaterThanOrEqual(read.paragraphs.count, 5)
+        XCTAssertTrue(read.paragraphs.contains(Self.body[1]))
+        XCTAssertFalse(read.paragraphs.contains(side))
+    }
+
     func testRulesVersion() {
         XCTAssertEqual(CraftIndex.currentVersion, 14)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)
