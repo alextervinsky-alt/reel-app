@@ -174,20 +174,24 @@ final class ArticleReaderTests: XCTestCase {
             ("Dir: Fay Example DP: Gus Sample", "Format: 35mm Camera: ARRICAM LT Lenses: Cooke Anamorphic/i"),
             ("Dir: Ann Example DP: Bob Sample", "Format: 4.5K ARRIRAW Camera: ALEXA LF Lenses: Zeiss Supreme Primes"),
         ]
-        let items = entries.map { "<li class=\"list-item\"><article class=\"list-entry\"><h2>A film</h2><p>\($0.0)</p><p>\($0.1)</p></article></li>" }
-        let html = "<html><body><h1>Festival Cinematography: Cameras and Lenses Used to Shoot 3 Films</h1>"
-            + "<div class=\"_sidebar_10r4d_1\"><p>Once again we asked the cinematographers what they shot on, and here is the list they sent.</p></div>"
-            + "<ul class=\"gallery\">" + items.joined() + "</ul>"
-            + "<div class=\"_newsletter_ixyx8_1\"><p>By providing your information, you agree to our terms of use and our privacy policy.</p></div></body></html>"
+        let items: [String] = entries.map { entry in
+            "<li class=\"list-item\"><article class=\"list-entry\"><h2>A film</h2><p>" + entry.0 + "</p><p>" + entry.1 + "</p></article></li>"
+        }
+        let intro = "<div class=\"_sidebar_10r4d_1\"><p>Once again we asked the cinematographers what they shot on, and here is the list they sent.</p></div>"
+        let letter = "<div class=\"_newsletter_ixyx8_1\"><p>By providing your information, you agree to our terms of use and our privacy policy.</p></div>"
+        let html: String = "<html><body><h1>Festival Cinematography: Cameras and Lenses Used to Shoot 3 Films</h1>" + intro
+            + "<ul class=\"gallery\">" + items.joined() + "</ul>" + letter + "</body></html>"
         let article = ArticleReader.read(html)
         XCTAssertEqual(article.boundary, .entries)
-        XCTAssertEqual(article.paragraphs, entries.flatMap { [$0.0, $0.1] })
+        let expected: [String] = entries.flatMap { entry in [entry.0, entry.1] }
+        XCTAssertEqual(article.paragraphs, expected)
         // Cards: a row of short teasers beside an unmarked article are left out.
-        let cards = (1...3).map { "<article class=\"card\"><h3>More</h3><p>Another story from the site, teased here in a single line of text for you.</p></article>" }
-        let page = "<html><body><h1>The piece</h1><div class=\"body\">" + Self.body.map(Self.p).joined()
-            + "<p>A fourth paragraph of the article itself, so the article holds most of the page's prose by far.</p>"
-            + "<p>And a fifth paragraph of the article, for good measure, saying more about how it was all shot.</p></div>"
-            + "<div class=\"more\">" + cards.joined() + "</div></body></html>"
+        let card = "<article class=\"card\"><h3>More</h3><p>Another story from the site, teased here in a single line of text for you.</p></article>"
+        let cards: String = String(repeating: card, count: 3)
+        let more: [String] = ["A fourth paragraph of the article itself, so the article holds most of the page's prose by far.",
+                              "And a fifth paragraph of the article, for good measure, saying more about how it was all shot."]
+        let articleBody: String = (Self.body + more).map(Self.p).joined()
+        let page: String = "<html><body><h1>The piece</h1><div class=\"body\">" + articleBody + "</div><div class=\"more\">" + cards + "</div></body></html>"
         let read = ArticleReader.read(page)
         XCTAssertEqual(read.boundary, .region)
         XCTAssertEqual(read.paragraphs.count, 5)
