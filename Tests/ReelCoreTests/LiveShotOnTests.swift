@@ -97,6 +97,10 @@ final class LiveShotOnTests: XCTestCase {
             var article: FilmArticle?
             if let title = facts?.articleTitle { article = try? await WikipediaClient().article(title: title) }
             let got = await fetched
+            if ["Megalopolis", "Uncut Gems"].contains(known.title) {
+                say("Shot on not counted: PROBE \(known.title) read: " + got.sources.map { "\($0.site) \($0.paragraphs.count) \(String(describing: $0.boundary)) lo=\($0.leftOut)" }.joined(separator: "; "))
+                say("Shot on not counted: PROBE \(known.title) skipped: " + got.skipped.map { "\($0.source.site) \($0.source.url.absoluteString.suffix(50)) \($0.reason.prefix(60))" }.joined(separator: "; "))
+            }
             let texts = CraftReader.texts(article: article, reading: got, hiding: false)
             let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
                                        year: details.year, title: details.title, otherTitles: others)
