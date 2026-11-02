@@ -23,8 +23,9 @@ import Foundation
 /// The page's headline is its `<h1>` matching the page's title (else the first not in a ticker
 /// or menu). A block named only "sidebar" (or a `<form>`, a `<header>`) that holds most of the
 /// page's prose is taken for the page's layout only when the page's structure alone finds no
-/// article, only an unmarked region, or too little to read, and that then finds one the page marks
-/// or one holding at least twice the prose.
+/// article, or only an unmarked region, and that then finds one the page marks (a column of post
+/// cards isn't a round-up there) or one holding at least twice the prose. "has-sidebar" names a
+/// wrapper with a sidebar, not a sidebar.
 ///
 /// Where the page has prose but no one article can be told apart (two regions of equal weight, two
 /// article bodies, every paragraph inside a component), nothing is read: the page is reported as not readable (see
@@ -120,7 +121,14 @@ public enum ArticleReader {
                 name.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" || $0 == " " }).map(String.init)
             }
         }
-        func named(_ j: Int) -> Bool { words[j].contains(where: componentWords.contains) }
+        // The component words naming an element. "has-sidebar", "with-sidebar" name a wrapper that
+        // has a sidebar (TheWrap's interview sits in "content-wrapper--has-sidebar"), not a sidebar.
+        func componentKinds(_ j: Int) -> [String] {
+            var kinds = words[j].filter(componentWords.contains)
+            if words[j].contains("has") || words[j].contains("with") { kinds.removeAll { $0 == "sidebar" } }
+            return kinds
+        }
+        func named(_ j: Int) -> Bool { !componentKinds(j).isEmpty }
         // The page's headline: the `<h1>` that matches the page's title, else the first not in a
         // block named like a component or in a menu (a ticker's or slider's `<h1>`), else the first.
         let h1s = elements.indices.filter { elements[$0].tag == "h1" }
@@ -169,10 +177,10 @@ public enum ArticleReader {
                 if element.tag == "header", chains[j].contains(where: { elements[$0].tag == "article" }) { return false }  // an article's own header
                 if componentTags.contains(element.tag) { return !(["form", "header"].contains(element.tag) && holdsMost(j)) }
                 if element.tag == "article", chains[j].contains(where: { elements[$0].tag == "article" }) { return !nestedEntries.contains(j) }
-                guard named(j) else { return false }
+                let kinds = componentKinds(j)
+                guard !kinds.isEmpty else { return false }
                 // Only a layout word ("sidebar") can name the page's layout; related posts, teasers,
                 // promotions and comments are never the article, however much of the page they fill.
-                let kinds = words[j].filter(componentWords.contains)
                 return !(kinds.allSatisfy(layoutWords.contains) && holdsMost(j))
             }
             func isComponent(_ j: Int) -> Bool { component[j] }
@@ -208,7 +216,10 @@ public enum ArticleReader {
                 }
                 let weights = top.map { weight(paragraphs(in: $0)) }
                 let sorted = weights.sorted(by: >)
-                guard top.filter(marked).count >= 3 || (2 * sorted[0] < weights.reduce(0, +) && sorted[0] < 2 * sorted[1]) else { return nil }
+                // In a block let in as the page's layout, only a round-up's marked entries (a column
+                // of post cards beside a short article isn't the article).
+                guard top.filter(marked).count >= 3
+                        || (!layout && 2 * sorted[0] < weights.reduce(0, +) && sorted[0] < 2 * sorted[1]) else { return nil }
                 func holder(_ j: Int) -> Int? {
                     guard let parent = elements[j].parent else { return nil }
                     return elements[parent].tag == "li" ? elements[parent].parent : parent
@@ -257,13 +268,7 @@ public enum ArticleReader {
                 switch pick(elements.indices.filter { matches(elements[$0]) }) {
                 case .none: continue
                 case .some(.none): return unbounded
-                case .some(.some(let container)):
-                    // A choice that would leave too little to read while the page holds more prose
-                    // elsewhere (a hero `<article>` with the headline and a dek, the body outside
-                    // it) isn't the article: the next tier looks.
-                    let chosen = paragraphs(in: container).count
-                    if chosen < 3, open.count - chosen >= 3 { continue }
-                    return done(container, boundary)
+                case .some(.some(let container)): return done(container, boundary)
                 }
             }
             // No marked container: the region holding the page's prose, going down while one child
@@ -296,16 +301,22 @@ public enum ArticleReader {
         // region, is a large block named like a component taken for the page's layout, and then
         // only if that finds an article the page marks as one.
         let first = resolve(layout: false)
-        let thin = first.paragraphs.count < 3
-        guard first.boundary == nil || first.boundary == .region || thin else { return first }
+        guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
+        // Only when the page has such a block at all.
+        let layoutBlock = elements.indices.contains { j in
+            guard 2 * (proseWeight[j] ?? 0) >= pageWeight, !["html", "body"].contains(elements[j].tag) else { return false }
+            if ["form", "header"].contains(elements[j].tag) { return true }
+            let kinds = componentKinds(j)
+            return !kinds.isEmpty && kinds.allSatisfy(layoutWords.contains)
+        }
+        guard layoutBlock else { return first }
         let second = resolve(layout: true)
         if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
         guard second.boundary != nil else { return first }
-        // An unmarked region, or too little to read, from what the layout column left over (TheWrap
-        // wraps its interview in "content-wrapper--has-sidebar"): the column's reading, when the
+        // An unmarked region from what the layout column left over: the column's reading, when the
         // page marks it, or when it holds at least twice the prose.
         func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
-        if first.boundary == .region, second.boundary != .region { return second }
+        if second.boundary != .region { return second }
         return weight(second) >= 2 * weight(first) ? second : first
     }
 

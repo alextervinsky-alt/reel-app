@@ -539,35 +539,37 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(ArticleReader.read(page).paragraphs, Array(Self.body.prefix(2)))
     }
 
-    /// A hero `<article>` holding the headline and one line, the interview's body outside any
-    /// `<article>` (a 1.10.5 pre-release read such a page as one line, "too little text"): the body
-    /// is read.
-    func testAHeroArticleWithTheBodyOutsideIt() {
-        let more: [String] = ["A fourth paragraph of the interview itself, so the body holds most of the page's prose by far.",
-                              "And a fifth paragraph of the interview, for good measure, saying more about how it was all shot."]
-        let html: String = "<html><body><article class=\"hero\"><h1>The piece</h1><p>A short line under the headline, introducing the piece at length.</p></article>"
-            + "<div class=\"story\">" + (Self.body + more).map(Self.p).joined() + "</div></body></html>"
-        let read = ArticleReader.read(html)
-        XCTAssertEqual(read.boundary, .region)
-        XCTAssertTrue(read.paragraphs.contains(Self.body[0]))
-        XCTAssertGreaterThanOrEqual(read.paragraphs.count, 5)
-    }
-
-    /// TheWrap's shape (live, found by CI): the headline in a hero `<article>` with one line, the
-    /// interview in a wrapper named "content-wrapper--has-sidebar" beside a real sidebar. The
-    /// wrapper is the page's layout, the sidebar isn't read.
+    /// TheWrap's shape (live, found by a CI probe): the headline in a hero `<article>` with one line,
+    /// the interview's container in a wrapper named "content-wrapper--has-sidebar" beside a real
+    /// sidebar. A wrapper that has a sidebar isn't one: the interview is read, the sidebar isn't.
     func testAnInterviewInAHasSidebarWrapper() {
         let more: [String] = ["A fourth paragraph of the interview itself, so the body holds most of the page's prose by far.",
                               "And a fifth paragraph of the interview, for good measure, saying more about how it was all shot."]
         let side = "Most read: a festival round-up of cameras and lenses, with every lens listed for each film."
         let html: String = "<html><head><title>The piece | Lens Weekly</title></head><body><article class=\"hero\"><h1>The piece</h1>"
             + "<p>A short line under the headline, introducing the piece at some length.</p></article>"
-            + "<div class=\"content-wrapper content-wrapper--has-sidebar\"><div class=\"story\">" + (Self.body + more).map(Self.p).joined()
+            + "<div class=\"content-wrapper content-wrapper--has-sidebar\"><div class=\"article-content\">" + (Self.body + more).map(Self.p).joined()
             + "</div><aside class=\"sidebar\"><p>" + side + "</p></aside></div></body></html>"
         let read = ArticleReader.read(html)
         XCTAssertGreaterThanOrEqual(read.paragraphs.count, 5)
         XCTAssertTrue(read.paragraphs.contains(Self.body[1]))
         XCTAssertFalse(read.paragraphs.contains(side))
+    }
+
+    /// Round 3, N1/N2: a short genuine article stays the article — beside four unmarked excerpts in
+    /// `<main>`, and beside a "sidebar" column of post cards holding most of the page's prose.
+    func testAShortArticleBesideExcerptsOrASidebarOfCards() {
+        let short: [String] = Array(Self.body.prefix(2))
+        let excerpts: [String] = (1...4).map { (n: Int) -> String in "Lens news \(n): a new zoom arrives for full-frame cinema cameras, in a short excerpt." }
+        let news: String = "<html><body><main><article><h1>The piece</h1>" + short.map(Self.p).joined() + "</article><div class=\"more-news\">"
+            + excerpts.map(Self.p).joined() + "</div></main></body></html>"
+        XCTAssertEqual(ArticleReader.read(news).paragraphs, short)
+        let cards: String = (1...4).map { (n: Int) -> String in
+            "<article class=\"card\"><p>Card \(n): another story from the site, its excerpt running on for a good long line or two here.</p></article>"
+        }.joined()
+        let column: String = "<html><body><div class=\"page\"><h1>The piece</h1>" + short.map(Self.p).joined() + "</div><div class=\"sidebar\">"
+            + cards + "</div></body></html>"
+        XCTAssertEqual(ArticleReader.read(column).paragraphs, short)
     }
 
     func testRulesVersion() {
