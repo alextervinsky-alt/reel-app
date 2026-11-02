@@ -61,7 +61,8 @@ public enum ArticleReader {
     /// Components that aren't the article, by a word of their class or id: related and recommended
     /// articles, tickers and carousels of other posts, promotions, advertising, newsletters, sharing
     /// and comments. Whole words of the name ("pp-content-ticker-item", "jp-relatedposts"), not
-    /// parts of words.
+    /// parts of words. A block so named that holds most of the page's prose is the page's layout
+    /// instead (comments excepted).
     static let componentWords: Set<String> = ["related", "relatedposts", "recommended", "recommendation", "recommendations",
                                               "teaser", "teasers", "ticker", "promo", "promos", "promoted", "promotion",
                                               "sponsored", "sponsor", "advert", "advertisement", "advertising", "ads", "newsletter",
@@ -69,6 +70,8 @@ public enum ArticleReader {
                                               "sidebar", "comments", "comment", "share", "sharing", "sharedaddy", "social",
                                               "popular", "trending", "breadcrumb", "breadcrumbs", "readmore", "readnext",
                                               "morefrom", "youmaylike", "youmightlike"]
+    /// Components written by readers, never the article however much of the page they fill.
+    static let readerWords: Set<String> = ["comments", "comment"]
     /// A publishing system's article container, by (part of) a class name.
     static let containerNames = ["entry-content", "post-content", "post__content", "theme-post-content", "fl-post-content",
                                  "article-body", "article__body", "articlebody", "article-content", "article__content",
@@ -107,6 +110,13 @@ public enum ArticleReader {
         // page's headline: a wrapper "has-sidebar" around the article), or an article inside another.
         // Cards found to be a row of other articles' teasers (see below).
         var cards = Set<Int>()
+        // How much prose each element holds, components or not. A block named like a component
+        // that holds most of the page's prose is the page's layout, not a component beside the
+        // article (IndieWire's galleries sit in a "_sidebar_…" column); comments are never the article.
+        let allProse = paragraphIndices.filter(isProse)
+        var proseWeight: [Int: Int] = [:]
+        for i in allProse { for j in ancestors(i) { proseWeight[j, default: 0] += texts[i]?.count ?? 0 } }
+        let pageWeight = allProse.reduce(0) { $0 + (texts[$1]?.count ?? 0) }
         func isComponent(_ j: Int) -> Bool {
             let element = elements[j]
             if cards.contains(j) { return true }
@@ -116,11 +126,13 @@ public enum ArticleReader {
             let words = (element.classes + [element.id]).flatMap { name in
                 name.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" || $0 == " " }).map(String.init)
             }
-            return words.contains(where: componentWords.contains)
+            guard words.contains(where: componentWords.contains) else { return false }
+            if words.contains(where: readerWords.contains) { return true }
+            return 2 * (proseWeight[j] ?? 0) < pageWeight
         }
         // Prose paragraphs not inside any component.
         var open = paragraphIndices.filter { i in isProse(i) && !ancestors(i).contains(where: isComponent) }
-        let leftOutOnPage = paragraphIndices.filter(isProse).count
+        let leftOutOnPage = allProse.count
         // Nothing on the page reads as prose: an empty article (too little text), not a failure.
         guard !open.isEmpty else {
             return Article(paragraphs: [], boundary: .region, leftOut: leftOutOnPage, canonical: canonical)

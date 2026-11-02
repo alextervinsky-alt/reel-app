@@ -177,10 +177,12 @@ final class ArticleReaderTests: XCTestCase {
         let items: [String] = entries.map { entry in
             "<li class=\"list-item\"><article class=\"list-entry\"><h2>A film</h2><p>" + entry.0 + "</p><p>" + entry.1 + "</p></article></li>"
         }
-        let intro = "<div class=\"_sidebar_10r4d_1\"><p>Once again we asked the cinematographers what they shot on, and here is the list they sent.</p></div>"
+        // As on the real gallery, the intro and the list sit in a column named "_sidebar_…", which
+        // holds most of the page's prose: the page's layout, not a sidebar beside the article.
+        let intro = "<p>Once again we asked the cinematographers what they shot on, and here is the list they sent.</p>"
         let letter = "<div class=\"_newsletter_ixyx8_1\"><p>By providing your information, you agree to our terms of use and our privacy policy.</p></div>"
-        let html: String = "<html><body><h1>Festival Cinematography: Cameras and Lenses Used to Shoot 3 Films</h1>" + intro
-            + "<ul class=\"gallery\">" + items.joined() + "</ul>" + letter + "</body></html>"
+        let html: String = "<html><body><h1>Festival Cinematography: Cameras and Lenses Used to Shoot 3 Films</h1><div class=\"_sidebar_10r4d_1\">" + intro
+            + "<ul class=\"gallery\">" + items.joined() + "</ul></div>" + letter + "</body></html>"
         let article = ArticleReader.read(html)
         XCTAssertEqual(article.boundary, .entries)
         let expected: [String] = entries.flatMap { entry in [entry.0, entry.1] }
@@ -196,6 +198,24 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(read.boundary, .region)
         XCTAssertEqual(read.paragraphs.count, 5)
         XCTAssertFalse(read.paragraphs.contains { $0.hasPrefix("Another story") })
+    }
+
+    /// A block named like a component is left out while it's beside the article (a sidebar of
+    /// other stories); comments stay out even when they fill most of the page.
+    func testASidebarBesideTheArticleAndLongCommentsStayOut() {
+        let side = ["Most read this week: a round-up of the season's festival cameras, with every lens listed.",
+                    "Also popular: how a documentary crew lit a whole night shoot with two practical lamps."]
+        let page: String = "<html><body><h1>The piece</h1><div class=\"body\">" + Self.body.map(Self.p).joined()
+            + "</div><div class=\"widget-sidebar\">" + side.map(Self.p).joined() + "</div></body></html>"
+        let read = ArticleReader.read(page)
+        XCTAssertEqual(read.paragraphs, Self.body)
+        let comment = "I loved this piece, and I shot my own short on the ARRI Alexa 35 last year with a rented kit."
+        let comments: String = String(repeating: Self.p(comment), count: 8)
+        let commented: String = "<html><body><main><h1>The piece</h1><div class=\"body\">" + Self.body.map(Self.p).joined()
+            + "</div><section id=\"comments\" class=\"comments-area\">" + comments + "</section></main></body></html>"
+        let withComments = ArticleReader.read(commented)
+        XCTAssertEqual(withComments.boundary, .main)
+        XCTAssertEqual(withComments.paragraphs, Self.body)
     }
 
     func testQuotesCaptionsAndListsAndBrokenMarkup() {
