@@ -274,6 +274,27 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(read.source?.leftOut, 3)
     }
 
+    /// The log says how each article was found: by what, how many paragraphs were read and left
+    /// out, and the address the page gives for itself when it isn't the one read.
+    func testTheLogSaysHowTheArticleWasFound() throws {
+        let article = ArticleReader.read(Self.definitionPage())
+        var page = CameraReading.Source(title: "Taking stock – Shooting on film", site: "Lens Weekly",
+                                        url: URL(string: "https://lensweekly.example/taking-stock/?ref=search")!, paragraphs: article.paragraphs)
+        page.boundary = article.boundary
+        page.leftOut = article.leftOut
+        page.canonical = article.canonical
+        let reading = CameraReading(sources: [page], more: [], cinematographer: nil, unanswered: [], skipped: [])
+        let json = #"{"id": 78, "title": "The Quiet Harbour", "release_date": "2023-05-01", "credits": {"cast": [], "crew": [{"name": "Jane Doe", "job": "Director of Photography"}]}}"#
+        let details = try JSONDecoder().decode(TMDBMovieDetails.self, from: Data(json.utf8))
+        let evaluated = CraftReader.evaluate(details, article: nil, reading: reading, colour: nil, otherTitles: [], now: Date())
+        let log = CraftLog.text(details: details, articleTitle: nil, articleRead: false, reading: reading, specs: evaluated.specs,
+                                index: evaluated.index)
+        XCTAssertTrue(log.contains("• Lens Weekly: Taking stock – Shooting on film (3 paragraphs)"), log)
+        XCTAssertTrue(log.contains("article found by the site's article container; 3 paragraphs on the page left out as not the article's"), log)
+        XCTAssertTrue(log.contains("the page gives its address as https://lensweekly.example/features/taking-stock/"), log)
+        XCTAssertFalse(log.contains("X-OCN"), log)
+    }
+
     // MARK: E. The finding a teaser made, corrected
 
     private let start = Date(timeIntervalSinceReferenceDate: 800_000_000)

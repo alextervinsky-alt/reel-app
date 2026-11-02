@@ -131,6 +131,16 @@ public enum CraftLog {
             }
             notes.append(how)
         }
+        // The address the page gives for itself, when it isn't the one read (or landed on).
+        if let canonical = source.canonical {
+            func same(_ a: URL, _ b: URL) -> Bool {
+                func key(_ u: URL) -> String { (u.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "") + u.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
+                return key(a) == key(b)
+            }
+            if !same(canonical, source.url), source.landed.map({ !same(canonical, $0) }) ?? true {
+                notes.append("the page gives its address as " + canonical.absoluteString)
+            }
+        }
         return notes.isEmpty ? "" : "  (" + notes.joined(separator: "; ") + ")"
     }
 
