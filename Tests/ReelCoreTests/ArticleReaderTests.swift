@@ -366,7 +366,7 @@ final class ArticleReaderTests: XCTestCase {
         // Lens Weekly answered, but its article couldn't be told apart.
         var unbounded = CraftIndex(readAt: start, shotOn: [.film], names: [], evidence: [filmOnly], sources: 2, read: ["Film Monthly", "Wikipedia"])
         unbounded.limits = [CraftIndex.SourceLimit(site: "Lens Weekly", url: "https://lensweekly.example/a/", kind: .restricted,
-                                                   detail: "not open to Reel: " + CameraSources.unboundedArticle)]
+                                                   detail: "not read: " + CameraSources.unboundedArticle)]
         var merged = CraftIndex.merging(old: old, new: unbounded, now: start)
         XCTAssertEqual(Set(merged.index.shotOn), [.film, .digital], "not a sign the tag is wrong")
         XCTAssertEqual(merged.carried.first?.misses, 1)
@@ -378,6 +378,140 @@ final class ArticleReaderTests: XCTestCase {
         let reread = CraftIndex(readAt: start, shotOn: [.film], names: [], evidence: [filmOnly], sources: 3,
                                 read: ["Lens Weekly", "Film Monthly", "Wikipedia"])
         XCTAssertEqual(CraftIndex.merging(old: old, new: reread, now: start).index.shotOn, [.film])
+    }
+
+    // MARK: Review round 1
+
+    /// R1: one page of the site couldn't be told apart, another of its pages was read and doesn't
+    /// say so: the page that said it may be the one not read, so the tag is carried, not dropped.
+    func testAnotherPageOfTheSiteReadDoesntEraseWhatAnUnboundedPageSaid() {
+        let old = CraftIndex(version: 13, readAt: start, shotOn: [.film, .digital], names: [],
+                             evidence: [CraftIndex.Evidence(shotOn: .film, text: "Jane Doe shot The Quiet Harbour on VistaVision.", source: "Film Monthly"),
+                                        CraftIndex.Evidence(shotOn: .digital, text: "We shot it on the Sony Venice 2.", source: "Lens Weekly")],
+                             sources: 3, read: ["Lens Weekly", "Film Monthly", "Wikipedia"])
+        let filmOnly = CraftIndex.Evidence(shotOn: .film, text: "Jane Doe shot The Quiet Harbour on VistaVision.", source: "Film Monthly")
+        var new = CraftIndex(readAt: start, shotOn: [.film], names: [], evidence: [filmOnly], sources: 3,
+                             read: ["Lens Weekly", "Film Monthly", "Wikipedia"])
+        new.limits = [CraftIndex.SourceLimit(site: "Lens Weekly", url: "https://lensweekly.example/a/", kind: .restricted,
+                                             detail: SourceFailure.restricted(CameraSources.unboundedArticle).reason)]
+        var merged = CraftIndex.merging(old: old, new: new, now: start)
+        XCTAssertEqual(Set(merged.index.shotOn), [.film, .digital])
+        XCTAssertEqual(merged.index.evidence(for: .digital)?.source, "Lens Weekly")
+        for _ in 0..<CraftIndex.maxRetries { merged = CraftIndex.merging(old: merged.index, new: new, now: start) }
+        XCTAssertEqual(merged.index.shotOn, [.film])
+        XCTAssertEqual(merged.dropped.map(\.reason), ["its article couldn't be told apart on Lens Weekly's page in \(CraftIndex.maxRetries) readings"])
+        XCTAssertTrue(SourceFailure.restricted(CameraSources.unboundedArticle).reason.hasPrefix("not read: "), "not \"not open to Reel\"")
+    }
+
+    /// R2: a guessed story page (Kodak's) whose article can't be told apart is noted with the
+    /// reading, as a limit, so the reading isn't "complete" and what Kodak said before is kept.
+    func testAGuessedStoryThatCantBeToldApartIsNoted() async {
+        StandInSite.reset()
+        defer { StandInSite.reset() }
+        let other = ["A different story entirely, of about the same length as the first, with prose in each of its paragraphs.",
+                     "It goes on for another paragraph of similar prose, so neither article outweighs the other on the page.",
+                     "And a third paragraph, to make the two articles carry the same weight of text on this page."]
+        StandInSite.route("www.kodak.com", "blog-post/the-quiet-harbour", body: "<html><body><article>" + Self.body.map(Self.p).joined()
+                          + "</article><article>" + other.map(Self.p).joined() + "</article></body></html>")
+        StandInSite.route("www.kodak.com", "page/the-quiet-harbour", status: 404, body: "<p>Not here</p>")
+        StandInSite.route("nofilmschool.com", "the-quiet-harbour", status: 404, body: "<p>Not here</p>")
+        let stories = await client().storySearch(filmTitle: "The Quiet Harbour", cinematographers: ["Jane Doe"])
+        XCTAssertEqual(stories.found, [])
+        XCTAssertEqual(stories.unbounded.map(\.source.site), ["Kodak"])
+        XCTAssertEqual(stories.unbounded.first?.limit, .restricted)
+        let reading = await client().reading(searched: [], fromSites: [], fromArticle: [], stories: [], person: nil, cinematographers: ["Jane Doe"],
+                                             directors: [], year: 2023, unanswered: UnansweredSites(), unboundedStories: stories.unbounded)
+        XCTAssertEqual(reading.skipped.map(\.source.site), ["Kodak"])
+        XCTAssertTrue(reading.skipped.first?.reason.contains(CameraSources.unboundedArticle) ?? false)
+    }
+
+    /// R3: every paragraph inside a component: the article couldn't be told apart (not a thin page);
+    /// a page wrapped in one form (and without a headline in it) is read.
+    func testAllProseInComponentsFailsClosedAndAFormWrappedPageIsRead() {
+        let comments = "<html><body><div class=\"comments\">" + Self.body.map(Self.p).joined() + "</div></body></html>"
+        XCTAssertNil(ArticleReader.read(comments).boundary)
+        let form = "<html><body><h1>Site</h1><form id=\"aspnetForm\"><div class=\"page\">" + Self.body.map(Self.p).joined()
+            + "</div></form></body></html>"
+        XCTAssertEqual(ArticleReader.read(form).paragraphs, Self.body)
+    }
+
+    /// R4: a short article in its container beside a large related block: the container wins; the
+    /// related block isn't taken for the page's layout.
+    func testAShortArticleBesideALargeRelatedBlock() {
+        let related: [String] = (1...5).map { (n: Int) -> String in
+            "Related story number \(n): a festival round-up of cameras and lenses, shot on the ARRI Alexa 35 and Kodak film."
+        }
+        let short: [String] = Array(Self.body.prefix(2))
+        let html: String = "<html><body><h1>The piece</h1><div class=\"entry-content\">" + short.map(Self.p).joined()
+            + "<div class=\"related-posts\">" + related.map(Self.p).joined() + "</div></div></body></html>"
+        let article = ArticleReader.read(html)
+        XCTAssertEqual(article.boundary, .container)
+        XCTAssertEqual(article.paragraphs, short)
+    }
+
+    /// R5: the article beside three cards, side by side, the headline outside them all: not a
+    /// round-up; the article is read without the cards.
+    func testAnArticleBesideCardsIsntARoundUp() {
+        let card: String = "<article><p>Another story from the site, teased here in a line of text that runs a little long.</p></article>"
+        let more: [String] = ["A fourth paragraph of the article itself, so the article holds most of the page's prose by far.",
+                              "And a fifth paragraph of the article, for good measure, saying more about how it was all shot."]
+        let html: String = "<html><body><header><h1>The piece</h1></header><main><article>" + (Self.body + more).map(Self.p).joined()
+            + "</article>" + String(repeating: card, count: 3) + "</main></body></html>"
+        let article = ArticleReader.read(html)
+        XCTAssertEqual(article.boundary, .article)
+        XCTAssertEqual(article.paragraphs, Self.body + more)
+    }
+
+    /// R6: an unmarked region of 60%, beside two teaser blocks of 20%: only the 60% is read; many
+    /// small blocks of one article are read together.
+    func testAnUnmarkedArticleBesideTeaserBlocks() {
+        let teaserA = "A teaser for another story on the site, which talks about digital cameras at some length here."
+        let teaserB = "A second teaser for yet another story, about lenses and lighting on a documentary shoot abroad."
+        let html: String = "<html><body><div class=\"x\">" + (Self.body + Self.body.map { $0 + " Again." }).map(Self.p).joined()
+            + "</div><div class=\"y\">" + Self.p(teaserA) + Self.p(teaserA + " More.") + "</div><div class=\"z\">" + Self.p(teaserB)
+            + Self.p(teaserB + " More.") + "</div></body></html>"
+        let article = ArticleReader.read(html)
+        XCTAssertEqual(article.boundary, .region)
+        XCTAssertFalse(article.paragraphs.contains(teaserA))
+        XCTAssertFalse(article.paragraphs.contains(teaserB))
+        XCTAssertEqual(article.paragraphs.count, 6)
+        let blocks: String = (Self.body + Self.body.map { $0 + " Again." }).map { "<div class=\"wp-block\">" + Self.p($0) + "</div>" }.joined()
+        XCTAssertEqual(ArticleReader.read("<html><body><div class=\"content\">" + blocks + "</div></body></html>").paragraphs.count, 6)
+    }
+
+    /// R7, R8: a hero `<article>` holding the headline and a one-line dek beside the body's
+    /// `<article>`: the body is read. A logo `<h1>` in a ticker doesn't make the ticker the article's.
+    func testAHeroBesideTheBodyAndALogoHeadline() {
+        let dek = "A short line under the headline, introducing the piece."
+        let more: [String] = ["A fourth paragraph of the article itself, so the article holds most of the page's prose by far.",
+                              "And a fifth paragraph of the article, for good measure, saying more about how it was all shot."]
+        let hero: String = "<html><body><article class=\"hero\"><h1>The piece</h1><p>" + dek + " It runs on a little.</p></article><article class=\"body\">"
+            + (Self.body + more).map(Self.p).joined() + "</article></body></html>"
+        XCTAssertEqual(ArticleReader.read(hero).paragraphs, Self.body + more)
+        let ticker = "Sony launches a camera extension system, expanding its cinema line to 65mm format this year."
+        let logo: String = "<html><head><title>The piece | Lens Weekly</title></head><body><div class=\"news-ticker\"><h1>Lens Weekly</h1><p>"
+            + ticker + "</p></div><div class=\"page\"><h1>The piece</h1>" + Self.body.map(Self.p).joined() + "</div></body></html>"
+        let read = ArticleReader.read(logo)
+        XCTAssertFalse(read.paragraphs.contains(ticker))
+        XCTAssertEqual(read.paragraphs, Self.body)
+    }
+
+    /// R9: a round-up whose entries are `<article>`s inside the page's own `<article>`: entries,
+    /// not cards. R10: items and paragraphs left open.
+    func testNestedRoundUpEntriesAndOpenItems() {
+        let entries: [String] = ["Dir: Carl Example DP: Jane Doe", "Dir: Fay Example DP: Gus Sample", "Dir: Ann Example DP: Bob Sample"]
+        let sheet = "Format: 6.5K ARRIRAW Camera: ALEXA 65 Lenses: Panavision Sphero 65"
+        let items: String = entries.map { "<article class=\"entry\"><h2>A film</h2><p>" + $0 + "</p><p>" + sheet + "</p></article>" }.joined()
+        let html: String = "<html><body><article><h1>Festival cameras</h1><p>We asked the cinematographers what they shot on, and here is the list.</p><section>"
+            + items + "</section></article></body></html>"
+        let read = ArticleReader.read(html)
+        XCTAssertTrue(read.paragraphs.contains(entries[0]))
+        XCTAssertTrue(read.paragraphs.contains(entries[2]))
+        let open: String = "<html><body><div class=\"entry-content\"><ul><li><p>" + Self.body[0] + "<li><p>" + Self.body[1] + "<li><p>" + Self.body[2]
+            + "</ul></div></body></html>"
+        XCTAssertEqual(ArticleReader.read(open).paragraphs, Self.body, "each once, not nested in the one before")
+        let slash: String = "<html><body><div/><div class=\"entry-content\"><a href=/news/>News</a>" + Self.body.map(Self.p).joined() + "</div></body></html>"
+        XCTAssertEqual(ArticleReader.read(slash).paragraphs, Self.body)
     }
 
     func testRulesVersion() {

@@ -165,7 +165,7 @@ public enum SourceFailure: Equatable, Sendable {
     public var reason: String {
         switch self {
         case .gone(let why): "gone: \(why)"
-        case .restricted(let why): "not open to Reel: \(why)"
+        case .restricted(let why): why == CameraSources.unboundedArticle ? "not read: \(why)" : "not open to Reel: \(why)"
         case .unanswered(let why): "didn't answer: \(why) (read again later)"
         case .wait(let why): "asked Reel to wait: \(why) (read again later)"
         }
@@ -761,7 +761,7 @@ public struct CameraSourcesClient: Sendable {
         trace.person = personFound.trace
         return await reading(searched: searchedLinks, fromSites: fromSites, fromArticle: citedFound.links, stories: storiesFound.found,
                              person: personFound.person, cinematographers: cinematographers, directors: directors, year: year,
-                             unanswered: unanswered, trace: trace, spare: spare)
+                             unanswered: unanswered, trace: trace, spare: spare, unboundedStories: storiesFound.unbounded)
     }
 
     /// American Cinematographer's next result. When every result its search kept was fetched and
@@ -848,7 +848,7 @@ public struct CameraSourcesClient: Sendable {
     func reading(searched searchedLinks: [CameraSources.Link], fromSites: [CameraSources.Link], fromArticle: [CameraSources.Link],
                  stories storiesRead: [CameraReading.Source], person: CameraReading.Cinematographer?, cinematographers: [String],
                  directors: [String], year: Int?, unanswered: UnansweredSites, trace: DiscoveryTrace? = nil,
-                 spare: [CameraSources.Link] = []) async -> CameraReading {
+                 spare: [CameraSources.Link] = [], unboundedStories: [CameraReading.Skipped] = []) async -> CameraReading {
         var links = searchedLinks
         // Found by searching the magazines for the title (not cited by the film's own article):
         // read only when the page names the film's people or year.
@@ -921,6 +921,8 @@ public struct CameraSourcesClient: Sendable {
             skipped.append(CameraReading.Skipped(source: story, reason: own ? reason(story) : "the same page as one already found",
                                                  limit: own ? CameraSources.limit(page: story, failure: nil, otherFilm: false) : nil))
         }
+        // A guessed story whose article couldn't be told apart: noted, so what its site said before is kept.
+        skipped += unboundedStories.filter { story in !skipped.contains { CameraSources.identity($0.source.url) == CameraSources.identity(story.source.url) } }
         var reading = CameraReading(sources: read, more: more, cinematographer: person, unanswered: await unanswered.all(), skipped: skipped)
         if var trace {
             trace.assembly.candidates = searchedLinks.count + fromSites.count + fromArticle.count
@@ -1116,36 +1118,44 @@ public struct CameraSourcesClient: Sendable {
     /// the-brutalist", "nofilmschool.com/dune-cinematography"). A page is kept only when it names
     /// the cinematographer (the same title may be another film).
     /// With what became of each guess (or why none was tried).
+    /// A guessed page found but whose article couldn't be told apart is noted with the reading
+    /// (`unbounded`), as any page found is, so what its site said before is kept meanwhile.
     func storySearch(filmTitle: String, cinematographers: [String]) async
-        -> (found: [CameraReading.Source], guesses: [DiscoveryTrace.Guess], notAttempted: String?) {
+        -> (found: [CameraReading.Source], guesses: [DiscoveryTrace.Guess], notAttempted: String?, unbounded: [CameraReading.Skipped]) {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
         let slug = CameraSources.slug(filmTitle)
-        guard !slug.isEmpty else { return ([], [], "the title has no letters or numbers for an address") }
-        guard !surnames.isEmpty else { return ([], [], "no cinematographer known (a page is kept only when it names them)") }
+        guard !slug.isEmpty else { return ([], [], "the title has no letters or numbers for an address", []) }
+        guard !surnames.isEmpty else { return ([], [], "no cinematographer known (a page is kept only when it names them)", []) }
         let guesses: [(String, String)] = [
             ("https://www.kodak.com/en/motion/blog-post/\(slug)/", "Kodak"),
             ("https://www.kodak.com/en/motion/page/\(slug)/", "Kodak"),
             ("https://nofilmschool.com/\(slug)-cinematography", "No Film School"),
         ]
-        let results = await withTaskGroup(of: (Int, CameraReading.Source?, DiscoveryTrace.Guess?).self) { group in
+        let results = await withTaskGroup(of: (Int, CameraReading.Source?, DiscoveryTrace.Guess?, CameraReading.Skipped?).self) { group in
             for (index, guess) in guesses.enumerated() {
                 group.addTask {
-                    guard let url = URL(string: guess.0) else { return (index, nil, nil) }
+                    guard let url = URL(string: guess.0) else { return (index, nil, nil, nil) }
                     let got = await page(url, site: guess.1, title: nil)
                     guard let found = got.source else {
-                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(Self.notRetried(got.failure?.reason ?? "couldn't be read"))))
+                        var unbounded: CameraReading.Skipped? = nil
+                        if let failure = got.failure, failure == .restricted(CameraSources.unboundedArticle) {
+                            let stand = CameraReading.Source(title: guess.1, site: guess.1, url: CameraSources.secure(url), paragraphs: [])
+                            unbounded = CameraReading.Skipped(source: stand, reason: failure.reason,
+                                                              limit: CameraSources.limit(page: nil, failure: failure, otherFilm: false))
+                        }
+                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(Self.notRetried(got.failure?.reason ?? "couldn't be read"))), unbounded)
                     }
                     guard found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else {
-                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .doesntNameCinematographer))
+                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .doesntNameCinematographer), nil)
                     }
-                    return (index, found, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .found))
+                    return (index, found, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .found), nil)
                 }
             }
-            var results: [(Int, CameraReading.Source?, DiscoveryTrace.Guess?)] = []
+            var results: [(Int, CameraReading.Source?, DiscoveryTrace.Guess?, CameraReading.Skipped?)] = []
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
-        return (results.compactMap { $0.1 }, results.compactMap { $0.2 }, nil)
+        return (results.compactMap { $0.1 }, results.compactMap { $0.2 }, nil, results.compactMap { $0.3 })
     }
 
     /// One page's title and paragraphs, or why it couldn't be read. Asked for over HTTPS.

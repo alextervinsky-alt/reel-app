@@ -355,15 +355,16 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 } else if siteDown {
                     carry = true
                     reason = ""
+                } else if unbounded(site) {
+                    // A page of its site was found but its article couldn't be told apart from the
+                    // rest of the page (see `ArticleReader`): not read, so not a sign the tag is wrong,
+                    // even when another page of that site was read. Kept, as a page not found again
+                    // is, for up to `maxRetries` readings, by any rules.
+                    carry = misses <= maxRetries
+                    reason = carry ? "" : "its article couldn't be told apart on \(site)'s page in \(maxRetries) readings"
                 } else if readAgain {
                     carry = false
                     reason = "\(evidence.source) was read again and, by rules \(new.version), doesn't say so"
-                } else if unbounded(site), misses <= maxRetries {
-                    // Its site's page was found but its article couldn't be told apart from the rest of
-                    // the page (see `ArticleReader`): not read, so not a sign the tag is wrong. Kept,
-                    // as a page not found again is, for up to `maxRetries` readings, by any rules.
-                    carry = true
-                    reason = ""
                 } else if !sameRules {
                     carry = false
                     reason = "found by rules \(evidence.carriedRules ?? old.version); \(evidence.source) wasn't found again to read by rules \(new.version)"
