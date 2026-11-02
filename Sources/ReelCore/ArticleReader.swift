@@ -86,6 +86,11 @@ public enum ArticleReader {
                                  "article-body", "article__body", "articlebody", "article-content", "article__content",
                                  "story-body", "post-body", "single-content"]
 
+    /// A publishing system's article container, by its class.
+    static func isContainer(_ element: Element) -> Bool {
+        element.classes.contains { name in containerNames.contains { name.lowercased().contains($0) } }
+    }
+
     struct Element {
         let tag: String
         let classes: [String]
@@ -96,7 +101,6 @@ public enum ArticleReader {
         var end: Int
     }
 
-    nonisolated(unsafe) public static var debug: ((String) -> Void)? = nil
     /// The article on the page.
     public static func read(_ html: String) -> Article {
         let (text, elements) = parse(html)
@@ -178,6 +182,9 @@ public enum ArticleReader {
                 if element.tag == "header", chains[j].contains(where: { elements[$0].tag == "article" }) { return false }  // an article's own header
                 if componentTags.contains(element.tag) { return !(["form", "header"].contains(element.tag) && holdsMost(j)) }
                 if element.tag == "article", chains[j].contains(where: { elements[$0].tag == "article" }) { return !nestedEntries.contains(j) }
+                // The page's own mark of its article body is never a component for a word in another
+                // of its classes (No Film School's "article-body main-article-body-ads").
+                if element.itemprop.lowercased() == "articlebody" || isContainer(element) { return false }
                 let kinds = componentKinds(j)
                 guard !kinds.isEmpty else { return false }
                 // Only a layout word ("sidebar") can name the page's layout; related posts, teasers,
@@ -187,13 +194,6 @@ public enum ArticleReader {
             func isComponent(_ j: Int) -> Bool { component[j] }
             func inComponent(_ i: Int) -> Bool { chains[i].contains { component[$0] } }
             var open = allProse.filter { !inComponent($0) }
-            if !layout {
-                var why: [String: Int] = [:]
-                for i in allProse where inComponent(i) {
-                    if let j = chains[i].last(where: { component[$0] }) { why[elements[j].tag + "." + elements[j].classes.joined(separator: ".").prefix(50) + "#" + elements[j].id, default: 0] += 1 }
-                }
-                debug?("allProse=\(allProse.count) open=\(open.count) excluded by: " + why.sorted { $0.value > $1.value }.prefix(5).map { "\($0.key)=\($0.value)" }.joined(separator: " | "))
-            }
             guard !open.isEmpty else { return unbounded }
             // Each element's open paragraphs, in page order.
             var under: [Int: [Int]] = [:]
@@ -254,7 +254,7 @@ public enum ArticleReader {
             }
             let tiers: [(Boundary, (Element) -> Bool)] = [
                 (.articleBody, { $0.itemprop.lowercased() == "articlebody" }),
-                (.container, { element in element.classes.contains { name in containerNames.contains { name.lowercased().contains($0) } } }),
+                (.container, isContainer),
                 (.article, { $0.tag == "article" }),
                 (.main, { $0.tag == "main" || $0.id.lowercased() == "main-content" }),
             ]
@@ -273,10 +273,7 @@ public enum ArticleReader {
                     index()
                     continue
                 }
-                let cands = elements.indices.filter { matches(elements[$0]) }
-                let pk = pick(cands)
-                debug?("layout=\(layout) tier=\(boundary) pick=\(String(describing: pk)) cands=" + cands.prefix(8).map { j in "\(elements[j].tag).\(elements[j].classes.joined(separator: ".").prefix(40))=\(weight(paragraphs(in: j)))h\(headlineAncestors.contains(j) ? 1 : 0)" }.joined(separator: ","))
-                switch pk {
+                switch pick(elements.indices.filter { matches(elements[$0]) }) {
                 case .none: continue
                 case .some(.none): return unbounded
                 case .some(.some(let container)): return done(container, boundary)
@@ -303,7 +300,6 @@ public enum ArticleReader {
                 // Its prose is spread over two or more large regions, none dominating: ambiguous,
                 // unless the paragraphs sit directly in it (a plain page of paragraphs). Many small
                 // blocks of one article (a block editor's) are read together.
-                debug?("region at \(region.map { elements[$0].tag + "." + elements[$0].classes.joined(separator: ".").prefix(40) } ?? "root") here=\(here) direct=\(direct) kids=" + weighed.prefix(4).map { "\(elements[$0.0].tag).\(elements[$0.0].classes.joined(separator: ".").prefix(40))=\($0.1)" }.joined(separator: ","))
                 if weighed.count >= 2, Double(weighed[1].1) >= 0.25 * Double(here), 2 * direct < here { return unbounded }
                 break
             }
