@@ -582,6 +582,19 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(read.paragraphs, Self.body)
     }
 
+    /// Round 4, F1/F2: a related block whose class also contains a container name stays out; a real
+    /// sidebar with a "has-…" modifier stays a sidebar.
+    func testRelatedPostContentAndASidebarWithAModifierStayOut() {
+        let related: [String] = (1...3).map { (n: Int) -> String in "Related \(n): a long excerpt of another story on the site, about a different film entirely." }
+        let html: String = "<html><body><h1>The piece</h1><div class=\"entry-content\">" + Self.body.map(Self.p).joined() + "</div>"
+            + "<div class=\"related-post-content\">" + related.map(Self.p).joined() + "</div></body></html>"
+        XCTAssertEqual(ArticleReader.read(html).paragraphs, Self.body)
+        let widgets: [String] = (1...4).map { (n: Int) -> String in "Popular \(n): a festival round-up of cameras and lenses, with every lens listed for each film." }
+        let side: String = "<html><body><main><h1>The piece</h1>" + Self.body.map(Self.p).joined() + "<div class=\"sidebar has-background\">"
+            + widgets.map(Self.p).joined() + "</div></main></body></html>"
+        XCTAssertEqual(ArticleReader.read(side).paragraphs, Self.body)
+    }
+
     func testRulesVersion() {
         XCTAssertEqual(CraftIndex.currentVersion, 14)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)
