@@ -189,15 +189,21 @@ public enum ArticleReader {
                 let kept = HTMLText.keep(chosen.compactMap { texts[$0] })
                 return Article(paragraphs: kept, boundary: boundary, leftOut: leftOutOnPage - chosen.count, canonical: canonical)
             }
-            /// Three or more of the page's own articles holding prose, none with the headline and
-            /// none outweighing the rest (a main article beside cards), in one list: each in an item
-            /// of the same element, or directly in the same element.
+            /// Three or more of the page's own articles holding prose, none with the headline, in one
+            /// list (each in an item of the same element, or directly in the same element): entries
+            /// with credits lines or spec sheets, or none holding half the list's prose (a main
+            /// article beside cards isn't a list).
             func entryList(_ articles: [Int]) -> (container: Int?, entries: [Int])? {
                 let top = articles.filter { j in !chains[j].contains { elements[$0].tag == "article" } && !isComponent(j)
                     && !chains[j].contains(where: isComponent) && !paragraphs(in: j).isEmpty }
                 guard top.count >= 3, !top.contains(where: headlineAncestors.contains) else { return nil }
-                let weights = top.map { weight(paragraphs(in: $0)) }.sorted(by: >)
-                guard weights[0] < 2 * weights[1] else { return nil }
+                // A round-up's entries carry credits lines or spec sheets; otherwise none may hold
+                // half the list's prose (that's an article beside its cards).
+                func marked(_ j: Int) -> Bool {
+                    paragraphs(in: j).contains { EntryLayout.isCredits(texts[$0] ?? "") || EntryLayout.isLabelledSheet(texts[$0] ?? "") }
+                }
+                let weights = top.map { weight(paragraphs(in: $0)) }
+                guard top.filter(marked).count >= 3 || 2 * (weights.max() ?? 0) < weights.reduce(0, +) else { return nil }
                 func holder(_ j: Int) -> Int? {
                     guard let parent = elements[j].parent else { return nil }
                     return elements[parent].tag == "li" ? elements[parent].parent : parent
