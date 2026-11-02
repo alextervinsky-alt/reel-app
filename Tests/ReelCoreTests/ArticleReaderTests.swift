@@ -539,6 +539,20 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(ArticleReader.read(page).paragraphs, Array(Self.body.prefix(2)))
     }
 
+    /// A hero `<article>` holding the headline and one line, the interview's body outside any
+    /// `<article>` (a 1.10.5 pre-release read such a page as one line, "too little text"): the body
+    /// is read.
+    func testAHeroArticleWithTheBodyOutsideIt() {
+        let more: [String] = ["A fourth paragraph of the interview itself, so the body holds most of the page's prose by far.",
+                              "And a fifth paragraph of the interview, for good measure, saying more about how it was all shot."]
+        let html: String = "<html><body><article class=\"hero\"><h1>The piece</h1><p>A short line under the headline, introducing the piece at length.</p></article>"
+            + "<div class=\"story\">" + (Self.body + more).map(Self.p).joined() + "</div></body></html>"
+        let read = ArticleReader.read(html)
+        XCTAssertEqual(read.boundary, .region)
+        XCTAssertTrue(read.paragraphs.contains(Self.body[0]))
+        XCTAssertGreaterThanOrEqual(read.paragraphs.count, 5)
+    }
+
     func testRulesVersion() {
         XCTAssertEqual(CraftIndex.currentVersion, 14)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)

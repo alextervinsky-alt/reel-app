@@ -257,7 +257,13 @@ public enum ArticleReader {
                 switch pick(elements.indices.filter { matches(elements[$0]) }) {
                 case .none: continue
                 case .some(.none): return unbounded
-                case .some(.some(let container)): return done(container, boundary)
+                case .some(.some(let container)):
+                    // A choice that would leave too little to read while the page holds more prose
+                    // elsewhere (a hero `<article>` with the headline and a dek, the body outside
+                    // it) isn't the article: the next tier looks.
+                    let chosen = paragraphs(in: container).count
+                    if chosen < 3, open.count - chosen >= 3 { continue }
+                    return done(container, boundary)
                 }
             }
             // No marked container: the region holding the page's prose, going down while one child
