@@ -311,7 +311,8 @@ public enum ArticleReader {
         debug?("allProse=\(allProse.count) headline=\(String(describing: headline.map { content($0).prefix(60) })) title=\(pageTitle.prefix(60))")
         let first = resolve(layout: false)
         debug?("first=\(String(describing: first.boundary)) \(first.paragraphs.count) leftOut=\(first.leftOut)")
-        guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
+        let thin = first.paragraphs.count < 3
+        guard first.boundary == nil || first.boundary == .region || thin else { return first }
         let second = resolve(layout: true)
         debug?("second=\(String(describing: second.boundary)) \(second.paragraphs.count) leftOut=\(second.leftOut)")
         if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
@@ -319,7 +320,8 @@ public enum ArticleReader {
         // An unmarked region from what the layout column left over: the column's reading, when the
         // page marks it, or when it holds at least twice the prose.
         func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
-        return second.boundary != .region || weight(second) >= 2 * weight(first) ? second : first
+        if first.boundary == .region, second.boundary != .region { return second }
+        return weight(second) >= 2 * weight(first) ? second : first
     }
 
     /// The page's elements, with where each one's content starts and ends in `text` (the page with
