@@ -95,6 +95,7 @@ public enum ArticleReader {
         var end: Int
     }
 
+    nonisolated(unsafe) public static var debug: ((String) -> Void)? = nil
     /// The article on the page.
     public static func read(_ html: String) -> Article {
         let (text, elements) = parse(html)
@@ -243,6 +244,7 @@ public enum ArticleReader {
                 // Several of the page's own articles side by side in one list (an `<article>` in
                 // each item, or directly in one element): a round-up's entries when they hold most
                 // of the page's prose, a row of cards when they don't.
+                if boundary == .article { debug?("layout=\(layout) entryList=\(String(describing: entryList(elements.indices.filter { matches(elements[$0]) })?.entries.count)) articles=\(elements.indices.filter { matches(elements[$0]) }.count)") }
                 if boundary == .article, let list = entryList(elements.indices.filter { matches(elements[$0]) }) {
                     if 2 * weight(list.entries.flatMap { paragraphs(in: $0) }) >= weight(open) {
                         return done(list.container, .entries)
@@ -254,7 +256,9 @@ public enum ArticleReader {
                     index()
                     continue
                 }
-                switch pick(elements.indices.filter { matches(elements[$0]) }) {
+                let pk = pick(elements.indices.filter { matches(elements[$0]) })
+                debug?("layout=\(layout) tier=\(boundary) pick=\(String(describing: pk)) open=\(open.count)")
+                switch pk {
                 case .none: continue
                 case .some(.none): return unbounded
                 case .some(.some(let container)):
@@ -295,9 +299,12 @@ public enum ArticleReader {
         // The page's own structure first. Only when that finds no article, or only an unmarked
         // region, is a large block named like a component taken for the page's layout, and then
         // only if that finds an article the page marks as one.
+        debug?("allProse=\(allProse.count) headline=\(String(describing: headline.map { content($0).prefix(60) })) title=\(pageTitle.prefix(60))")
         let first = resolve(layout: false)
+        debug?("first=\(String(describing: first.boundary)) \(first.paragraphs.count) leftOut=\(first.leftOut)")
         guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
         let second = resolve(layout: true)
+        debug?("second=\(String(describing: second.boundary)) \(second.paragraphs.count) leftOut=\(second.leftOut)")
         if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
         guard second.boundary != nil else { return first }
         // An unmarked region from what the layout column left over: the column's reading, when the

@@ -71,6 +71,15 @@ final class LiveShotOnTests: XCTestCase {
         // Written as soon as it's known (unbuffered), for CI to sum up.
         func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
+        if chosen == 0 || chosen == nil {
+            for address in ["https://www.indiewire.com/gallery/cannes-2024-cameras-arri-furiosa/megalopolis-mihai-malaimare-jr-dp/",
+                            "https://www.thewrap.com/the-batman-cinematography-greig-fraser-interview/"] {
+                ArticleReader.debug = { say("::notice::PROBE \(address.prefix(40)): " + $0) }
+                let got = await CameraSourcesClient().page(URL(string: address)!, site: "probe", title: nil)
+                ArticleReader.debug = nil
+                say("::notice::PROBE result \(address.prefix(40)): failure=\(String(describing: got.failure)) paragraphs=\(got.source?.paragraphs.count ?? -1) boundary=\(String(describing: got.source?.boundary)) leftOut=\(got.source?.leftOut ?? -1)")
+            }
+        }
         let reading = chosen.map { films.indices.contains($0) ? [films[$0]] : [] } ?? films
         for known in reading {
             guard let id = try? await client.searchMovies(query: known.title, year: known.year).first?.id,
