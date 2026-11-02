@@ -21,9 +21,10 @@ import Foundation
 /// 5. otherwise the one region that holds most of the page's prose.
 ///
 /// The page's headline is its `<h1>` matching the page's title (else the first not in a ticker
-/// or menu). A block named like a component (or a `<form>`, a `<header>`) that holds most of the
+/// or menu). A block named only "sidebar" (or a `<form>`, a `<header>`) that holds most of the
 /// page's prose is taken for the page's layout only when the page's structure alone finds no
-/// article, or only an unmarked region, and that then finds one the page marks.
+/// article, or only an unmarked region, and that then finds one the page marks or one holding at
+/// least twice the prose.
 ///
 /// Where the page has prose but no one article can be told apart (two regions of equal weight, two
 /// article bodies, every paragraph inside a component), nothing is read: the page is reported as not readable (see
@@ -67,8 +68,8 @@ public enum ArticleReader {
     /// Components that aren't the article, by a word of their class or id: related and recommended
     /// articles, tickers and carousels of other posts, promotions, advertising, newsletters, sharing
     /// and comments. Whole words of the name ("pp-content-ticker-item", "jp-relatedposts"), not
-    /// parts of words. A block so named that holds most of the page's prose is the page's layout
-    /// instead (comments excepted).
+    /// parts of words. A block named only "sidebar" that holds most of the page's prose may be the
+    /// page's layout instead (see `layoutWords`).
     static let componentWords: Set<String> = ["related", "relatedposts", "recommended", "recommendation", "recommendations",
                                               "teaser", "teasers", "ticker", "promo", "promos", "promoted", "promotion",
                                               "sponsored", "sponsor", "advert", "advertisement", "advertising", "ads", "newsletter",
@@ -76,8 +77,9 @@ public enum ArticleReader {
                                               "sidebar", "comments", "comment", "share", "sharing", "sharedaddy", "social",
                                               "popular", "trending", "breadcrumb", "breadcrumbs", "readmore", "readnext",
                                               "morefrom", "youmaylike", "youmightlike"]
-    /// Components written by readers, never the article however much of the page they fill.
-    static let readerWords: Set<String> = ["comments", "comment"]
+    /// Component words that can also name a page's layout column: a block so named that holds most
+    /// of the page's prose may be the article's column (IndieWire's "_sidebar_…" gallery).
+    static let layoutWords: Set<String> = ["sidebar"]
     /// A publishing system's article container, by (part of) a class name.
     static let containerNames = ["entry-content", "post-content", "post__content", "theme-post-content", "fl-post-content",
                                  "article-body", "article__body", "articlebody", "article-content", "article__content",
@@ -154,10 +156,10 @@ public enum ArticleReader {
             for (_, group) in Dictionary(grouping: marked, by: { holder($0) ?? -1 }) where group.count >= 3 { nestedEntries.formUnion(group) }
         }
 
-        /// The article, with components left out. `layout`: a block named like a component, or a
-        /// `<form>` or `<header>`, that holds most of the page's prose is the page's layout instead
-        /// (IndieWire's galleries sit in a "_sidebar_…" column; a page wrapped in one form);
-        /// comments never are.
+        /// The article, with components left out. `layout`: a block named only by a layout word
+        /// ("sidebar"), or a `<form>` or `<header>`, that holds most of the page's prose is the
+        /// page's layout instead (IndieWire's galleries sit in a "_sidebar_…" column; a page wrapped
+        /// in one form).
         func resolve(layout: Bool) -> Article {
             var cards = Set<Int>()
             func holdsMost(_ j: Int) -> Bool { layout && 2 * (proseWeight[j] ?? 0) >= pageWeight }
@@ -168,8 +170,10 @@ public enum ArticleReader {
                 if componentTags.contains(element.tag) { return !(["form", "header"].contains(element.tag) && holdsMost(j)) }
                 if element.tag == "article", chains[j].contains(where: { elements[$0].tag == "article" }) { return !nestedEntries.contains(j) }
                 guard named(j) else { return false }
-                if words[j].contains(where: readerWords.contains) { return true }
-                return !holdsMost(j)
+                // Only a layout word ("sidebar") can name the page's layout; related posts, teasers,
+                // promotions and comments are never the article, however much of the page they fill.
+                let kinds = words[j].filter(componentWords.contains)
+                return !(kinds.allSatisfy(layoutWords.contains) && holdsMost(j))
             }
             func isComponent(_ j: Int) -> Bool { component[j] }
             func inComponent(_ i: Int) -> Bool { chains[i].contains { component[$0] } }
@@ -203,7 +207,8 @@ public enum ArticleReader {
                     paragraphs(in: j).contains { EntryLayout.isCredits(texts[$0] ?? "") || EntryLayout.isLabelledSheet(texts[$0] ?? "") }
                 }
                 let weights = top.map { weight(paragraphs(in: $0)) }
-                guard top.filter(marked).count >= 3 || 2 * (weights.max() ?? 0) < weights.reduce(0, +) else { return nil }
+                let sorted = weights.sorted(by: >)
+                guard top.filter(marked).count >= 3 || (2 * sorted[0] < weights.reduce(0, +) && sorted[0] < 2 * sorted[1]) else { return nil }
                 func holder(_ j: Int) -> Int? {
                     guard let parent = elements[j].parent else { return nil }
                     return elements[parent].tag == "li" ? elements[parent].parent : parent
@@ -267,7 +272,8 @@ public enum ArticleReader {
                 guard let top = weighed.first else { break }
                 let here = weight(paragraphs(in: region))
                 let direct = weight(paragraphs(in: region).filter { elements[$0].parent == region })
-                let dominant = 2 * direct < here && 2 * top.1 >= here && (weighed.count == 1 || top.1 >= 2 * weighed[1].1)
+                let dominant = 2 * direct < here && 2 * top.1 >= here && top.1 >= 2 * direct
+                    && (weighed.count == 1 || top.1 >= 2 * weighed[1].1)
                 if Double(top.1) >= 0.7 * Double(here) || dominant {
                     region = top.0
                     continue
@@ -287,7 +293,11 @@ public enum ArticleReader {
         guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
         let second = resolve(layout: true)
         if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
-        return second.boundary != nil && second.boundary != .region ? second : first
+        guard second.boundary != nil else { return first }
+        // An unmarked region from what the layout column left over: the column's reading, when the
+        // page marks it, or when it holds at least twice the prose.
+        func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
+        return second.boundary != .region || weight(second) >= 2 * weight(first) ? second : first
     }
 
     /// The page's elements, with where each one's content starts and ends in `text` (the page with

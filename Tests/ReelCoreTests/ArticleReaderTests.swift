@@ -514,6 +514,31 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(ArticleReader.read(slash).paragraphs, Self.body)
     }
 
+    // MARK: Review round 2
+
+    /// R16: an unmarked article in a "_sidebar_…" column, and a stray paragraph outside it: the
+    /// column is read, not the leftover. R17: a short article beside three unmarked cards of
+    /// smaller size, the headline outside them all: not a round-up.
+    func testTheLayoutColumnOverALeftoverAndAShortArticleBesideCards() {
+        let more: [String] = ["A fourth paragraph of the article itself, so the article holds most of the page's prose by far.",
+                              "And a fifth paragraph of the article, for good measure, saying more about how it was all shot."]
+        let stray = "A short note from the site about its events this autumn, set apart in a box of its own here."
+        let column: String = "<html><body><h1>The piece</h1><div class=\"_sidebar_x_1\"><div class=\"_inner_y_1\">" + (Self.body + more).map(Self.p).joined()
+            + "</div></div><div class=\"box\">" + Self.p(stray) + "</div></body></html>"
+        XCTAssertEqual(ArticleReader.read(column).paragraphs, Self.body + more)
+        let card: String = "<article><p>Another story from the site, teased here in a line of text that runs on for a bit more than one line.</p></article>"
+        let cards: String = "<html><body><header><h1>The piece</h1></header><main><article>" + Self.body.map(Self.p).joined() + "</article>"
+            + String(repeating: card, count: 3) + "</main></body></html>"
+        let read = ArticleReader.read(cards)
+        XCTAssertEqual(read.boundary, .article)
+        XCTAssertEqual(read.paragraphs, Self.body)
+        // A related block never becomes the layout, however much of the page it fills.
+        let related: [String] = (1...6).map { (n: Int) -> String in "Related story \(n): a long excerpt about a different film and how it was shot on film." }
+        let page: String = "<html><body><h1>The piece</h1><div class=\"x\">" + Self.body.prefix(2).map(Self.p).joined()
+            + "</div><div class=\"related-posts\">" + related.map(Self.p).joined() + "</div></body></html>"
+        XCTAssertEqual(ArticleReader.read(page).paragraphs, Array(Self.body.prefix(2)))
+    }
+
     func testRulesVersion() {
         XCTAssertEqual(CraftIndex.currentVersion, 14)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)
