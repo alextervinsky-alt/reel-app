@@ -96,6 +96,7 @@ public enum ArticleReader {
         var end: Int
     }
 
+    nonisolated(unsafe) public static var debug: ((String) -> Void)? = nil
     /// The article on the page.
     public static func read(_ html: String) -> Article {
         let (text, elements) = parse(html)
@@ -186,6 +187,13 @@ public enum ArticleReader {
             func isComponent(_ j: Int) -> Bool { component[j] }
             func inComponent(_ i: Int) -> Bool { chains[i].contains { component[$0] } }
             var open = allProse.filter { !inComponent($0) }
+            if !layout {
+                var why: [String: Int] = [:]
+                for i in allProse where inComponent(i) {
+                    if let j = chains[i].last(where: { component[$0] }) { why[elements[j].tag + "." + elements[j].classes.joined(separator: ".").prefix(50) + "#" + elements[j].id, default: 0] += 1 }
+                }
+                debug?("allProse=\(allProse.count) open=\(open.count) excluded by: " + why.sorted { $0.value > $1.value }.prefix(5).map { "\($0.key)=\($0.value)" }.joined(separator: " | "))
+            }
             guard !open.isEmpty else { return unbounded }
             // Each element's open paragraphs, in page order.
             var under: [Int: [Int]] = [:]
@@ -265,7 +273,10 @@ public enum ArticleReader {
                     index()
                     continue
                 }
-                switch pick(elements.indices.filter { matches(elements[$0]) }) {
+                let cands = elements.indices.filter { matches(elements[$0]) }
+                let pk = pick(cands)
+                debug?("layout=\(layout) tier=\(boundary) pick=\(String(describing: pk)) cands=" + cands.prefix(8).map { j in "\(elements[j].tag).\(elements[j].classes.joined(separator: ".").prefix(40))=\(weight(paragraphs(in: j)))h\(headlineAncestors.contains(j) ? 1 : 0)" }.joined(separator: ","))
+                switch pk {
                 case .none: continue
                 case .some(.none): return unbounded
                 case .some(.some(let container)): return done(container, boundary)
@@ -292,6 +303,7 @@ public enum ArticleReader {
                 // Its prose is spread over two or more large regions, none dominating: ambiguous,
                 // unless the paragraphs sit directly in it (a plain page of paragraphs). Many small
                 // blocks of one article (a block editor's) are read together.
+                debug?("region at \(region.map { elements[$0].tag + "." + elements[$0].classes.joined(separator: ".").prefix(40) } ?? "root") here=\(here) direct=\(direct) kids=" + weighed.prefix(4).map { "\(elements[$0.0].tag).\(elements[$0.0].classes.joined(separator: ".").prefix(40))=\($0.1)" }.joined(separator: ","))
                 if weighed.count >= 2, Double(weighed[1].1) >= 0.25 * Double(here), 2 * direct < here { return unbounded }
                 break
             }
