@@ -1,5 +1,8 @@
 import XCTest
 @testable import ReelCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Reel 1.10.5: only the article's own paragraphs are read from a page. The pages are made up, but
 /// shaped like the real ones: Definition's "You might also like" cards (whole `<article>`s nested in
