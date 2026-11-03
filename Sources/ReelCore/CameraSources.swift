@@ -1341,17 +1341,22 @@ public struct CameraSourcesClient: Sendable {
                 }
                 let raw = fetched.paragraphs.joined(separator: " ")
                 let body = CameraSources.fold(raw)
-                // The film by its title as written (not "her" for Her), and its year or one of its
-                // people: a short or common title alone names nearly any page.
-                let titled = !filmTitleShort.isEmpty
-                    && raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: filmTitleShort) + #"\b"#, options: .regularExpression) != nil
+                // The film by its title: a distinctive one (two words or more, eight letters or more:
+                // "World War Z") anywhere on the page, accents, case and punctuation aside; a short one
+                // ("Her", "Heat", "Joker") as written, and with its year or one of its people too.
+                let distinctive = filmTitleShort.split(separator: " ").count >= 2 && filmTitleShort.filter(\.isLetter).count >= 8
+                let folded = " " + CameraSources.fold(filmTitleShort) + " "
                 let people = (cinematographers + directors + crew.map(\.name)).compactMap { $0.split(separator: " ").last.map(String.init) }
                     .filter { $0.count >= 3 }
-                // A title of two words or more and eight letters or more ("World War Z") names the film
-                // by itself; a short one ("Her", "Heat", "Joker") needs its year or one of its people too.
-                let distinctive = filmTitleShort.split(separator: " ").count >= 2 && filmTitleShort.filter(\.isLetter).count >= 8
-                let namesFilm = titled && (distinctive || year.map { raw.contains(String($0)) } ?? false
-                    || people.contains { raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: $0) + #"\b"#, options: .regularExpression) != nil })
+                let namesFilm: Bool
+                if distinctive {
+                    namesFilm = (" " + body + " ").contains(folded) || (" " + CameraSources.fold(fetched.title) + " ").contains(folded)
+                } else {
+                    let titled = !filmTitleShort.isEmpty
+                        && raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: filmTitleShort) + #"\b"#, options: .regularExpression) != nil
+                    namesFilm = titled && (year.map { raw.contains(String($0)) } ?? false
+                        || people.contains { raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: $0) + #"\b"#, options: .regularExpression) != nil })
+                }
                 let namesPerson = query.contributor.map { body.contains(CameraSources.fold($0)) } ?? true
                 if !namesFilm || !namesPerson {
                     skipped.append(CameraReading.Skipped(source: fetched, reason: "found searching for \(query.text), but it doesn't name "
