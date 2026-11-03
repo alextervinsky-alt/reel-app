@@ -435,6 +435,8 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             merged.retries = 0
             merged.retryAt = nil
         }
+        // A tag carried while its site is down still says what was shot on: its dimension is found.
+        merged.research = merged.research.map { ResearchCoverage.reconciled($0, shotOn: merged.shotOn) }
         return Merged(index: merged, carried: carried, dropped: dropped)
     }
 

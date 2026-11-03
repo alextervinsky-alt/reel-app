@@ -102,19 +102,39 @@ final class ResearchCoverageTests: XCTestCase {
                        ["Ann Writer", "Lena Marsh", "Ravi Holt", "Tom Ashby"])
     }
 
-    func testAnUncreditedCinematographerIsNamedWithTheirPart() {
+    func testAnUncreditedCinematographerIsNamedOnlyWhenTheSentenceIsAboutThisFilm() {
         let credited = CraftCrew.credited(quarantine())
-        let named = CraftCrew.named(in: [
+        let named = CraftCrew.named(article: [
             "Paul Rowe was originally hired as the cinematographer, and left the production before filming began.",
             "The second unit director of photography Kim Vale shot the aerial plates over the city.",
             "Additional photography during reshoots was handled by cinematographer Sara Lund.",
             "Tom Ashby was the cinematographer.",
-        ], besides: credited)
-        XCTAssertEqual(named.map(\.name), ["Paul Rowe", "Kim Vale", "Sara Lund"])
-        XCTAssertEqual(named.map(\.scope), [.principal, .secondUnit, .reshoots])
-        XCTAssertEqual(named.map(\.role), [.cinematographer, .secondUnitCinematographer, .additionalCinematographer])
+            // In passing, about other work: not this film's crew.
+            "The director's longtime cinematographer Roberto Vane shot his earlier films.",
+        ], sources: [
+            "Like cinematographer Wally Pfister on his last thriller, Ashby kept the camera moving.",
+            "For The Long Quarantine, cinematographer Ann Vey photographed the Budapest pick-ups.",
+        ], title: "The Long Quarantine", besides: credited)
+        XCTAssertEqual(named.map(\.name), ["Paul Rowe", "Kim Vale", "Sara Lund", "Ann Vey"])
+        // The part of the production only when the sentence says it: "originally hired" isn't a part.
+        XCTAssertEqual(named.map(\.scope), [nil, .secondUnit, .reshoots, .reshoots])
+        XCTAssertEqual(named.map(\.role), [.cinematographer, .secondUnitCinematographer, .additionalCinematographer, .additionalCinematographer])
         XCTAssertTrue(named.allSatisfy { !$0.credited })
         XCTAssertEqual(named[0].described, "Director of photography Paul Rowe (named in what was read)")
+    }
+
+    func testWhoseWordsTheyAreIsWhoIsSpeaking() {
+        let crew = CraftCrew.credited(quarantine()) + [person("Stephanie Martin", .cameraOperator)]
+        XCTAssertEqual(CraftCrew.speaker(in: "“We wanted the camera to feel like one of the people fleeing,” Marsh says.", crew: crew)?.name,
+                       "Lena Marsh")
+        XCTAssertEqual(CraftCrew.speaker(in: "According to Tom Ashby, “the light had to come from the street.”", crew: crew)?.name, "Tom Ashby")
+        // Named, not speaking.
+        XCTAssertNil(CraftCrew.speaker(in: "The director told Tom Ashby: “shoot every scene handheld and close to them.”", crew: crew))
+        // Another person of the same name.
+        XCTAssertNil(CraftCrew.speaker(in: "“It never settles,” said Martin Campbell of his own films.", crew: crew))
+        // A title in quotes isn't someone's words.
+        XCTAssertFalse(CraftCrew.quotes("Ashby shot “Mank” and this film back to back."))
+        XCTAssertTrue(CraftCrew.quotes("“We kept the camera low for the whole of the chase,” he says."))
     }
 
     func testAPartOfTheProductionIsSaidNotGuessed() {
@@ -321,6 +341,35 @@ final class ResearchCoverageTests: XCTestCase {
             .first { $0.dimension == .lighting }?.state, .extractionFailed)
         XCTAssertEqual(ResearchCoverage.entries(found: [], run: nil, readSomething: true, languageLimited: false)
             .first { $0.dimension == .lighting }?.state, .readNoFindings)
+        // A site of the first pass that didn't answer: not a verdict on anything not found.
+        XCTAssertEqual(Set(ResearchCoverage.entries(found: [.camera], run: nil, readSomething: true, languageLimited: false, unavailable: true)
+            .filter { $0.dimension != .camera }.map(\.state)), [.unavailable])
+    }
+
+    func testAPageThatDidntAnswerIsNotKeptQuiet() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let query = ResearchPlan.Query(dimension: .movement, site: "American Cinematographer", text: "Lena Marsh", contributor: "Lena Marsh")
+        func entry(_ result: ResearchOutcome.Result) -> ResearchEntry? {
+            ResearchCoverage.entries(found: [], run: ResearchRun(missing: [.movement], outcomes: [ResearchOutcome(query: query, result: result)]),
+                                     readSomething: true, languageLimited: false, now: now).first { $0.dimension == .movement }
+        }
+        XCTAssertEqual(entry(.pageUnavailable(["https://theasc.com/a"]))?.state, .unavailable)
+        XCTAssertEqual(entry(.pageLanguage(["https://theasc.com/a"]))?.state, .unsupportedLanguage)
+        XCTAssertEqual(entry(.pageUnreadable(["https://theasc.com/a"]))?.state, .extractionFailed)
+        XCTAssertEqual(entry(.nothingUsable(["https://theasc.com/a"]))?.state, .searchedNoSource)
+        // Only "searched, nothing about the film" waits a year.
+        for result: ResearchOutcome.Result in [.pageUnavailable([]), .pageLanguage([]), .pageUnreadable([])] {
+            let earlier = entry(result).map { [$0] }
+            XCTAssertTrue(ResearchPlan.quiet(earlier, discovery: CraftIndex.currentDiscovery, readAt: now, now: now.addingTimeInterval(86_400)).isEmpty)
+        }
+        XCTAssertFalse(ResearchPlan.quiet(entry(.nothingUsable([])).map { [$0] }, discovery: CraftIndex.currentDiscovery, readAt: now,
+                                          now: now.addingTimeInterval(86_400)).isEmpty)
+    }
+
+    func testATagCarriedWhileItsSiteIsDownCountsAsFound() {
+        let research = [ResearchEntry(dimension: .camera, state: .unavailable), ResearchEntry(dimension: .lenses, state: .unavailable)]
+        let reconciled = ResearchCoverage.reconciled(research, shotOn: [.digital])
+        XCTAssertEqual(reconciled.map(\.state), [.found, .unavailable])
     }
 
     // MARK: F. Persistence
@@ -368,7 +417,7 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertTrue(first.discovery?.cited?.links.contains { $0.rejected == .creditDatabase } ?? false)
 
         let crew = CraftReader.crew(of: details, article: article, reading: first)
-        XCTAssertTrue(crew.contains { $0.name == "Paul Rowe" && !$0.credited && $0.scope == .principal })
+        XCTAssertTrue(crew.contains { $0.name == "Paul Rowe" && !$0.credited && $0.scope == nil })
         let researched = await client().researched(first, article: article, filmTitle: details.title, cinematographers: details.cinematographers,
                                                    directors: details.directors, year: details.year, otherTitles: [], crew: crew,
                                                    previous: nil)
@@ -396,7 +445,7 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertNotEqual(state(.lighting), .unknown)
         // The log says who, what was missing, where Reel looked, and the observations with their source.
         XCTAssertTrue(reading.log.contains("RESEARCH (who photographed it"))
-        XCTAssertTrue(reading.log.contains("Director of photography Paul Rowe (named in what was read) (principal photography)"))
+        XCTAssertTrue(reading.log.contains("Director of photography Paul Rowe (named in what was read)"))
         XCTAssertTrue(reading.log.contains("Searched American Cinematographer for “Lena Marsh”"))
         XCTAssertTrue(reading.log.contains("Camera and VFX — Animation World Network; technical reporting"))
         XCTAssertTrue(reading.log.contains("Steadicam operator Lena Marsh"))

@@ -1268,14 +1268,20 @@ public struct CameraSourcesClient: Sendable {
         var result = base
         let queries = ResearchPlan.plan(missing: missing, crew: crew, title: filmTitle, previous: previous?.research,
                                         discovery: CraftIndex.currentDiscovery, readAt: previous?.readAt, now: now)
-        let asked = base.discovery?.assembly.asked.count ?? (base.sources.count + base.skipped.count)
+        // Every page the first pass asked for: those assembled, the further result when it was
+        // asked for, and (at least) every page read or set aside after loading.
+        var asked = base.discovery?.assembly.asked.count ?? 0
+        if let fallback = base.discovery?.fallback {
+            if case .notTried = fallback.result {} else { asked += 1 }
+        }
+        asked = max(asked, Set((base.sources + base.skipped.map(\.source)).map { CameraSources.identity($0.url) }).count)
         var pagesLeft = min(ResearchPlan.maxPages, max(0, CameraSources.askLimit - asked))
         var readLeft = max(0, CameraSources.readLimit - base.sources.count)
         var known = Set((base.sources + base.more + base.skipped.map(\.source)).map { CameraSources.identity($0.url) })
         let unanswered = UnansweredSites()
         var sources = base.sources
         var skipped = base.skipped
-        let shortTitle = CameraSources.fold(filmTitle.split(separator: ":").first.map(String.init) ?? filmTitle)
+        let filmTitleShort = (filmTitle.split(separator: ":").first.map(String.init) ?? filmTitle).trimmingCharacters(in: .whitespaces)
         for query in queries {
             guard pagesLeft > 0, readLeft > 0 else {
                 run.outcomes.append(ResearchOutcome(query: query, result: .notTried("no page left to ask for or read")))
@@ -1309,6 +1315,9 @@ public struct CameraSourcesClient: Sendable {
                 continue
             }
             var read: [String] = [], passed: [String] = []
+            // What the pages that weren't read came to: a verdict only when they answered and
+            // weren't about the film (S1: a page that didn't answer is searched again at the retry).
+            var unavailable = false, foreign = false, unreadable = false, overLimit = false
             for hit in candidates.prefix(min(2, pagesLeft)) {
                 guard let url = URL(string: hit.url).map(CameraSources.secure) else { continue }
                 known.insert(CameraSources.identity(url))
@@ -1321,10 +1330,25 @@ public struct CameraSourcesClient: Sendable {
                     skipped.append(CameraReading.Skipped(source: stand, reason: (failure?.reason ?? "couldn't be read") + " (found searching for \(query.text))",
                                                          limit: CameraSources.limit(page: nil, failure: failure, otherFilm: false)))
                     passed.append(url.absoluteString)
+                    switch failure {
+                    case .unanswered?, .wait?: unavailable = true
+                    case .language?: foreign = true
+                    case .restricted?: unreadable = true
+                    case .gone?, nil: break
+                    }
+                    if pagesLeft <= 0 { break }
                     continue
                 }
-                let body = CameraSources.fold(fetched.paragraphs.joined(separator: " "))
-                let namesFilm = !shortTitle.isEmpty && (" " + body + " ").contains(" " + shortTitle + " ")
+                let raw = fetched.paragraphs.joined(separator: " ")
+                let body = CameraSources.fold(raw)
+                // The film by its title as written (not "her" for Her), and its year or one of its
+                // people: a short or common title alone names nearly any page.
+                let titled = !filmTitleShort.isEmpty
+                    && raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: filmTitleShort) + #"\b"#, options: .regularExpression) != nil
+                let people = (cinematographers + directors + crew.map(\.name)).compactMap { $0.split(separator: " ").last.map(String.init) }
+                    .filter { $0.count >= 3 }
+                let namesFilm = titled && (year.map { raw.contains(String($0)) } ?? false
+                    || people.contains { raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: $0) + #"\b"#, options: .regularExpression) != nil })
                 let namesPerson = query.contributor.map { body.contains(CameraSources.fold($0)) } ?? true
                 if !namesFilm || !namesPerson {
                     skipped.append(CameraReading.Skipped(source: fetched, reason: "found searching for \(query.text), but it doesn't name "
@@ -1333,8 +1357,10 @@ public struct CameraSourcesClient: Sendable {
                 } else if fetched.paragraphs.count < 3 {
                     skipped.append(CameraReading.Skipped(source: fetched, reason: "too little text to read", limit: .thin))
                     passed.append(url.absoluteString)
+                    unreadable = true
                 } else if readLeft <= 0 {
                     skipped.append(CameraReading.Skipped(source: fetched, reason: "six sources were already read"))
+                    overLimit = true
                 } else {
                     sources.append(fetched)
                     readLeft -= 1
@@ -1342,7 +1368,13 @@ public struct CameraSourcesClient: Sendable {
                 }
                 if pagesLeft <= 0 { break }
             }
-            run.outcomes.append(ResearchOutcome(query: query, result: read.isEmpty ? .nothingUsable(passed) : .read(read)))
+            let result: ResearchOutcome.Result = !read.isEmpty ? .read(read)
+                : unavailable ? .pageUnavailable(passed)
+                : foreign ? .pageLanguage(passed)
+                : unreadable ? .pageUnreadable(passed)
+                : overLimit ? .notTried("six sources were already read")
+                : .nothingUsable(passed)
+            run.outcomes.append(ResearchOutcome(query: query, result: result))
         }
         if !queries.isEmpty {
             var reading = CameraReading(sources: sources, more: base.more, cinematographer: base.cinematographer,

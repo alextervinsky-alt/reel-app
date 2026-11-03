@@ -101,7 +101,10 @@ public enum CraftLog {
                 case .notTried(let why): line = "• Not searched: \(query.site) for “\(query.text)” (\(what)) — \(why)"
                 case .unavailable(let why): line += why
                 case .noCandidate(let count): line += count == 0 ? "no results" : "\(count) results; none names the film" + (query.contributor == nil ? "" : " or the person")
-                case .nothingUsable(let pages): line += "asked for \(pages.count), none usable (see NOT READ)"
+                case .nothingUsable(let pages): line += "asked for \(pages.count), none about the film (see NOT READ)"
+                case .pageUnavailable(let pages): line += "asked for \(pages.count); a page didn't answer (searched again later; see NOT READ)"
+                case .pageLanguage(let pages): line += "asked for \(pages.count); a page is in a language Reel doesn't read (see NOT READ)"
+                case .pageUnreadable(let pages): line += "asked for \(pages.count); a page couldn't be read (see NOT READ)"
                 case .read(let pages): line += "read " + pages.joined(separator: ", ")
                 }
                 lines.append(line)

@@ -48,7 +48,8 @@ public enum CraftReader {
         index.research = ResearchCoverage.entries(
             found: ResearchCoverage.found(in: specs, crew: people), run: reading?.research, readSomething: !texts.isEmpty,
             languageLimited: skipped.contains { $0.limit == .language },
-            extractionLimited: skipped.contains { $0.limit == .thin || $0.reason.contains(CameraSources.unboundedArticle) }, now: now)
+            extractionLimited: skipped.contains { $0.limit == .thin || $0.limit == .restricted },
+            unavailable: !index.unanswered.isEmpty, now: now)
         return (index, specs)
     }
 
@@ -56,9 +57,9 @@ public enum CraftReader {
     /// photography named only in what was read ("Robert Richardson was originally…").
     public static func crew(of details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?) -> [CraftCrew.Contributor] {
         let credited = CraftCrew.credited(details)
-        let paragraphs = (article.map { ($0.before + $0.after).flatMap(\.paragraphs) } ?? [])
-            + (reading?.sources.flatMap(\.paragraphs) ?? [])
-        return credited + CraftCrew.named(in: paragraphs, besides: credited)
+        let own = article.map { ($0.before + $0.after).flatMap(\.paragraphs) } ?? []
+        return credited + CraftCrew.named(article: own, sources: reading?.sources.flatMap(\.paragraphs) ?? [], title: details.title,
+                                          besides: credited)
     }
 
     /// A film read: the summary, and the log of what was read for it (see `CraftLog`).

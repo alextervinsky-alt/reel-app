@@ -65,11 +65,19 @@ extension AppModel {
                     let others = otherTitles(of: details)
                     // Its earlier reading: research that found nothing isn't repeated within the year.
                     let previous = film.craft
+                    // Info saved before 1.10.7 kept only the director of photography of the camera crew:
+                    // its operators, gaffer, colourist and VFX supervisor are asked for now, so the
+                    // research is made with them (the info refresh stores them meanwhile).
+                    let crewToken = film.infoVersion < FilmEntry.currentInfoVersion && hasToken ? token : nil
                     // Its collection couldn't be read (offline, no token): read again later with it.
                     let collectionKnown = details.collection == nil || collectionLoaded(of: details)
                     group.addTask {
-                        (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others,
-                                                             previous: previous),
+                        var details = details
+                        if let crewToken, let fresh = try? await TMDBClient(token: crewToken).movieDetails(id: details.id) {
+                            details.credits = fresh.trimmed().credits
+                        }
+                        return (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others,
+                                                                    previous: previous),
                          CraftLog.fileName(for: details))
                     }
                     if !collectionKnown { unknownCollection.insert(details.id) }
