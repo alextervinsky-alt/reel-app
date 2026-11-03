@@ -398,7 +398,7 @@ public struct TechSpecs: Equatable, Sendable {
                                                         : establishes && said.captured && !tried && !speech && !testedOnly(sentence, at: at) ? .direct : .ambiguous,
                                                       productionScope: ProductionScope.said(in: sentence),
                                                       evidenceKind: SourceRegistry.evidence(source: text.source, text: sentence, isInterview: text.isInterview,
-                                                                                             speaker: CraftCrew.named(in: sentence, crew: crew))))
+                                                                                             speaker: CraftCrew.speaker(in: sentence, crew: crew))))
                                 }
                             }
                         }
@@ -447,7 +447,8 @@ public struct TechSpecs: Equatable, Sendable {
                         // shot it (no craft, no reason) says nothing.
                         // How the photography served the effects (tracking cameras, encoders, plates):
                         // its own part, whoever says it.
-                        if commentary, (25...450).contains(sentence.count), !matches(reception, sentence), matches(cameraVFXTerms, sentence) {
+                        if commentary, (25...450).contains(sentence.count), !matches(reception, sentence), matches(cameraVFXTerms, sentence),
+                           effectsSource || !(fits && theirs && (text.isInterview || quoted(sentence))) {
                             add(note, to: &cameraVFX)
                         } else if effectsSource, !(fits && quoted(sentence) && mentions(names, in: sentence)) {
                             placed = false
@@ -509,7 +510,7 @@ public struct TechSpecs: Equatable, Sendable {
         func mark(_ notes: [Note]) -> [Note] {
             notes.map { note in
                 var marked = note
-                marked.speaker = CraftCrew.named(in: note.text, crew: crew)
+                marked.speaker = CraftCrew.speaker(in: note.text, crew: crew)
                 marked.scope = ProductionScope.said(in: note.text)
                 marked.evidence = SourceRegistry.evidence(source: note.source, text: note.text, isInterview: interview(note.source),
                                                           speaker: marked.speaker)
@@ -540,7 +541,9 @@ public struct TechSpecs: Equatable, Sendable {
     /// Whether a name is this film's: a camera, a lens or what it was shot on needs a sentence saying
     /// this film was shot with it; anything else (light, grip, a frame rate) a sentence about this film.
     static func isThisFilms(_ spec: Spec) -> Bool {
-        spec.kind == .camera || spec.kind == .lens || !CraftIndex.shotOn(spec).isEmpty ? spec.capture : spec.aboutThisFilm
+        // A VFX publication's or a database's gear isn't the production's (1.10.7), whatever the kind.
+        guard SourceRegistry.establishesCapture(SourceRegistry.family(ofSource: spec.source)) else { return false }
+        return spec.kind == .camera || spec.kind == .lens || !CraftIndex.shotOn(spec).isEmpty ? spec.capture : spec.aboutThisFilm
     }
 
     /// A text about many films: eight or more cameras and three or more other films' titles in

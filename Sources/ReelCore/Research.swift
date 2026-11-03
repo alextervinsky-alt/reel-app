@@ -199,28 +199,39 @@ public enum CraftCrew {
     }
 
     /// Directors of photography named in what was read but not credited ("Robert Richardson was
-    /// originally hired as the cinematographer"), with the part the sentence says when it says one.
+    /// originally hired as the cinematographer"). Only a sentence about this film: in its own
+    /// article, one that names the film or tells of a change of crew (hired, replaced, left,
+    /// reshoots, second unit); anywhere else, one that names the film. "Nolan's longtime
+    /// cinematographer Wally Pfister" in passing isn't this film's crew. The part of the production
+    /// only when the sentence says it (`ProductionScope.said`); never guessed.
     /// A name is two or three capitalised words right by "cinematographer" or "director of photography".
-    public static func named(in paragraphs: [String], besides known: [Contributor]) -> [Contributor] {
+    public static func named(article: [String], sources: [String], title: String, besides known: [Contributor]) -> [Contributor] {
         let patterns = [
             #"\b(?:cinematographer|director of photography|DoP|DP)\s+([A-Z][\p{L}'’.-]+(?:\s+[A-Z][\p{L}'’.-]+){1,2})"#,
             #"\b([A-Z][\p{L}'’.-]+(?:\s+[A-Z][\p{L}'’.-]+){1,2}),?\s+(?:who|was|had been|as)\s+(?:originally\s+|initially\s+|first\s+)?(?:hired\s+|brought on\s+|signed\s+)?(?:as\s+)?(?:the\s+)?(?:film's\s+)?(?:cinematographer|director of photography)\b"#,
         ]
         let regexes = patterns.compactMap { try? NSRegularExpression(pattern: $0) }
         let stop: Set<String> = ["The", "A", "An", "His", "Her", "Their", "Academy", "Award", "Society", "American", "British", "Best"]
+        let shortTitle = title.split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? title
+        func namesFilm(_ sentence: String) -> Bool {
+            !shortTitle.isEmpty && sentence.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: shortTitle) + #"\b"#,
+                                                  options: .regularExpression) != nil
+        }
+        let change = #"\b(?:originally|initially|replac\w*|left the (?:film|project|production)|departed|exited|took over|stepped in|re-?shoots?|additional photography|second[- ]unit)\b"#
         var found: [Contributor] = []
-        for paragraph in paragraphs {
+        let all = article.map { ($0, true) } + sources.map { ($0, false) }
+        for (paragraph, own) in all {
             for sentence in Digest.sentences(in: paragraph) {
+                guard namesFilm(sentence) || own && sentence.range(of: change, options: [.regularExpression, .caseInsensitive]) != nil else { continue }
                 for regex in regexes {
                     for match in regex.matches(in: sentence, range: NSRange(sentence.startIndex..., in: sentence)) {
                         guard let range = Range(match.range(at: 1), in: sentence) else { continue }
                         let name = String(sentence[range]).trimmingCharacters(in: CharacterSet(charactersIn: " ,.’'"))
                         let words = name.split(separator: " ").map(String.init)
-                        guard words.count >= 2, !words.contains(where: stop.contains) else { continue }
+                        guard words.count >= 2, !words.contains(where: stop.contains), name != shortTitle,
+                              !shortTitle.contains(name) else { continue }
                         guard !known.contains(where: { $0.name == name }), !found.contains(where: { $0.name == name }) else { continue }
                         let scope = ProductionScope.said(in: sentence)
-                            ?? (sentence.range(of: #"\b(?:originally|initially|first|replaced|left the (?:film|project|production)|departed|exited)\b"#,
-                                                options: .regularExpression) != nil ? .principal : nil)
                         let role: Role = scope == .secondUnit ? .secondUnitCinematographer
                             : [.additional, .reshoots].contains(scope) ? .additionalCinematographer : .cinematographer
                         found.append(Contributor(name: name, role: role, scope: scope, credited: false))
@@ -231,23 +242,34 @@ public enum CraftCrew {
         return Array(found.prefix(4))
     }
 
-    /// Who in `crew` a sentence names: the whole name, or the surname (four letters or more) of
-    /// someone whose role it is. The first named.
-    public static func named(in sentence: String, crew: [Contributor]) -> Contributor? {
-        let folded = CameraSources.fold(sentence)
+    /// Whose words a sentence gives: a crew member named as the speaker ("…,” Marsh says;
+    /// "McConkey recalls…"; "according to Ben Seresin"), by the whole name or the surname (four
+    /// letters or more, not followed by another capitalised word: "said Martin Campbell" isn't
+    /// Stephanie Martin). A name only mentioned ("Forster told Seresin…") isn't the speaker.
+    public static func speaker(in sentence: String, crew: [Contributor]) -> Contributor? {
+        let verbs = #"(?:says|said|explains|explained|recalls|recalled|notes|noted|adds|added|remembers|remembered|tells us|told us|describes|described|admits|admitted|continues|continued|observes|observed|reflects|reflected)"#
         for person in crew {
-            let whole = CameraSources.fold(person.name)
-            if folded.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: whole) + #"\b"#, options: .regularExpression) != nil {
-                return person
+            var names = [NSRegularExpression.escapedPattern(for: person.name)]
+            if let surname = person.name.split(separator: " ").last.map(String.init), surname.count >= 4, surname != person.name {
+                names.append(NSRegularExpression.escapedPattern(for: surname))
             }
-        }
-        for person in crew {
-            guard let surname = person.name.split(separator: " ").last.map(String.init), surname.count >= 4 else { continue }
-            if sentence.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: surname) + #"\b"#, options: .regularExpression) != nil {
-                return person
+            for name in names {
+                let after = #"(?![\s-]+[A-Z])"#
+                let patterns = [
+                    #"\b"# + name + after + #",?\s+(?:\w+\s+)?"# + verbs + #"\b"#,
+                    #"\b"# + verbs + #"\s+(?:\w+\s+)?"# + name + #"\b"# + after,
+                    #"\baccording to\s+(?:\w+\s+)?"# + name + #"\b"# + after,
+                ]
+                if patterns.contains(where: { sentence.range(of: $0, options: .regularExpression) != nil }) { return person }
             }
         }
         return nil
+    }
+
+    /// Whether a sentence gives someone's words: a quoted span of a sentence's length (not a title
+    /// in quotes, “Mank”).
+    public static func quotes(_ sentence: String) -> Bool {
+        sentence.range(of: #"[“"][^”"]{20,}[”"]|[“"][^”"]{20,}$"#, options: .regularExpression) != nil
     }
 }
 
@@ -334,7 +356,7 @@ public enum SourceRegistry {
     /// `speaker`: the crew member the sentence names, when it names one.
     public static func evidence(source: String?, text: String, isInterview: Bool, speaker: CraftCrew.Contributor?) -> EvidenceKind {
         let family = family(ofSource: source)
-        let ownWords = text.contains("“") || text.contains("\"") || isInterview
+        let ownWords = CraftCrew.quotes(text) || isInterview
             && text.range(of: #"\b(?:I|we|my|our)\b"#, options: .regularExpression) != nil
         // Someone looking at the finished film (no one of its crew speaking, in a piece that isn't
         // an interview): an analysis, however expert, not testimony.
@@ -352,8 +374,9 @@ public enum SourceRegistry {
         case .productionTechnology, .vfxVendor, .cinematographyPublication:
             if ownWords {
                 if let speaker { return speaker.role.photographs ? .productionStatement : .crewTestimony }
-                // A quote from someone not of the film's crew (a VFX company's supervisor): reporting.
-                if family == .cinematographyPublication { return .productionStatement }
+                // Whose words isn't said: in a cinematography magazine's interview, the filmmakers';
+                // otherwise (a critic, a VFX company's supervisor) reporting.
+                if family == .cinematographyPublication, isInterview { return .productionStatement }
             }
             return .technicalTrade
         }
@@ -454,8 +477,15 @@ public struct ResearchOutcome: Equatable, Sendable {
         case unavailable(String)
         /// Answered; no result named the film or the person.
         case noCandidate(Int)
-        /// Results asked for; none was about this film (or none could be read).
+        /// Results asked for; none was about this film (they answered, and didn't name it).
         case nothingUsable([String])
+        /// A result's page didn't answer, or asked Reel to wait (searched again at the retry).
+        case pageUnavailable([String])
+        /// A result's page was in a language Reel doesn't read.
+        case pageLanguage([String])
+        /// A result's page couldn't be read: its article couldn't be told apart, too little text,
+        /// not open to Reel.
+        case pageUnreadable([String])
         /// Read: these pages.
         case read([String])
     }
@@ -569,10 +599,28 @@ public enum ResearchCoverage {
         return found
     }
 
+    /// The coverage with what the stored Shot on says (a tag carried from an earlier reading):
+    /// film, digital or IMAX say the camera, anamorphic the lenses, black and white the colour.
+    public static func reconciled(_ research: [ResearchEntry], shotOn: [ShotOn]) -> [ResearchEntry] {
+        var found = Set<ResearchDimension>()
+        if shotOn.contains(where: { [.film, .digital, .imax].contains($0) }) { found.insert(.camera) }
+        if shotOn.contains(.anamorphic) { found.insert(.lenses) }
+        if shotOn.contains(.blackAndWhite) { found.insert(.colour) }
+        return research.map { entry in
+            guard found.contains(entry.dimension), entry.state != .found else { return entry }
+            return ResearchEntry(dimension: entry.dimension, state: .found, queries: entry.queries, discovery: entry.discovery,
+                                 searchedAt: entry.searchedAt)
+        }
+    }
+
     /// Where each dimension stands after a reading: found; else, by what the planned searches for it
     /// brought; else, pages were read (`readSomething`) and said nothing of it, or nothing was.
+    /// `unavailable`: a site of the first pass didn't answer (the reading is read again later);
+    /// `languageLimited` and `extractionLimited`: a page found in the first pass was in another
+    /// language, or couldn't be read. Each says of every dimension not found that a source may
+    /// have said it.
     public static func entries(found: Set<ResearchDimension>, run: ResearchRun?, readSomething: Bool,
-                               languageLimited: Bool, extractionLimited: Bool = false,
+                               languageLimited: Bool, extractionLimited: Bool = false, unavailable: Bool = false,
                                discovery: Int = CraftIndex.currentDiscovery, now: Date = Date()) -> [ResearchEntry] {
         ResearchDimension.allCases.map { dimension in
             let outcomes = (run?.outcomes ?? []).filter { $0.query.covers(dimension) }
@@ -584,19 +632,30 @@ public enum ResearchCoverage {
             if found.contains(dimension) {
                 return ResearchEntry(dimension: dimension, state: .found, queries: keys, discovery: discovery, searchedAt: searchedAt)
             }
-            // Searched within the year and nothing found: still so (not "not searched").
-            if keys.isEmpty, let carried = run?.quiet.first(where: { $0.dimension == dimension }) { return carried }
+            func any(_ test: (ResearchOutcome.Result) -> Bool) -> Bool { outcomes.contains { test($0.result) } }
             let state: ResearchEntry.State
-            if outcomes.contains(where: { if case .unavailable = $0.result { return true } else { return false } }) {
+            if unavailable || any({ if case .unavailable = $0 { true } else if case .pageUnavailable = $0 { true } else { false } }) {
+                // A site didn't answer: not a verdict (searched again at the retry, never kept quiet).
                 state = .unavailable
-            } else if outcomes.contains(where: { if case .read = $0.result { return true } else { return false } }) {
+            } else if any({ if case .read = $0 { true } else { false } }) {
                 state = .readNoFindings
-            } else if !keys.isEmpty {
-                state = .searchedNoSource
-            } else if languageLimited {
+            } else if any({ if case .pageLanguage = $0 { true } else { false } }) {
                 state = .unsupportedLanguage
-            } else if extractionLimited, !readSomething {
+            } else if any({ if case .pageUnreadable = $0 { true } else { false } }) {
                 state = .extractionFailed
+            } else if any({ if case .noCandidate = $0 { true } else if case .nothingUsable = $0 { true } else { false } }) {
+                state = .searchedNoSource
+            } else if let carried = run?.quiet.first(where: { $0.dimension == dimension }) {
+                // Searched within the year and nothing found: still so (not "not searched").
+                return carried
+            } else if languageLimited {
+                // A page of the first pass that may have said it, in a language Reel doesn't read.
+                state = .unsupportedLanguage
+            } else if extractionLimited {
+                state = .extractionFailed
+            } else if !outcomes.isEmpty || run?.missing.contains(dimension) == true && !readSomething {
+                // Planned and not run (no page left), or nothing read at all: not searched.
+                state = .notSearched
             } else {
                 state = readSomething ? .readNoFindings : .notSearched
             }
