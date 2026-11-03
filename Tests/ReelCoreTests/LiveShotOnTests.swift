@@ -71,6 +71,41 @@ final class LiveShotOnTests: XCTestCase {
         // Written as soon as it's known (unbuffered), for CI to sum up.
         func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
+        if chosen == 0 {
+            func get(_ address: String) async -> (Int, Data) {
+                guard let url = URL(string: address) else { return (-1, Data()) }
+                var request = URLRequest(url: url, timeoutInterval: 20)
+                request.setValue("application/json", forHTTPHeaderField: "Accept")
+                guard let (data, response) = try? await URLSession.shared.data(for: request) else { return (-2, Data()) }
+                return ((response as? HTTPURLResponse)?.statusCode ?? -3, data)
+            }
+            if let details = try? await client.movieDetails(id: 72190) {
+                let crew = (details.credits?.crew ?? []).filter { member in ["Camera", "Photography", "Steadicam", "Gaffer", "Grip", "Color", "Visual Effects", "Lighting", "Imaging"].contains { (member.job ?? "").contains($0) } }
+                say("Shot on not counted: PROBE tmdb crew \(details.credits?.crew.count ?? -1): " + crew.prefix(40).map { "\($0.job ?? "?")=\($0.name)" }.joined(separator: "; "))
+            }
+            let queries: [(String, String)] = [
+                ("asc", "https://theasc.com/wp-json/wp/v2/search?per_page=10&search=Seresin"),
+                ("asc", "https://theasc.com/wp-json/wp/v2/search?per_page=10&search=McConkey"),
+                ("asc", "https://theasc.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z%20Seresin"),
+                ("bc", "https://britishcinematographer.co.uk/wp-json/wp/v2/posts?_fields=link&per_page=10&orderby=relevance&search=Seresin"),
+                ("fxguide", "https://www.fxguide.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("fdtimes", "https://www.fdtimes.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("definition", "https://definitionmagazine.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("newsshooter", "https://www.newsshooter.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("postperspective", "https://postperspective.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("provideo", "https://www.provideocoalition.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("ymcinema", "https://ymcinema.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("filmmaker", "https://filmmakermagazine.com/wp-json/wp/v2/search?per_page=10&search=McConkey"),
+                ("cined", "https://www.cined.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+                ("arri", "https://www.arri.com/en/search?query=World%20War%20Z"),
+                ("cinesite", "https://cinesite.com/wp-json/wp/v2/search?per_page=10&search=World%20War%20Z"),
+            ]
+            for (name, address) in queries {
+                let (status, data) = await get(address)
+                let urls = (try? JSONSerialization.jsonObject(with: data) as? [[String: Any]])?.compactMap { ($0["url"] ?? $0["link"]) as? String } ?? []
+                say("Shot on not counted: PROBE \(name) \(address.suffix(40)) status=\(status) bytes=\(data.count) hits=\(urls.count): " + urls.prefix(6).map { String($0.suffix(70)) }.joined(separator: " , "))
+            }
+        }
         let reading = chosen.map { films.indices.contains($0) ? [films[$0]] : [] } ?? films
         for known in reading {
             guard let id = try? await client.searchMovies(query: known.title, year: known.year).first?.id,
