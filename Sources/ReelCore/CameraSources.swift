@@ -1347,7 +1347,10 @@ public struct CameraSourcesClient: Sendable {
                     && raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: filmTitleShort) + #"\b"#, options: .regularExpression) != nil
                 let people = (cinematographers + directors + crew.map(\.name)).compactMap { $0.split(separator: " ").last.map(String.init) }
                     .filter { $0.count >= 3 }
-                let namesFilm = titled && (year.map { raw.contains(String($0)) } ?? false
+                // A title of two words or more and eight letters or more ("World War Z") names the film
+                // by itself; a short one ("Her", "Heat", "Joker") needs its year or one of its people too.
+                let distinctive = filmTitleShort.split(separator: " ").count >= 2 && filmTitleShort.filter(\.isLetter).count >= 8
+                let namesFilm = titled && (distinctive || year.map { raw.contains(String($0)) } ?? false
                     || people.contains { raw.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: $0) + #"\b"#, options: .regularExpression) != nil })
                 let namesPerson = query.contributor.map { body.contains(CameraSources.fold($0)) } ?? true
                 if !namesFilm || !namesPerson {

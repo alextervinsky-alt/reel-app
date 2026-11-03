@@ -258,7 +258,7 @@ public enum CraftCrew {
                 let patterns = [
                     #"\b"# + name + after + #",?\s+(?:\w+\s+)?"# + verbs + #"\b"#,
                     #"\b"# + verbs + #"\s+(?:\w+\s+)?"# + name + #"\b"# + after,
-                    #"\baccording to\s+(?:\w+\s+)?"# + name + #"\b"# + after,
+                    #"\b[Aa]ccording to\s+(?:\w+\s+)?"# + name + #"\b"# + after,
                 ]
                 if patterns.contains(where: { sentence.range(of: $0, options: .regularExpression) != nil }) { return person }
             }
