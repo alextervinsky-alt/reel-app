@@ -24,14 +24,6 @@ jobs:
           SHOTON_FILM=0 swift test --skip-build --filter LiveShotOnTests > one.log 2>&1
           grep -E "^PROBE\| " one.log | sed -E 's/^PROBE\| //' > probe.txt
           wc -l probe.txt
-          # Ten notices of about 3,500 characters each.
-          python3 - <<'PY' 2>/dev/null || awk '{print "::notice::" $0}' probe.txt | head -10
-          lines=open("probe.txt").read().splitlines()
-          chunks=[];cur=""
-          for l in lines:
-              if len(cur)+len(l)+3>3500: chunks.append(cur);cur=""
-              cur+=(" ¦ " if cur else "")+l
-          if cur: chunks.append(cur)
-          for c in chunks[:10]: print("::notice::"+c.replace("%","%25"))
-          PY
+          # Notices of about 3,500 characters each (ten at most per step).
+          awk 'BEGIN{c=""} { if (length(c)+length($0)+3>3500) { print "::notice::" c; c="" } c = (c=="" ? $0 : c " ¦ " $0) } END { if (c!="") print "::notice::" c }' probe.txt | head -10
           exit 0
