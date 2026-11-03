@@ -746,7 +746,7 @@ public struct CameraSourcesClient: Sendable {
         async let cited = citedSearch(articleTitle: articleTitle, cinematographers: cinematographers)
         async let asc = ascSearch(filmTitle: filmTitle, otherTitles: otherTitles, cinematographers: cinematographers, noting: unanswered)
         async let british = britishSearch(filmTitle: filmTitle, otherTitles: otherTitles, cinematographers: cinematographers, noting: unanswered)
-        async let stories = storySearch(filmTitle: filmTitle, cinematographers: cinematographers)
+        async let stories = storySearch(filmTitle: filmTitle, cinematographers: cinematographers, noting: unanswered)
         async let person = cinematographerSearch(cinematographers.first, filmTitle: filmTitle)
         // The magazines' own searches first (American Cinematographer's articles are the deepest),
         // then what Wikipedia cites; each page once, however its address is written.
@@ -1123,7 +1123,8 @@ public struct CameraSourcesClient: Sendable {
     /// With what became of each guess (or why none was tried).
     /// A guessed page found but whose article couldn't be told apart is noted with the reading
     /// (`unbounded`), as any page found is, so what its site said before is kept meanwhile.
-    func storySearch(filmTitle: String, cinematographers: [String]) async
+    /// A guessed page that comes back as a shell is a site that didn't answer (`noting`), noted too.
+    func storySearch(filmTitle: String, cinematographers: [String], noting: UnansweredSites? = nil) async
         -> (found: [CameraReading.Source], guesses: [DiscoveryTrace.Guess], notAttempted: String?, unbounded: [CameraReading.Skipped]) {
         let surnames = cinematographers.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 3 }
         let slug = CameraSources.slug(filmTitle)
@@ -1141,12 +1142,15 @@ public struct CameraSourcesClient: Sendable {
                     let got = await page(url, site: guess.1, title: nil)
                     guard let found = got.source else {
                         var unbounded: CameraReading.Skipped? = nil
-                        if let failure = got.failure, failure == .restricted(CameraSources.unboundedArticle) {
+                        let shell = got.failure == .unanswered(CameraSources.incompletePage)
+                        if shell { await noting?.add(guess.1) }
+                        if let failure = got.failure, failure == .restricted(CameraSources.unboundedArticle) || shell {
                             let stand = CameraReading.Source(title: guess.1, site: guess.1, url: CameraSources.secure(url), paragraphs: [])
                             unbounded = CameraReading.Skipped(source: stand, reason: failure.reason,
                                                               limit: CameraSources.limit(page: nil, failure: failure, otherFilm: false))
                         }
-                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(Self.notRetried(got.failure?.reason ?? "couldn't be read"))), unbounded)
+                        let why = got.failure?.reason ?? "couldn't be read"
+                        return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .failed(shell ? why : Self.notRetried(why))), unbounded)
                     }
                     guard found.paragraphs.contains(where: { paragraph in surnames.contains { paragraph.contains($0) } }) else {
                         return (index, nil, DiscoveryTrace.Guess(site: guess.1, url: guess.0, result: .doesntNameCinematographer), nil)

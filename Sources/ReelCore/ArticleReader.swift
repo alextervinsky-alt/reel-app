@@ -177,6 +177,8 @@ public enum ArticleReader {
         let leftOutOnPage = allProse.count
         // Nothing on the page reads as prose: an empty article (too little text), not a failure.
         guard !allProse.isEmpty else {
+            // Not taken for a shell: pages that never have prose (a credits list, an old archive page)
+            // would be read again for good.
             return Article(paragraphs: [], boundary: .region, leftOut: 0, canonical: canonical)
         }
         let unbounded = Article(paragraphs: [], boundary: nil, leftOut: leftOutOnPage, canonical: canonical)

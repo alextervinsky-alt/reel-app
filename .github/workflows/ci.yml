@@ -66,7 +66,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           set +e
-          # OMDb's 1,000 requests a day are shared with the app: 50 look-ups only on a [build] commit.
+          # OMDb's 1,000 requests a day are shared with the app: 50 look-ups only on a pushed [build] commit
+          # (a manual run has no commit message here, so it looks up none).
           OMDB_ACCLAIM_LOOKUPS=${{ contains(github.event.head_commit.message, '[build]') && '50' || '0' }} \
             swift test --skip-build --filter LiveAcclaimTests > acclaim.log 2>&1
           grep -E "^::notice::Most acclaimed" acclaim.log || echo "::notice::Most acclaimed: not worked out ($(grep -cE 'error|failed' acclaim.log) errors)"

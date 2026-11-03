@@ -330,6 +330,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         var carried: [Evidence] = [], dropped: [Dropped] = []
         // A page on the site whose article couldn't be told apart (an extraction that failed, not a
         // reading that found nothing).
+        func shell(_ site: String) -> Bool {
+            new.limits.contains { $0.site == site && $0.detail.contains(CameraSources.incompletePage) }
+        }
         func unbounded(_ site: String) -> Bool {
             new.limits.contains { $0.site == site && $0.detail.contains(CameraSources.unboundedArticle) }
         }
@@ -356,6 +359,12 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 } else if !fromPage {
                     carry = false
                     reason = "\(site) no longer says so"
+                } else if siteDown, shell(site) {
+                    // Its site answered with a shell in place of the page (see `ArticleReader`):
+                    // carried and read again, as when a site doesn't answer, but counted, so a page
+                    // that stays a shell doesn't keep an old tag for good.
+                    carry = misses <= maxRetries
+                    reason = carry ? "" : "\(site) answered with an incomplete page in \(maxRetries) readings"
                 } else if siteDown {
                     carry = true
                     reason = ""
@@ -384,7 +393,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                     kept.carriedFrom = evidence.carriedFrom ?? old.readAt
                     kept.carriedRules = evidence.carriedRules ?? old.version
                     // Counted only while every site answers and its page isn't found.
-                    kept.misses = siteDown ? evidence.misses : misses
+                    kept.misses = siteDown && !shell(site) ? evidence.misses : misses
                     carried.append(kept)
                 } else {
                     dropped.append(Dropped(shotOn: kind, reason: reason))

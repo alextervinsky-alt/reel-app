@@ -625,6 +625,42 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertNotNil(merged.index.retryAt)
     }
 
+    /// Review S1, S2: a guessed story page (Kodak's) that comes back as a shell is noted as its site
+    /// not answering, so an old Kodak tag is carried, not dropped by the new rules; a page that stays
+    /// a shell keeps it only for a few readings.
+    func testAGuessedShellIsCarriedAndAPersistentShellIsBounded() async {
+        let shell = "<html><body><div class=\"newsletter\"><p>By providing your information, you agree to our terms of use and our privacy policy.</p></div>"
+            + "<footer><p>© 2026 A made-up company. All rights reserved. Terms of use, privacy and accessibility.</p></footer></body></html>"
+        StandInSite.reset()
+        defer { StandInSite.reset() }
+        StandInSite.route("www.kodak.com", "blog-post/the-quiet-harbour", body: shell)
+        StandInSite.route("www.kodak.com", "page/the-quiet-harbour", status: 404, body: "<p>Not here</p>")
+        StandInSite.route("nofilmschool.com", "the-quiet-harbour", status: 404, body: "<p>Not here</p>")
+        let noting = UnansweredSites()
+        let stories = await client().storySearch(filmTitle: "The Quiet Harbour", cinematographers: ["Jane Doe"], noting: noting)
+        let unanswered = await noting.all()
+        XCTAssertEqual(unanswered, ["Kodak"])
+        XCTAssertEqual(stories.unbounded.first?.limit, .unanswered)
+        XCTAssertTrue(stories.unbounded.first?.reason.contains(CameraSources.incompletePage) ?? false)
+        // The merge: carried while the page is a shell, for at most `maxRetries` readings.
+        let old = CraftIndex(version: 14, readAt: start, shotOn: [.film, .blackAndWhite], names: [],
+                             evidence: [CraftIndex.Evidence(shotOn: .film, text: "Doe shot The Quiet Harbour on Kodak 65mm film.", source: "Film Monthly"),
+                                        CraftIndex.Evidence(shotOn: .blackAndWhite, text: "Doe also shot on Double-X 5222.", source: "Kodak", partial: true)],
+                             sources: 3, read: ["Kodak", "Film Monthly", "Wikipedia"])
+        let filmOnly = CraftIndex.Evidence(shotOn: .film, text: "Doe shot The Quiet Harbour on Kodak 65mm film.", source: "Film Monthly")
+        var new = CraftIndex(readAt: start, shotOn: [.film], names: [], evidence: [filmOnly], sources: 2, read: ["Film Monthly", "Wikipedia"],
+                             unanswered: ["Kodak"])
+        new.limits = [CraftIndex.SourceLimit(site: "Kodak", url: "https://www.kodak.com/en/motion/blog-post/the-quiet-harbour/", kind: .unanswered,
+                                             detail: SourceFailure.unanswered(CameraSources.incompletePage).reason)]
+        var merged = CraftIndex.merging(old: old, new: new, now: start)
+        XCTAssertEqual(Set(merged.index.shotOn), [.film, .blackAndWhite], "carried, not dropped by the new rules")
+        XCTAssertEqual(merged.carried.first?.misses, 1)
+        XCTAssertNotNil(merged.index.retryAt)
+        for _ in 0..<CraftIndex.maxRetries { merged = CraftIndex.merging(old: merged.index, new: new, now: start) }
+        XCTAssertEqual(merged.index.shotOn, [.film])
+        XCTAssertEqual(merged.dropped.map(\.reason), ["Kodak answered with an incomplete page in \(CraftIndex.maxRetries) readings"])
+    }
+
     func testRulesVersion() {
         XCTAssertEqual(CraftIndex.currentVersion, 15)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)

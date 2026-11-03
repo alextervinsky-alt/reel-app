@@ -51,7 +51,7 @@ final class LiveAcclaimTests: XCTestCase {
         let line = ranked.prefix(20).enumerated().map { index, entry in
             "\(index + 1). \(entry.candidate.film.title) (\(Acclaim.note(entry.candidate))\(entry.candidate.prizeName.map { " · \($0)" } ?? ""))"
         }
-        print("::notice::Most acclaimed of \(year) (\(pool.count) in the running): \(line.joined(separator: "; "))")
+        print("::notice::Most acclaimed of \(year) (\(pool.count) in the running; critics' scores \(lookups > 0 ? "looked up for \(lookups)" : "not looked up: not a build")): \(line.joined(separator: "; "))")
         XCTAssertFalse(ranked.isEmpty)
     }
 
