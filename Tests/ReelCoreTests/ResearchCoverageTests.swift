@@ -453,6 +453,30 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertFalse(reading.index.evidence.contains { $0.source == "Animation World Network" })
     }
 
+    func testAShortTitleAloneDoesntMakeAPageTheFilms() async {
+        func run(_ paragraphs: [String]) async -> CameraReading {
+            StandInSite.reset()
+            StandInSite.route("cinesite.com", "wp-json/wp/v2/search", body: DiscoveryFixtures.ascHits([("Ash", "https://cinesite.com/ash/", "page")]))
+            StandInSite.route("cinesite.com", "/ash/", body: DiscoveryFixtures.page("Ash", paragraphs))
+            return await client().researched(CameraReading(sources: [], more: [], cinematographer: nil), article: nil, filmTitle: "Ash",
+                                              cinematographers: ["Ida Holm"], directors: ["Ola Berg"], year: 2019, otherTitles: [], crew: [],
+                                              previous: nil)
+        }
+        let generic = await run([
+            "Ash from the fires drifted over the plates we shot for the commercial, and the greenscreen work took a week.",
+            "The studio's reel this year includes car spots, a music video and a game trailer, each with its own camera arrays.",
+            "Ash and smoke simulations were rendered on the new farm, with HDRI captured on every set.",
+        ])
+        XCTAssertTrue(generic.sources.isEmpty, "\(generic.sources.map(\.title))")
+        XCTAssertEqual(generic.research?.outcomes.first?.result, .nothingUsable(["https://cinesite.com/ash/"]))
+        let film = await run([
+            "For Ash (2019), directed by Ola Berg, the studio built the burning forest around the plates shot on location.",
+            "Ida Holm's camera team fitted witness cameras on every set so the matchmove artists could track the handheld shots.",
+            "The forest was extended digitally from HDRI captured at dusk, with greenscreen used for the cabin interiors.",
+        ])
+        XCTAssertEqual(film.sources.map(\.url.absoluteString), ["https://cinesite.com/ash/"])
+    }
+
     func testAFilmWithNothingMissingIsNotSearchedFurther() async {
         DiscoveryFixtures.quietHarbour()
         let first = await client().read(articleTitle: "The Quiet Harbour", filmTitle: "The Quiet Harbour", cinematographers: ["Jane Doe"],
