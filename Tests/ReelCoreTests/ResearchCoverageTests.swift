@@ -13,7 +13,7 @@ extension DiscoveryFixtures {
     // nothing by its title; Wikipedia cites a VFX trade piece and a credits database.
 
     static let quarantineVFX = page("Inside the VFX of The Long Quarantine", [
-        "The Long Quarantine needed crowds of thousands, and the camera team fitted zoom encoders on every lens so the matchmove artists could follow the handheld, zoom-heavy footage.",
+        "The Long Quarantine needed crowds of thousands, and the camera team fitted zoom encoders on every lens so the matchmove artists could follow every change of focal length.",
         "For the motorway chase, four static cameras were mounted on a truck and their plates were stitched into one moving background.",
         "The production shot on ARRI ALEXA M cameras, the visual effects supervisor Ravi Holt told the magazine.",
         "Most of the crowd shots were extended digitally, with witness cameras recording every take from the side.",
