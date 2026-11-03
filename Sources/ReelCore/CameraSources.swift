@@ -484,10 +484,13 @@ public enum CameraSources {
 
     /// Whether a page is about another craft (the editor, composer, costumes, sound…) and not the
     /// camera: its title names that craft and neither the cinematographer nor the cinematography.
-    public static func isOtherCraft(title: String, cinematographers: [String]) -> Bool {
+    /// On a production-technology publication or a VFX company's site (`site`), visual effects are
+    /// what it's read for (the camera work the effects needed), not another craft (1.10.7).
+    public static func isOtherCraft(title: String, cinematographers: [String], site: String? = nil) -> Bool {
         let heading = title.lowercased()
+        let vfxSite = [.productionTechnology, .vfxVendor].contains(SourceRegistry.family(ofSource: site ?? "Wikipedia"))
         let others = ["editor", "editing", "composer", "score", "costume", "production design", "sound design",
-                      "makeup", "make-up", "casting", "screenwriter", "visual effects", "vfx"]
+                      "makeup", "make-up", "casting", "screenwriter"] + (vfxSite ? [] : ["visual effects", "vfx"])
         // Whole words ("score", not "underscore"; "casting", not "broadcasting").
         let padded = " " + String(heading.map { $0.isLetter || $0 == "-" ? $0 : " " }) + " "
         guard others.contains(where: { padded.contains(" " + $0 + " ") || padded.contains(" " + $0 + "s ") }) else { return false }
@@ -841,7 +844,7 @@ public struct CameraSourcesClient: Sendable {
             if otherFilm.contains(source.url) { return source.paragraphs.isEmpty ? .thin : .anotherFilm }
             if read.contains(where: { $0.url == source.url }) { return .read }
             if source.paragraphs.count < 3 { return .thin }
-            if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers) { return .otherCraft }
+            if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers, site: source.site) { return .otherCraft }
             return .beyondReadLimit
         }
         var trace = DiscoveryTrace.Fallback(picks: picks, result: .notTried("not every result kept was another film's"))
@@ -888,7 +891,7 @@ public struct CameraSourcesClient: Sendable {
             trace.result = .notRead("too little text to read")
             return (nil, source, CameraReading.Skipped(source: source, reason: "too little text to read" + note, limit: .thin), trace)
         }
-        if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers) {
+        if CameraSources.isOtherCraft(title: source.title, cinematographers: cinematographers, site: source.site) {
             trace.result = .notRead("an interview about another craft")
             return (nil, source, CameraReading.Skipped(source: source, reason: "an interview about another craft (editing, music, design)" + note), trace)
         }
@@ -932,14 +935,14 @@ public struct CameraSourcesClient: Sendable {
         }.map(\.url))
         let found = pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) } }
-        let readable = found.filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers) }
+        let readable = found.filter { $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers, site: $0.site) }
         var read = Array(readable.prefix(CameraSources.readLimit))
         var more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
         // Why each page found wasn't read.
         func reason(_ page: CameraReading.Source) -> String {
             if otherFilm.contains(page.url) { return "another film of that title: it doesn't name the film's cinematographer, director or year" }
             if page.paragraphs.count < 3 { return "too little text to read" }
-            if CameraSources.isOtherCraft(title: page.title, cinematographers: cinematographers) {
+            if CameraSources.isOtherCraft(title: page.title, cinematographers: cinematographers, site: page.site) {
                 return "an interview about another craft (editing, music, design)"
             }
             return "six sources were already read"

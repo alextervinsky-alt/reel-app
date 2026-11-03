@@ -138,6 +138,12 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertTrue(SourceRegistry.establishesCapture(.cinematographyPublication))
         XCTAssertTrue(SourceRegistry.establishesCapture(.manufacturer))
         XCTAssertEqual(SourceRegistry.entry(host: "www.fxguide.com")?.name, "fxguide")
+        // A VFX piece is what a VFX publication is read for; on a cinematography magazine it's still another craft.
+        XCTAssertFalse(CameraSources.isOtherCraft(title: "Inside the VFX of The Long Quarantine", cinematographers: ["Tom Ashby"],
+                                                  site: "Animation World Network"))
+        XCTAssertTrue(CameraSources.isOtherCraft(title: "Inside the VFX of The Long Quarantine", cinematographers: ["Tom Ashby"],
+                                                 site: "American Cinematographer"))
+        XCTAssertTrue(CameraSources.isOtherCraft(title: "The Editor of The Long Quarantine", cinematographers: ["Tom Ashby"], site: "fxguide"))
         XCTAssertNil(SourceRegistry.entry(host: "notfxguide.com"))
     }
 

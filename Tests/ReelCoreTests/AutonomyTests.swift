@@ -321,7 +321,7 @@ final class AutonomyTests: XCTestCase {
         file.version = LibraryFile.currentVersion + 1
         let opening = LibraryOpening.decide(try JSONStore.encode(file))
         guard case .newer(let version, let read) = opening else { return XCTFail("not newer") }
-        XCTAssertEqual(version, 4)
+        XCTAssertEqual(version, LibraryFile.currentVersion + 1)
         XCTAssertEqual(read?.films.count, 2)
         XCTAssertEqual(opening.films.count, 2)
         XCTAssertFalse(opening.writable)

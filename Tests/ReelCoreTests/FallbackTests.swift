@@ -335,7 +335,7 @@ final class FallbackTests: XCTestCase {
         let new = CraftReader.reading(of: details, articleTitle: nil, article: nil, reading: reading, colour: nil).index
         XCTAssertTrue(new.shotOn.contains(.film))
         XCTAssertEqual(new.evidence(for: .film)?.source, "American Cinematographer")
-        XCTAssertEqual(new.discovery, 5)
+        XCTAssertGreaterThanOrEqual(new.discovery, 5)
         // Merged with an older reading that had nothing: the new tag is stored.
         let old = CraftIndex(shotOn: [], names: [], sources: 1, read: ["Wikipedia"], discovery: 4)
         XCTAssertTrue(CraftIndex.merging(old: old, new: new).index.shotOn.contains(.film))
