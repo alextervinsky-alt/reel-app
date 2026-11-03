@@ -207,6 +207,27 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertTrue(CraftIndex.make(from: fromAC, colour: nil, keywords: [], sources: 1).shotOn.contains(.digital))
     }
 
+    func testAVFXCompanysLightAndCameraAreTheEffectsNotTheCinematography() {
+        let text = TechSpecs.Text(source: "Cinesite", sections: [FilmArticle.Section(id: 0, title: "", paragraphs: [
+            "The work on The Long Quarantine led to significant developments in the studio's raytracing, lighting and shading pipelines.",
+            "Beyond the bridge are tower-blocks, and furthest from the camera is the harbour, all of it built for The Long Quarantine.",
+            "“We’re very proud of the response to our stereo conversion of The Long Quarantine,” said the company's head of visual effects.",
+            "The whole sequence was filmed in Glasgow against greenscreen, with reference photographs taken with HDRI cameras.",
+        ])], isInterview: true)
+        let specs = TechSpecs.read(texts: [text], cinematographers: ["Tom Ashby"], directors: [], year: 2013, title: "The Long Quarantine",
+                                   crew: CraftCrew.credited(quarantine()))
+        XCTAssertTrue(specs.lighting.isEmpty, "CG shading isn't how the film was lit: \(specs.lighting.map(\.text))")
+        XCTAssertTrue(specs.cameraLanguage.isEmpty, "a virtual camera isn't the film's camera work: \(specs.cameraLanguage.map(\.text))")
+        XCTAssertTrue(specs.approach.isEmpty, "a VFX company's own words aren't the filmmakers': \(specs.approach.map(\.text))")
+        XCTAssertEqual(specs.cameraVFX.count, 1)
+        XCTAssertEqual(specs.cameraVFX.first?.evidence, .technicalTrade)
+        let found = ResearchCoverage.found(in: specs, crew: [])
+        XCTAssertEqual(found, [.vfx])
+        // A quote with no one of the film's crew named, on a VFX site: reporting, not crew testimony.
+        XCTAssertEqual(SourceRegistry.evidence(source: "Cinesite", text: "“We’re proud of it,” said the company.", isInterview: true, speaker: nil),
+                       .technicalTrade)
+    }
+
     func testAGuessIsNotGear() {
         func filters(_ sentence: String) -> [String] {
             let text = TechSpecs.Text(source: "American Cinematographer", sections: [FilmArticle.Section(id: 0, title: "", paragraphs: [sentence])],

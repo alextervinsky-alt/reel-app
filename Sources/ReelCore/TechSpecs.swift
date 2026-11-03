@@ -227,7 +227,12 @@ public struct TechSpecs: Equatable, Sendable {
         for text in texts {
             // A VFX publication or vendor, a database: what it names isn't the production's camera
             // package (see `SourceRegistry.establishesCapture`).
-            let establishes = SourceRegistry.establishesCapture(SourceRegistry.family(ofSource: text.source))
+            let family = SourceRegistry.family(ofSource: text.source)
+            let establishes = SourceRegistry.establishesCapture(family)
+            // A VFX publication or vendor reports the effects work: its "lighting" is CG shading and
+            // its "camera" a virtual one. Only how the photography served the effects is read from
+            // it, and what the cinematographer is quoted saying.
+            let effectsSource = family == .productionTechnology || family == .vfxVendor
             let roundup = text.isInterview && !shortTitle.isEmpty && (text.isList || isRoundup(text, title: title ?? ""))
             if roundup { roundups.append(text.source ?? "Wikipedia") }
             // In a round-up, a spec sheet ("Camera: … Lenses: …") is this film's only when it's in this
@@ -444,6 +449,8 @@ public struct TechSpecs: Equatable, Sendable {
                         // its own part, whoever says it.
                         if commentary, (25...450).contains(sentence.count), !matches(reception, sentence), matches(cameraVFXTerms, sentence) {
                             add(note, to: &cameraVFX)
+                        } else if effectsSource, !(fits && theirs && quoted(sentence)) {
+                            placed = false
                         } else if fits, theirs, text.isInterview || quoted(sentence) {
                             add(note, to: &approach)
                         } else if fits, withDirector, !text.isInterview, !named, !matches(detail, sentence),
