@@ -595,8 +595,38 @@ final class ArticleReaderTests: XCTestCase {
         XCTAssertEqual(ArticleReader.read(side).paragraphs, Self.body)
     }
 
+    /// 1.10.6: a page that comes back as a shell (IndieWire's gallery, now and then: a footer and a
+    /// newsletter box) is a site that didn't answer — read again later, its old evidence carried —
+    /// not a page whose article couldn't be told apart.
+    func testAShellPageIsReadAgainLater() async {
+        let shell = "<html><head><title>Festival cameras</title></head><body><div class=\"_newsletter_ab_1\"><p>By providing your information, you agree to our terms of use and our privacy policy.</p></div>"
+            + "<footer><p>© 2026 A made-up company. All rights reserved. Terms of use, privacy and accessibility.</p></footer></body></html>"
+        let article = ArticleReader.read(shell)
+        XCTAssertNil(article.boundary)
+        XCTAssertTrue(article.incomplete)
+        XCTAssertFalse(ArticleReader.read(Self.definitionPage()).incomplete)
+        StandInSite.reset()
+        defer { StandInSite.reset() }
+        StandInSite.route("shell.example", "gallery", body: shell)
+        let noting = UnansweredSites()
+        let got = await client().page(URL(string: "https://shell.example/gallery/")!, site: "Lens Weekly", title: nil, noting: noting)
+        XCTAssertNil(got.source)
+        XCTAssertEqual(got.failure, .unanswered(CameraSources.incompletePage))
+        XCTAssertTrue(got.failure?.retried ?? false, "read again later")
+        let unanswered = await noting.all()
+        XCTAssertEqual(unanswered, ["Lens Weekly"])
+        // What its site said before is carried, as when a site doesn't answer.
+        let old = CraftIndex(version: 14, readAt: start, shotOn: [.digital], names: [],
+                             evidence: [CraftIndex.Evidence(shotOn: .digital, text: "We shot it on the Sony Venice 2.", source: "Lens Weekly")],
+                             sources: 2, read: ["Lens Weekly", "Wikipedia"])
+        let new = CraftIndex(readAt: start, shotOn: [], names: [], evidence: [], sources: 1, read: ["Wikipedia"], unanswered: ["Lens Weekly"])
+        let merged = CraftIndex.merging(old: old, new: new, now: start)
+        XCTAssertEqual(merged.index.shotOn, [.digital])
+        XCTAssertNotNil(merged.index.retryAt)
+    }
+
     func testRulesVersion() {
-        XCTAssertEqual(CraftIndex.currentVersion, 14)
+        XCTAssertEqual(CraftIndex.currentVersion, 15)
         XCTAssertEqual(CraftIndex.currentDiscovery, 5)
         XCTAssertEqual(CraftIndex.findingChanged, 2)
         XCTAssertEqual(LibraryFile.currentVersion, 3)

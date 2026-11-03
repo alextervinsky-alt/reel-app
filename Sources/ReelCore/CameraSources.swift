@@ -317,6 +317,9 @@ public enum CameraSources {
     /// Why a page whose article couldn't be told apart from the rest of the page wasn't read.
     public static let unboundedArticle = "the article couldn't be told apart from the rest of the page (menus, other articles, teasers)"
 
+    /// Why a page that came back as a shell (a few boilerplate lines, no article) wasn't read.
+    public static let incompletePage = "an incomplete page came back (a few lines of boilerplate, no article)"
+
     /// A page asked for by its own address that ends on the site's front page: what it was is gone.
     public static func isFrontPage(_ landed: URL, for requested: URL) -> Bool {
         let asked = requested.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -1171,7 +1174,15 @@ public struct CameraSourcesClient: Sendable {
             // Only the article's own paragraphs (see `ArticleReader`). A page whose article can't be
             // told apart from the rest isn't read whole: it's not open to Reel this time.
             let article = ArticleReader.read(html)
-            guard let boundary = article.boundary else { return (nil, .restricted(CameraSources.unboundedArticle)) }
+            guard let boundary = article.boundary else {
+                // A shell in place of the page: as if the site hadn't answered (read again later,
+                // what it said before kept meanwhile), not a verdict on the page.
+                if article.incomplete {
+                    await noting?.add(site)
+                    return (nil, .unanswered(CameraSources.incompletePage))
+                }
+                return (nil, .restricted(CameraSources.unboundedArticle))
+            }
             var source = CameraReading.Source(title: title ?? HTMLText.title(html) ?? site, site: site, url: CameraSources.secure(url),
                                               paragraphs: article.paragraphs)
             source.landed = landed

@@ -42,6 +42,9 @@ public enum ArticleReader {
         public var leftOut: Int
         /// The address the page gives for itself (`rel="canonical"`), when it has one.
         public var canonical: URL?
+        /// No article, and at most three lines of prose on the whole page, none the article's (a
+        /// footer, a newsletter box): a shell or a stub in place of the page, not a page to judge.
+        public var incomplete = false
 
         public var found: Bool { boundary != nil }
     }
@@ -331,23 +334,34 @@ public enum ArticleReader {
         // The page's own structure first. Only when that finds no article, or only an unmarked
         // region, is a large block named like a component taken for the page's layout, and then
         // only if that finds an article the page marks as one.
-        let first = resolve(layout: false)
-        guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
-        // Only when the page has such a block at all.
-        let layoutBlock = elements.indices.contains { j in
-            guard 2 * (proseWeight[j] ?? 0) >= pageWeight, !["html", "body"].contains(elements[j].tag) else { return false }
-            if ["form", "header"].contains(elements[j].tag) { return true }
-            let kinds = componentKinds(j)
-            return !kinds.isEmpty && kinds.allSatisfy(layoutWords.contains)
+        func choose() -> Article {
+            let first = resolve(layout: false)
+            guard first.boundary == nil || first.boundary == .region || first.paragraphs.isEmpty else { return first }
+            // Only when the page has such a block at all.
+            let layoutBlock = elements.indices.contains { j in
+                guard 2 * (proseWeight[j] ?? 0) >= pageWeight, !["html", "body"].contains(elements[j].tag) else { return false }
+                if ["form", "header"].contains(elements[j].tag) { return true }
+                let kinds = componentKinds(j)
+                return !kinds.isEmpty && kinds.allSatisfy(layoutWords.contains)
+            }
+            guard layoutBlock else { return first }
+            let second = resolve(layout: true)
+            if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
+            guard second.boundary != nil else { return first }
+            // An unmarked region from what the layout column left over: the column's reading when it
+            // holds at least twice the prose.
+            func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
+            return weight(second) >= 2 * weight(first) ? second : first
         }
-        guard layoutBlock else { return first }
-        let second = resolve(layout: true)
-        if first.boundary == nil || first.paragraphs.isEmpty { return second.boundary == nil && first.boundary != nil ? first : second }
-        guard second.boundary != nil else { return first }
-        // An unmarked region from what the layout column left over: the column's reading when it
-        // holds at least twice the prose.
-        func weight(_ article: Article) -> Int { article.paragraphs.reduce(0) { $0 + $1.count } }
-        return weight(second) >= 2 * weight(first) ? second : first
+        let found = choose()
+        // Not told apart, with next to no prose on the page: a shell, not the page (IndieWire
+        // sometimes answers its galleries with a footer and a newsletter box only).
+        if found.boundary == nil, allProse.count <= 3 {
+            var shell = found
+            shell.incomplete = true
+            return shell
+        }
+        return found
     }
 
     /// The page's elements, with where each one's content starts and ends in `text` (the page with

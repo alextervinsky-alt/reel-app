@@ -77,7 +77,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 14: only the article's own paragraphs are read from a page, not every paragraph on it (a
     /// related article's teaser, a news ticker; see `ArticleReader`); a page whose article can't be
     /// told apart isn't read, and what its site said before is kept meanwhile.
-    public static let currentVersion = 14
+    /// 15 (1.10.6): the final 1.10.5 article reader (a 1.10.5 pre-release had stamped readings 14:
+    /// TheWrap's "has-sidebar" interview, No Film School's "article-body …-ads" body); a page that
+    /// comes back as a shell (a few boilerplate lines, none the article's) is a site that didn't
+    /// answer, read again later.
+    public static let currentVersion = 15
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.

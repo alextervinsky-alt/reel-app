@@ -50,6 +50,8 @@ jobs:
           fi
           exit $code
       - name: Find interviews for well-known films (American and British Cinematographer)
+        # Run even when an earlier live step failed (an OMDb key over its daily limit).
+        if: ${{ !cancelled() }}
         run: |
           set +e
           swift test --filter LiveCraftSourcesTests 2>&1 | tee craft.log
@@ -60,13 +62,19 @@ jobs:
           fi
           exit $code
       - name: The most acclaimed of last year, worked out live (a report)
+        # Run even when an earlier live step failed (an OMDb key over its daily limit).
+        if: ${{ !cancelled() }}
         run: |
           set +e
-          swift test --skip-build --filter LiveAcclaimTests > acclaim.log 2>&1
+          # OMDb's 1,000 requests a day are shared with the app: 50 look-ups only on a [build] commit.
+          OMDB_ACCLAIM_LOOKUPS=${{ contains(github.event.head_commit.message, '[build]') && '50' || '0' }} \
+            swift test --skip-build --filter LiveAcclaimTests > acclaim.log 2>&1
           grep -E "^::notice::Most acclaimed" acclaim.log || echo "::notice::Most acclaimed: not worked out ($(grep -cE 'error|failed' acclaim.log) errors)"
           exit 0
 
       - name: Shot on for well-known films on record (wrong tags are warnings, missing ones notices)
+        # Run even when an earlier live step failed (an OMDb key over its daily limit).
+        if: ${{ !cancelled() }}
         run: |
           set +e
           swift build --build-tests 2>&1 | tail -3

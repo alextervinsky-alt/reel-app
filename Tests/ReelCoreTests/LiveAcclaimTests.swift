@@ -35,9 +35,12 @@ final class LiveAcclaimTests: XCTestCase {
             candidates.append(Acclaim.Candidate(film: film, tmdbVote: found?.voteAverage, tmdbVotes: found?.voteCount,
                                                 prize: prizes[film.id]?.prize, prizeName: prizes[film.id]?.name))
         }
-        if let key = ProcessInfo.processInfo.environment["OMDB_KEY"], !key.isEmpty {
+        // OMDb allows 1,000 requests a day per key, shared with the app: the critics' scores are
+        // looked up for the 50 likeliest only on a build ("[build]" commits; OMDB_ACCLAIM_LOOKUPS).
+        let lookups = ProcessInfo.processInfo.environment["OMDB_ACCLAIM_LOOKUPS"].flatMap(Int.init) ?? 0
+        if lookups > 0, let key = ProcessInfo.processInfo.environment["OMDB_KEY"], !key.isEmpty {
             let omdb = OMDbClient(key: key)
-            let likely = Set(Acclaim.rank(candidates).prefix(50).map { $0.candidate.film.id })
+            let likely = Set(Acclaim.rank(candidates).prefix(lookups).map { $0.candidate.film.id })
             for index in candidates.indices where likely.contains(candidates[index].film.id) {
                 guard let scores = try? await omdb.ratings(imdbID: candidates[index].film.id) else { continue }
                 candidates[index].metacritic = scores.metacritic
