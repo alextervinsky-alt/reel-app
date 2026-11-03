@@ -1,5 +1,8 @@
 import XCTest
 @testable import ReelCore
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Live, run with the TMDB check (not offline): Shot on for well-known films whose answers are on
 /// record, read from the real sources the way the app reads them. A tag a film shouldn't have is
