@@ -71,6 +71,26 @@ final class LiveShotOnTests: XCTestCase {
         // Written as soon as it's known (unbuffered), for CI to sum up.
         func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
+        if chosen == 0 {
+            // PROBE (not for release): World War Z through the 1.10.7 pipeline.
+            guard let full = try? await client.movieDetails(id: 72190) else { say("PROBE| no TMDB details"); return }
+            let details = full.trimmed()
+            say("PROBE| crew kept: " + CraftCrew.credited(details).map(\.described).joined(separator: "; "))
+            guard let reading = await CraftReader.read(details, articleTitle: "World War Z (film)", colour: nil) else {
+                say("PROBE| nothing reached"); return
+            }
+            say("PROBE| shotOn=\(reading.index.shotOn.map(\.rawValue)) names=\(reading.index.names.prefix(20)) unanswered=\(reading.index.unanswered)")
+            say("PROBE| research: " + (reading.index.research ?? []).map { "\($0.dimension.rawValue)=\($0.state.rawValue)" }.joined(separator: " "))
+            var keep = false
+            for line in reading.log.split(separator: "\n", omittingEmptySubsequences: false) {
+                let text = String(line)
+                if text.hasPrefix("DISCOVERY") || text.hasPrefix("NOT READ") || text.hasPrefix("RESEARCH") || text.hasPrefix("CRAFT OBSERVATIONS")
+                    || text.hasPrefix("READ") || text.hasPrefix("THIS FILM'S GEAR") || text.hasPrefix("SHOT ON, IN") { keep = true }
+                else if text.isEmpty { keep = false }
+                if keep, !text.isEmpty { say("PROBE| " + String(text.prefix(330))) }
+            }
+            return
+        }
         let reading = chosen.map { films.indices.contains($0) ? [films[$0]] : [] } ?? films
         for known in reading {
             guard let id = try? await client.searchMovies(query: known.title, year: known.year).first?.id,
