@@ -449,7 +449,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // its own part, whoever says it.
                         if commentary, (25...450).contains(sentence.count), !matches(reception, sentence), matches(cameraVFXTerms, sentence) {
                             add(note, to: &cameraVFX)
-                        } else if effectsSource, !(fits && theirs && quoted(sentence)) {
+                        } else if effectsSource, !(fits && quoted(sentence) && mentions(names, in: sentence)) {
                             placed = false
                         } else if fits, theirs, text.isInterview || quoted(sentence) {
                             add(note, to: &approach)
