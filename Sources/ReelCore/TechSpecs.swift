@@ -535,7 +535,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// How the photography served the visual effects: "a zoom encoder", "witness cameras", "tracking
     /// markers", "the plates were shot", "four static cameras… stitched", "motion control".
     static let cameraVFXTerms = try! NSRegularExpression(
-        pattern: #"\b(?:(?:zoom|lens) encoders?|encoder data|lens data|witness cam(?:era)?s?|tracking (?:cameras?|markers|data|camera)|camera track\w*|match ?mov\w*|motion[- ]control|camera arrays?|array of (?:\w+ )?cameras|(?:background |driving |clean |vfx )?plates? (?:photography|shoot|unit|were shot|was shot|shot)|shot (?:the |as )?(?:background )?plates|plate (?:photography|shoot|unit)|stitched|virtual cam(?:era)?s?|green ?screen|blue ?screen|HDRIs?)\b"#,
+        pattern: #"\b(?:(?:zoom|lens) encoders?|encoder data|lens data|witness cam(?:era)?s?|tracking (?:cameras?|markers|data|camera)|markers? for (?:the )?cameras?|camera track\w*|match ?mov\w*|motion[- ]control|camera arrays?|array of (?:\w+ )?cameras|(?:background |driving |clean |vfx )?plates? (?:photography|shoot|unit|were shot|was shot|shot)|shot (?:the |as )?(?:background )?plates|plate (?:photography|shoot|unit)|stitched|virtual cam(?:era)?s?|green ?screen|blue ?screen|HDRIs?)\b"#,
         options: [.caseInsensitive])
 
     /// Whether a name is this film's: a camera, a lens or what it was shot on needs a sentence saying
