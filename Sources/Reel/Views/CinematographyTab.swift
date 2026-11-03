@@ -29,11 +29,12 @@ struct CinematographyTab: View {
         let id = film.tmdb?.id ?? 0
         let article = model.articles[id]
         let reading = model.cameraReadings[id]
-        let crew = CameraCrew.groups(film.tmdb)
+        let crew = CameraCrew.groups(film.tmdb, named: reading?.research?.contributors ?? [])
         let lead = crew.first { $0.isLead }?.names ?? []
         let hiding = model.hidesSpoilers(for: film)
+        let people = reading?.research?.contributors ?? film.tmdb.map(CraftCrew.credited) ?? []
         let specs = read.specs(article: article, reading: reading, hiding: hiding, cinematographers: lead,
-                               directors: film.tmdb?.directors ?? [], year: film.tmdb?.year, title: film.tmdb?.title)
+                               directors: film.tmdb?.directors ?? [], year: film.tmdb?.year, title: film.tmdb?.title, crew: people)
         let bold = specs.specs.filter { !$0.isFixedName }.map(\.name)
         let sheet = SpecSheet(specs: specs, quick: film.funFacts?.quick)
         let loading = model.cameraReadingsLoading.contains(id) || model.articlesLoading.contains(id)
@@ -86,6 +87,7 @@ struct CinematographyTab: View {
             let team = crew.filter { !$0.isLead }
             if !team.isEmpty { crewGrid(team) }
             reads(reading)
+            researchStands(film.craft?.research)
             links(article: article)
         }
         .frame(maxWidth: 820, alignment: .leading)
@@ -96,6 +98,8 @@ struct CinematographyTab: View {
             async let article: Void = model.loadArticle(for: film)
             async let more: Void = model.loadCameraReading(for: film)
             _ = await (article, more)
+            // What it's missing, looked for (the same bounded searches as the background reading).
+            await model.researchCameraReading(for: film)
             // What the tab read is the film's Shot on and search summary too.
             // The model's copy: its Wikipedia facts (the colour) arrived just now.
             if let id = film.tmdb?.id {
@@ -358,6 +362,26 @@ struct CinematographyTab: View {
         }
     }
 
+    /// Where Reel's research stands, as kept with the film's reading: one short line per state, so
+    /// "not searched yet" and "a source didn't answer" aren't mistaken for "there's nothing" (1.10.7).
+    @ViewBuilder
+    private func researchStands(_ research: [ResearchEntry]?) -> some View {
+        let lines = ResearchEntry.State.shown.compactMap { state -> String? in
+            let dimensions = (research ?? []).filter { $0.state == state && $0.dimension != .contributors }.map(\.dimension.title)
+            guard !dimensions.isEmpty else { return nil }
+            return state.label.prefix(1).uppercased() + state.label.dropFirst() + ": " + dimensions.joined(separator: ", ").lowercased()
+        }
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Where Reel's Research Stands").font(.system(size: 15, weight: .semibold))
+                ForEach(lines, id: \.self) { line in
+                    Text(line).font(.system(size: 12.5)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
     private func links(article: FilmArticle?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Find More").font(.system(size: 15, weight: .semibold))
@@ -418,6 +442,20 @@ private struct NoteRow: View {
     /// A name in the sentence that was clicked: what it is shows under it.
     @State private var looking: Term?
 
+    /// "American Cinematographer · a crew member's own words · Steadicam operator Larry McConkey ·
+    /// second unit": where it was read and, when it's known, what kind of statement it is, whose
+    /// words, and which part of the production (1.10.7). The film's own article says nothing.
+    static func provenance(_ note: TechSpecs.Note) -> String {
+        var parts: [String] = []
+        if let source = note.source, !source.hasPrefix("Wikipedia") { parts.append(source) }
+        if let evidence = note.evidence, evidence != .secondaryReporting, evidence != .technicalTrade || parts.isEmpty {
+            parts.append(evidence.label)
+        }
+        if let speaker = note.speaker { parts.append(speaker.role.title.lowercased() + " " + speaker.name) }
+        if let scope = note.scope, scope != .wholeFilm { parts.append(scope.label) }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
         // What it names, each explained once (Cooke S4/i and Cooke Panchro share an explanation).
         var explained = Set<String>()
@@ -459,8 +497,12 @@ private struct NoteRow: View {
                         })
                     if let looking { lookUp(looking) }
                     HStack(spacing: 14) {
-                        if let source = note.source, !source.hasPrefix("Wikipedia") {
-                            Text("— " + source).font(.system(size: 12)).foregroundStyle(.secondary)
+                        // Where it was read, what kind of statement it is, whose words and which part
+                        // of the production (1.10.7).
+                        let about = Self.provenance(note)
+                        if !about.isEmpty {
+                            Text("— " + about).font(.system(size: 12)).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         // Only a note with more to read has the button (a disabled one would look dimmed).
                         if more {
@@ -642,7 +684,7 @@ private struct SpecValue: View {
 /// most) and how much it surprises (see `FunFactExtractor.score`).
 struct CraftNotes {
     enum Topic: Hashable {
-        case idea, words, reference, scene, challenge, frame, light, colour, gear
+        case idea, words, reference, scene, challenge, frame, light, colour, vfx, gear
 
         var title: String {
             switch self {
@@ -654,6 +696,7 @@ struct CraftNotes {
             case .frame: "Frame and Movement"
             case .light: "Light"
             case .colour: "Colour and Texture"
+            case .vfx: "Camera and Visual Effects"
             case .gear: "The Gear"
             }
         }
@@ -663,7 +706,7 @@ struct CraftNotes {
             switch self {
             case .words, .idea, .reference: 2
             case .scene, .challenge: 1.5
-            case .frame, .light, .colour: 0.5
+            case .frame, .light, .colour, .vfx: 0.5
             case .gear: 0
             }
         }
@@ -683,7 +726,7 @@ struct CraftNotes {
         let all: [(Topic, [TechSpecs.Note])] = [
             (.idea, specs.intent), (.words, specs.approach), (.reference, specs.references), (.scene, specs.scenes),
             (.challenge, specs.challenges), (.frame, specs.cameraLanguage), (.light, specs.lighting),
-            (.colour, specs.colour), (.gear, specs.sentences),
+            (.colour, specs.colour), (.vfx, specs.cameraVFX), (.gear, specs.sentences),
         ]
         // Each note's worth worked out once.
         let items: [Item] = all.flatMap { entry in entry.1.map { Item(topic: entry.0, note: $0) } }
@@ -756,7 +799,7 @@ private final class ReadSpecs {
     private(set) var notes = CraftNotes(TechSpecs.read([]))
 
     func specs(article: FilmArticle?, reading: CameraReading?, hiding: Bool, cinematographers: [String],
-               directors: [String], year: Int?, title: String?) -> TechSpecs {
+               directors: [String], year: Int?, title: String?, crew: [CraftCrew.Contributor] = []) -> TechSpecs {
         guard article != nil || reading != nil else {
             // Nothing read yet (another film opened): nothing from the last one shows.
             stamp = ""
@@ -764,12 +807,13 @@ private final class ReadSpecs {
             return TechSpecs.read([])
         }
         let now = "\(article?.title ?? "")|\(article?.before.count ?? 0)|\(article?.after.count ?? 0)|"
-            + "\(reading?.sources.count ?? -1)|\(hiding)|\(cinematographers)|\(directors)"
+            + "\(reading?.sources.count ?? -1)|\(hiding)|\(cinematographers)|\(directors)|\(crew.map(\.name))"
         if now != stamp {
             stamp = now
             // Read as the Shot on filter and search read it (the interviews first).
             let texts = CraftReader.texts(article: article, reading: reading, hiding: hiding)
-            specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors, year: year, title: title)
+            specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors, year: year, title: title,
+                                   crew: crew)
             if hiding { specs = Self.withoutStory(specs) }
             notes = CraftNotes(specs)
         }
@@ -800,6 +844,7 @@ private final class ReadSpecs {
         specs.scenes = keep(specs.scenes)
         specs.challenges = keep(specs.challenges)
         specs.collaboration = keep(specs.collaboration)
+        specs.cameraVFX = keep(specs.cameraVFX)
         return specs
     }
 
@@ -829,16 +874,24 @@ enum CameraCrew {
         ("Gaffer", ["Gaffer", "Chief Lighting Technician"]),
         ("Key Grip", ["Key Grip"]),
         ("Colourist", ["Colorist", "Digital Intermediate Colorist", "Supervising Colorist", "Senior Colorist"]),
+        ("Visual Effects", ["Visual Effects Supervisor"]),
     ]
 
-    static func groups(_ details: TMDBMovieDetails?) -> [Group] {
+    /// `named`: the crew found in what was read; those not credited ("Robert Richardson was
+    /// originally…") are listed apart, with the part of the production the sentence said.
+    static func groups(_ details: TMDBMovieDetails?, named: [CraftCrew.Contributor] = []) -> [Group] {
         guard let details else { return [] }
         var listed = Set<String>()
-        return jobs.compactMap { entry in
+        var groups: [Group] = jobs.compactMap { entry in
             let names = details.people(forJobs: entry.jobs).map(\.name).filter { !listed.contains($0) }
             listed.formUnion(names)
             return names.isEmpty ? nil : Group(title: entry.title, names: Array(names.prefix(4)))
         }
+        let uncredited = named.filter { !$0.credited && !listed.contains($0.name) }.map { person in
+            person.name + (person.scope.map { " (" + $0.label + ")" } ?? "")
+        }
+        if !uncredited.isEmpty { groups.append(Group(title: "Also Named in What Was Read", names: Array(uncredited.prefix(4)))) }
+        return groups
     }
 }
 #endif

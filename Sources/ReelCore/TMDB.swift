@@ -316,7 +316,8 @@ public struct TMDBMovieDetails: Codable, Equatable, Sendable {
         if let c = credits {
             copy.credits = TMDBCredits(
                 cast: Array(c.cast.sorted { ($0.order ?? 999) < ($1.order ?? 999) }.prefix(12)),
-                crew: c.crew.filter { Self.keptCrewJobs.contains($0.job ?? "") }
+                // The camera, lighting, colour and VFX crew too (1.10.7): who photographed what.
+                crew: c.crew.filter { Self.keptCrewJobs.contains($0.job ?? "") || CraftCrew.keptJobs.contains($0.job ?? "") }
             )
         }
         if let v = videos {

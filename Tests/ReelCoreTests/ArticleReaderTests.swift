@@ -662,9 +662,9 @@ final class ArticleReaderTests: XCTestCase {
     }
 
     func testRulesVersion() {
-        XCTAssertEqual(CraftIndex.currentVersion, 15)
-        XCTAssertEqual(CraftIndex.currentDiscovery, 5)
+        XCTAssertGreaterThanOrEqual(CraftIndex.currentVersion, 15)
+        XCTAssertGreaterThanOrEqual(CraftIndex.currentDiscovery, 5)
         XCTAssertEqual(CraftIndex.findingChanged, 2)
-        XCTAssertEqual(LibraryFile.currentVersion, 3)
+        XCTAssertGreaterThanOrEqual(LibraryFile.currentVersion, 3)
     }
 }

@@ -29,8 +29,9 @@ public enum CraftReader {
     static func evaluate(_ details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?, colour: [String]?,
                          otherTitles: [String], now: Date) -> (index: CraftIndex, specs: TechSpecs) {
         let texts = texts(article: article, reading: reading, hiding: false)
+        let people = reading?.research?.contributors ?? Self.crew(of: details, article: article, reading: reading)
         let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
-                                   year: details.year, title: details.title, otherTitles: otherTitles)
+                                   year: details.year, title: details.title, otherTitles: otherTitles, crew: people)
         var index = CraftIndex.make(from: specs, colour: colour, keywords: details.keywordNames, sources: texts.count, now: now)
         index.unanswered = reading?.unanswered ?? []
         // What was found and couldn't be examined, kept with the reading (not only in the log).
@@ -42,7 +43,22 @@ public enum CraftReader {
         var read: [String] = []
         for text in texts where !read.contains(text.source ?? "Wikipedia") { read.append(text.source ?? "Wikipedia") }
         index.read = read
+        // Where its research stands, dimension by dimension (1.10.7).
+        let skipped = reading?.skipped ?? []
+        index.research = ResearchCoverage.entries(
+            found: ResearchCoverage.found(in: specs, crew: people), run: reading?.research, readSomething: !texts.isEmpty,
+            languageLimited: skipped.contains { $0.limit == .language },
+            extractionLimited: skipped.contains { $0.limit == .thin || $0.reason.contains(CameraSources.unboundedArticle) }, now: now)
         return (index, specs)
+    }
+
+    /// The film's camera, lighting, colour and VFX people: credited on TMDB, and directors of
+    /// photography named only in what was read ("Robert Richardson was originally…").
+    public static func crew(of details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?) -> [CraftCrew.Contributor] {
+        let credited = CraftCrew.credited(details)
+        let paragraphs = (article.map { ($0.before + $0.after).flatMap(\.paragraphs) } ?? [])
+            + (reading?.sources.flatMap(\.paragraphs) ?? [])
+        return credited + CraftCrew.named(in: paragraphs, besides: credited)
     }
 
     /// A film read: the summary, and the log of what was read for it (see `CraftLog`).
@@ -59,8 +75,10 @@ public enum CraftReader {
     /// Fetches the film's article and what's written about how it was shot, and reads them. Nil when
     /// nothing could be reached (offline): tried again later.
     /// `otherTitles`: the other films of its collection, so their articles aren't read for it.
+    /// `previous`: the film's reading before, so a search that found nothing isn't repeated within
+    /// a year (see `ResearchPlan`).
     public static func read(_ details: TMDBMovieDetails, articleTitle: String?, colour: [String]?,
-                            otherTitles: [String] = []) async -> Reading? {
+                            otherTitles: [String] = [], previous: CraftIndex? = nil) async -> Reading? {
         async let fetched = CameraSourcesClient().read(articleTitle: articleTitle, filmTitle: details.title,
                                                        cinematographers: details.cinematographers,
                                                        directors: details.directors, year: details.year, otherTitles: otherTitles)
@@ -76,8 +94,13 @@ public enum CraftReader {
                 articleFailed = true
             }
         }
-        let reading = await fetched
-        guard reached || !reading.sources.isEmpty || reading.cinematographer != nil else { return nil }
+        let first = await fetched
+        guard reached || !first.sources.isEmpty || first.cinematographer != nil else { return nil }
+        // What the first pass is missing, looked for (discovery 6).
+        let reading = await CameraSourcesClient().researched(first, article: article, filmTitle: details.title,
+                                                             cinematographers: details.cinematographers, directors: details.directors,
+                                                             year: details.year, otherTitles: otherTitles,
+                                                             crew: Self.crew(of: details, article: article, reading: first), previous: previous)
         let now = Date()
         let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
         var read = evaluated.index

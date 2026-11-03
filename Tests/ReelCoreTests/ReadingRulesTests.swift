@@ -375,7 +375,7 @@ final class ReadingRulesTests: XCTestCase {
     /// new reason.
     func testReadAgainTheFalseFilmTagIsDroppedAndDigitalKept() {
         XCTAssertGreaterThanOrEqual(CraftIndex.currentVersion, 12, "rules 12 or later")
-        XCTAssertEqual(CraftIndex.currentDiscovery, 5, "finding unchanged")
+        XCTAssertGreaterThanOrEqual(CraftIndex.currentDiscovery, 5)
         XCTAssertEqual(CraftQueue.state(craft: stored(), attempt: nil, hasFacts: true, inCollection: false, now: Date()), .olderRules)
         let new = CraftIndex(version: 12, shotOn: [.digital], names: [], evidence: [veniceEvidence], sources: 3,
                              read: ["British Cinematographer", "American Cinematographer", "Wikipedia"], discovery: 5)

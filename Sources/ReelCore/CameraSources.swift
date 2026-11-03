@@ -69,6 +69,10 @@ public struct CameraReading: Equatable, Sendable {
 
     public var skipped: [Skipped] = []
 
+    /// Who photographed it, and the searches made for what the first pass was missing (1.10.7;
+    /// see `CameraSourcesClient.researched`). Nil before that step.
+    public var research: ResearchRun? = nil
+
     public init(sources: [Source], more: [Source], cinematographer: Cinematographer?, unanswered: [String] = [], skipped: [Skipped] = []) {
         self.sources = sources
         self.more = more
@@ -144,11 +148,13 @@ public enum SourceFailure: Equatable, Sendable {
     /// Asked Reel to wait: "too many requests", a captcha or a challenge page. The site is left
     /// alone for a while (see `HostPacer`).
     case wait(String)
+    /// Written in a language Reel doesn't read (1.10.7): not a page read with nothing in it.
+    case language(String)
 
     public var retried: Bool {
         switch self {
         case .unanswered, .wait: true
-        case .gone, .restricted: false
+        case .gone, .restricted, .language: false
         }
     }
 
@@ -158,6 +164,7 @@ public enum SourceFailure: Equatable, Sendable {
         case .gone: .gone
         case .restricted: .restricted
         case .unanswered, .wait: .unanswered
+        case .language: .language
         }
     }
 
@@ -168,6 +175,7 @@ public enum SourceFailure: Equatable, Sendable {
         case .restricted(let why): why == CameraSources.unboundedArticle ? "not read: \(why)" : "not open to Reel: \(why)"
         case .unanswered(let why): "didn't answer: \(why) (read again later)"
         case .wait(let why): "asked Reel to wait: \(why) (read again later)"
+        case .language(let name): "not read: written in \(name), a language Reel doesn't read yet"
         }
     }
 
@@ -314,6 +322,22 @@ public enum CameraSources {
         return !otherFilm && page.paragraphs.count < 3 ? .thin : nil
     }
 
+    /// The language a page says it's written in (`<html lang="es">`), when that isn't English: nil
+    /// for English or a page that doesn't say. "Spanish", or the code itself when Reel doesn't know it.
+    public static func otherLanguage(_ html: String) -> String? {
+        let head = String(html.prefix(4096))
+        guard let regex = try? NSRegularExpression(pattern: #"<html\b[^>]*\blang\s*=\s*["']?([A-Za-z]{2,3})(?:[-_][A-Za-z0-9]+)?"#, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: head, range: NSRange(head.startIndex..., in: head)),
+              let range = Range(match.range(at: 1), in: head) else { return nil }
+        let code = head[range].lowercased()
+        guard code != "en" else { return nil }
+        let names = ["es": "Spanish", "fr": "French", "de": "German", "it": "Italian", "pt": "Portuguese", "nl": "Dutch",
+                     "pl": "Polish", "ru": "Russian", "ja": "Japanese", "zh": "Chinese", "ko": "Korean", "sv": "Swedish",
+                     "da": "Danish", "no": "Norwegian", "nb": "Norwegian", "fi": "Finnish", "et": "Estonian", "cs": "Czech",
+                     "tr": "Turkish", "hu": "Hungarian", "ca": "Catalan"]
+        return names[code] ?? code
+    }
+
     /// Why a page whose article couldn't be told apart from the rest of the page wasn't read.
     public static let unboundedArticle = "the article couldn't be told apart from the rest of the page (menus, other articles, teasers)"
 
@@ -395,10 +419,25 @@ public enum CameraSources {
             guard seen.insert(addressIdentity(url)).inserted else { rejected[index] = .duplicate; continue }
             let cited = url == given ? nil : given
             let namesThem = surnames.contains { path.contains($0) }
-            if let site = craftSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }) {
+            // An archived copy (web.archive.org/web/<time>/<address>): judged by the page it's a
+            // copy of, read from the archive (1.10.7).
+            let original = archived(url)
+            let judgedHost = original?.host?.lowercased() ?? host
+            let judgedPath = original?.path.lowercased() ?? path
+            if original != nil, !seen.insert(addressIdentity(secure(original!))).inserted { rejected[index] = .duplicate; continue }
+            if original != nil, judgedPath.count <= 8 { rejected[index] = .navigation; continue }
+            if let entry = SourceRegistry.entry(host: judgedHost) {
+                // The research sites of 1.10.7: VFX and technical publications and vendors are read;
+                // a credits database is a lead, not read.
+                if entry.family == .creditDatabase {
+                    rejected[index] = .creditDatabase
+                } else {
+                    picked.append((url, entry.name, cited, (namesThem ? 150 : 250) + index, index))
+                }
+            } else if let site = craftSites.first(where: { judgedHost == $0.host || judgedHost.hasSuffix("." + $0.host) }) {
                 picked.append((url, site.name, cited, (namesThem ? 0 : 100) + index, index))
-            } else if let site = newsSites.first(where: { host == $0.host || host.hasSuffix("." + $0.host) }) {
-                if namesThem || craftWords.contains(where: { path.contains($0) }) {
+            } else if let site = newsSites.first(where: { judgedHost == $0.host || judgedHost.hasSuffix("." + $0.host) }) {
+                if namesThem || craftWords.contains(where: { judgedPath.contains($0) }) {
                     picked.append((url, site.name, cited, (namesThem ? 200 : 300) + index, index))
                 } else {
                     rejected[index] = .newsNotCamera
@@ -411,6 +450,17 @@ public enum CameraSources {
         for over in sorted.dropFirst(limit) { rejected[over.index] = .overLimit }
         let decisions = links.enumerated().map { index, link in DiscoveryTrace.Hit(title: "", url: link, rejected: rejected[index]) }
         return (sorted.prefix(limit).map { ($0.url, $0.site, $0.cited) }, decisions)
+    }
+
+    /// The page an archived copy is of: "https://web.archive.org/web/20111018062539/http://www.deadline.com/…"
+    /// → "http://www.deadline.com/…". Nil for any other address.
+    public static func archived(_ url: URL) -> URL? {
+        guard let host = url.host?.lowercased(), host == "web.archive.org" else { return nil }
+        let text = url.absoluteString
+        guard let range = text.range(of: #"/web/\d{8,14}[a-z_]*/"#, options: .regularExpression) else { return nil }
+        var rest = String(text[range.upperBound...])
+        if !rest.lowercased().hasPrefix("http") { rest = "http://" + rest }
+        return URL(string: rest)
     }
 
     /// A title as sites write it in their addresses: "The Brutalist" → "the-brutalist",
@@ -1165,6 +1215,143 @@ public struct CameraSourcesClient: Sendable {
         return (results.compactMap { $0.1 }, results.compactMap { $0.2 }, nil, results.compactMap { $0.3 })
     }
 
+    /// The sites a planned search can be made on (`ResearchPlan`), and their WordPress search.
+    static func searchEndpoint(for site: String) -> URL? {
+        if site == "American Cinematographer" { return URL(string: "https://theasc.com/wp-json/wp/v2/search") }
+        return SourceRegistry.added.first { $0.name == site }?.search
+    }
+
+    /// A WordPress site's own search: each result's title and address, or why there are none.
+    func wordpressSearch(_ endpoint: URL, site: String, query: String, noting: UnansweredSites?) async
+        -> (hits: [(title: String, url: String)], failure: String?) {
+        struct Hit: Decodable {
+            let title: String
+            let url: String
+            let subtype: String?
+        }
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "search", value: query), URLQueryItem(name: "per_page", value: "10")]
+        guard let url = components?.url else { return ([], "no address") }
+        switch await fetch(url, accept: "application/json", site: site, noting: noting) {
+        case .failed(let failure):
+            return ([], failure.reason)
+        case .page(let data, _):
+            guard let hits = try? JSONDecoder().decode([Hit].self, from: data) else {
+                await noting?.add(site)
+                return ([], "answered with a page, not search results (read again later)")
+            }
+            // Articles, posts and pages, not attachments or media.
+            return (hits.filter { !["attachment", "media"].contains($0.subtype ?? "") }.map { (HTMLText.plain($0.title), $0.url) }, nil)
+        }
+    }
+
+    /// The first pass's reading, with what the bounded searches for what it's missing found
+    /// (discovery 6; see `ResearchPlan`). What's missing is judged on everything the first pass read
+    /// and the film's article; the people searched for are the film's camera, lighting and VFX crew.
+    /// Pages found this way are asked for only in the slots the first pass left (never more than
+    /// `askLimit` asked for and `readLimit` read in all), at most `ResearchPlan.maxPages` of them, and
+    /// read only when they name the film (and, found by a person's name, that person).
+    public func researched(_ base: CameraReading, article: FilmArticle?, filmTitle: String, cinematographers: [String],
+                           directors: [String], year: Int?, otherTitles: [String], crew: [CraftCrew.Contributor],
+                           previous: CraftIndex?, now: Date = Date()) async -> CameraReading {
+        var texts = base.texts(hiding: false)
+        if let article { texts.append(TechSpecs.Text(source: nil, sections: article.before + article.after, isInterview: false)) }
+        let specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors, year: year,
+                                   title: filmTitle, otherTitles: otherTitles, crew: crew)
+        let found = ResearchCoverage.found(in: specs, crew: crew)
+        let missing = ResearchDimension.allCases.filter { $0 != .contributors && !found.contains($0) }
+        let quiet = ResearchPlan.quiet(previous?.research, discovery: CraftIndex.currentDiscovery, readAt: previous?.readAt, now: now)
+        var run = ResearchRun(contributors: crew, missing: missing, quiet: quiet.filter { missing.contains($0.dimension) })
+        var result = base
+        let queries = ResearchPlan.plan(missing: missing, crew: crew, title: filmTitle, previous: previous?.research,
+                                        discovery: CraftIndex.currentDiscovery, readAt: previous?.readAt, now: now)
+        let asked = base.discovery?.assembly.asked.count ?? (base.sources.count + base.skipped.count)
+        var pagesLeft = min(ResearchPlan.maxPages, max(0, CameraSources.askLimit - asked))
+        var readLeft = max(0, CameraSources.readLimit - base.sources.count)
+        var known = Set((base.sources + base.more + base.skipped.map(\.source)).map { CameraSources.identity($0.url) })
+        let unanswered = UnansweredSites()
+        var sources = base.sources
+        var skipped = base.skipped
+        let shortTitle = CameraSources.fold(filmTitle.split(separator: ":").first.map(String.init) ?? filmTitle)
+        for query in queries {
+            guard pagesLeft > 0, readLeft > 0 else {
+                run.outcomes.append(ResearchOutcome(query: query, result: .notTried("no page left to ask for or read")))
+                continue
+            }
+            guard let endpoint = Self.searchEndpoint(for: query.site) else {
+                run.outcomes.append(ResearchOutcome(query: query, result: .notTried("no search on \(query.site)")))
+                continue
+            }
+            let answer = await wordpressSearch(endpoint, site: query.site, query: query.text, noting: unanswered)
+            if let failure = answer.failure {
+                run.outcomes.append(ResearchOutcome(query: query, result: .unavailable(failure)))
+                continue
+            }
+            // Results naming the film first; found by a person's name, those naming the person
+            // too; found by the title on a VFX site, any (the page itself must name the film).
+            let candidates = answer.hits.filter { hit in
+                guard let url = URL(string: hit.url), !known.contains(CameraSources.identity(CameraSources.secure(url))),
+                      !CameraSources.namesOtherFilm(hit.title, link: hit.url, film: filmTitle, otherTitles: otherTitles) else { return false }
+                let aboutFilm = CameraSources.isAbout(title: filmTitle, articleTitle: hit.title, url: hit.url)
+                if let person = query.contributor {
+                    return aboutFilm || CameraSources.namesCinematographer(title: hit.title, link: hit.url, cinematographers: [person]) == 2
+                }
+                return true
+            }.sorted { a, b in
+                CameraSources.isAbout(title: filmTitle, articleTitle: a.title, url: a.url)
+                    && !CameraSources.isAbout(title: filmTitle, articleTitle: b.title, url: b.url)
+            }
+            guard !candidates.isEmpty else {
+                run.outcomes.append(ResearchOutcome(query: query, result: .noCandidate(answer.hits.count)))
+                continue
+            }
+            var read: [String] = [], passed: [String] = []
+            for hit in candidates.prefix(min(2, pagesLeft)) {
+                guard let url = URL(string: hit.url).map(CameraSources.secure) else { continue }
+                known.insert(CameraSources.identity(url))
+                pagesLeft -= 1
+                let site = SourceRegistry.entry(host: url.host ?? "")?.name ?? query.site
+                let got = await page(url, site: site, title: hit.title.isEmpty ? nil : hit.title, noting: unanswered)
+                guard let fetched = got.source else {
+                    let stand = CameraReading.Source(title: hit.title.isEmpty ? site : hit.title, site: site, url: url, paragraphs: [])
+                    let failure = got.failure
+                    skipped.append(CameraReading.Skipped(source: stand, reason: (failure?.reason ?? "couldn't be read") + " (found searching for \(query.text))",
+                                                         limit: CameraSources.limit(page: nil, failure: failure, otherFilm: false)))
+                    passed.append(url.absoluteString)
+                    continue
+                }
+                let body = CameraSources.fold(fetched.paragraphs.joined(separator: " "))
+                let namesFilm = !shortTitle.isEmpty && (" " + body + " ").contains(" " + shortTitle + " ")
+                let namesPerson = query.contributor.map { body.contains(CameraSources.fold($0)) } ?? true
+                if !namesFilm || !namesPerson {
+                    skipped.append(CameraReading.Skipped(source: fetched, reason: "found searching for \(query.text), but it doesn't name "
+                                                         + (namesFilm ? "\(query.text)" : "the film")))
+                    passed.append(url.absoluteString)
+                } else if fetched.paragraphs.count < 3 {
+                    skipped.append(CameraReading.Skipped(source: fetched, reason: "too little text to read", limit: .thin))
+                    passed.append(url.absoluteString)
+                } else if readLeft <= 0 {
+                    skipped.append(CameraReading.Skipped(source: fetched, reason: "six sources were already read"))
+                } else {
+                    sources.append(fetched)
+                    readLeft -= 1
+                    read.append(url.absoluteString)
+                }
+                if pagesLeft <= 0 { break }
+            }
+            run.outcomes.append(ResearchOutcome(query: query, result: read.isEmpty ? .nothingUsable(passed) : .read(read)))
+        }
+        if !queries.isEmpty {
+            var reading = CameraReading(sources: sources, more: base.more, cinematographer: base.cinematographer,
+                                        unanswered: base.unanswered + (await unanswered.all()).filter { !base.unanswered.contains($0) },
+                                        skipped: skipped)
+            reading.discovery = base.discovery
+            result = reading
+        }
+        result.research = run
+        return result
+    }
+
     /// One page's title and paragraphs, or why it couldn't be read. Asked for over HTTPS.
     func page(_ url: URL, site: String, title: String?, noting: UnansweredSites? = nil) async
         -> (source: CameraReading.Source?, failure: SourceFailure?) {
@@ -1175,6 +1362,8 @@ public struct CameraSourcesClient: Sendable {
             guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
                 return (nil, .gone("not a readable page"))
             }
+            // A page in another language: said so, not read as a page with nothing in it (1.10.7).
+            if let language = CameraSources.otherLanguage(html) { return (nil, .language(language)) }
             // Only the article's own paragraphs (see `ArticleReader`). A page whose article can't be
             // told apart from the rest isn't read whole: it's not open to Reel this time.
             let article = ArticleReader.read(html)

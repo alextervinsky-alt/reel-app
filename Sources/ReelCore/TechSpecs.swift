@@ -80,6 +80,10 @@ public struct TechSpecs: Equatable, Sendable {
         /// Whose it is, as the sentence tells it: said this film was shot with it (`direct`), or only
         /// named about this film (`ambiguous`), or set aside as another production's (see `Attribution`).
         public var attribution: Attribution = .ambiguous
+        /// The part of the production its sentence is about, when it says (1.10.7).
+        public var productionScope: ProductionScope? = nil
+        /// What kind of statement its sentence is (1.10.7).
+        public var evidenceKind: EvidenceKind? = nil
         public var id: String { kind.rawValue + "|" + name.lowercased() }
         /// How firmly it's said of how much of the film: the whole in so many words (3), a stated share
         /// (2), plainly (1), part of it (0).
@@ -98,6 +102,12 @@ public struct TechSpecs: Equatable, Sendable {
         public var context: String?
         /// The gear and techniques it names ("ARRI Alexa 65", "Steadicam"), as the sheet lists them.
         public var names: [String] = []
+        /// What kind of statement it is: someone's own words, a maker's account, reporting (1.10.7).
+        public var evidence: EvidenceKind? = nil
+        /// The crew member it names or quotes, with what they did (1.10.7).
+        public var speaker: CraftCrew.Contributor? = nil
+        /// The part of the production it's about, when it says (1.10.7).
+        public var scope: ProductionScope? = nil
         public var id: String { text }
     }
 
@@ -146,6 +156,9 @@ public struct TechSpecs: Equatable, Sendable {
     public var cameraLanguage: [Note] = []
     /// The palette, the grade and the texture (stock, grain, finish).
     public var colour: [Note] = []
+    /// How the photography served the visual effects: tracking and witness cameras, lens encoders,
+    /// plates, camera arrays (1.10.7).
+    public var cameraVFX: [Note] = []
     /// How one particular scene or shot was done.
     public var scenes: [Note] = []
     /// What was hard, tested, built or done for the first time.
@@ -176,8 +189,10 @@ public struct TechSpecs: Equatable, Sendable {
     /// `title`: the film's, so "his work on Carol" isn't read as this one's (but "his work on" this film is).
     /// `otherTitles`: the other films of its collection ("Alien" for Alien: Romulus), so what's said
     /// of them isn't a Shot on tag for this one.
+    /// `crew`: the film's camera, lighting, colour and VFX people (`CraftCrew`), to say whose words a
+    /// note is and what they did.
     public static func read(texts: [Text], cinematographers: [String], directors: [String] = [], year: Int? = nil,
-                            title: String? = nil, otherTitles: [String] = []) -> TechSpecs {
+                            title: String? = nil, otherTitles: [String] = [], crew: [CraftCrew.Contributor] = []) -> TechSpecs {
         var found: [Spec] = []
         var gear: [Note] = []
         var approach: [Note] = []
@@ -189,6 +204,7 @@ public struct TechSpecs: Equatable, Sendable {
         var scenes: [Note] = []
         var challenges: [Note] = []
         var collaboration: [Note] = []
+        var cameraVFX: [Note] = []
         // The full name, and the first and last names alone ("Hong" for Hong Kyung-pyo, "Deakins"
         // for Roger Deakins), as articles write them.
         let particles: Set<String> = ["van", "von", "der", "den", "del", "della", "les", "dos", "das"]
@@ -209,6 +225,9 @@ public struct TechSpecs: Equatable, Sendable {
         let shortTitle = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
         var roundups: [String] = []
         for text in texts {
+            // A VFX publication or vendor, a database: what it names isn't the production's camera
+            // package (see `SourceRegistry.establishesCapture`).
+            let establishes = SourceRegistry.establishesCapture(SourceRegistry.family(ofSource: text.source))
             let roundup = text.isInterview && !shortTitle.isEmpty && (text.isList || isRoundup(text, title: title ?? ""))
             if roundup { roundups.append(text.source ?? "Wikipedia") }
             // In a round-up, a spec sheet ("Camera: … Lenses: …") is this film's only when it's in this
@@ -368,10 +387,13 @@ public struct TechSpecs: Equatable, Sendable {
                                                       intended: saidAsIntended(sentence, at: at),
                                                       namesFilm: namesTitle(segment(of: sentence, around: at), title: title),
                                                       principal: saidAsPrincipal(sentence, at: at),
-                                                      capture: said.captured && !tried && !speech && !testedOnly(sentence, at: at),
+                                                      capture: establishes && said.captured && !tried && !speech && !testedOnly(sentence, at: at),
                                                       aboutThisFilm: said.aboutThisFilm,
                                                       attribution: !said.aboutThisFilm ? .otherProduction
-                                                        : said.captured && !tried && !speech && !testedOnly(sentence, at: at) ? .direct : .ambiguous))
+                                                        : establishes && said.captured && !tried && !speech && !testedOnly(sentence, at: at) ? .direct : .ambiguous,
+                                                      productionScope: ProductionScope.said(in: sentence),
+                                                      evidenceKind: SourceRegistry.evidence(source: text.source, text: sentence, isInterview: text.isInterview,
+                                                                                             speaker: CraftCrew.named(in: sentence, crew: crew))))
                                 }
                             }
                         }
@@ -418,7 +440,11 @@ public struct TechSpecs: Equatable, Sendable {
                         // alone. How the cinematographer and the director came together goes before
                         // the craft (it often names a film they shot). A sentence that only says who
                         // shot it (no craft, no reason) says nothing.
-                        if fits, theirs, text.isInterview || quoted(sentence) {
+                        // How the photography served the effects (tracking cameras, encoders, plates):
+                        // its own part, whoever says it.
+                        if commentary, (25...450).contains(sentence.count), !matches(reception, sentence), matches(cameraVFXTerms, sentence) {
+                            add(note, to: &cameraVFX)
+                        } else if fits, theirs, text.isInterview || quoted(sentence) {
                             add(note, to: &approach)
                         } else if fits, withDirector, !text.isInterview, !named, !matches(detail, sentence),
                                   mentions(names, in: sentence, generic: false), mentions(directorNames, in: sentence, generic: false),
@@ -465,8 +491,44 @@ public struct TechSpecs: Equatable, Sendable {
         specs.scenes = ranked(scenes, 6)
         specs.challenges = ranked(challenges, 6)
         specs.collaboration = ranked(collaboration, 3)
+        specs.cameraVFX = ranked(cameraVFX, 6)
+        return annotated(specs, texts: texts, crew: crew)
+    }
+
+    /// Each note with what kind of statement it is, whose words, and the part of the production it's
+    /// about (1.10.7). Read from the note itself and where it was read; nothing is guessed.
+    static func annotated(_ read: TechSpecs, texts: [Text], crew: [CraftCrew.Contributor]) -> TechSpecs {
+        func interview(_ source: String?) -> Bool { texts.first { $0.source == source }?.isInterview ?? false }
+        func mark(_ notes: [Note]) -> [Note] {
+            notes.map { note in
+                var marked = note
+                marked.speaker = CraftCrew.named(in: note.text, crew: crew)
+                marked.scope = ProductionScope.said(in: note.text)
+                marked.evidence = SourceRegistry.evidence(source: note.source, text: note.text, isInterview: interview(note.source),
+                                                          speaker: marked.speaker)
+                return marked
+            }
+        }
+        var specs = read
+        specs.sentences = mark(specs.sentences)
+        specs.approach = mark(specs.approach)
+        specs.intent = mark(specs.intent)
+        specs.references = mark(specs.references)
+        specs.lighting = mark(specs.lighting)
+        specs.cameraLanguage = mark(specs.cameraLanguage)
+        specs.colour = mark(specs.colour)
+        specs.scenes = mark(specs.scenes)
+        specs.challenges = mark(specs.challenges)
+        specs.collaboration = mark(specs.collaboration)
+        specs.cameraVFX = mark(specs.cameraVFX)
         return specs
     }
+
+    /// How the photography served the visual effects: "a zoom encoder", "witness cameras", "tracking
+    /// markers", "the plates were shot", "four static cameras… stitched", "motion control".
+    static let cameraVFXTerms = try! NSRegularExpression(
+        pattern: #"\b(?:(?:zoom|lens) encoders?|encoder data|lens data|witness cam(?:era)?s?|tracking (?:cameras?|markers|data|camera)|camera track\w*|match ?mov\w*|motion[- ]control|camera arrays?|array of (?:\w+ )?cameras|(?:background |driving |clean |vfx )?plates? (?:photography|shoot|unit|were shot|was shot|shot)|shot (?:the |as )?(?:background )?plates|plate (?:photography|shoot|unit)|stitched|virtual cam(?:era)?s?|green ?screen|blue ?screen|HDRIs?)\b"#,
+        options: [.caseInsensitive])
 
     /// Whether a name is this film's: a camera, a lens or what it was shot on needs a sentence saying
     /// this film was shot with it; anything else (light, grip, a frame rate) a sentence about this film.
@@ -1447,7 +1509,9 @@ public struct TechSpecs: Equatable, Sendable {
             ? lead.replacingOccurrences(of: #"\bwhenever\s+(?:possible|feasible|practical|we could|they could|he could|she could|i could|we can|they can)\b"#,
                                         with: "", options: [.regularExpression, .caseInsensitive])
             : lead
-        let about = !matches(otherWork, practice) && !general && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
+        // A guess ("they may have used Classic Soft filters", "probably shot on…") isn't what was used.
+        let about = !matches(otherWork, practice) && !general && !matches(speculation, part)
+            && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
             && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.upperBound]), title: title)
         // Said while accepting an award: advice to others, not how this film was shot.
@@ -1643,6 +1707,13 @@ public struct TechSpecs: Equatable, Sendable {
     static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|That)\b(?!\s+time\b)|^\W*This\b(?!\s+(?:time|film|movie|picture|feature|one|project)\b)"#)
     /// Another production named: "his 2007 feature Glass Rivers", "her previous film", "Glass Rivers (2007)".
     static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
+
+    /// A guess, not a statement of what was used (1.10.7): "may have used", "might have been",
+    /// "probably", "possibly", "presumably", "perhaps", "I suspect", "it seems", "appears to have",
+    /// "my guess", "I would guess".
+    static let speculation = try! NSRegularExpression(
+        pattern: #"\b(?:may have|might have|could have been|probably|possibly|presumably|perhaps|i suspect|we suspect|suspect(?:ed)? (?:that|they|it)|it seems|seems to have|seem to have|appears? to have|looks like (?:they|it was|it's)|my guess|i(?:'d| would) guess|i(?:'d| would) bet|speculat\w*|rumou?red)\b"#,
+        options: [.caseInsensitive])
 
     static let filmsInGeneral = try! NSRegularExpression(
         pattern: #"\b(?:films|movies|pictures) (?:that|which) (?:are|were|get|got) (?:\w+ )?(?:shot|filmed|made|photographed)\b"#,

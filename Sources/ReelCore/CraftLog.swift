@@ -71,7 +71,66 @@ public enum CraftLog {
                 lines.append("• \(spec.kind.rawValue): \(spec.name) — \(why)" + said(spec))
             }
         }
+        lines += research(reading: reading, specs: specs, index: index)
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// RESEARCH and CRAFT OBSERVATIONS (1.10.7): who photographed it and in which part, what the
+    /// first pass was missing and the searches made for it, where each dimension stands, and what
+    /// was said of how it was shot, each with its kind of source, whose words and which part.
+    static func research(reading: CameraReading, specs: TechSpecs, index: CraftIndex) -> [String] {
+        var lines = ["", "RESEARCH (who photographed it, what was missing, where Reel looked)"]
+        if let run = reading.research {
+            lines.append("• Crew: " + (run.contributors.isEmpty ? "none known beyond the credits above"
+                : run.contributors.map { $0.described + ($0.scope.map { " (\($0.label))" } ?? "") }.joined(separator: "; ")))
+            lines.append("• Missing after the first pass: " + (run.missing.isEmpty ? "nothing" : run.missing.map(\.title).joined(separator: ", ")))
+            if run.outcomes.isEmpty, !run.missing.isEmpty, run.quiet.isEmpty {
+                lines.append("• No further search: none planned (no crew member to search by, and no search for it)")
+            }
+            let day = ISO8601DateFormatter()
+            day.formatOptions = [.withFullDate]
+            for entry in run.quiet {
+                lines.append("• Not searched again: \(entry.dimension.title) — searched \(entry.searchedAt.map { day.string(from: $0) } ?? "earlier")"
+                             + " with nothing found (again after a year)")
+            }
+            for outcome in run.outcomes {
+                let query = outcome.query
+                let what = ([query.dimension] + query.also).map(\.title).joined(separator: ", ")
+                var line = "• Searched \(query.site) for “\(query.text)” (\(what)): "
+                switch outcome.result {
+                case .notTried(let why): line = "• Not searched: \(query.site) for “\(query.text)” (\(what)) — \(why)"
+                case .unavailable(let why): line += why
+                case .noCandidate(let count): line += count == 0 ? "no results" : "\(count) results; none names the film" + (query.contributor == nil ? "" : " or the person")
+                case .nothingUsable(let pages): line += "asked for \(pages.count), none usable (see NOT READ)"
+                case .read(let pages): line += "read " + pages.joined(separator: ", ")
+                }
+                lines.append(line)
+            }
+        } else {
+            lines.append("• Not researched beyond the first pass")
+        }
+        if let research = index.research {
+            lines.append("• Where it stands: " + research.map { "\($0.dimension.title) — \($0.state.label)" }.joined(separator: "; "))
+        }
+        let groups: [(String, [TechSpecs.Note])] = [
+            ("In their own words", specs.approach), ("The visual idea", specs.intent), ("Light", specs.lighting),
+            ("Frame and movement", specs.cameraLanguage), ("Colour", specs.colour), ("Camera and VFX", specs.cameraVFX),
+            ("A scene", specs.scenes), ("A challenge", specs.challenges),
+        ]
+        let observed = groups.filter { !$0.1.isEmpty }
+        lines.append("")
+        lines.append("CRAFT OBSERVATIONS (what was said of how it was shot; the kind of source, whose words, which part)")
+        if observed.isEmpty { lines.append("• none") }
+        for (title, notes) in observed {
+            for note in notes.prefix(4) {
+                var about = [note.source ?? "Wikipedia"]
+                if let evidence = note.evidence { about.append(evidence.label) }
+                if let speaker = note.speaker { about.append(speaker.described) }
+                if let scope = note.scope { about.append(scope.label) }
+                lines.append("• \(title) — \(about.joined(separator: "; ")): “\(note.text.prefix(300))”")
+            }
+        }
+        return lines
     }
 
     /// What Reel stored after the reading (see `CraftIndex.merge`), which is what it shows: each tag

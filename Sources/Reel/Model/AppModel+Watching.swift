@@ -329,6 +329,25 @@ extension AppModel {
         cameraReadings[details.id] = reading
     }
 
+    /// The tab's reading, with what it's missing looked for (discovery 6): once its article and
+    /// first pass are in, the same bounded searches as the background reading, judged on the
+    /// film's crew and its earlier research (a search that found nothing isn't repeated within the year).
+    func researchCameraReading(for film: FilmEntry) async {
+        guard let details = film.tmdb, let base = cameraReadings[details.id], base.research == nil,
+              !cameraReadingsLoading.contains(details.id) else { return }
+        cameraReadingsLoading.insert(details.id)
+        defer { cameraReadingsLoading.remove(details.id) }
+        let current = self.film(id: film.id) ?? film
+        let article = articles[details.id]
+        let stored = CraftQueue.representatives(of: films.filter { $0.tmdb?.id == details.id }).first ?? current
+        let reading = await CameraSourcesClient().researched(base, article: article, filmTitle: details.title,
+                                                             cinematographers: details.cinematographers, directors: details.directors,
+                                                             year: details.year, otherTitles: otherTitles(of: details),
+                                                             crew: CraftReader.crew(of: details, article: article, reading: base),
+                                                             previous: stored.craft)
+        cameraReadings[details.id] = reading
+    }
+
     /// Searches for the film's reviews and essays on sites that have no free data to read in Reel.
     func readMoreLinks(for film: FilmEntry) -> [(title: String, url: URL)] {
         let words = [film.displayTitle, film.displayYear.map(String.init) ?? ""].joined(separator: " ")

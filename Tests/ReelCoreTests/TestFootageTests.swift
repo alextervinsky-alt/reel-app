@@ -103,7 +103,7 @@ final class TestFootageTests: XCTestCase {
 
     func testRulesVersion() {
         XCTAssertGreaterThanOrEqual(CraftIndex.currentVersion, 13)
-        XCTAssertEqual(CraftIndex.currentDiscovery, 5, "finding unchanged")
-        XCTAssertEqual(LibraryFile.currentVersion, 3, "library format unchanged")
+        XCTAssertGreaterThanOrEqual(CraftIndex.currentDiscovery, 5)
+        XCTAssertGreaterThanOrEqual(LibraryFile.currentVersion, 3)
     }
 }

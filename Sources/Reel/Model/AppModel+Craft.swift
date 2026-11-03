@@ -63,10 +63,13 @@ extension AppModel {
                     let title = film.funFacts?.articleTitle
                     let colour = film.funFacts?.quick?.colour
                     let others = otherTitles(of: details)
+                    // Its earlier reading: research that found nothing isn't repeated within the year.
+                    let previous = film.craft
                     // Its collection couldn't be read (offline, no token): read again later with it.
                     let collectionKnown = details.collection == nil || collectionLoaded(of: details)
                     group.addTask {
-                        (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others),
+                        (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others,
+                                                             previous: previous),
                          CraftLog.fileName(for: details))
                     }
                     if !collectionKnown { unknownCollection.insert(details.id) }

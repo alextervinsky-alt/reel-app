@@ -359,8 +359,8 @@ final class DiscoveryTraceTests: XCTestCase {
 
     /// Discovery 4 (as 3 before it): the thin readings and collection films are read again, the rest aren't.
     func testANewDiscoveryReadsAgainOnlyThinReadingsAndCollectionFilms() {
-        XCTAssertEqual(CraftIndex.currentDiscovery, 5)
-        XCTAssertEqual(CraftIndex.currentVersion, 15, "1.10.6: the final article reader; a shell page is read again later")
+        XCTAssertEqual(CraftIndex.currentDiscovery, 6, "1.10.7: searches for what's missing")
+        XCTAssertEqual(CraftIndex.currentVersion, 16, "1.10.7: guesses aren't gear; research kept")
         let now = Date()
         func reading(sources: Int, tags: [ShotOn]) -> CraftIndex {
             var index = CraftIndex(version: CraftIndex.currentVersion, readAt: now, shotOn: tags, names: [], sources: sources)

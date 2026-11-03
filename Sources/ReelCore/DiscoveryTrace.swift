@@ -31,6 +31,7 @@ public struct DiscoveryTrace: Equatable, Sendable {
         case navigation = "a front, tag, search or category page"
         case unlistedSite = "not a site Reel reads"
         case newsNotCamera = "a news page not about the camera work"
+        case creditDatabase = "a credits database: a lead, not read"
     }
 
     public struct Hit: Equatable, Sendable {

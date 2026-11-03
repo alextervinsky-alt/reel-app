@@ -81,7 +81,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// TheWrap's "has-sidebar" interview, No Film School's "article-body …-ads" body); a page that
     /// comes back as a shell (a few boilerplate lines, none the article's) is a site that didn't
     /// answer, read again later.
-    public static let currentVersion = 15
+    /// 16 (1.10.7): a guess ("they may have used Classic Soft filters", "probably shot on…") is no
+    /// gear of the film's; what a VFX publication or vendor names isn't the camera package (no Shot
+    /// on tag, camera or lens from it alone); each reading keeps where its research stands
+    /// (`research`); how the photography served the effects is a part of its own.
+    public static let currentVersion = 16
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
@@ -95,7 +99,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 5: when every result American Cinematographer's search kept turns out to be another film's,
     /// the next result naming the film is asked for (one page, from the same answer;
     /// `CameraSourcesClient.furtherResult`).
-    public static let currentDiscovery = 5
+    /// 6 (1.10.7): the film's camera, lighting and VFX people are known (`CraftCrew`); for what a
+    /// reading is missing, bounded searches by person and on VFX sites (`ResearchPlan`); Wikipedia's
+    /// links to VFX and technical publications and to archived copies of pages are read.
+    public static let currentDiscovery = 6
     /// A reading found before this discovery version is replaced whole by a newer one (what it no
     /// longer reads is gone): finding changed then in ways the rules for one tag couldn't follow.
     /// From there on, a reading read again by a newer discovery version is merged tag by tag like
@@ -176,6 +183,9 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// When it's read again, when that's planned (a site didn't answer, a tag was carried over):
     /// until then it isn't, unless the rules change.
     public var retryAt: Date?
+    /// Where its research stands, dimension by dimension (1.10.7): what was found, searched for and
+    /// not found, unavailable, or not searched yet. Nil for readings before 1.10.7.
+    public var research: [ResearchEntry]?
 
     public init(version: Int = CraftIndex.currentVersion, readAt: Date = Date(), shotOn: [ShotOn], names: [String],
                 evidence: [Evidence] = [], sources: Int = 0, read: [String] = [], discovery: Int = CraftIndex.currentDiscovery,
@@ -207,6 +217,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         unanswered = try c.decodeIfPresent([String].self, forKey: .unanswered) ?? []
         retries = try c.decodeIfPresent(Int.self, forKey: .retries) ?? 0
         retryAt = try c.decodeIfPresent(Date.self, forKey: .retryAt)
+        research = try c.decodeIfPresent([ResearchEntry].self, forKey: .research)
     }
 
     /// Tries in a row while a tag is carried over because its page wasn't found again (every site
@@ -269,6 +280,8 @@ public struct CraftIndex: Codable, Equatable, Sendable {
             case thin
             /// The site didn't answer, or asked Reel to wait: read again later.
             case unanswered
+            /// Written in a language Reel doesn't read (1.10.7): not a page read with nothing in it.
+            case language
             /// Saved by a later Reel with a kind this one doesn't know: not taken for a page read.
             case unknown
 

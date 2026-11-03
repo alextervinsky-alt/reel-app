@@ -268,7 +268,8 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// 9: likes and dislikes read again (critics by what they did, figures and prizes left out).
     /// 10: dislikes only when said in words (not a sentence's tone); Did You Know? not cut at
     ///     "No." or "St.", and no fact that starts with a "he" or "she" it can't say who is.
-    public static let currentInfoVersion = 10
+    /// 11 (1.10.7): the camera, lighting, colour and VFX crew are kept (`CraftCrew`).
+    public static let currentInfoVersion = 11
 
     public init(
         driveID: String, relativePath: String, fileName: String, size: Int64, modified: Date?,
@@ -552,7 +553,10 @@ public struct LibraryFile: Codable, Equatable, Sendable {
 
     /// The format this Reel writes. A file with a higher version is a newer Reel's: never written
     /// over (see `LibraryOpening`).
-    public static let currentVersion = 3
+    /// 4 (1.10.7): readings keep where their research stands (`CraftIndex.research`) and a page in
+    /// another language as such (`SourceLimit.Kind.language`). A version 3 file reads as it is (the
+    /// research is nil until the film is read again); Reel 1.10.6 and older won't write over a 4.
+    public static let currentVersion = 4
 
     public init(films: [FilmEntry] = []) {
         self.version = LibraryFile.currentVersion
