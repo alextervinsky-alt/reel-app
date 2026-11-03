@@ -351,8 +351,9 @@ public enum SourceRegistry {
             return .secondaryReporting
         case .productionTechnology, .vfxVendor, .cinematographyPublication:
             if ownWords {
-                if let speaker, !speaker.role.photographs { return .crewTestimony }
-                return family == .cinematographyPublication ? .productionStatement : .crewTestimony
+                if let speaker { return speaker.role.photographs ? .productionStatement : .crewTestimony }
+                // A quote from someone not of the film's crew (a VFX company's supervisor): reporting.
+                if family == .cinematographyPublication { return .productionStatement }
             }
             return .technicalTrade
         }
