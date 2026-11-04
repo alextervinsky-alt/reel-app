@@ -836,7 +836,8 @@ public struct CameraSourcesClient: Sendable {
         trace.person = personFound.trace
         return await reading(searched: searchedLinks, fromSites: fromSites, fromArticle: citedFound.links, stories: storiesFound.found,
                              person: personFound.person, cinematographers: cinematographers, directors: directors, year: year,
-                             unanswered: unanswered, trace: trace, spare: spare, unboundedStories: storiesFound.unbounded)
+                             unanswered: unanswered, trace: trace, spare: spare, unboundedStories: storiesFound.unbounded,
+                             filmTitle: filmTitle, otherTitles: otherTitles)
     }
 
     /// American Cinematographer's next result. When every result its search kept was fetched and
@@ -923,7 +924,8 @@ public struct CameraSourcesClient: Sendable {
     func reading(searched searchedLinks: [CameraSources.Link], fromSites: [CameraSources.Link], fromArticle: [CameraSources.Link],
                  stories storiesRead: [CameraReading.Source], person: CameraReading.Cinematographer?, cinematographers: [String],
                  directors: [String], year: Int?, unanswered: UnansweredSites, trace: DiscoveryTrace? = nil,
-                 spare: [CameraSources.Link] = [], unboundedStories: [CameraReading.Skipped] = []) async -> CameraReading {
+                 spare: [CameraSources.Link] = [], unboundedStories: [CameraReading.Skipped] = [],
+                 filmTitle: String = "", otherTitles: [String] = []) async -> CameraReading {
         var links = searchedLinks
         // Found by searching the magazines for the title (not cited by the film's own article):
         // read only when the page names the film's people or year.
@@ -957,7 +959,7 @@ public struct CameraSourcesClient: Sendable {
         let people = cinematographers + directors
         let found = (pages.compactMap { $0.1 }.filter { !otherFilm.contains($0.url) }
             + storiesRead.filter { story in !pages.contains { CameraSources.identity($0.2.url) == CameraSources.identity(story.url) } })
-            .map { CameraSources.judged($0, filmTitle: filmTitle, otherTitles: otherTitles, people: people) }
+            .map { filmTitle.isEmpty ? $0 : CameraSources.judged($0, filmTitle: filmTitle, otherTitles: otherTitles, people: people) }
         // (A round-up of many films is read by its own entry rules: its sheets needn't name the film.)
         func passing(_ page: CameraReading.Source) -> Bool {
             guard let context = page.context, !context.aboutFilm, context.anchored == 0 else { return false }
