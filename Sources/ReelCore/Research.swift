@@ -222,7 +222,11 @@ public enum CraftCrew {
         let all = article.map { ($0, true) } + sources.map { ($0, false) }
         for (paragraph, own) in all {
             for sentence in Digest.sentences(in: paragraph) {
-                guard namesFilm(sentence) || own && sentence.range(of: change, options: [.regularExpression, .caseInsensitive]) != nil else { continue }
+                let titled = namesFilm(sentence)
+                // In the film's own article, a change of crew said of this person: the word within a
+                // few words of the name ("Pfister, who originally worked with Nolan on…" isn't one).
+                let changes: [Range<String.Index>] = own && !titled ? Self.ranges(of: change, in: sentence) : []
+                guard titled || !changes.isEmpty else { continue }
                 for regex in regexes {
                     for match in regex.matches(in: sentence, range: NSRange(sentence.startIndex..., in: sentence)) {
                         guard let range = Range(match.range(at: 1), in: sentence) else { continue }
@@ -231,6 +235,18 @@ public enum CraftCrew {
                         guard words.count >= 2, !words.contains(where: stop.contains), name != shortTitle,
                               !shortTitle.contains(name) else { continue }
                         guard !known.contains(where: { $0.name == name }), !found.contains(where: { $0.name == name }) else { continue }
+                        if !titled {
+                            // At most three words between them, the role's own words aside.
+                            let near = changes.contains { change in
+                                let between = change.lowerBound >= range.upperBound
+                                    ? String(sentence[range.upperBound..<change.lowerBound]) : String(sentence[change.upperBound..<range.lowerBound])
+                                let words = between.replacingOccurrences(of: #"(?i)\b(?:cinematographer|director of photography|DoP|DP|the|as)\b"#,
+                                                                         with: " ", options: .regularExpression)
+                                    .split { !$0.isLetter }
+                                return words.count <= 3
+                            }
+                            guard near else { continue }
+                        }
                         let scope = ProductionScope.said(in: sentence)
                         let role: Role = scope == .secondUnit ? .secondUnitCinematographer
                             : [.additional, .reshoots].contains(scope) ? .additionalCinematographer : .cinematographer
@@ -240,6 +256,11 @@ public enum CraftCrew {
             }
         }
         return Array(found.prefix(4))
+    }
+
+    static func ranges(of pattern: String, in text: String) -> [Range<String.Index>] {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range, in: text) }
     }
 
     /// Whose words a sentence gives: a crew member named as the speaker ("…,” Marsh says;
@@ -257,7 +278,9 @@ public enum CraftCrew {
                 let after = #"(?![\s-]+[A-Z])"#
                 let patterns = [
                     #"\b"# + name + after + #",?\s+(?:\w+\s+)?"# + verbs + #"\b"#,
-                    #"\b"# + verbs + #"\s+(?:\w+\s+)?"# + name + #"\b"# + after,
+                    // "…,” says Marsh" (verb first only right after the quote: "Forster said Seresin
+                    // brought…" is Forster speaking).
+                    #"[”"’],?\s*"# + verbs + #"\s+(?:\w+\s+)?"# + name + #"\b"# + after,
                     #"\b[Aa]ccording to\s+(?:\w+\s+)?"# + name + #"\b"# + after,
                 ]
                 if patterns.contains(where: { sentence.range(of: $0, options: .regularExpression) != nil }) { return person }
@@ -634,8 +657,10 @@ public enum ResearchCoverage {
             }
             func any(_ test: (ResearchOutcome.Result) -> Bool) -> Bool { outcomes.contains { test($0.result) } }
             let state: ResearchEntry.State
-            if unavailable || any({ if case .unavailable = $0 { true } else if case .pageUnavailable = $0 { true } else { false } }) {
-                // A site didn't answer: not a verdict (searched again at the retry, never kept quiet).
+            // This reading's own searches first: what they came to is said even while a site of the
+            // first pass is down (and a search that found nothing keeps its year of quiet).
+            if any({ if case .unavailable = $0 { true } else if case .pageUnavailable = $0 { true } else { false } }) {
+                // A search or its page didn't answer: not a verdict (searched again at the retry).
                 state = .unavailable
             } else if any({ if case .read = $0 { true } else { false } }) {
                 state = .readNoFindings
@@ -648,6 +673,9 @@ public enum ResearchCoverage {
             } else if let carried = run?.quiet.first(where: { $0.dimension == dimension }) {
                 // Searched within the year and nothing found: still so (not "not searched").
                 return carried
+            } else if unavailable {
+                // A site of the first pass didn't answer (the reading is read again later).
+                state = .unavailable
             } else if languageLimited {
                 // A page of the first pass that may have said it, in a language Reel doesn't read.
                 state = .unsupportedLanguage

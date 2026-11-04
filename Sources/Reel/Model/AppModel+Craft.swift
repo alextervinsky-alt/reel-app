@@ -73,7 +73,11 @@ extension AppModel {
                     let collectionKnown = details.collection == nil || collectionLoaded(of: details)
                     group.addTask {
                         var details = details
-                        if let crewToken, let fresh = try? await TMDBClient(token: crewToken).movieDetails(id: details.id) {
+                        if let crewToken {
+                            // TMDB didn't answer: tried again later rather than researched with half the crew.
+                            guard let fresh = try? await TMDBClient(token: crewToken).movieDetails(id: details.id) else {
+                                return (details.id, nil, CraftLog.fileName(for: details))
+                            }
                             details.credits = fresh.trimmed().credits
                         }
                         return (details.id, await CraftReader.read(details, articleTitle: title, colour: colour, otherTitles: others,
