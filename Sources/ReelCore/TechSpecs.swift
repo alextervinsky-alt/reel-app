@@ -131,6 +131,9 @@ public struct TechSpecs: Equatable, Sendable {
         /// Other productions the page names as such (`PageContext.productions`): what's said of them
         /// isn't this film's, on any page.
         public var otherProductions: [String] = []
+        /// On a page that isn't about the film: whether a statement after one naming the film is
+        /// about it too (an interview about productions), or not (a profile, an obituary, a news item).
+        public var inheritsSubject = true
 
         public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool, isList: Bool = false) {
             self.source = source
@@ -311,7 +314,8 @@ public struct TechSpecs: Equatable, Sendable {
                     // On a page that isn't about the film, only what's anchored to it (1.10.8).
                     // (A round-up keeps its own entry rules: its spec sheets don't name the film.)
                     let anchors = text.aboutFilm || roundup ? nil
-                        : PageContext.anchoring(paragraph, title: title ?? "", otherTitles: otherTitles, people: names + directorNames)
+                        : PageContext.anchoring(paragraph, title: title ?? "", otherTitles: otherTitles, people: names + directorNames,
+                                                inherit: text.inheritsSubject)
                     var skipNext = false
                     // Inside the quote of an award speech ("…said: “Celluloid is alive and kicking. Four
                     // out of five nominated films were shot on celluloid…”"): not how this film was shot.

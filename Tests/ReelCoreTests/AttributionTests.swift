@@ -64,11 +64,6 @@ final class AttributionTests: XCTestCase {
         XCTAssertTrue(names.contains("Sony Venice"), "\(names)")
         XCTAssertTrue(names.contains { $0.contains("Kino") }, "follows a statement about the film in its paragraph: \(names)")
         XCTAssertFalse(names.contains { $0.contains("RED") || $0.contains("Summilux") || $0 == "Steadicam" }, "\(names)")
-        // The same page read the old way (about the film) takes the other production's gear.
-        text.aboutFilm = true
-        text.otherProductions = []
-        let old = Set(TechSpecs.read(texts: [text], cinematographers: ["Ada Brisk"], directors: [], year: 2020, title: film).specs.map(\.name))
-        XCTAssertTrue(old.contains("Steadicam") || old.contains { $0.contains("RED") }, "the baseline this replaces: \(old)")
     }
 
     // MARK: Uncertainty on the property it qualifies

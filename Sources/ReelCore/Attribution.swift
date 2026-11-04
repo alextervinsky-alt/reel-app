@@ -52,7 +52,7 @@ public struct PageContext: Equatable, Sendable {
     }
 
     /// The other productions a page names as productions (see `productions`), never the film itself.
-    public static func productions(in paragraphs: [String], title: String) -> [String] {
+    public static func productions(in paragraphs: [String], title: String, people: [String] = []) -> [String] {
         var found: [String] = []
         func add(_ raw: String) {
             let name = raw.trimmingCharacters(in: CharacterSet(charactersIn: " ,.;:“”\"'‘’()"))
@@ -64,11 +64,33 @@ public struct PageContext: Equatable, Sendable {
             found.append(name)
         }
         let titled = #"([A-Z0-9][\w'’:&!-]*(?:\s+(?:[A-Z0-9][\w'’:&!-]*|of|the|and|a|an|in|on|to|for))*)"#
-        let year = try! NSRegularExpression(pattern: titled + #"\s+\((?:19|20)\d\d\)"#)
+        // Two words or more, capitalised (a title, not "Tuesday" or "Location").
+        let multi = #"((?:The |A |An )?[A-Z0-9][\w'’:&!-]*(?:\s+(?:of|the|and|a|an|in|on|to|for)?\s*[A-Z0-9][\w'’:&!-]*)+)"#
+        let cues = [
+            // "Glass Rivers (2019)".
+            try! NSRegularExpression(pattern: titled + #"\s+\((?:19|20)\d\d\)"#),
+            // "He shot Antlers Above the Salt Road with…", "she photographed Low Country".
+            try! NSRegularExpression(pattern: #"\b(?:shot|photographed|lensed|filmed|lit)\s+"# + multi + #"(?=\s+(?:with|on|in|for|using|entirely|mostly|back)\b|[,.;])"#),
+            // "Lowland Cantata, his first digital feature, …".
+            try! NSRegularExpression(pattern: multi + #",\s+(?:his|her|their|the|our|my)\s+(?:\w+\s+){0,3}(?:feature|film|picture|movie|documentary|series|short)\b"#),
+            // "On The Quiet Ledger, a few years earlier, …" (an opening naming a production).
+            try! NSRegularExpression(pattern: #"(?:^|[.!?]\s+)(?:On|For|With|During)\s+"# + multi + #","#),
+        ]
         for paragraph in paragraphs {
             let range = NSRange(paragraph.startIndex..., in: paragraph)
-            for match in year.matches(in: paragraph, range: range) {
-                if let r = Range(match.range(at: 1), in: paragraph) { add(String(paragraph[r])) }
+            for cue in cues {
+                for match in cue.matches(in: paragraph, range: range) {
+                    guard let r = Range(match.range(at: 1), in: paragraph) else { continue }
+                    let name = String(paragraph[r])
+                    // Gear, a company or a person isn't a production ("shot Sony Venice", "On Kodak Vision3").
+                    let read = TechSpecs.read([name + " was used."])
+                    if !read.specs.isEmpty || !read.mentioned.isEmpty || people.contains(where: { name.contains($0) || $0.contains(name) }) { continue }
+                    // The shoot's own vocabulary isn't a title ("During Principal Photography,", "On Set Day").
+                    let lowered = name.lowercased()
+                    if ["photography", "production", "filming", "shoot", "location", "season", "week", "scene", "sequence", "night",
+                        "morning", "evening", "stage", "set ", "day", "unit", "studio", "camera", "lens", "light"].contains(where: lowered.contains) { continue }
+                    add(name)
+                }
             }
             for sentence in Digest.sentences(in: paragraph) where namesCredits(sentence) || isCreditList(sentence, title: title) {
                 // The list: after its cue ("…include", "known for", a colon), split at commas and "and".
@@ -104,7 +126,7 @@ public struct PageContext: Equatable, Sendable {
         let share = paragraphs.isEmpty ? 0 : Double(naming.filter { $0 }.count) / Double(paragraphs.count)
         // A page whose own title names another of the collection is that film's.
         let otherTitled = otherTitles.contains { TechSpecs.namesTitle(pageTitle, title: $0) } && !named
-        let others = productions(in: paragraphs, title: title)
+        let others = productions(in: paragraphs, title: title, people: people)
         if named && !otherTitled || (!otherTitled && lede && naming.filter { $0 }.count >= 2 && share >= 0.25) {
             return PageContext(kind: .targetFilm, anchored: paragraphs.reduce(0) { $0 + Digest.sentences(in: $1).count }, productions: others)
         }
@@ -113,7 +135,8 @@ public struct PageContext: Equatable, Sendable {
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
             : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
         let count = paragraphs.reduce(0) { total, paragraph in
-            total + anchoring(paragraph, title: title, otherTitles: otherTitles + others, people: people).filter { $0 }.count
+            total + anchoring(paragraph, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction)
+                .filter { $0 }.count
         }
         return PageContext(kind: kind, anchored: count, productions: others)
     }
@@ -122,7 +145,11 @@ public struct PageContext: Equatable, Sendable {
     /// to the film. A statement naming the film anchors itself and the statements after it in its
     /// paragraph, until one names another production; a list of credits ("his films include…",
     /// three titles or more) names the film without saying anything about it.
-    public static func anchoring(_ paragraph: String, title: String, otherTitles: [String], people: [String]) -> [Bool] {
+    /// On a profile, an obituary or a news page (`inherit` false) the subject is the person or the
+    /// company: only a statement naming the film is about it ("In his last years he taught…" after a
+    /// sentence on the film is about him, not the film).
+    public static func anchoring(_ paragraph: String, title: String, otherTitles: [String], people: [String],
+                                 inherit: Bool = true) -> [Bool] {
         var anchor = false
         return Digest.sentences(in: paragraph).map { sentence in
             let namesIt = TechSpecs.namesTitle(sentence, title: title)
@@ -135,7 +162,7 @@ public struct PageContext: Equatable, Sendable {
                 anchor = false
                 return false
             }
-            return anchor
+            return inherit && anchor
         }
     }
 

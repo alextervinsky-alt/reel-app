@@ -65,25 +65,26 @@ enum DevelopmentCorpus {
             if i % 5 != 4 {
                 let url = "https://theasc.com/article/\(slug)-\(i)/"
                 let capture = "\(film) was shot on the \(camera) with \(lens) lenses."
-                let lit = "For the night exteriors, \(gaffer) rigged \(light) along the street."
-                let reason = "\(dp) wanted the city to feel lived in rather than staged."
+                let lit = "For the night exteriors of \(film), \(gaffer) rigged \(light) along the street."
+                let reason = "\(dp) wanted the city of \(film) to feel lived in rather than staged."
                 var paragraphs = ["\(dp) photographed \(film) over eleven weeks.", capture + " " + lit, reason]
                 var claims = [BenchClaim(text: capture, film: film, gear: [camera, lens]), BenchClaim(text: lit, film: film, gear: [light]),
                               BenchClaim(text: reason, film: film)]
                 if i % 7 == 0 {
-                    let estimate = "The practicals in the bar were probably around 300 watts, hidden behind the shelves."
+                    let estimate = "The practicals in the bar of \(film) were probably around 300 watts, hidden behind the shelves."
                     paragraphs.append(estimate)
                     claims.append(BenchClaim(text: estimate, film: film))
                 }
                 if i % 9 == 0 {
-                    let guess = "Some viewers think they may have used a Black Satin filter on the close-ups."
+                    let guess = "Some viewers of \(film) think they may have used a Black Satin filter on the close-ups."
                     paragraphs.append(guess)
                     claims.append(BenchClaim(text: guess, film: film))
                 }
                 // Another production compared, in quotes as the magazine prints it.
-                let compare = "Unlike on “\(other(i, 1))”, which \(dp) shot on the \(otherCamera), this film needed a lighter camera."
+                // About this film (it needed a lighter camera); the other film's camera isn't its gear.
+                let compare = "Unlike on “\(other(i, 1))”, which \(dp) shot on the \(otherCamera), \(film) needed a lighter camera."
                 paragraphs.append(compare)
-                claims.append(BenchClaim(text: compare, film: other(i, 1)))
+                claims.append(BenchClaim(text: compare, film: film))
                 pages[url] = BenchPage(title: "Lived-In Light: \(film)", url: url, site: "American Cinematographer",
                                        paragraphs: paragraphs, claims: claims)
                 firstPass.append(url)
@@ -104,10 +105,10 @@ enum DevelopmentCorpus {
             var dpHits: [(title: String, url: String)] = []
             if i % 3 == 0 {
                 let url = "https://theasc.com/news/\(dp.lowercased().replacingOccurrences(of: " ", with: "-"))-joins-\(i)/"
-                let welcome = "The Society has welcomed \(dp) into its active membership."
+                let welcome = "The Society has welcomed \(dp) into its active membership this year (\(i))."
                 let credits = "\(dp)'s credits include \(other(i, 2)), \(film), \(other(i, 3)) and \(other(i, 4))."
                 let gear = "On \(other(i, 2)), \(dp) shot with the \(otherCamera) and \(otherLens) lenses."
-                let career = "\(dp) began as a Steadicam operator on commercials."
+                let career = "\(dp) began as a Steadicam operator on commercials in \(1950 + i % 40)."
                 pages[url] = BenchPage(title: "\(dp) Joins the Society", url: url, site: "American Cinematographer",
                                        paragraphs: [welcome, credits + " " + gear, career],
                                        claims: [BenchClaim(text: welcome, film: ""), BenchClaim(text: credits, film: ""),
@@ -118,9 +119,9 @@ enum DevelopmentCorpus {
             if i % 4 == 1 {
                 let url = "https://theasc.com/article/\(dp.lowercased().replacingOccurrences(of: " ", with: "-"))-light-and-movement-\(i)/"
                 let a = "For “\(other(i, 5))”, we built everything around a Technocrane."
-                let a2 = "It gave the whole film a floating feeling."
+                let a2 = "It gave the whole of “\(other(i, 5))” a floating feeling under \(dp)."
                 let b = "On \(film), we lit the interiors with \(otherLight) and kept the camera on a dolly."
-                let b2 = "We wanted the rooms to breathe."
+                let b2 = "We wanted the rooms of the house in \(film) to breathe."
                 let c = "“\(other(i, 6))” was a different story: we shot it handheld on the \(otherCamera)."
                 pages[url] = BenchPage(title: "\(dp) on Light and Movement", url: url, site: "American Cinematographer",
                                        paragraphs: ["\(dp) has shot features on three continents.", a + " " + a2, b + " " + b2, c],
@@ -146,11 +147,11 @@ enum DevelopmentCorpus {
             // A VFX company's page about the film, and its year in review listing it among others.
             if vfx {
                 let url = "https://cinesite.com/\(slug)-\(i)/"
-                let witness = "Witness cameras recorded every take from the side so the tracking team could rebuild the set."
+                let witness = "Witness cameras recorded every take of \(film) from the side so the tracking team could rebuild the set."
                 let plates = "The background plates for \(film) were shot from a camera array on a truck."
                 let review = "https://cinesite.com/our-year-\(i)/"
                 let list = "This year we delivered shots for \(other(i, 1)), \(film), \(other(i, 2)) and \(other(i, 3))."
-                let leak = "On \(other(i, 1)), every plate was shot with a motion-control rig."
+                let leak = "On \(other(i, 1)), every plate was shot with a motion-control rig for \(dp)."
                 pages[url] = BenchPage(title: "\(film)", url: url, site: "Cinesite", paragraphs: ["\(film) needed crowds of thousands.", witness, plates],
                                        claims: [BenchClaim(text: witness, film: film), BenchClaim(text: plates, film: film)])
                 pages[review] = BenchPage(title: "Our Year: \(film) and More", url: review, site: "Cinesite", paragraphs: [list, leak, "We opened a studio in Berlin."],

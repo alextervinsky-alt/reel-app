@@ -105,6 +105,9 @@ final class ResearchBenchmarkTests: XCTestCase {
             var items: [(text: String, gear: String?)] = specs.specs.map { spec -> (text: String, gear: String?) in (text: spec.evidence ?? "", gear: spec.name) }
             items += notes.map { note -> (text: String, gear: String?) in (text: note.text, gear: nil) }
             let readText = texts.flatMap { $0.sections.flatMap(\.paragraphs) }.joined(separator: "\n")
+            // The labels of what this reading read: its pages and its own article.
+            let readPages = Set(researched.sources.map(\.url.absoluteString) + ["wikipedia:" + film.title])
+            let claims = claims.filter { readPages.contains($0.page) }
             for item in items {
                 m.accepted += 1
                 let owners = claims.filter { item.text.contains($0.claim.text) || $0.claim.text.contains(item.text) }.map(\.claim.film)

@@ -32,7 +32,8 @@ final class LibraryTests: XCTestCase {
         try makeFile("$RECYCLE.BIN/Old (1999).mkv")
 
         let files = DriveScanner.scan(root: dir, minimumSize: 0).files
-        XCTAssertEqual(files.map { $0.relativePath }, ["A (2001) 1080p.mkv", "C (2003).mkv.part", "sub/B 2002 720p.mp4"])
+        // A download still in progress isn't a film (1.10.8).
+        XCTAssertEqual(files.map { $0.relativePath }, ["A (2001) 1080p.mkv", "sub/B 2002 720p.mp4"])
         XCTAssertEqual(files.first?.size, 42)
         XCTAssertEqual(files.last?.fileName, "B 2002 720p.mp4")
     }
