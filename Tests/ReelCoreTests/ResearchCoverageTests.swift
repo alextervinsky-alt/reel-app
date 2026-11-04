@@ -526,8 +526,8 @@ final class ResearchCoverageTests: XCTestCase {
             StandInSite.route("cinesite.com", "wp-json/wp/v2/search", body: DiscoveryFixtures.ascHits([("Ash", "https://cinesite.com/ash/", "page")]))
             StandInSite.route("cinesite.com", "/ash/", body: DiscoveryFixtures.page("Ash", paragraphs))
             return await client().researched(CameraReading(sources: [], more: [], cinematographer: nil), article: nil, filmTitle: "Ash",
-                                              cinematographers: ["Ida Holm"], directors: ["Ola Berg"], year: 2019, otherTitles: [], crew: [],
-                                              previous: nil)
+                                              cinematographers: ["Ida Holm"], directors: ["Ola Berg"], year: 2019, otherTitles: [],
+                                              crew: [person("Ole Vik", .vfxSupervisor)], previous: nil)
         }
         let generic = await run([
             "Ash from the fires drifted over the plates we shot for the commercial, and the greenscreen work took a week.",
@@ -535,7 +535,7 @@ final class ResearchCoverageTests: XCTestCase {
             "Ash and smoke simulations were rendered on the new farm, with HDRI captured on every set.",
         ])
         XCTAssertTrue(generic.sources.isEmpty, "\(generic.sources.map(\.title))")
-        XCTAssertEqual(generic.research?.outcomes.first?.result, .nothingUsable(["https://cinesite.com/ash/"]))
+        XCTAssertEqual(generic.research?.outcomes.first { $0.query.site == "Cinesite" }?.result, .nothingUsable(["https://cinesite.com/ash/"]))
         let film = await run([
             "For Ash (2019), directed by Ola Berg, the studio built the burning forest around the plates shot on location.",
             "Ida Holm's camera team fitted witness cameras on every set so the matchmove artists could track the handheld shots.",

@@ -364,7 +364,10 @@ public struct TechSpecs: Equatable, Sendable {
                         // Answering about another production, a sentence is this film's only when it says how
                         // this film was shot ("We shot Ex Machina on the F65"), not when it just names it.
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
-                            || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) })
+                            || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) }
+                                // "On Glass Rivers, I shot film, but this time we chose…": it turns to this film.
+                                && sentence.range(of: #"\b(?:but|this time|whereas|however|while (?:here|this)|here we|on this (?:one|film))\b"#,
+                                                  options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
                         // Only a sentence that names another production is followed by "It…" about it: not

@@ -40,6 +40,7 @@ final class ResearchBenchmarkTests: XCTestCase {
         var pagesFetched = 0, pagesRead = 0, pagesPassed = 0, pagesUseful = 0
         var states: [String: Int] = [:]
         var examples: [String] = []
+        var missed: [String] = []
 
         var description: String {
             "films \(films); accepted claims \(accepted); contaminated \(contaminated); unattributed (about no film) \(unattributed); "
@@ -127,7 +128,9 @@ final class ResearchBenchmarkTests: XCTestCase {
                 .flatMap(\.claim.gear))
             m.expectedGear += expected.count
             let names = specs.specs.map { $0.name.lowercased() }
-            m.foundGear += expected.filter { gear in names.contains { $0.contains(gear.lowercased()) || gear.lowercased().contains($0) } }.count
+            let hit = expected.filter { gear in names.contains { $0.contains(gear.lowercased()) || gear.lowercased().contains($0) } }
+            m.foundGear += hit.count
+            for gear in expected.subtracting(hit) where m.missed.count < 12 { m.missed.append("\(film.title): \(gear)") }
             // Budgets and duplication.
             let run = researched.research
             let outcomes = run?.outcomes ?? []
@@ -215,6 +218,7 @@ final class ResearchBenchmarkTests: XCTestCase {
         say("holdout, 1.10.8: \(now)")
         say("holdout, 1.10.7 way (baseline): \(before)")
         if !now.examples.isEmpty { say("holdout examples: \(now.examples.joined(separator: " ¦ "))") }
+        say("holdout missed: \(now.missed.joined(separator: " ¦ "))")
         check(now, "holdout")
     }
 

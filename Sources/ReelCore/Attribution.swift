@@ -109,7 +109,7 @@ public struct PageContext: Equatable, Sendable {
 
     /// Profile and news cues in a page's title or address: what the page is when it isn't the film's.
     static let profileCues = try! NSRegularExpression(
-        pattern: #"\b(?:in memoriam|obituary|dies at|has died|remembering|tribute|welcomes?|welcomed|joins?|joined|new (?:active |associate )?members?|membership|knighted|honou?red|honou?rs?|lifetime achievement|award(?:ed|s)? |wins?\b|receives?|named|appointed|career|retrospective|profile|biography|podcast|conversations?|masterclass|interview with)\b"#,
+        pattern: #"\b(?:in memoriam|obituary|dies at|has died|remembering|tribute to|welcomes?|welcomed|joins?|joined|new (?:active |associate )?members?|membership|knighted|honou?red|lifetime achievement|appointed|career|retrospective|biography)\b"#,
         options: [.caseInsensitive])
     static let corporateCues = try! NSRegularExpression(
         pattern: #"\b(?:press release|appoint\w*|names? .+ (?:coo|ceo|cfo|head)|partners?(?:hip)? with|acquires?|acquisition|opens?|anniversary|turns \d+|edition|policy|careers|jobs|hiring|bio\b|announces?)\b"#,
