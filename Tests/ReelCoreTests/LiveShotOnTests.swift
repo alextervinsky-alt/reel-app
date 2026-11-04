@@ -73,7 +73,7 @@ final class LiveShotOnTests: XCTestCase {
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
         if chosen == 0 {
             // PROBE (not for release): World War Z through the 1.10.7 pipeline.
-            for (id, article) in [(756999, "The Black Phone"), (693134, "Dune: Part Two")] {
+            for (id, article) in [(72190, "World War Z (film)"), (693134, "Dune: Part Two")] {
             guard let full = try? await client.movieDetails(id: id) else { say("PROBE| no TMDB details"); continue }
             let details = full.trimmed()
             say("PROBE| ===== \(details.title)")
@@ -86,7 +86,7 @@ final class LiveShotOnTests: XCTestCase {
             var keep = false
             for line in reading.log.split(separator: "\n", omittingEmptySubsequences: false) {
                 let text = String(line)
-                if text.hasPrefix("NOT READ") || text.hasPrefix("READ") || text.hasPrefix("RESEARCH") { keep = true }
+                if text.hasPrefix("NOT READ") || text.hasPrefix("READ") || text.hasPrefix("RESEARCH") || text.hasPrefix("CRAFT OBSERVATIONS") { keep = true }
                 else if text.isEmpty { keep = false }
                 if keep, !text.isEmpty, !text.hasPrefix("  left out") { say("PROBE| " + String(text.prefix(260))) }
                 if text.hasPrefix("• Wikipedia's cited links") || text.hasPrefix("  kept:") { say("PROBE| " + String(text.prefix(260))) }
