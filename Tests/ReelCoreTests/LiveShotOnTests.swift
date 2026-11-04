@@ -73,24 +73,21 @@ final class LiveShotOnTests: XCTestCase {
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
         if chosen == 0 {
             // PROBE (not for release): World War Z through the 1.10.7 pipeline.
-            for (id, article) in [(72190, "World War Z (film)"), (693134, "Dune: Part Two")] {
-            guard let full = try? await client.movieDetails(id: id) else { say("PROBE| no TMDB details"); continue }
-            let details = full.trimmed()
-            say("PROBE| ===== \(details.title)")
-            say("PROBE| crew kept: " + CraftCrew.credited(details).map(\.described).joined(separator: "; "))
-            guard let reading = await CraftReader.read(details, articleTitle: article, colour: nil) else {
-                say("PROBE| nothing reached"); continue
-            }
-            say("PROBE| shotOn=\(reading.index.shotOn.map(\.rawValue)) names=\(reading.index.names.prefix(20)) unanswered=\(reading.index.unanswered)")
-            say("PROBE| research: " + (reading.index.research ?? []).map { "\($0.dimension.rawValue)=\($0.state.rawValue)" }.joined(separator: " "))
-            var keep = false
-            for line in reading.log.split(separator: "\n", omittingEmptySubsequences: false) {
-                let text = String(line)
-                if text.hasPrefix("NOT READ") || text.hasPrefix("READ") || text.hasPrefix("RESEARCH") || text.hasPrefix("CRAFT OBSERVATIONS") { keep = true }
-                else if text.isEmpty { keep = false }
-                if keep, !text.isEmpty, !text.hasPrefix("  left out") { say("PROBE| " + String(text.prefix(260))) }
-                if text.hasPrefix("• Wikipedia's cited links") || text.hasPrefix("  kept:") { say("PROBE| " + String(text.prefix(260))) }
-            }
+            let client2 = CameraSourcesClient()
+            let sites: [(String, String)] = [("Filmmaker", "https://filmmakermagazine.com/wp-json/wp/v2/search"),
+                ("Definition", "https://definitionmagazine.com/wp-json/wp/v2/search"),
+                ("Newsshooter", "https://www.newsshooter.com/wp-json/wp/v2/search"),
+                ("ProVideo Coalition", "https://www.provideocoalition.com/wp-json/wp/v2/search"),
+                ("American Cinematographer", "https://theasc.com/wp-json/wp/v2/search")]
+            for (site, endpoint) in sites {
+                for q in ["Greig Fraser", "Hoyte van Hoytema", "Larry McConkey", "Dune"] {
+                    let answer = await client2.wordpressSearch(URL(string: endpoint)!, site: site, query: q, noting: nil)
+                    say("PROBE| \(site) [\(q)] failure=\(answer.failure ?? "-") hits=\(answer.hits.count): " + answer.hits.prefix(4).map { String($0.title.prefix(60)) + " <" + String($0.url.suffix(60)) + ">" }.joined(separator: " ; "))
+                    if q == "Greig Fraser", let first = answer.hits.first, let url = URL(string: first.url) {
+                        let got = await client2.page(url, site: site, title: first.title)
+                        say("PROBE| \(site) page: paragraphs=\(got.source?.paragraphs.count ?? -1) boundary=\(got.source?.boundary.map { "\($0)" } ?? "-") failure=\(got.failure?.reason ?? "-")")
+                    }
+                }
             }
             return
         }
