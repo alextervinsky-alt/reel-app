@@ -23,7 +23,7 @@ jobs:
           swift build --build-tests 2>&1 | tail -3
           SHOTON_FILM=0 swift test --skip-build --filter LiveShotOnTests > one.log 2>&1
           grep -E "^PROBE\| " one.log | sed -E 's/^PROBE\| //' > probe.txt
-          wc -l probe.txt
+          wc -l probe.txt; sed "s/^/PROBE| /" probe.txt
           # Notices of about 3,500 characters each (ten at most per step).
           awk 'BEGIN{c=""} { if (length(c)+length($0)+3>3500) { print "::notice::" c; c="" } c = (c=="" ? $0 : c " ¦ " $0) } END { if (c!="") print "::notice::" c }' probe.txt | head -10
           exit 0
