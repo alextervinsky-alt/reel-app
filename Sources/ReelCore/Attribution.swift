@@ -185,11 +185,12 @@ public struct PageContext: Equatable, Sendable {
         anchors([paragraph], title: title, otherTitles: otherTitles, people: people, inherit: inherit, acrossParagraphs: false).first ?? []
     }
 
-    /// `anchoring` for a page's paragraphs in order. On an interview (`inherit`), the film stays the
-    /// subject from paragraph to paragraph ("We shot it on…" after a paragraph naming it) until
-    /// another production is named; on a profile or news page only what names it.
+    /// `anchoring` for a page's paragraphs in order. The film stays the subject within a paragraph
+    /// on an interview (`inherit`), not across paragraphs: a round-table or an interview moving to
+    /// another production often names it in a way no rule can tell from a name ("looks back further,
+    /// to Saints of the Low Meridian"), and the holdout showed carrying it over leaks that film's gear.
     public static func anchors(_ paragraphs: [String], title: String, otherTitles: [String], people: [String],
-                               inherit: Bool = true, acrossParagraphs: Bool = true) -> [[Bool]] {
+                               inherit: Bool = true, acrossParagraphs: Bool = false) -> [[Bool]] {
         var anchor = false
         return paragraphs.map { paragraph in
             if !acrossParagraphs { anchor = false }

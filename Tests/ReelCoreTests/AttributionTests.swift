@@ -66,7 +66,7 @@ final class AttributionTests: XCTestCase {
         XCTAssertFalse(names.contains { $0.contains("RED") || $0.contains("Summilux") || $0 == "Steadicam" }, "\(names)")
     }
 
-    func testAnInterviewKeepsItsSubjectFromParagraphToParagraph() {
+    func testAnInterviewKeepsItsSubjectWithinAParagraph() {
         // Titled with its subject's name, the film named once, then "we", "it".
         let interview = page("Ada Brisk: Working in the Dark", "https://example.org/ada-brisk/", [
             "Ada Brisk has shot features on three continents.",
@@ -76,8 +76,9 @@ final class AttributionTests: XCTestCase {
         ])
         XCTAssertEqual(PageContext.anchors(["Ada Brisk has shot features on three continents.", "The Copper Lantern was her hardest shoot.",
                                             "We shot it on the Sony Venice with Cooke S4 lenses.", "“Glass Rivers” was a different story: we shot it handheld."],
-                                           title: film, otherTitles: [], people: []), [[false], [true], [true], [false]])
-        XCTAssertEqual(interview.anchored, 2)
+                                           title: film, otherTitles: [], people: []), [[false], [true], [false], [false]],
+                       "within its paragraph only: across paragraphs leaked another film's gear in the holdout")
+        XCTAssertEqual(interview.anchored, 1)
         // On a profile the person stays the subject.
         XCTAssertEqual(PageContext.anchors(["The Copper Lantern was her hardest shoot.", "We shot it on the Sony Venice."], title: film,
                                            otherTitles: [], people: [], inherit: false), [[true], [false]])
