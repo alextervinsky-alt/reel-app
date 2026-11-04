@@ -71,6 +71,22 @@ final class LiveShotOnTests: XCTestCase {
         // Written as soon as it's known (unbuffered), for CI to sum up.
         func say(_ line: String) { FileHandle.standardOutput.write(Data((line + "\n").utf8)) }
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
+        if chosen == 0 {
+            for (id, article) in [(756999, "The Black Phone"), (693134, "Dune: Part Two")] {
+                guard let full = try? await client.movieDetails(id: id) else { say("PROBE| no TMDB details"); continue }
+                let details = full.trimmed()
+                say("PROBE| ===== \(details.title)")
+                guard let reading = await CraftReader.read(details, articleTitle: article, colour: nil) else { say("PROBE| nothing reached"); continue }
+                var keep = false
+                for line in reading.log.split(separator: "\n", omittingEmptySubsequences: false) {
+                    let text = String(line)
+                    if text.hasPrefix("NOT READ") || text.hasPrefix("READ") { keep = true } else if text.isEmpty { keep = false }
+                    if keep, !text.isEmpty, !text.hasPrefix("  left out") { say("PROBE| " + String(text.prefix(260))) }
+                    if text.hasPrefix("• Wikipedia's cited links") || text.hasPrefix("  kept:") { say("PROBE| " + String(text.prefix(260))) }
+                }
+            }
+            return
+        }
         let reading = chosen.map { films.indices.contains($0) ? [films[$0]] : [] } ?? films
         for known in reading {
             guard let id = try? await client.searchMovies(query: known.title, year: known.year).first?.id,
