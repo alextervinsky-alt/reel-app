@@ -814,7 +814,7 @@ enum HoldoutCorpus {
 
         b.ac("Matthias Grünewald-Pyke", stormChasers)
         b.ac("Ilse Brandvold", stormChasers)
-        b.ac("Teo Marangoni", stormChasers, "https://www.cineworkshop.example/case-studies/between-the-organ-pipes")
+        b.ac("Teo Marangoni", stormChasers)
         b.ac("Pavel Inouye", stormChasers)
         b.ac("Hana Yoshimura-Clay")
         b.cinesite(juniper, juniperCinesite, "https://www.cinesite.com/about/our-work")

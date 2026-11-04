@@ -837,9 +837,9 @@ public struct TechSpecs: Equatable, Sendable {
         // (see `Spec.direct`); among equals the first read.
         // A source that can establish it first (1.10.8): an incidental mention on a VFX site or in a
         // database never stands in for the cinematography magazine's sentence about the same gear.
-        func rank(_ spec: Spec) -> (Int, Int, Int, Int, Int, Int, Int) {
-            (SourceRegistry.establishesCapture(SourceRegistry.family(ofSource: spec.source)) ? 1 : 0,
-             spec.capture ? 1 : 0, spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.said, spec.principal ? 1 : 0,
+        func rank(_ spec: Spec) -> (Int, Int, Int, Int, Int, Int) {
+            ((SourceRegistry.establishesCapture(SourceRegistry.family(ofSource: spec.source)) ? 2 : 0) + (spec.capture ? 1 : 0),
+             spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.said, spec.principal ? 1 : 0,
              (spec.intended ? 0 : 2) + (spec.namesFilm ? 1 : 0))
         }
         var best: [String: Spec] = [:]
