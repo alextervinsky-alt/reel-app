@@ -433,6 +433,25 @@ final class ResearchCoverageTests: XCTestCase {
                                           now: now.addingTimeInterval(86_400)).isEmpty)
     }
 
+    func testAPartlyFoundDimensionWhoseSearchFailedIsSearchedAgain() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let crew = CraftCrew.credited(quarantine()) + [person("Ivy Lamp", .gaffer)]
+        // How it was lit is known; which lights is open; the gaffer's search didn't answer.
+        let context = knowing(["For The Long Quarantine, Ashby lit the corridors from above so the actors could move freely."], crew: crew)
+        let lighting = ResearchPlan.open(context).filter { $0.dimension == .lighting }
+        XCTAssertEqual(lighting.map(\.id), ["lighting.sources"])
+        let query = ResearchPlan.Query(dimension: .lighting, site: "American Cinematographer", text: "Ivy Lamp", contributor: "Ivy Lamp",
+                                       questions: ["lighting.sources"])
+        let entries = ResearchCoverage.entries(context: context, run: ResearchRun(missing: [.lighting],
+                                               outcomes: [ResearchOutcome(query: query, result: .unavailable("didn't answer: timed out"))]),
+                                               readSomething: true, languageLimited: false, now: now)
+        let entry = entries.first { $0.dimension == .lighting }
+        XCTAssertEqual(entry?.state, .partial)
+        XCTAssertEqual(entry?.queries, [], "a search that didn't answer isn't kept, so it can't be kept quiet")
+        XCTAssertEqual(ResearchPlan.plan(open: lighting, crew: crew, title: "The Long Quarantine", previous: entries,
+                                         now: now.addingTimeInterval(6 * 3600)).first?.key, query.key)
+    }
+
     func testATagCarriedWhileItsSiteIsDownCountsAsFoundInPart() {
         let research = [ResearchEntry(dimension: .camera, state: .unavailable), ResearchEntry(dimension: .lenses, state: .unavailable)]
         let reconciled = ResearchCoverage.reconciled(research, shotOn: [.digital])

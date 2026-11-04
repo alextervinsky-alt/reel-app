@@ -100,7 +100,7 @@ public enum ResearchEngine {
                     continue
                 }
                 // 5. The page's context, and what on it is anchored to the film.
-                fetched = CameraSources.judged(fetched, filmTitle: filmTitle, otherTitles: otherTitles, people: people)
+                fetched = CameraSources.judged(fetched, filmTitle: filmTitle, otherTitles: otherTitles, people: people, year: year)
                 let judged = fetched.context ?? PageContext(kind: .targetFilm, anchored: 0)
                 let namesPerson = query.contributor.map { person in
                     CameraSources.fold(fetched.paragraphs.joined(separator: " ")).contains(CameraSources.fold(person))

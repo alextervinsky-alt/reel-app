@@ -191,7 +191,8 @@ final class ResearchBenchmarkTests: XCTestCase {
         XCTAssertEqual(m.contaminated, 0, "\(name): cross-film contamination: \(m.examples)")
         // The holdout's one known failure is reported, not asserted (see the handoff): a workshop's
         // exercise on a page about the film ("Most chose a Kino Flo bank") reads as the film's.
-        if name != "holdout" { XCTAssertEqual(m.unattributed, 0, "\(name): gear from statements about no film: \(m.examples)") }
+        // Pinned: the holdout's one known failure (a workshop exercise), so a change either way shows.
+        XCTAssertLessThanOrEqual(m.unattributed, name == "holdout" ? 1 : 0, "\(name): gear from statements about no film: \(m.examples)")
         XCTAssertEqual(m.untraceable, 0, "\(name): findings without a read passage")
         XCTAssertEqual(m.budgetViolations, 0, "\(name): budgets")
         XCTAssertEqual(m.duplicateSearches, 0, "\(name): duplicate searches")
@@ -211,6 +212,8 @@ final class ResearchBenchmarkTests: XCTestCase {
         if !now.examples.isEmpty { say("development examples: \(now.examples.joined(separator: " ¦ "))") }
         if !before.examples.isEmpty { say("baseline examples: \(before.examples.joined(separator: " ¦ "))") }
         check(now, "development")
+        // Recall floor: what this release finds (a rule that trades recall for safety shows here).
+        XCTAssertEqual(now.foundGear, now.expectedGear, "development recall: \(now.missed)")
     }
 
     func testTheBlindHoldout() async {
@@ -222,6 +225,7 @@ final class ResearchBenchmarkTests: XCTestCase {
         if !now.examples.isEmpty { say("holdout examples: \(now.examples.joined(separator: " ¦ "))") }
         say("holdout missed: \(now.missed.joined(separator: " ¦ "))")
         check(now, "holdout")
+        XCTAssertGreaterThanOrEqual(now.foundGear, 64, "holdout recall: \(now.missed)")
     }
 
     /// 150 films, 120 of them on two drives (270 copies): each film due once by the new rules,
