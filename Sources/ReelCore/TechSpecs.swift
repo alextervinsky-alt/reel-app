@@ -80,6 +80,8 @@ public struct TechSpecs: Equatable, Sendable {
         /// Whose it is, as the sentence tells it: said this film was shot with it (`direct`), or only
         /// named about this film (`ambiguous`), or set aside as another production's (see `Attribution`).
         public var attribution: Attribution = .ambiguous
+        /// Every source that says it of this film (1.10.8): independent support, the one shown first.
+        public var support: [String] = []
         /// The part of the production its sentence is about, when it says (1.10.7).
         public var productionScope: ProductionScope? = nil
         /// What kind of statement its sentence is (1.10.7).
@@ -122,6 +124,16 @@ public struct TechSpecs: Equatable, Sendable {
         /// A page about many films ("The best films of 2024", a festival round-up): read only where it
         /// names this film.
         public var isList = false
+        /// A page about the film (1.10.8). When it isn't (a contributor's profile, an interview about
+        /// another production, a news item), only statements anchored to the film are read
+        /// (`PageContext.anchoring`): a mention elsewhere on the page lends it nothing.
+        public var aboutFilm = true
+        /// Other productions the page names as such (`PageContext.productions`): what's said of them
+        /// isn't this film's, on any page.
+        public var otherProductions: [String] = []
+        /// On a page that isn't about the film: whether a statement after one naming the film is
+        /// about it too (an interview about productions), or not (a profile, an obituary, a news item).
+        public var inheritsSubject = true
 
         public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool, isList: Bool = false) {
             self.source = source
@@ -225,6 +237,11 @@ public struct TechSpecs: Equatable, Sendable {
         let shortTitle = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
         var roundups: [String] = []
         for text in texts {
+            // This page's own other productions count as the collection's do (1.10.8): those its
+            // context found, or (the film's article, a text not judged) those it names as productions.
+            let pageOthers = !text.otherProductions.isEmpty || title == nil ? text.otherProductions
+                : PageContext.productions(in: text.sections.flatMap(\.paragraphs), title: title ?? "", people: names + directorNames)
+            let otherTitles = otherTitles + pageOthers
             // A VFX publication or vendor, a database: what it names isn't the production's camera
             // package (see `SourceRegistry.establishesCapture`).
             let family = SourceRegistry.family(ofSource: text.source)
@@ -297,6 +314,11 @@ public struct TechSpecs: Equatable, Sendable {
                     // "He wanted…" right after a sentence about the cinematographer is theirs too.
                     var aboutThem = false
                     let sentences = Digest.sentences(in: paragraph)
+                    // On a page that isn't about the film, only what's anchored to it (1.10.8).
+                    // (A round-up keeps its own entry rules: its spec sheets don't name the film.)
+                    let anchors = text.aboutFilm || roundup ? nil
+                        : PageContext.anchoring(paragraph, title: title ?? "", otherTitles: otherTitles, people: names + directorNames,
+                                                inherit: text.inheritsSubject)
                     var skipNext = false
                     // Inside the quote of an award speech ("…said: “Celluloid is alive and kicking. Four
                     // out of five nominated films were shot on celluloid…”"): not how this film was shot.
@@ -311,6 +333,7 @@ public struct TechSpecs: Equatable, Sendable {
                             skipNext = false
                             continue
                         }
+                        if let anchors, index < anchors.count, !anchors[index] { continue }
                         // The interviewer's questions ("NFS: How does…?") are not the filmmakers' words.
                         if text.isInterview, isQuestion(sentence, source: text.source, people: cinematographers + directors) {
                             aboutThem = false
@@ -341,6 +364,10 @@ public struct TechSpecs: Equatable, Sendable {
                         // Answering about another production, a sentence is this film's only when it says how
                         // this film was shot ("We shot Ex Machina on the F65"), not when it just names it.
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
+                            || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) }
+                                // "On Glass Rivers, I shot film, but this time we chose…": it turns to this film.
+                                && sentence.range(of: #"\b(?:but|this time|whereas|however|while (?:here|this)|here we|on this (?:one|film))\b"#,
+                                                  options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
                         // Only a sentence that names another production is followed by "It…" about it: not
@@ -819,8 +846,11 @@ public struct TechSpecs: Equatable, Sendable {
     static func tidy(_ specs: [Spec]) -> [Spec] {
         // Said to have been shot with it, about this film, how much of it, then said in so many words
         // (see `Spec.direct`); among equals the first read.
+        // A source that can establish it first (1.10.8): an incidental mention on a VFX site or in a
+        // database never stands in for the cinematography magazine's sentence about the same gear.
         func rank(_ spec: Spec) -> (Int, Int, Int, Int, Int, Int) {
-            (spec.capture ? 1 : 0, spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.said, spec.principal ? 1 : 0,
+            ((SourceRegistry.establishesCapture(SourceRegistry.family(ofSource: spec.source)) ? 2 : 0) + (spec.capture ? 1 : 0),
+             spec.aboutThisFilm ? 1 : 0, spec.scopeRank, spec.said, spec.principal ? 1 : 0,
              (spec.intended ? 0 : 2) + (spec.namesFilm ? 1 : 0))
         }
         var best: [String: Spec] = [:]
@@ -833,7 +863,16 @@ public struct TechSpecs: Equatable, Sendable {
             }
             if rank(spec) > rank(known) { best[spec.id] = spec }
         }
-        let unique = order.compactMap { best[$0] }
+        // Every source that says it of this film, the one shown first (independent support).
+        let unique: [Spec] = order.compactMap { id in
+            guard var chosen = best[id] else { return nil }
+            var support = [chosen.source ?? "Wikipedia"]
+            for other in specs where other.id == id && isThisFilms(other) && !support.contains(other.source ?? "Wikipedia") {
+                support.append(other.source ?? "Wikipedia")
+            }
+            chosen.support = support
+            return chosen
+        }
         func covers(_ other: Spec, _ spec: Spec) -> Bool {
             other.kind == spec.kind && other.name.count > spec.name.count && other.name.lowercased().contains(spec.name.lowercased())
         }
@@ -1166,6 +1205,9 @@ public struct TechSpecs: Equatable, Sendable {
         let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
         let lead = String(chars[..<min(start, chars.count)]).suffix(40)
         if lead.range(of: #"\b(?:every|any|all|most|many|other)(?:\s+[a-z\-]+)?\s*$|\b(?:anything|everything|something|nothing|whatever)\s*$"#,
+                      options: .regularExpression) != nil { return true }
+        // Set against it as a product ("a direct competitor to SkyPanels", "an alternative to the Alexa").
+        if lead.range(of: #"\b(?:competitors?|alternatives?|rivals?|challengers?|answer|successors?)\s+to\s+(?:the\s+)?$|\b(?:rivals?|outperforms?|replaces?)\s+(?:the\s+)?$"#,
                       options: .regularExpression) != nil { return true }
         // The clause after it: "…cameras were not used".
         var clauseEnd = after.endIndex
@@ -1520,7 +1562,7 @@ public struct TechSpecs: Equatable, Sendable {
                                         with: "", options: [.regularExpression, .caseInsensitive])
             : lead
         // A guess ("they may have used Classic Soft filters", "probably shot on…") isn't what was used.
-        let about = !matches(otherWork, practice) && !general && !matches(speculation, part)
+        let about = !matches(otherWork, practice) && !general && !hedges(sentence, around: range, within: whole)
             && !namesAnotherFilm(part, title: title, otherTitles: otherTitles, people: people)
             && !namesAnotherPart(scope(of: sentence, around: range), title: title, otherTitles: otherTitles)
             && !saidOfAnotherTitle(String(sentence[whole.lowerBound..<range.upperBound]), title: title)
@@ -1721,6 +1763,23 @@ public struct TechSpecs: Equatable, Sendable {
     /// A guess, not a statement of what was used (1.10.7): "may have used", "might have been",
     /// "probably", "possibly", "presumably", "perhaps", "I suspect", "it seems", "appears to have",
     /// "my guess", "I would guess".
+    /// Whether a guess qualifies the gear at `range` itself (1.10.8): the hedge comes before it in its
+    /// part of the sentence, at most six words before ("they may have used Classic Soft filters", "it
+    /// might have easily been shot in Super 35"). A hedge after the gear, or one that only qualifies a
+    /// number ("the practicals were probably 300 watts", "perhaps 90 percent"), leaves the gear stated.
+    static func hedges(_ sentence: String, around range: Range<String.Index>, within whole: Range<String.Index>) -> Bool {
+        let before = String(sentence[whole.lowerBound..<range.lowerBound])
+        let ns = before as NSString
+        for match in speculation.matches(in: before, range: NSRange(location: 0, length: ns.length)) {
+            let after = ns.substring(from: match.range.location + match.range.length)
+            // "probably 300 watts", "perhaps 90 percent", "possibly two or three": an estimate.
+            if after.range(of: #"^\s*(?:around |about |some |only |just )?(?:\d|one\b|two\b|three\b|four\b|five\b|a few\b|a dozen\b)"#,
+                           options: [.regularExpression, .caseInsensitive]) != nil { continue }
+            if after.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).count <= 6 { return true }
+        }
+        return false
+    }
+
     static let speculation = try! NSRegularExpression(
         pattern: #"\b(?:may have|might have|could have been|probably|possibly|presumably|perhaps|i suspect|we suspect|suspect(?:ed)? (?:that|they|it)|it seems|seems to have|seem to have|appears? to have|looks like (?:they|it was|it's)|my guess|i(?:'d| would) guess|i(?:'d| would) bet|speculat\w*|rumou?red)\b"#,
         options: [.caseInsensitive])

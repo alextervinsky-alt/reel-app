@@ -363,8 +363,11 @@ enum FilmGrouping {
         }
 
         var films: [Film] = []
+        // A download or copy still in progress ("….mkv.crdownload", ".part", ".!qb"…) isn't a film yet
+        // (1.10.8): never read, renamed or removed, it's found as a film once it's finished and has
+        // its own name. A film catalogued from one leaves by the usual complete-scan rules.
         func isCandidate(_ f: File) -> Bool {
-            f.parsed.isVideo && f.size >= minimumSize && !f.parsed.looksLikeSample
+            f.parsed.isVideo && !f.parsed.isIncomplete && f.size >= minimumSize && !f.parsed.looksLikeSample
         }
 
         func walk(_ folder: String, owner: Film?, inBonus: Bool) -> (films: [Film], orphans: [File]) {

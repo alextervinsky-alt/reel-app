@@ -286,43 +286,89 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertNil(note?.scope, "the sentence names no part of the production: not said to be the whole film either")
     }
 
-    // MARK: D. Planning: what's missing, by whom, within the bounds
+    // MARK: D. Planning: open questions, by whom, where, within the bounds
+
+    /// What's known of a synthetic film, as the engine sees it: these sentences read from a
+    /// cinematography magazine, and its crew.
+    private func knowing(_ sentences: [String], crew: [CraftCrew.Contributor], title: String = "The Long Quarantine") -> ResearchContext {
+        let texts = sentences.isEmpty ? [] : [TechSpecs.Text(source: "American Cinematographer", paragraphs: sentences, isInterview: false)]
+        let specs = TechSpecs.read(texts: texts, cinematographers: crew.filter { $0.role == .cinematographer }.map(\.name), directors: [],
+                                   year: 2013, title: title, crew: crew)
+        return ResearchContext(crew: crew, specs: specs, texts: texts)
+    }
 
     func testThePlanSearchesTheRightPeopleOnceEach() {
         let crew = CraftCrew.credited(quarantine()) + [person("Ivy Lamp", .gaffer)]
-        let plan = ResearchPlan.plan(missing: [.movement, .lighting, .lenses, .vfx, .colour], crew: crew, title: "The Long Quarantine", previous: nil)
+        let context = knowing([], crew: crew)
+        let open = ResearchPlan.open(context)
+        XCTAssertEqual(open.first?.id, "movement.method")
+        let plan = ResearchPlan.plan(open: open, crew: crew, title: "The Long Quarantine", previous: nil)
         XCTAssertLessThanOrEqual(plan.count, ResearchPlan.maxQueries)
-        XCTAssertEqual(plan.map(\.text), ["Lena Marsh", "Ivy Lamp", "Tom Ashby", "The Long Quarantine"])
-        XCTAssertEqual(plan.map(\.dimension), [.movement, .lighting, .lenses, .vfx])
-        // The cinematographer's search speaks to the colour too: one search, not two.
-        XCTAssertEqual(plan[2].also, [.colour])
-        XCTAssertEqual(plan[3].site, "Cinesite")
-        // Nothing missing, nothing searched.
-        XCTAssertTrue(ResearchPlan.plan(missing: [], crew: crew, title: "The Long Quarantine", previous: nil).isEmpty)
-        // No one to search by: only the VFX sites, by title.
-        XCTAssertEqual(ResearchPlan.plan(missing: [.movement, .vfx], crew: [], title: "X", previous: nil).map(\.site), ["Cinesite"])
+        XCTAssertEqual(plan.map(\.text), ["Lena Marsh", "Ivy Lamp", "Tom Ashby", "Ravi Holt"])
+        XCTAssertEqual(plan.map(\.dimension), [.movement, .lighting, .camera, .vfx])
+        // The cinematographer's search speaks to the lenses and colour too: one search, not three.
+        XCTAssertEqual(plan[2].also, [.lenses, .colour])
+        XCTAssertTrue(plan[1].questions.contains("lighting.sources"))
+        // Nothing open, nothing searched.
+        XCTAssertTrue(ResearchPlan.plan(open: [], crew: crew, title: "The Long Quarantine", previous: nil).isEmpty)
+        // No one to search by: only a provider searched by title.
+        XCTAssertEqual(ResearchPlan.plan(open: open, crew: [], title: "X", previous: nil).map(\.site), ["Cinesite"])
+    }
+
+    func testAGeneralFindingLeavesItsMoreSpecificQuestionsOpen() {
+        let crew = CraftCrew.credited(quarantine())
+        let context = knowing(["For The Long Quarantine, the background plates were shot from a camera array on a truck in Glasgow."], crew: crew)
+        XCTAssertFalse(context.specs.cameraVFX.isEmpty)
+        let open = ResearchPlan.open(context).map(\.id)
+        XCTAssertTrue(open.contains("vfx.tracking"), "plates found; tracking still open: \(open)")
+        XCTAssertFalse(open.contains("vfx.plates"))
+        XCTAssertFalse(open.contains("vfx.photography"))
+        let entries = ResearchCoverage.entries(context: context, run: nil, readSomething: true, languageLimited: false)
+        let vfx = entries.first { $0.dimension == .vfx }
+        XCTAssertEqual(vfx?.state, .partial)
+        XCTAssertEqual(vfx?.open, ["vfx.tracking"])
+        // And it's still searched for, after the dimensions with nothing found.
+        let plan = ResearchPlan.plan(open: ResearchPlan.open(context), crew: crew, title: "The Long Quarantine", previous: nil)
+        XCTAssertTrue(plan.contains { $0.questions.contains("vfx.tracking") } || plan.count == ResearchPlan.maxQueries)
+    }
+
+    func testAQuestionThatDoesntApplyIsNotSearchedOrMissing() {
+        // No VFX credit and nothing read about effects: camera and VFX doesn't apply.
+        var details = quarantine()
+        details.credits = TMDBCredits(cast: [], crew: [TMDBCrewMember(name: "Tom Ashby", job: "Director of Photography")])
+        let crew = CraftCrew.credited(details)
+        let context = knowing(["For The Long Quarantine, Ashby shot on ARRI ALEXA Mini cameras with Cooke S4 lenses."], crew: crew)
+        XCTAssertFalse(context.vfxRelevant)
+        XCTAssertFalse(ResearchPlan.open(context).contains { $0.dimension == .vfx })
+        XCTAssertEqual(ResearchCoverage.entries(context: context, run: nil, readSomething: true, languageLimited: false)
+            .first { $0.dimension == .vfx }?.state, .notApplicable)
+        XCTAssertFalse(ResearchPlan.plan(open: ResearchPlan.open(context), crew: crew, title: "The Long Quarantine", previous: nil)
+            .contains { $0.site == "Cinesite" })
     }
 
     func testASearchThatFoundNothingWaitsAYearAndStaysSaid() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let crew = CraftCrew.credited(quarantine())
+        let open = ResearchPlan.open(knowing([], crew: crew)).filter { $0.dimension == .movement }
         let key = "American Cinematographer|lena marsh"
         let earlier = [ResearchEntry(dimension: .movement, state: .searchedNoSource, queries: [key], discovery: CraftIndex.currentDiscovery,
                                      searchedAt: now.addingTimeInterval(-30 * 86_400))]
-        let plan = ResearchPlan.plan(missing: [.movement], crew: crew, title: "T", previous: earlier, now: now)
-        XCTAssertTrue(plan.isEmpty, "searched a month ago with nothing found")
+        let plan = ResearchPlan.plan(open: open, crew: crew, title: "T", previous: earlier, now: now)
+        // Not on the provider that found nothing a month ago; the next provider that can answer it instead.
+        XCTAssertEqual(plan.map(\.key), ["ProVideo Coalition|lena marsh"], "searched a month ago with nothing found")
         let quiet = ResearchPlan.quiet(earlier, discovery: CraftIndex.currentDiscovery, readAt: nil, now: now)
         // Carried as it was (its date too), not "not searched".
-        let entries = ResearchCoverage.entries(found: [.contributors], run: ResearchRun(contributors: crew, missing: [.movement], quiet: quiet),
+        let entries = ResearchCoverage.entries(context: knowing([], crew: crew),
+                                               run: ResearchRun(contributors: crew, missing: [.movement], quiet: quiet),
                                                readSomething: true, languageLimited: false, now: now)
         let movement = entries.first { $0.dimension == .movement }
         XCTAssertEqual(movement?.state, .searchedNoSource)
         XCTAssertEqual(movement?.searchedAt, earlier[0].searchedAt)
         // A year on, or by a new discovery: searched again.
-        XCTAssertEqual(ResearchPlan.plan(missing: [.movement], crew: crew, title: "T", previous: earlier,
-                                         now: now.addingTimeInterval(400 * 86_400)).map(\.key), [key])
-        XCTAssertEqual(ResearchPlan.plan(missing: [.movement], crew: crew, title: "T", previous: earlier,
-                                         discovery: CraftIndex.currentDiscovery + 1, now: now).map(\.key), [key])
+        XCTAssertEqual(ResearchPlan.plan(open: open, crew: crew, title: "T", previous: earlier,
+                                         now: now.addingTimeInterval(400 * 86_400)).map(\.key).first, key)
+        XCTAssertEqual(ResearchPlan.plan(open: open, crew: crew, title: "T", previous: earlier,
+                                         discovery: CraftIndex.currentDiscovery + 1, now: now).map(\.key).first, key)
     }
 
     // MARK: E. Coverage states
@@ -331,13 +377,16 @@ final class ResearchCoverageTests: XCTestCase {
         let query = { (dimension: ResearchDimension, text: String) in
             ResearchPlan.Query(dimension: dimension, site: "American Cinematographer", text: text)
         }
+        let crew = CraftCrew.credited(quarantine())
+        let camera = knowing(["For The Long Quarantine, Ashby shot digitally on ARRI ALEXA Mini cameras."], crew: crew)
+        let nothing = knowing([], crew: crew)
         let run = ResearchRun(missing: [.movement, .lighting, .lenses, .vfx, .colour], outcomes: [
             ResearchOutcome(query: query(.movement, "a"), result: .unavailable("didn't answer")),
             ResearchOutcome(query: query(.lighting, "b"), result: .noCandidate(3)),
             ResearchOutcome(query: query(.lenses, "c"), result: .read(["https://theasc.com/x"])),
             ResearchOutcome(query: query(.vfx, "d"), result: .notTried("no page left to ask for or read")),
         ])
-        let entries = ResearchCoverage.entries(found: [.contributors, .camera], run: run, readSomething: false, languageLimited: false)
+        let entries = ResearchCoverage.entries(context: camera, run: run, readSomething: false, languageLimited: false)
         func state(_ dimension: ResearchDimension) -> ResearchEntry.State? { entries.first { $0.dimension == dimension }?.state }
         XCTAssertEqual(state(.contributors), .found)
         XCTAssertEqual(state(.camera), .found)
@@ -346,27 +395,29 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertEqual(state(.lenses), .readNoFindings)
         XCTAssertEqual(state(.vfx), .notSearched, "planned but no slot left: not searched, not 'nothing found'")
         XCTAssertEqual(state(.colour), .notSearched)
+        func first(_ entries: [ResearchEntry]) -> ResearchEntry.State? { entries.first { $0.dimension == .lighting }?.state }
         // A page in another language, and a page that couldn't be told apart.
-        XCTAssertEqual(ResearchCoverage.entries(found: [], run: nil, readSomething: true, languageLimited: true)
-            .first { $0.dimension == .lighting }?.state, .unsupportedLanguage)
-        XCTAssertEqual(ResearchCoverage.entries(found: [], run: nil, readSomething: false, languageLimited: false, extractionLimited: true)
-            .first { $0.dimension == .lighting }?.state, .extractionFailed)
-        XCTAssertEqual(ResearchCoverage.entries(found: [], run: nil, readSomething: true, languageLimited: false)
-            .first { $0.dimension == .lighting }?.state, .readNoFindings)
-        // A site of the first pass that didn't answer: not a verdict on anything not found.
-        XCTAssertEqual(Set(ResearchCoverage.entries(found: [.camera], run: nil, readSomething: true, languageLimited: false, unavailable: true)
-            .filter { $0.dimension != .camera }.map(\.state)), [.unavailable])
+        XCTAssertEqual(first(ResearchCoverage.entries(context: nothing, run: nil, readSomething: true, languageLimited: true)), .unsupportedLanguage)
+        XCTAssertEqual(first(ResearchCoverage.entries(context: nothing, run: nil, readSomething: false, languageLimited: false,
+                                                      extractionLimited: true)), .extractionFailed)
+        XCTAssertEqual(first(ResearchCoverage.entries(context: nothing, run: nil, readSomething: true, languageLimited: false)), .readNoFindings)
+        // A site of the first pass that didn't answer (the film's article included): not a verdict on
+        // anything not found; what was found stays found.
+        let down = ResearchCoverage.entries(context: camera, run: nil, readSomething: true, languageLimited: false, unavailable: true)
+        XCTAssertEqual(down.first { $0.dimension == .camera }?.state, .found)
+        XCTAssertEqual(down.first { $0.dimension == .lighting }?.state, .unavailable)
         // A search this reading made still says what it came to while a site of the first pass is down.
         let searched = ResearchRun(missing: [.lighting], outcomes: [ResearchOutcome(query: query(.lighting, "b"), result: .noCandidate(2))])
-        XCTAssertEqual(ResearchCoverage.entries(found: [], run: searched, readSomething: true, languageLimited: false, unavailable: true)
-            .first { $0.dimension == .lighting }?.state, .searchedNoSource)
+        XCTAssertEqual(first(ResearchCoverage.entries(context: nothing, run: searched, readSomething: true, languageLimited: false,
+                                                      unavailable: true)), .searchedNoSource)
     }
 
     func testAPageThatDidntAnswerIsNotKeptQuiet() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let nothing = knowing([], crew: CraftCrew.credited(quarantine()))
         let query = ResearchPlan.Query(dimension: .movement, site: "American Cinematographer", text: "Lena Marsh", contributor: "Lena Marsh")
         func entry(_ result: ResearchOutcome.Result) -> ResearchEntry? {
-            ResearchCoverage.entries(found: [], run: ResearchRun(missing: [.movement], outcomes: [ResearchOutcome(query: query, result: result)]),
+            ResearchCoverage.entries(context: nothing, run: ResearchRun(missing: [.movement], outcomes: [ResearchOutcome(query: query, result: result)]),
                                      readSomething: true, languageLimited: false, now: now).first { $0.dimension == .movement }
         }
         XCTAssertEqual(entry(.pageUnavailable(["https://theasc.com/a"]))?.state, .unavailable)
@@ -382,10 +433,10 @@ final class ResearchCoverageTests: XCTestCase {
                                           now: now.addingTimeInterval(86_400)).isEmpty)
     }
 
-    func testATagCarriedWhileItsSiteIsDownCountsAsFound() {
+    func testATagCarriedWhileItsSiteIsDownCountsAsFoundInPart() {
         let research = [ResearchEntry(dimension: .camera, state: .unavailable), ResearchEntry(dimension: .lenses, state: .unavailable)]
         let reconciled = ResearchCoverage.reconciled(research, shotOn: [.digital])
-        XCTAssertEqual(reconciled.map(\.state), [.found, .unavailable])
+        XCTAssertEqual(reconciled.map(\.state), [.partial, .unavailable])
     }
 
     // MARK: F. Persistence
@@ -475,8 +526,8 @@ final class ResearchCoverageTests: XCTestCase {
             StandInSite.route("cinesite.com", "wp-json/wp/v2/search", body: DiscoveryFixtures.ascHits([("Ash", "https://cinesite.com/ash/", "page")]))
             StandInSite.route("cinesite.com", "/ash/", body: DiscoveryFixtures.page("Ash", paragraphs))
             return await client().researched(CameraReading(sources: [], more: [], cinematographer: nil), article: nil, filmTitle: "Ash",
-                                              cinematographers: ["Ida Holm"], directors: ["Ola Berg"], year: 2019, otherTitles: [], crew: [],
-                                              previous: nil)
+                                              cinematographers: ["Ida Holm"], directors: ["Ola Berg"], year: 2019, otherTitles: [],
+                                              crew: [person("Ole Vik", .vfxSupervisor)], previous: nil)
         }
         let generic = await run([
             "Ash from the fires drifted over the plates we shot for the commercial, and the greenscreen work took a week.",
@@ -484,7 +535,7 @@ final class ResearchCoverageTests: XCTestCase {
             "Ash and smoke simulations were rendered on the new farm, with HDRI captured on every set.",
         ])
         XCTAssertTrue(generic.sources.isEmpty, "\(generic.sources.map(\.title))")
-        XCTAssertEqual(generic.research?.outcomes.first?.result, .nothingUsable(["https://cinesite.com/ash/"]))
+        XCTAssertEqual(generic.research?.outcomes.first { $0.query.site == "Cinesite" }?.result, .nothingUsable(["https://cinesite.com/ash/"]))
         let film = await run([
             "For Ash (2019), directed by Ola Berg, the studio built the burning forest around the plates shot on location.",
             "Ida Holm's camera team fitted witness cameras on every set so the matchmove artists could track the handheld shots.",

@@ -73,7 +73,7 @@ final class LiveShotOnTests: XCTestCase {
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
         if chosen == 0 {
             // PROBE (not for release): World War Z through the 1.10.7 pipeline.
-            for (id, article) in [(72190, "World War Z (film)"), (693134, "Dune: Part Two")] {
+            for (id, article) in [(72190, "World War Z (film)"), (11324, "Shutter Island (film)"), (180863, "T2 Trainspotting"), (103, "Taxi Driver"), (264660, "Ex Machina (film)"), (980489, "Gran Turismo (film)"), (51497, "Fast Five"), (14836, "Coraline (film)"), (359724, "Ford v Ferrari"), (438631, "Dune (2021 film)"), (756999, "The Black Phone"), (28, "Apocalypse Now"), (329865, "Arrival (film)")] {
             guard let full = try? await client.movieDetails(id: id) else { say("PROBE| no TMDB details"); continue }
             let details = full.trimmed()
             say("PROBE| ===== \(details.title)")
@@ -83,13 +83,15 @@ final class LiveShotOnTests: XCTestCase {
             }
             say("PROBE| shotOn=\(reading.index.shotOn.map(\.rawValue)) names=\(reading.index.names.prefix(20)) unanswered=\(reading.index.unanswered)")
             say("PROBE| research: " + (reading.index.research ?? []).map { "\($0.dimension.rawValue)=\($0.state.rawValue)" }.joined(separator: " "))
+            for e in reading.index.evidence { say("PROBE| tag \(e.shotOn.rawValue) — \(e.source): " + String(e.text.prefix(150))) }
+            say("PROBE| names: \(reading.index.names.joined(separator: ", "))")
+            say("PROBE| research: " + (reading.index.research ?? []).map { "\($0.dimension.rawValue)=\($0.state.rawValue)" + ($0.open.isEmpty ? "" : "\($0.open)") }.joined(separator: " "))
             var keep = false
             for line in reading.log.split(separator: "\n", omittingEmptySubsequences: false) {
                 let text = String(line)
-                if text.hasPrefix("NOT READ") || text.hasPrefix("READ") || text.hasPrefix("RESEARCH") || text.hasPrefix("CRAFT OBSERVATIONS") { keep = true }
+                if text.hasPrefix("NOT READ") || text.hasPrefix("READ") || text.hasPrefix("RESEARCH") || text.hasPrefix("CRAFT OBSERVATIONS") || text.hasPrefix("THIS FILM'S GEAR") { keep = true }
                 else if text.isEmpty { keep = false }
-                if keep, !text.isEmpty, !text.hasPrefix("  left out") { say("PROBE| " + String(text.prefix(260))) }
-                if text.hasPrefix("• Wikipedia's cited links") || text.hasPrefix("  kept:") { say("PROBE| " + String(text.prefix(260))) }
+                if keep, !text.isEmpty, !text.hasPrefix("  left out"), !text.hasPrefix("  https") { say("PROBE| " + String(text.prefix(240))) }
             }
             }
             return

@@ -325,9 +325,6 @@ public enum SourceRegistry {
         public let family: Family
         /// What it's good for.
         public let claims: Set<ResearchDimension>
-        /// Its own WordPress search (`/wp-json/wp/v2/search`), when it has a working one: searched by
-        /// a film's title for what's missing.
-        public var search: URL? = nil
     }
 
     static let all: Set<ResearchDimension> = Set(ResearchDimension.allCases)
@@ -342,8 +339,7 @@ public enum SourceRegistry {
         Entry(host: "cgw.com", name: "Computer Graphics World", family: .productionTechnology, claims: [.vfx]),
         Entry(host: "beforesandafters.com", name: "befores & afters", family: .productionTechnology, claims: [.vfx, .movement]),
         Entry(host: "vfxvoice.com", name: "VFX Voice", family: .productionTechnology, claims: [.vfx]),
-        Entry(host: "cinesite.com", name: "Cinesite", family: .vfxVendor, claims: [.vfx, .movement],
-              search: URL(string: "https://cinesite.com/wp-json/wp/v2/search")),
+        Entry(host: "cinesite.com", name: "Cinesite", family: .vfxVendor, claims: [.vfx, .movement]),
         Entry(host: "dneg.com", name: "DNEG", family: .vfxVendor, claims: [.vfx]),
         Entry(host: "catalog.afi.com", name: "AFI Catalog", family: .creditDatabase, claims: [.contributors]),
         Entry(host: "shotonwhat.com", name: "ShotOnWhat", family: .creditDatabase, claims: [.camera, .lenses]),
@@ -406,13 +402,147 @@ public enum SourceRegistry {
     }
 }
 
-// MARK: - What's missing, and where to look
+// MARK: - Research questions (1.10.8)
 
-/// The bounded extra searches for what a film's reading is missing (discovery 6). Old budget, per
-/// film: two magazine searches, Wikipedia's links, three guessed story pages and the
-/// cinematographer's article; at most 8 pages asked for and 6 read. New: at most `maxQueries`
-/// more searches, and their pages only in the slots the first pass left (never more than 8 asked
-/// for and 6 read in all), at most `maxPages` of them.
+/// What Reel can know about a film's research context before planning: who photographed it, what
+/// was read, and whether the film involves visual effects at all (a film with no VFX credit and no
+/// mention of effects has no camera-and-VFX questions: they're not applicable, not unanswered).
+public struct ResearchContext: Sendable {
+    public let crew: [CraftCrew.Contributor]
+    public let specs: TechSpecs
+    public let vfxRelevant: Bool
+
+    public init(crew: [CraftCrew.Contributor], specs: TechSpecs, texts: [TechSpecs.Text]) {
+        self.crew = crew
+        self.specs = specs
+        let mentions = texts.flatMap { $0.sections.flatMap(\.paragraphs) }.contains {
+            $0.range(of: #"\b(?:visual effects|VFX|CGI|CG |computer[- ]generated|digital effects|green ?screen|blue ?screen)\b"#,
+                     options: [.regularExpression, .caseInsensitive]) != nil
+        }
+        vfxRelevant = crew.contains { $0.role == .vfxSupervisor } || !specs.cameraVFX.isEmpty || mentions
+    }
+}
+
+/// One reusable research question: what it asks, which part of the cinematography it belongs to,
+/// who can answer it first-hand, when it applies and when it's answered. Answered by what was read
+/// (never by a credit alone: a gaffer's credit says nothing of the fixtures).
+public struct ResearchQuestion: Sendable {
+    public let id: String
+    public let dimension: ResearchDimension
+    public let purpose: String
+    /// The roles to search by, best first (the specialist before the cinematographer).
+    public let roles: [CraftCrew.Role]
+    let applies: @Sendable (ResearchContext) -> Bool
+    let answered: @Sendable (TechSpecs) -> Bool
+
+    public func isApplicable(_ context: ResearchContext) -> Bool { applies(context) }
+    public func isAnswered(_ specs: TechSpecs) -> Bool { answered(specs) }
+}
+
+public enum ResearchQuestions {
+    static let dp: [CraftCrew.Role] = [.cinematographer, .additionalCinematographer, .secondUnitCinematographer]
+    static func notes(_ notes: [TechSpecs.Note], _ pattern: String) -> Bool {
+        notes.contains { $0.text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil }
+    }
+    static let always: @Sendable (ResearchContext) -> Bool = { _ in true }
+    static let vfx: @Sendable (ResearchContext) -> Bool = { $0.vfxRelevant }
+
+    /// The catalogue, in the order questions are worth asking within a dimension.
+    public static let catalogue: [ResearchQuestion] = [
+        ResearchQuestion(id: "camera.capture", dimension: .camera, purpose: "film or digital capture", roles: dp + [.digitalImaging],
+                         applies: always, answered: { specs in
+                             specs.specs.contains { $0.capture && !CraftIndex.shotOn($0).intersection([.film, .digital, .imax]).isEmpty }
+                         }),
+        ResearchQuestion(id: "camera.system", dimension: .camera, purpose: "which cameras", roles: dp + [.digitalImaging, .cameraOperator],
+                         applies: always, answered: { !$0.names(.camera).isEmpty }),
+        ResearchQuestion(id: "lenses.family", dimension: .lenses, purpose: "which lenses", roles: dp,
+                         applies: always, answered: { !$0.names(.lens).isEmpty }),
+        ResearchQuestion(id: "movement.method", dimension: .movement, purpose: "how the camera moved",
+                         roles: [.steadicamOperator, .cameraOperator, .keyGrip] + dp,
+                         applies: always, answered: { !$0.names(.support).isEmpty || !$0.cameraLanguage.isEmpty }),
+        ResearchQuestion(id: "lighting.approach", dimension: .lighting, purpose: "how it was lit", roles: [.gaffer] + dp,
+                         applies: always, answered: { !$0.lighting.isEmpty || !$0.names(.light).isEmpty }),
+        ResearchQuestion(id: "lighting.sources", dimension: .lighting, purpose: "which lights", roles: [.gaffer] + dp,
+                         applies: always, answered: { !$0.names(.light).isEmpty }),
+        ResearchQuestion(id: "colour.image", dimension: .colour, purpose: "how the image was treated", roles: [.colourist] + dp,
+                         applies: always, answered: { !$0.colour.isEmpty || !$0.names(.finish).isEmpty }),
+        ResearchQuestion(id: "colour.workflow", dimension: .colour, purpose: "the grade and its workflow", roles: [.colourist] + dp,
+                         applies: always, answered: { !$0.names(.finish).isEmpty }),
+        ResearchQuestion(id: "vfx.photography", dimension: .vfx, purpose: "how the photography served the effects",
+                         roles: [.vfxSupervisor] + dp, applies: vfx, answered: { !$0.cameraVFX.isEmpty }),
+        ResearchQuestion(id: "vfx.tracking", dimension: .vfx, purpose: "tracking, encoders and witness cameras",
+                         roles: [.vfxSupervisor] + dp, applies: vfx, answered: {
+                             notes($0.cameraVFX, #"\b(?:track\w*|encoder\w*|witness|match ?mov\w*|motion[- ]control|markers?)\b"#)
+                         }),
+        ResearchQuestion(id: "vfx.plates", dimension: .vfx, purpose: "plates, arrays and reference photography",
+                         roles: [.vfxSupervisor] + dp, applies: vfx, answered: {
+                             notes($0.cameraVFX, #"\b(?:plates?|arrays?|stitched|panoram\w*|HDRI?s?|reference photo\w*|green ?screen|blue ?screen)\b"#)
+                         }),
+    ]
+
+    public static func question(_ id: String) -> ResearchQuestion? { catalogue.first { $0.id == id } }
+}
+
+// MARK: - Sources to search (1.10.8)
+
+/// A source Reel can search for a film's research: who it is, what kind of source, how it can be
+/// searched (by a person's name, by the film's title) and which parts of the cinematography it can
+/// speak to. The engine plans by these capabilities; how a search is made is the transport's.
+public struct ResearchProvider: Sendable, Equatable {
+    public enum SearchBy: String, Sendable { case person, title }
+    public let name: String
+    public let host: String
+    public let family: SourceRegistry.Family
+    public let search: URL
+    public let searchBy: Set<SearchBy>
+    public let serves: Set<ResearchDimension>
+    public let languages: Set<String>
+
+    public init(name: String, host: String, family: SourceRegistry.Family, search: URL, searchBy: Set<SearchBy>,
+                serves: Set<ResearchDimension>, languages: Set<String> = ["en"]) {
+        self.name = name
+        self.host = host
+        self.family = family
+        self.search = search
+        self.searchBy = searchBy
+        self.serves = serves
+        self.languages = languages
+    }
+
+    static let camera: Set<ResearchDimension> = [.camera, .lenses, .movement, .lighting, .colour, .vfx]
+
+    /// Every provider with a search that answers (checked live before it was added), in the order
+    /// tried for a question.
+    public static let all: [ResearchProvider] = [
+        ResearchProvider(name: "American Cinematographer", host: "theasc.com", family: .cinematographyPublication,
+                         search: URL(string: "https://theasc.com/wp-json/wp/v2/search")!, searchBy: [.person], serves: camera),
+        ResearchProvider(name: "Cinesite", host: "cinesite.com", family: .vfxVendor,
+                         search: URL(string: "https://cinesite.com/wp-json/wp/v2/search")!, searchBy: [.title], serves: [.vfx]),
+        // Checked live on 4 Nov 2026: its search answers by person with craft interviews, and its
+        // articles are told apart by its container. (Newsshooter's search answers too, but the
+        // article checked read as two paragraphs; Filmmaker's search sent a challenge page and
+        // Definition's redirects loop: not added.)
+        ResearchProvider(name: "ProVideo Coalition", host: "provideocoalition.com", family: .cinematographyPublication,
+                         search: URL(string: "https://www.provideocoalition.com/wp-json/wp/v2/search")!, searchBy: [.person], serves: camera),
+    ]
+
+    public static func named(_ name: String) -> ResearchProvider? { all.first { $0.name == name } }
+}
+
+/// How the engine reaches providers and pages: production uses `CameraSourcesClient` (paced,
+/// HTTPS, its article reader); the benchmark an in-memory corpus. The engine never knows which.
+public protocol ResearchTransport: Sendable {
+    func researchSearch(_ provider: ResearchProvider, query: String, noting: UnansweredSites) async
+        -> (hits: [(title: String, url: String)], failure: String?)
+    func researchPage(_ url: URL, site: String, title: String?, noting: UnansweredSites) async
+        -> (source: CameraReading.Source?, failure: SourceFailure?)
+}
+
+// MARK: - Planning
+
+/// The bounded extra searches for a film's open research questions (discovery 7). At most
+/// `maxQueries` searches and `maxPages` pages per reading, and the pages only in the slots the first
+/// pass left (never more than 8 asked for and 6 read in all).
 public enum ResearchPlan {
     public static let maxQueries = 4
     public static let maxPages = 3
@@ -427,64 +557,87 @@ public enum ResearchPlan {
         public let text: String
         /// The person searched for, when it's a person.
         public var contributor: String?
-        /// The other missing dimensions the same search speaks to (a cinematographer searched for
-        /// the light is searched for the lenses and colour too): one search, not three.
+        /// The other dimensions the same search speaks to: one search, not three.
         public var also: [ResearchDimension] = []
+        /// The research questions it was made for (1.10.8).
+        public var questions: [String] = []
 
-        /// Whether the search was made for `dimension`.
+        public init(dimension: ResearchDimension, site: String, text: String, contributor: String? = nil,
+                    also: [ResearchDimension] = [], questions: [String] = []) {
+            self.dimension = dimension
+            self.site = site
+            self.text = text
+            self.contributor = contributor
+            self.also = also
+            self.questions = questions
+        }
+
         public func covers(_ dimension: ResearchDimension) -> Bool { self.dimension == dimension || also.contains(dimension) }
-
         public var key: String { site + "|" + text.lowercased() }
     }
 
-    /// Searches that need no planning: a site searched by the film's title (American and British
-    /// Cinematographer always are, in the first pass).
-    static let byTitleFirstPass: Set<String> = ["American Cinematographer", "British Cinematographer"]
+    /// The questions still open for a film, the most useful first: those of dimensions with nothing
+    /// found before those of dimensions found in part (a general finding never closes the rest).
+    public static func open(_ context: ResearchContext) -> [ResearchQuestion] {
+        let relevant = ResearchQuestions.catalogue.filter { $0.isApplicable(context) }
+        let open = relevant.filter { !$0.isAnswered(context.specs) }
+        let order: [ResearchDimension] = [.movement, .lighting, .camera, .lenses, .vfx, .colour]
+        func untouched(_ dimension: ResearchDimension) -> Bool {
+            !relevant.contains { $0.dimension == dimension && $0.isAnswered(context.specs) }
+        }
+        return open.sorted { a, b in
+            let ua = untouched(a.dimension), ub = untouched(b.dimension)
+            if ua != ub { return ua }
+            return (order.firstIndex(of: a.dimension) ?? 9, ResearchQuestions.catalogue.firstIndex { $0.id == a.id } ?? 99)
+                < (order.firstIndex(of: b.dimension) ?? 9, ResearchQuestions.catalogue.firstIndex { $0.id == b.id } ?? 99)
+        }
+    }
 
-    /// What to search for, most useful first: for each dimension nothing was found for, the people
-    /// whose role speaks to it (searched by name on American Cinematographer, whose interviews are
-    /// titled by subject rather than film), and for camera and VFX work, the VFX sites that have a
-    /// search (by the film's title). None for what's already known, a search repeated within a year
-    /// that found nothing, or the same query twice.
-    public static func plan(missing: [ResearchDimension], crew: [CraftCrew.Contributor], title: String,
-                            previous: [ResearchEntry]?, discovery: Int = CraftIndex.currentDiscovery,
-                            readAt: Date? = nil, now: Date = Date()) -> [Query] {
+    /// What to search for: for each open question, each provider that can speak to it, by the
+    /// person whose role answers it (specialists first) or by the title. The same search is made
+    /// once for every question it serves; none repeated within a year after finding nothing.
+    public static func plan(open: [ResearchQuestion], crew: [CraftCrew.Contributor], title: String,
+                            providers: [ResearchProvider] = ResearchProvider.all, previous: [ResearchEntry]?,
+                            discovery: Int = CraftIndex.currentDiscovery, readAt: Date? = nil, now: Date = Date()) -> [Query] {
         let quiet = Set(Self.quiet(previous, discovery: discovery, readAt: readAt, now: now).flatMap(\.queries))
         var queries: [Query] = []
         func add(_ query: Query) {
             guard !quiet.contains(query.key) else { return }
             if let same = queries.firstIndex(where: { $0.key == query.key }) {
                 if !queries[same].covers(query.dimension) { queries[same].also.append(query.dimension) }
+                for id in query.questions where !queries[same].questions.contains(id) { queries[same].questions.append(id) }
                 return
             }
             guard queries.count < maxQueries else { return }
             queries.append(query)
         }
-        let order: [ResearchDimension] = [.movement, .lighting, .camera, .lenses, .vfx, .colour]
-        for dimension in order where missing.contains(dimension) {
-            if dimension == .vfx {
-                for entry in SourceRegistry.added where entry.search != nil && entry.claims.contains(.vfx) {
-                    add(Query(dimension: .vfx, site: entry.name, text: title))
+        // Breadth first: each question's first capable provider, then (with what's left of the
+        // budget) the next ones; one that found nothing is quiet next time, so another is tried then.
+        func candidates(for question: ResearchQuestion) -> [Query] {
+            providers.filter { $0.serves.contains(question.dimension) }.compactMap { provider in
+                if provider.searchBy.contains(.person),
+                   let person = question.roles.lazy.compactMap({ role in crew.first { $0.role == role } }).first {
+                    return Query(dimension: question.dimension, site: provider.name, text: person.name, contributor: person.name,
+                                 questions: [question.id])
                 }
-                continue
-            }
-            // The specialists first (an operator for movement, a gaffer for light), then whoever
-            // photographed it.
-            let people = crew.filter { $0.role.dimensions.contains(dimension) && !$0.role.photographs }
-                + crew.filter { $0.role.dimensions.contains(dimension) && $0.role.photographs }
-            for person in people.prefix(1) {
-                add(Query(dimension: dimension, site: "American Cinematographer", text: person.name, contributor: person.name))
-            }
+                if provider.searchBy.contains(.title) {
+                    return Query(dimension: question.dimension, site: provider.name, text: title, questions: [question.id])
+                }
+                return nil
+            }.filter { !quiet.contains($0.key) }
+        }
+        let options = open.map(candidates)
+        for round in 0..<(options.map(\.count).max() ?? 0) {
+            for list in options where round < list.count { add(list[round]) }
         }
         return queries
     }
 
     /// The earlier entries whose searches found nothing within the last `quietPeriod` (by the same
-    /// discovery): not searched again, and carried as they are (their date unchanged) so the year
-    /// is counted from the search, not from the latest reading.
+    /// discovery): not searched again, and carried as they are (their date unchanged).
     public static func quiet(_ previous: [ResearchEntry]?, discovery: Int, readAt: Date?, now: Date = Date()) -> [ResearchEntry] {
         (previous ?? []).filter { entry in
-            guard entry.state == .searchedNoSource, entry.discovery == discovery, !entry.queries.isEmpty,
+            guard entry.state == .searchedNoSource || entry.state == .partial, entry.discovery == discovery, !entry.queries.isEmpty,
                   let searched = entry.searchedAt ?? readAt else { return false }
             return now.timeIntervalSince(searched) < quietPeriod
         }
@@ -516,29 +669,42 @@ public struct ResearchOutcome: Equatable, Sendable {
     public var result: Result
 }
 
-/// What was looked for, in a film's reading: the people found, the searches planned for what was
-/// missing and what they brought. For the log and the coverage; not kept in the library.
+/// What was looked for, in a film's reading: the people found, the questions open, the searches
+/// and what they brought. For the log and the coverage; not kept in the library itself.
 public struct ResearchRun: Equatable, Sendable {
     public var contributors: [CraftCrew.Contributor] = []
+    /// The dimensions with an open question after the first pass.
     public var missing: [ResearchDimension] = []
     public var outcomes: [ResearchOutcome] = []
     /// Earlier searches that found nothing, not repeated this time (see `ResearchPlan.quiet`).
     public var quiet: [ResearchEntry] = []
+    /// The questions open after the first pass, the most useful first (1.10.8).
+    public var open: [String] = []
+    /// Candidates set aside by page context: their address and why (1.10.8).
+    public var passed: [(url: String, why: String)] = []
 
     public init(contributors: [CraftCrew.Contributor] = [], missing: [ResearchDimension] = [], outcomes: [ResearchOutcome] = [],
-                quiet: [ResearchEntry] = []) {
+                quiet: [ResearchEntry] = [], open: [String] = []) {
         self.contributors = contributors
         self.missing = missing
         self.outcomes = outcomes
         self.quiet = quiet
+        self.open = open
+    }
+
+    public static func == (a: ResearchRun, b: ResearchRun) -> Bool {
+        a.contributors == b.contributors && a.missing == b.missing && a.outcomes == b.outcomes && a.quiet == b.quiet && a.open == b.open
+            && a.passed.map(\.url) == b.passed.map(\.url)
     }
 }
 
 /// Where a film's research stands for one dimension, kept with its reading (`CraftIndex.research`).
 public struct ResearchEntry: Codable, Equatable, Sendable {
     public enum State: String, Codable, Sendable {
-        /// Found in what was read.
+        /// Found in what was read: every applicable question of it answered.
         case found
+        /// Found in part (1.10.8): some of its questions answered, others still open (`open`).
+        case partial
         /// Pages were read; none said anything of it.
         case readNoFindings
         /// Searched for; no suitable page was found.
@@ -551,6 +717,8 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         case unsupportedLanguage
         /// Not looked for beyond the first pass (no slot left, or nothing to search by).
         case notSearched
+        /// No question of it applies to this film (1.10.8): camera and VFX for a film without effects.
+        case notApplicable
         /// Saved by a later Reel with a state this one doesn't know.
         case unknown
 
@@ -559,18 +727,20 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         }
 
         /// In the order shown (found first; the unknown not shown).
-        public static let shown: [State] = [.found, .readNoFindings, .searchedNoSource, .unavailable, .extractionFailed,
-                                            .unsupportedLanguage, .notSearched]
+        public static let shown: [State] = [.found, .partial, .readNoFindings, .searchedNoSource, .unavailable, .extractionFailed,
+                                            .unsupportedLanguage, .notSearched, .notApplicable]
 
         public var label: String {
             switch self {
             case .found: "found"
+            case .partial: "found in part, more still open"
             case .readNoFindings: "read about, nothing said"
             case .searchedNoSource: "searched for, no source found"
             case .unavailable: "a source didn't answer"
             case .extractionFailed: "a source couldn't be read"
             case .unsupportedLanguage: "a source in a language Reel doesn't read"
             case .notSearched: "not searched for yet"
+            case .notApplicable: "not applicable"
             case .unknown: "unknown"
             }
         }
@@ -585,17 +755,20 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
     public var discovery: Int = CraftIndex.currentDiscovery
     /// When its searches were made (none: nothing was searched for it).
     public var searchedAt: Date?
+    /// Its questions still open (1.10.8), by id (`ResearchQuestions`).
+    public var open: [String] = []
 
     public init(dimension: ResearchDimension, state: State, queries: [String] = [], discovery: Int = CraftIndex.currentDiscovery,
-                searchedAt: Date? = nil) {
+                searchedAt: Date? = nil, open: [String] = []) {
         self.dimension = dimension
         self.state = state
         self.queries = queries
         self.discovery = discovery
         self.searchedAt = searchedAt
+        self.open = open
     }
 
-    enum CodingKeys: String, CodingKey { case dimension, state, queries, discovery, searchedAt }
+    enum CodingKeys: String, CodingKey { case dimension, state, queries, discovery, searchedAt, open }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -605,44 +778,51 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         queries = try c.decodeIfPresent([String].self, forKey: .queries) ?? []
         discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 6
         searchedAt = try c.decodeIfPresent(Date.self, forKey: .searchedAt)
+        open = try c.decodeIfPresent([String].self, forKey: .open) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(dimension, forKey: .dimension)
+        try c.encode(state, forKey: .state)
+        try c.encode(queries, forKey: .queries)
+        try c.encode(discovery, forKey: .discovery)
+        try c.encodeIfPresent(searchedAt, forKey: .searchedAt)
+        if !open.isEmpty { try c.encode(open, forKey: .open) }
     }
 }
 
 public enum ResearchCoverage {
-    /// What was found, by dimension, in a film's reading.
+    /// The dimensions with something found (any question of it answered), in a film's reading.
     public static func found(in specs: TechSpecs, crew: [CraftCrew.Contributor]) -> Set<ResearchDimension> {
         var found = Set<ResearchDimension>()
         if !crew.isEmpty { found.insert(.contributors) }
-        if !specs.names(.camera).isEmpty || specs.specs.contains(where: { $0.kind == .format && !$0.name.contains(":1") }) { found.insert(.camera) }
-        if !specs.names(.lens).isEmpty { found.insert(.lenses) }
-        if !specs.names(.support).isEmpty || !specs.cameraLanguage.isEmpty { found.insert(.movement) }
-        if !specs.names(.light).isEmpty || !specs.lighting.isEmpty { found.insert(.lighting) }
-        if !specs.colour.isEmpty || !specs.names(.finish).isEmpty { found.insert(.colour) }
-        if !specs.cameraVFX.isEmpty { found.insert(.vfx) }
+        for question in ResearchQuestions.catalogue where question.isAnswered(specs) { found.insert(question.dimension) }
         return found
     }
 
     /// The coverage with what the stored Shot on says (a tag carried from an earlier reading):
     /// film, digital or IMAX say the camera, anamorphic the lenses, black and white the colour.
+    /// A dimension found in part stays in part (its other questions are still open).
     public static func reconciled(_ research: [ResearchEntry], shotOn: [ShotOn]) -> [ResearchEntry] {
         var found = Set<ResearchDimension>()
         if shotOn.contains(where: { [.film, .digital, .imax].contains($0) }) { found.insert(.camera) }
         if shotOn.contains(.anamorphic) { found.insert(.lenses) }
         if shotOn.contains(.blackAndWhite) { found.insert(.colour) }
         return research.map { entry in
-            guard found.contains(entry.dimension), entry.state != .found else { return entry }
-            return ResearchEntry(dimension: entry.dimension, state: .found, queries: entry.queries, discovery: entry.discovery,
-                                 searchedAt: entry.searchedAt)
+            guard found.contains(entry.dimension), entry.state != .found, entry.state != .partial else { return entry }
+            return ResearchEntry(dimension: entry.dimension, state: .partial, queries: entry.queries, discovery: entry.discovery,
+                                 searchedAt: entry.searchedAt, open: entry.open)
         }
     }
 
-    /// Where each dimension stands after a reading: found; else, by what the planned searches for it
-    /// brought; else, pages were read (`readSomething`) and said nothing of it, or nothing was.
-    /// `unavailable`: a site of the first pass didn't answer (the reading is read again later);
-    /// `languageLimited` and `extractionLimited`: a page found in the first pass was in another
-    /// language, or couldn't be read. Each says of every dimension not found that a source may
-    /// have said it.
-    public static func entries(found: Set<ResearchDimension>, run: ResearchRun?, readSomething: Bool,
+    /// Where each dimension stands after a reading, decided once every source attempt of the reading
+    /// is known: every applicable question answered (found), some (in part, with the rest open),
+    /// none applicable, or by what this reading's searches for it came to, the carried year of
+    /// quiet, then the first pass's outages and limits.
+    /// `unavailable`: a site of the first pass didn't answer, or the film's article didn't come;
+    /// `languageLimited`/`extractionLimited`: a first-pass page in another language, or unreadable.
+    public static func entries(context: ResearchContext, run: ResearchRun?, readSomething: Bool,
                                languageLimited: Bool, extractionLimited: Bool = false, unavailable: Bool = false,
                                discovery: Int = CraftIndex.currentDiscovery, now: Date = Date()) -> [ResearchEntry] {
         ResearchDimension.allCases.map { dimension in
@@ -652,15 +832,25 @@ public enum ResearchCoverage {
                 return true
             }.map(\.query.key)
             let searchedAt: Date? = keys.isEmpty ? nil : now
-            if found.contains(dimension) {
+            if dimension == .contributors {
+                return ResearchEntry(dimension: dimension, state: context.crew.isEmpty ? (readSomething ? .readNoFindings : .notSearched) : .found,
+                                     discovery: discovery)
+            }
+            let relevant = ResearchQuestions.catalogue.filter { $0.dimension == dimension && $0.isApplicable(context) }
+            if relevant.isEmpty { return ResearchEntry(dimension: dimension, state: .notApplicable, discovery: discovery) }
+            let open = relevant.filter { !$0.isAnswered(context.specs) }.map(\.id)
+            if open.isEmpty {
                 return ResearchEntry(dimension: dimension, state: .found, queries: keys, discovery: discovery, searchedAt: searchedAt)
+            }
+            if open.count < relevant.count {
+                return ResearchEntry(dimension: dimension, state: .partial, queries: keys, discovery: discovery, searchedAt: searchedAt,
+                                     open: open)
             }
             func any(_ test: (ResearchOutcome.Result) -> Bool) -> Bool { outcomes.contains { test($0.result) } }
             let state: ResearchEntry.State
             // This reading's own searches first: what they came to is said even while a site of the
             // first pass is down (and a search that found nothing keeps its year of quiet).
             if any({ if case .unavailable = $0 { true } else if case .pageUnavailable = $0 { true } else { false } }) {
-                // A search or its page didn't answer: not a verdict (searched again at the retry).
                 state = .unavailable
             } else if any({ if case .read = $0 { true } else { false } }) {
                 state = .readNoFindings
@@ -674,20 +864,17 @@ public enum ResearchCoverage {
                 // Searched within the year and nothing found: still so (not "not searched").
                 return carried
             } else if unavailable {
-                // A site of the first pass didn't answer (the reading is read again later).
                 state = .unavailable
             } else if languageLimited {
-                // A page of the first pass that may have said it, in a language Reel doesn't read.
                 state = .unsupportedLanguage
             } else if extractionLimited {
                 state = .extractionFailed
             } else if !outcomes.isEmpty || run?.missing.contains(dimension) == true && !readSomething {
-                // Planned and not run (no page left), or nothing read at all: not searched.
                 state = .notSearched
             } else {
                 state = readSomething ? .readNoFindings : .notSearched
             }
-            return ResearchEntry(dimension: dimension, state: state, queries: keys, discovery: discovery, searchedAt: searchedAt)
+            return ResearchEntry(dimension: dimension, state: state, queries: keys, discovery: discovery, searchedAt: searchedAt, open: open)
         }
     }
 }

@@ -23,7 +23,8 @@ public enum CraftLog {
         lines.append("")
         lines.append("READ")
         for source in reading.sources {
-            let roundup = specs.roundups.contains(source.site) ? "  [about many films: read only where it names this one]" : ""
+            let roundup = specs.roundups.contains(source.site) ? "  [about many films: read only where it names this one]"
+                : source.context.map { $0.aboutFilm ? "" : "  [\($0.kind.label): read only where it's about this film, \($0.anchored) statements]" } ?? ""
             lines.append("• \(source.site): \(source.title) (\(source.paragraphs.count) paragraphs)\(roundup)")
             lines.append("  \(source.url.absoluteString)" + provenance(source))
         }
@@ -61,7 +62,9 @@ public enum CraftLog {
         lines.append("THIS FILM'S GEAR AND TECHNIQUES")
         if specs.specs.isEmpty { lines.append("• none named") }
         for spec in specs.specs {
-            lines.append("• \(spec.kind.rawValue): \(spec.name)\(spec.partial ? " (in part)" : "")" + said(spec))
+            let also = spec.support.dropFirst()
+            lines.append("• \(spec.kind.rawValue): \(spec.name)\(spec.partial ? " (in part)" : "")" + said(spec)
+                         + (also.isEmpty ? "" : " (also said by " + also.joined(separator: ", ") + ")"))
         }
         if !specs.mentioned.isEmpty {
             lines.append("")
@@ -84,6 +87,13 @@ public enum CraftLog {
             lines.append("• Crew: " + (run.contributors.isEmpty ? "none known beyond the credits above"
                 : run.contributors.map { $0.described + ($0.scope.map { " (\($0.label))" } ?? "") }.joined(separator: "; ")))
             lines.append("• Missing after the first pass: " + (run.missing.isEmpty ? "nothing" : run.missing.map(\.title).joined(separator: ", ")))
+            let questions = run.open.compactMap(ResearchQuestions.question)
+            if !questions.isEmpty {
+                lines.append("• Open questions: " + questions.map { "\($0.purpose) (\($0.dimension.title))" }.joined(separator: "; "))
+            }
+            for passed in run.passed {
+                lines.append("• Not read: \(passed.url) — names the film only in passing (\(passed.why))")
+            }
             if run.outcomes.isEmpty, !run.missing.isEmpty, run.quiet.isEmpty {
                 lines.append("• No further search: none planned (no crew member to search by, and no search for it)")
             }
@@ -113,7 +123,10 @@ public enum CraftLog {
             lines.append("• Not researched beyond the first pass")
         }
         if let research = index.research {
-            lines.append("• Where it stands: " + research.map { "\($0.dimension.title) — \($0.state.label)" }.joined(separator: "; "))
+            lines.append("• Where it stands: " + research.map { entry in
+                let open = entry.open.compactMap(ResearchQuestions.question).map(\.purpose)
+                return "\(entry.dimension.title) — \(entry.state.label)" + (open.isEmpty || entry.state == .notSearched ? "" : " (open: " + open.joined(separator: ", ") + ")")
+            }.joined(separator: "; "))
         }
         let groups: [(String, [TechSpecs.Note])] = [
             ("In their own words", specs.approach), ("The visual idea", specs.intent), ("Light", specs.lighting),

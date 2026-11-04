@@ -27,7 +27,7 @@ public enum CraftReader {
 
     /// The summary and the reading it came from.
     static func evaluate(_ details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?, colour: [String]?,
-                         otherTitles: [String], now: Date) -> (index: CraftIndex, specs: TechSpecs) {
+                         otherTitles: [String], articleFailed: Bool = false, now: Date) -> (index: CraftIndex, specs: TechSpecs) {
         let texts = texts(article: article, reading: reading, hiding: false)
         let people = reading?.research?.contributors ?? Self.crew(of: details, article: article, reading: reading)
         let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
@@ -46,10 +46,12 @@ public enum CraftReader {
         // Where its research stands, dimension by dimension (1.10.7).
         let skipped = reading?.skipped ?? []
         index.research = ResearchCoverage.entries(
-            found: ResearchCoverage.found(in: specs, crew: people), run: reading?.research, readSomething: !texts.isEmpty,
+            context: ResearchContext(crew: people, specs: specs, texts: texts), run: reading?.research, readSomething: !texts.isEmpty,
             languageLimited: skipped.contains { $0.limit == .language },
             extractionLimited: skipped.contains { $0.limit == .thin || $0.limit == .restricted },
-            unavailable: !index.unanswered.isEmpty, now: now)
+            // A site that didn't answer, the film's own article included (1.10.8): not a verdict on what
+            // it might have said, for the dimensions this reading's searches didn't settle.
+            unavailable: !index.unanswered.isEmpty || articleFailed, now: now)
         return (index, specs)
     }
 
@@ -103,7 +105,7 @@ public enum CraftReader {
                                                              year: details.year, otherTitles: otherTitles,
                                                              crew: Self.crew(of: details, article: article, reading: first), previous: previous)
         let now = Date()
-        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
+        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, articleFailed: articleFailed, now: now)
         var read = evaluated.index
         noteArticle(&read, articleTitle: articleTitle, article: article, failed: articleFailed)
         return Reading(index: read, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
@@ -128,7 +130,7 @@ public enum CraftReader {
     /// `articleFailed`: the article was asked for and Wikipedia didn't answer (not: there's no such article).
     public static func reading(of details: TMDBMovieDetails, articleTitle: String?, article: FilmArticle?, reading: CameraReading?,
                                colour: [String]?, otherTitles: [String] = [], articleFailed: Bool = false, now: Date = Date()) -> Reading {
-        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, now: now)
+        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, articleFailed: articleFailed, now: now)
         let sources = reading ?? CameraReading(sources: [], more: [], cinematographer: nil)
         var index = evaluated.index
         noteArticle(&index, articleTitle: articleTitle, article: article, failed: articleFailed)
