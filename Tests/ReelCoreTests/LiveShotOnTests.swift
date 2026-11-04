@@ -73,21 +73,24 @@ final class LiveShotOnTests: XCTestCase {
         let chosen = ProcessInfo.processInfo.environment["SHOTON_FILM"].flatMap(Int.init)
         if chosen == 0 {
             // PROBE (not for release): World War Z through the 1.10.7 pipeline.
-            guard let full = try? await client.movieDetails(id: 72190) else { say("PROBE| no TMDB details"); return }
+            for (id, article) in [(756999, "The Black Phone"), (693134, "Dune: Part Two")] {
+            guard let full = try? await client.movieDetails(id: id) else { say("PROBE| no TMDB details"); continue }
             let details = full.trimmed()
+            say("PROBE| ===== \(details.title)")
             say("PROBE| crew kept: " + CraftCrew.credited(details).map(\.described).joined(separator: "; "))
-            guard let reading = await CraftReader.read(details, articleTitle: "World War Z (film)", colour: nil) else {
-                say("PROBE| nothing reached"); return
+            guard let reading = await CraftReader.read(details, articleTitle: article, colour: nil) else {
+                say("PROBE| nothing reached"); continue
             }
             say("PROBE| shotOn=\(reading.index.shotOn.map(\.rawValue)) names=\(reading.index.names.prefix(20)) unanswered=\(reading.index.unanswered)")
             say("PROBE| research: " + (reading.index.research ?? []).map { "\($0.dimension.rawValue)=\($0.state.rawValue)" }.joined(separator: " "))
             var keep = false
             for line in reading.log.split(separator: "\n", omittingEmptySubsequences: false) {
                 let text = String(line)
-                if text.hasPrefix("DISCOVERY") || text.hasPrefix("NOT READ") || text.hasPrefix("RESEARCH") || text.hasPrefix("CRAFT OBSERVATIONS")
-                    || text.hasPrefix("READ") || text.hasPrefix("THIS FILM'S GEAR") || text.hasPrefix("SHOT ON, IN") { keep = true }
+                if text.hasPrefix("NOT READ") || text.hasPrefix("READ") || text.hasPrefix("RESEARCH") { keep = true }
                 else if text.isEmpty { keep = false }
-                if keep, !text.isEmpty { say("PROBE| " + String(text.prefix(330))) }
+                if keep, !text.isEmpty, !text.hasPrefix("  left out") { say("PROBE| " + String(text.prefix(260))) }
+                if text.hasPrefix("• Wikipedia's cited links") || text.hasPrefix("  kept:") { say("PROBE| " + String(text.prefix(260))) }
+            }
             }
             return
         }
