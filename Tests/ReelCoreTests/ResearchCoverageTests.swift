@@ -354,7 +354,8 @@ final class ResearchCoverageTests: XCTestCase {
         let earlier = [ResearchEntry(dimension: .movement, state: .searchedNoSource, queries: [key], discovery: CraftIndex.currentDiscovery,
                                      searchedAt: now.addingTimeInterval(-30 * 86_400))]
         let plan = ResearchPlan.plan(open: open, crew: crew, title: "T", previous: earlier, now: now)
-        XCTAssertTrue(plan.isEmpty, "searched a month ago with nothing found")
+        // Not on the provider that found nothing a month ago; the next provider that can answer it instead.
+        XCTAssertEqual(plan.map(\.key), ["ProVideo Coalition|lena marsh"], "searched a month ago with nothing found")
         let quiet = ResearchPlan.quiet(earlier, discovery: CraftIndex.currentDiscovery, readAt: nil, now: now)
         // Carried as it was (its date too), not "not searched".
         let entries = ResearchCoverage.entries(context: knowing([], crew: crew),
@@ -365,9 +366,9 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertEqual(movement?.searchedAt, earlier[0].searchedAt)
         // A year on, or by a new discovery: searched again.
         XCTAssertEqual(ResearchPlan.plan(open: open, crew: crew, title: "T", previous: earlier,
-                                         now: now.addingTimeInterval(400 * 86_400)).map(\.key), [key])
+                                         now: now.addingTimeInterval(400 * 86_400)).map(\.key).first, key)
         XCTAssertEqual(ResearchPlan.plan(open: open, crew: crew, title: "T", previous: earlier,
-                                         discovery: CraftIndex.currentDiscovery + 1, now: now).map(\.key), [key])
+                                         discovery: CraftIndex.currentDiscovery + 1, now: now).map(\.key).first, key)
     }
 
     // MARK: E. Coverage states

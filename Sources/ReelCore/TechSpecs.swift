@@ -237,8 +237,11 @@ public struct TechSpecs: Equatable, Sendable {
         let shortTitle = (title ?? "").split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? ""
         var roundups: [String] = []
         for text in texts {
-            // This page's own other productions count as the collection's do (1.10.8).
-            let otherTitles = otherTitles + text.otherProductions
+            // This page's own other productions count as the collection's do (1.10.8): those its
+            // context found, or (the film's article, a text not judged) those it names as productions.
+            let pageOthers = !text.otherProductions.isEmpty || title == nil ? text.otherProductions
+                : PageContext.productions(in: text.sections.flatMap(\.paragraphs), title: title ?? "", people: names + directorNames)
+            let otherTitles = otherTitles + pageOthers
             // A VFX publication or vendor, a database: what it names isn't the production's camera
             // package (see `SourceRegistry.establishesCapture`).
             let family = SourceRegistry.family(ofSource: text.source)
@@ -361,6 +364,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // Answering about another production, a sentence is this film's only when it says how
                         // this film was shot ("We shot Ex Machina on the F65"), not when it just names it.
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
+                            || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) })
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
                         // Only a sentence that names another production is followed by "It…" about it: not
@@ -1198,6 +1202,9 @@ public struct TechSpecs: Equatable, Sendable {
         let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
         let lead = String(chars[..<min(start, chars.count)]).suffix(40)
         if lead.range(of: #"\b(?:every|any|all|most|many|other)(?:\s+[a-z\-]+)?\s*$|\b(?:anything|everything|something|nothing|whatever)\s*$"#,
+                      options: .regularExpression) != nil { return true }
+        // Set against it as a product ("a direct competitor to SkyPanels", "an alternative to the Alexa").
+        if lead.range(of: #"\b(?:competitors?|alternatives?|rivals?|challengers?|answer|successors?)\s+to\s+(?:the\s+)?$|\b(?:rivals?|outperforms?|replaces?)\s+(?:the\s+)?$"#,
                       options: .regularExpression) != nil { return true }
         // The clause after it: "…cameras were not used".
         var clauseEnd = after.endIndex

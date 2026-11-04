@@ -121,19 +121,26 @@ public struct PageContext: Equatable, Sendable {
         let address = url.path.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
         let named = TechSpecs.namesTitle(pageTitle, title: title) || TechSpecs.namesTitle(address, title: title)
             || CameraSources.isAbout(title: title, articleTitle: pageTitle, url: url.absoluteString)
-        let naming = paragraphs.map { TechSpecs.namesTitle($0, title: title) }
+        // Named outside a list of credits: "her credits include…" says nothing about the film.
+        let naming = paragraphs.map { paragraph in
+            Digest.sentences(in: paragraph).contains { TechSpecs.namesTitle($0, title: title) && !isCreditList($0, title: title) }
+        }
         let lede = naming.prefix(3).contains(true)
         let share = paragraphs.isEmpty ? 0 : Double(naming.filter { $0 }.count) / Double(paragraphs.count)
         // A page whose own title names another of the collection is that film's.
         let otherTitled = otherTitles.contains { TechSpecs.namesTitle(pageTitle, title: $0) } && !named
         let others = productions(in: paragraphs, title: title, people: people)
-        if named && !otherTitled || (!otherTitled && lede && naming.filter { $0 }.count >= 2 && share >= 0.25) {
-            return PageContext(kind: .targetFilm, anchored: paragraphs.reduce(0) { $0 + Digest.sentences(in: $1).count }, productions: others)
-        }
         let heading = pageTitle + " " + address
         let range = NSRange(heading.startIndex..., in: heading)
+        // A page titled for a person or as news is about them, whatever it says of the film after.
+        let personal = people.contains { pageTitle.localizedCaseInsensitiveContains($0) } && !named
+            || profileCues.firstMatch(in: heading, range: range) != nil || corporateCues.firstMatch(in: heading, range: range) != nil
+        if named && !otherTitled || (!otherTitled && !personal && lede && naming.filter { $0 }.count >= 2 && share >= 0.25) {
+            return PageContext(kind: .targetFilm, anchored: paragraphs.reduce(0) { $0 + Digest.sentences(in: $1).count }, productions: others)
+        }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
-            : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
+            : profileCues.firstMatch(in: heading, range: range) != nil || people.contains(where: { pageTitle.localizedCaseInsensitiveContains($0) })
+                ? .contributorProfile : .otherProduction
         let count = paragraphs.reduce(0) { total, paragraph in
             total + anchoring(paragraph, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction)
                 .filter { $0 }.count
