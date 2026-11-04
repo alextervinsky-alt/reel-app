@@ -66,6 +66,45 @@ final class AttributionTests: XCTestCase {
         XCTAssertFalse(names.contains { $0.contains("RED") || $0.contains("Summilux") || $0 == "Steadicam" }, "\(names)")
     }
 
+    func testAnInterviewKeepsItsSubjectFromParagraphToParagraph() {
+        // Titled with its subject's name, the film named once, then "we", "it".
+        let interview = page("Ada Brisk: Working in the Dark", "https://example.org/ada-brisk/", [
+            "Ada Brisk has shot features on three continents.",
+            "The Copper Lantern was her hardest shoot.",
+            "We shot it on the Sony Venice with Cooke S4 lenses.",
+            "“Glass Rivers” was a different story: we shot it handheld.",
+        ])
+        XCTAssertEqual(PageContext.anchors(["Ada Brisk has shot features on three continents.", "The Copper Lantern was her hardest shoot.",
+                                            "We shot it on the Sony Venice with Cooke S4 lenses.", "“Glass Rivers” was a different story: we shot it handheld."],
+                                           title: film, otherTitles: [], people: []), [[false], [true], [true], [false]])
+        XCTAssertEqual(interview.anchored, 2)
+        // On a profile the person stays the subject.
+        XCTAssertEqual(PageContext.anchors(["The Copper Lantern was her hardest shoot.", "We shot it on the Sony Venice."], title: film,
+                                           otherTitles: [], people: [], inherit: false), [[true], [false]])
+    }
+
+    func testACommonWordTitleNamesTheFilmOnlyAsWritten() {
+        XCTAssertFalse(PageContext.names("Their drive for realism shaped every set.", title: "Drive"))
+        XCTAssertTrue(PageContext.names("On Drive, we shot at night.", title: "Drive"))
+        // A page titled with the word is the film's only with its year or people on it.
+        XCTAssertFalse(PageContext.classify(pageTitle: "Test Drive: A New Camera Extension", url: URL(string: "https://example.org/test-drive/")!,
+                                            paragraphs: ["The extension adds four stops.", "It ships in May."], title: "Drive", otherTitles: [],
+                                            people: ["Ada Brisk"], year: 2011).aboutFilm)
+        XCTAssertTrue(PageContext.classify(pageTitle: "Night Moves: Drive", url: URL(string: "https://example.org/drive/")!,
+                                           paragraphs: ["Ada Brisk shot it in 2011.", "It was all night work."], title: "Drive", otherTitles: [],
+                                           people: ["Ada Brisk"], year: 2011).aboutFilm)
+    }
+
+    func testATurnMustComeBackToThisFilm() {
+        func names(_ sentence: String) -> Set<String> {
+            var text = TechSpecs.Text(source: "American Cinematographer", paragraphs: [sentence], isInterview: true)
+            text.otherProductions = ["Glass Rivers"]
+            return Set(TechSpecs.read(texts: [text], cinematographers: ["Ada Brisk"], directors: [], year: 2020, title: film).specs.map(\.name))
+        }
+        XCTAssertFalse(names("On Glass Rivers we used the ARRI Alexa Mini, but the lenses were Cooke S4.").contains { $0.contains("Cooke") })
+        XCTAssertTrue(names("On Glass Rivers I shot 35mm film, but this time we chose the ARRI Alexa 65.").contains { $0.contains("65") })
+    }
+
     // MARK: Uncertainty on the property it qualifies
 
     func testAGuessQualifiesOnlyWhatItIsAbout() {
@@ -76,6 +115,8 @@ final class AttributionTests: XCTestCase {
         XCTAssertFalse(gear("On The Copper Lantern, above all of the practicals we had little tungsten Fresnels that were probably 300 watts.").isEmpty)
         XCTAssertTrue(gear("On The Copper Lantern, they may have used Black Satin filters on the close-ups.").isEmpty)
         XCTAssertTrue(gear("Without her, The Copper Lantern might have easily been shot in Super 35.").isEmpty)
+        // A clause between the hedge and the gear ends what it qualifies.
+        XCTAssertFalse(gear("Perhaps surprisingly, The Copper Lantern was shot on the ARRI Alexa 65.").isEmpty)
         // An estimate of how much doesn't make the format a guess.
         XCTAssertTrue(gear("The Copper Lantern was shot on 35mm film, perhaps 90 percent of it.").contains { $0.contains("35") })
     }

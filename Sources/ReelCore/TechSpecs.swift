@@ -265,6 +265,11 @@ public struct TechSpecs: Equatable, Sendable {
             // about Glass Rivers?") are about that production: the next few paragraphs, until a question
             // names this film or the section ends (a wrong guess costs a few answers, not the interview).
             var answeringAboutAnother = 0
+            // What on a page not about the film is anchored to it, paragraph by paragraph (1.10.8).
+            let pageAnchors = text.aboutFilm || roundup ? nil
+                : PageContext.anchors(text.sections.flatMap(\.paragraphs), title: title ?? "", otherTitles: otherTitles,
+                                      people: names + directorNames, inherit: text.inheritsSubject)
+            var paragraphIndex = -1
             for section in text.sections {
                 answeringAboutAnother = 0
                 let heading = section.title.lowercased()
@@ -316,9 +321,8 @@ public struct TechSpecs: Equatable, Sendable {
                     let sentences = Digest.sentences(in: paragraph)
                     // On a page that isn't about the film, only what's anchored to it (1.10.8).
                     // (A round-up keeps its own entry rules: its spec sheets don't name the film.)
-                    let anchors = text.aboutFilm || roundup ? nil
-                        : PageContext.anchoring(paragraph, title: title ?? "", otherTitles: otherTitles, people: names + directorNames,
-                                                inherit: text.inheritsSubject)
+                    paragraphIndex += 1
+                    let anchors = pageAnchors.map { $0.indices.contains(paragraphIndex) ? $0[paragraphIndex] : [] }
                     var skipNext = false
                     // Inside the quote of an award speech ("…said: “Celluloid is alive and kicking. Four
                     // out of five nominated films were shot on celluloid…”"): not how this film was shot.
@@ -366,7 +370,8 @@ public struct TechSpecs: Equatable, Sendable {
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
                             || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) }
                                 // "On Glass Rivers, I shot film, but this time we chose…": it turns to this film.
-                                && sentence.range(of: #"\b(?:but|this time|whereas|however|while (?:here|this)|here we|on this (?:one|film))\b"#,
+                                // (Not "…, but the lenses were Cooke S4": the turn must come back to this film.)
+                                && sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here|we|our|us)\b|\bthis time\b|\bon this (?:one|film)\b"#,
                                                   options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
@@ -1775,6 +1780,8 @@ public struct TechSpecs: Equatable, Sendable {
             // "probably 300 watts", "perhaps 90 percent", "possibly two or three": an estimate.
             if after.range(of: #"^\s*(?:around |about |some |only |just )?(?:\d|one\b|two\b|three\b|four\b|five\b|a few\b|a dozen\b)"#,
                            options: [.regularExpression, .caseInsensitive]) != nil { continue }
+            // A clause between them ("Perhaps surprisingly, they shot on 65mm") ends what it qualifies.
+            if after.range(of: #"[,;:—–]|\s-\s"#, options: .regularExpression) != nil { continue }
             if after.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).count <= 6 { return true }
         }
         return false

@@ -340,6 +340,9 @@ extension AppModel {
         let current = self.film(id: film.id) ?? film
         let article = articles[details.id]
         let stored = CraftQueue.representatives(of: films.filter { $0.tmdb?.id == details.id }).first ?? current
+        // Researched by the background reading in the last day (by these rules): not again for opening the tab.
+        if let craft = stored.craft, craft.research != nil, craft.discovery == CraftIndex.currentDiscovery,
+           Date().timeIntervalSince(craft.readAt) < 86_400 { return }
         let reading = await CameraSourcesClient().researched(base, article: article, filmTitle: details.title,
                                                              cinematographers: details.cinematographers, directors: details.directors,
                                                              year: details.year, otherTitles: otherTitles(of: details),

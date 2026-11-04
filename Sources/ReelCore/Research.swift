@@ -827,9 +827,14 @@ public enum ResearchCoverage {
                                discovery: Int = CraftIndex.currentDiscovery, now: Date = Date()) -> [ResearchEntry] {
         ResearchDimension.allCases.map { dimension in
             let outcomes = (run?.outcomes ?? []).filter { $0.query.covers(dimension) }
+            // The searches that came to a verdict (answered, nothing about the film, or read): only
+            // these are kept, so only these can be kept quiet. One that didn't answer, or whose page
+            // couldn't be read, is searched again at the next reading.
             let keys = outcomes.filter {
-                if case .notTried = $0.result { return false }
-                return true
+                switch $0.result {
+                case .noCandidate, .nothingUsable, .read: return true
+                default: return false
+                }
             }.map(\.query.key)
             let searchedAt: Date? = keys.isEmpty ? nil : now
             if dimension == .contributors {

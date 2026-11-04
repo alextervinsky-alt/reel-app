@@ -75,6 +75,10 @@ public struct PageContext: Equatable, Sendable {
             try! NSRegularExpression(pattern: multi + #",\s+(?:his|her|their|the|our|my)\s+(?:\w+\s+){0,3}(?:feature|film|picture|movie|documentary|series|short)\b"#),
             // "On The Quiet Ledger, a few years earlier, …" (an opening naming a production).
             try! NSRegularExpression(pattern: #"(?:^|[.!?]\s+)(?:On|For|With|During)\s+"# + multi + #","#),
+            // "the miniseries Dust", "the feature Low Country", "on the set of Kiln" (one word or more).
+            try! NSRegularExpression(pattern: #"\b(?:the|a|his|her|their|our|my)\s+(?:mini-?series|series|show|feature|film|documentary|commercial|short|movie|pilot|sequel|remake)\s+"#
+                                     + titled + #"(?=[\s,.;:!?)]|$)"#),
+            try! NSRegularExpression(pattern: #"\bon the set of\s+"# + titled),
         ]
         for paragraph in paragraphs {
             let range = NSRange(paragraph.startIndex..., in: paragraph)
@@ -118,14 +122,36 @@ public struct PageContext: Equatable, Sendable {
         options: [.caseInsensitive])
 
     /// The page's context for `title`. `pageTitle`/`url`: the page's own; `paragraphs`: its article.
+    /// A title of two words or more and eight letters or more ("World War Z") names the film by
+    /// itself; a short or common one ("Drive", "Heat", "Her") only as written, with a capital.
+    public static func isDistinctive(_ title: String) -> Bool {
+        let short = (title.split(separator: ":").first.map(String.init) ?? title).trimmingCharacters(in: .whitespaces)
+        return short.split(separator: " ").count >= 2 && short.filter(\.isLetter).count >= 8
+    }
+
+    /// Whether `text` names the film: any case for a distinctive title, as written for another
+    /// ("the drive for realism" isn't Drive).
+    public static func names(_ text: String, title: String) -> Bool {
+        if isDistinctive(title) { return TechSpecs.namesTitle(text, title: title) }
+        let short = (title.split(separator: ":").first.map(String.init) ?? title).trimmingCharacters(in: .whitespaces)
+        guard !short.isEmpty else { return false }
+        let pattern = #"(?<![\w’'])"# + NSRegularExpression.escapedPattern(for: short) + #"(?!\w)"#
+        return text.replacingOccurrences(of: "’", with: "'").range(of: pattern, options: .regularExpression) != nil
+    }
+
     public static func classify(pageTitle: String, url: URL, paragraphs: [String], title: String, otherTitles: [String],
-                                people: [String]) -> PageContext {
+                                people: [String], year: Int? = nil) -> PageContext {
         let address = url.path.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
-        let named = TechSpecs.namesTitle(pageTitle, title: title) || TechSpecs.namesTitle(address, title: title)
-            || CameraSources.isAbout(title: title, articleTitle: pageTitle, url: url.absoluteString)
+        // A short or common title in a page's title or address is the film's only when the page
+        // also gives its year or one of its people.
+        let body = paragraphs.joined(separator: " ")
+        let confirmed = isDistinctive(title) || year.map { body.contains(String($0)) } ?? false
+            || people.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 4 }.contains { body.contains($0) }
+        let named = confirmed && (names(pageTitle, title: title) || isDistinctive(title) && TechSpecs.namesTitle(address, title: title)
+            || CameraSources.isAbout(title: title, articleTitle: pageTitle, url: url.absoluteString) && names(pageTitle + " " + body, title: title))
         // Named outside a list of credits: "her credits include…" says nothing about the film.
         let naming = paragraphs.map { paragraph in
-            Digest.sentences(in: paragraph).contains { TechSpecs.namesTitle($0, title: title) && !isCreditList($0, title: title) }
+            Digest.sentences(in: paragraph).contains { names($0, title: title) && !isCreditList($0, title: title) }
         }
         let lede = naming.prefix(3).contains(true)
         let share = paragraphs.isEmpty ? 0 : Double(naming.filter { $0 }.count) / Double(paragraphs.count)
@@ -134,18 +160,16 @@ public struct PageContext: Equatable, Sendable {
         let others = productions(in: paragraphs, title: title, people: people)
         let heading = pageTitle + " " + address
         let range = NSRange(heading.startIndex..., in: heading)
-        // A page titled for a person or as news is about them, whatever it says of the film after.
-        let personal = people.contains { pageTitle.localizedCaseInsensitiveContains($0) } && !named
-            || profileCues.firstMatch(in: heading, range: range) != nil || corporateCues.firstMatch(in: heading, range: range) != nil
+        // A profile, an obituary or a news page is about its person or company, whatever it says of the
+        // film after (an interview titled with its subject's name isn't: it can be about the film).
+        let personal = profileCues.firstMatch(in: heading, range: range) != nil || corporateCues.firstMatch(in: heading, range: range) != nil
         if named && !otherTitled || (!otherTitled && !personal && lede && naming.filter { $0 }.count >= 2 && share >= 0.25) {
             return PageContext(kind: .targetFilm, anchored: paragraphs.reduce(0) { $0 + Digest.sentences(in: $1).count }, productions: others)
         }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
             : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
-        let count = paragraphs.reduce(0) { total, paragraph in
-            total + anchoring(paragraph, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction)
-                .filter { $0 }.count
-        }
+        let count = anchors(paragraphs, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction)
+            .joined().filter { $0 }.count
         return PageContext(kind: kind, anchored: count, productions: others)
     }
 
@@ -158,9 +182,19 @@ public struct PageContext: Equatable, Sendable {
     /// sentence on the film is about him, not the film).
     public static func anchoring(_ paragraph: String, title: String, otherTitles: [String], people: [String],
                                  inherit: Bool = true) -> [Bool] {
+        anchors([paragraph], title: title, otherTitles: otherTitles, people: people, inherit: inherit, acrossParagraphs: false).first ?? []
+    }
+
+    /// `anchoring` for a page's paragraphs in order. On an interview (`inherit`), the film stays the
+    /// subject from paragraph to paragraph ("We shot it on…" after a paragraph naming it) until
+    /// another production is named; on a profile or news page only what names it.
+    public static func anchors(_ paragraphs: [String], title: String, otherTitles: [String], people: [String],
+                               inherit: Bool = true, acrossParagraphs: Bool = true) -> [[Bool]] {
         var anchor = false
-        return Digest.sentences(in: paragraph).map { sentence in
-            let namesIt = TechSpecs.namesTitle(sentence, title: title)
+        return paragraphs.map { paragraph in
+            if !acrossParagraphs { anchor = false }
+            return Digest.sentences(in: paragraph).map { sentence in
+            let namesIt = names(sentence, title: title)
             let other = TechSpecs.namesAnotherFilm(sentence, title: title, otherTitles: otherTitles, people: people)
             if namesIt, !isCreditList(sentence, title: title) {
                 anchor = true
@@ -171,6 +205,7 @@ public struct PageContext: Equatable, Sendable {
                 return false
             }
             return inherit && anchor
+            }
         }
     }
 
