@@ -85,6 +85,8 @@ public struct PageContext: Equatable, Sendable {
                     // Gear, a company or a person isn't a production ("shot Sony Venice", "On Kodak Vision3").
                     let read = TechSpecs.read([name + " was used."])
                     if !read.specs.isEmpty || !read.mentioned.isEmpty || people.contains(where: { name.contains($0) || $0.contains(name) }) { continue }
+                    // A part of the film itself ("shot Part One on…") is the collection's rules' to judge.
+                    if name.range(of: #"^(?:Part|Chapter|Volume|Book|Episode|Act)\b"#, options: .regularExpression) != nil { continue }
                     // The shoot's own vocabulary isn't a title ("During Principal Photography,", "On Set Day").
                     let lowered = name.lowercased()
                     if ["photography", "production", "filming", "shoot", "location", "season", "week", "scene", "sequence", "night",
@@ -109,7 +111,7 @@ public struct PageContext: Equatable, Sendable {
 
     /// Profile and news cues in a page's title or address: what the page is when it isn't the film's.
     static let profileCues = try! NSRegularExpression(
-        pattern: #"\b(?:in memoriam|obituary|dies at|has died|remembering|tribute to|welcomes?|welcomed|joins?|joined|new (?:active |associate )?members?|membership|knighted|honou?red|lifetime achievement|appointed|career|retrospective|biography)\b"#,
+        pattern: #"\b(?:in memoriam|obituary|dies at|has died|remembering|tribute to|welcomes?|welcomed|joins?|joined|new (?:active |associate )?members?|members|membership|knighted|honou?red|lifetime achievement|appointed|career|retrospective|biography)\b"#,
         options: [.caseInsensitive])
     static let corporateCues = try! NSRegularExpression(
         pattern: #"\b(?:press release|appoint\w*|names? .+ (?:coo|ceo|cfo|head)|partners?(?:hip)? with|acquires?|acquisition|opens?|anniversary|turns \d+|edition|policy|careers|jobs|hiring|bio\b|announces?)\b"#,
@@ -139,8 +141,7 @@ public struct PageContext: Equatable, Sendable {
             return PageContext(kind: .targetFilm, anchored: paragraphs.reduce(0) { $0 + Digest.sentences(in: $1).count }, productions: others)
         }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
-            : profileCues.firstMatch(in: heading, range: range) != nil || people.contains(where: { pageTitle.localizedCaseInsensitiveContains($0) })
-                ? .contributorProfile : .otherProduction
+            : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
         let count = paragraphs.reduce(0) { total, paragraph in
             total + anchoring(paragraph, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction)
                 .filter { $0 }.count
