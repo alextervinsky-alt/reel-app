@@ -226,7 +226,11 @@ extension AppModel {
         let articleFailed = film.funFacts?.articleTitle != nil && article == nil && !articlesMissing.contains(details.id)
         let read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
                                        colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details), articleFailed: articleFailed)
-        let merged = CraftIndex.merging(old: current, new: read.index)
+        // A tab reading that wasn't researched (the background did it within the day) keeps the
+        // stored research rather than replacing it with "nothing searched".
+        var index = read.index
+        if reading?.research == nil, let kept = current?.research { index.research = kept }
+        let merged = CraftIndex.merging(old: current, new: index)
         // The same as kept: nothing to write (the log already says what's stored, and opening the
         // tab again doesn't put off a planned reading).
         if let current, current.version == merged.index.version, current.discovery == merged.index.discovery,

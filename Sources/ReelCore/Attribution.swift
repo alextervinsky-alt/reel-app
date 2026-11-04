@@ -145,8 +145,11 @@ public struct PageContext: Equatable, Sendable {
         // A short or common title in a page's title or address is the film's only when the page
         // also gives its year or one of its people.
         let body = paragraphs.joined(separator: " ")
-        let confirmed = isDistinctive(title) || year.map { body.contains(String($0)) } ?? false
-            || people.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 4 }.contains { body.contains($0) }
+        // In a paragraph that names it as written: the year or a credited surname beside the title.
+        let surnames = people.compactMap { $0.split(separator: " ").last.map(String.init) }.filter { $0.count >= 4 }
+        let confirmed = isDistinctive(title) || paragraphs.contains { paragraph in
+            names(paragraph, title: title) && (year.map { paragraph.contains(String($0)) } ?? false || surnames.contains { paragraph.contains($0) })
+        }
         let named = confirmed && (names(pageTitle, title: title) || isDistinctive(title) && TechSpecs.namesTitle(address, title: title)
             || CameraSources.isAbout(title: title, articleTitle: pageTitle, url: url.absoluteString) && names(pageTitle + " " + body, title: title))
         // Named outside a list of credits: "her credits include…" says nothing about the film.

@@ -92,8 +92,12 @@ final class AttributionTests: XCTestCase {
                                             paragraphs: ["The extension adds four stops.", "It ships in May."], title: "Drive", otherTitles: [],
                                             people: ["Ada Brisk"], year: 2011).aboutFilm)
         XCTAssertTrue(PageContext.classify(pageTitle: "Night Moves: Drive", url: URL(string: "https://example.org/drive/")!,
-                                           paragraphs: ["Ada Brisk shot it in 2011.", "It was all night work."], title: "Drive", otherTitles: [],
+                                           paragraphs: ["Ada Brisk shot Drive in 2011.", "It was all night work."], title: "Drive", otherTitles: [],
                                            people: ["Ada Brisk"], year: 2011).aboutFilm)
+        // The year somewhere on a page about something else doesn't make it the film's.
+        XCTAssertFalse(PageContext.classify(pageTitle: "Why Drive Matters in Lighting Design", url: URL(string: "https://example.org/why/")!,
+                                            paragraphs: ["Lighting changed a lot in 2011.", "Panels got brighter."], title: "Drive", otherTitles: [],
+                                            people: ["Ada Brisk"], year: 2011).aboutFilm)
     }
 
     func testATurnMustComeBackToThisFilm() {
@@ -104,6 +108,7 @@ final class AttributionTests: XCTestCase {
         }
         XCTAssertFalse(names("On Glass Rivers we used the ARRI Alexa Mini, but the lenses were Cooke S4.").contains { $0.contains("Cooke") })
         XCTAssertTrue(names("On Glass Rivers I shot 35mm film, but this time we chose the ARRI Alexa 65.").contains { $0.contains("65") })
+        XCTAssertFalse(names("On Glass Rivers we shot film, but we switched to the ARRI Alexa Mini for the night work.").contains { $0.contains("Mini") })
     }
 
     // MARK: Uncertainty on the property it qualifies

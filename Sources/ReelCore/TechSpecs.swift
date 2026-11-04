@@ -370,8 +370,8 @@ public struct TechSpecs: Equatable, Sendable {
                         let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
                             || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) }
                                 // "On Glass Rivers, I shot film, but this time we chose…": it turns to this film.
-                                // (Not "…, but the lenses were Cooke S4": the turn must come back to this film.)
-                                && sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here|we|our|us)\b|\bthis time\b|\bon this (?:one|film)\b"#,
+                                // (Not "…, but the lenses were Cooke S4", nor "but we switched…": the turn must name this film.)
+                                && sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here)\b|\bthis time\b|\bon this (?:one|film)\b"#,
                                                   options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
