@@ -102,7 +102,8 @@ final class ResearchBenchmarkTests: XCTestCase {
             // What was accepted: the sheet's gear and every observation.
             let notes = specs.approach + specs.intent + specs.references + specs.scenes + specs.challenges + specs.lighting
                 + specs.colour + specs.cameraLanguage + specs.cameraVFX + specs.sentences
-            let items: [(text: String, gear: String?)] = specs.specs.map { ($0.evidence, $0.name) } + notes.map { ($0.text, nil) }
+            var items: [(text: String, gear: String?)] = specs.specs.map { spec -> (text: String, gear: String?) in (text: spec.evidence, gear: spec.name) }
+            items += notes.map { note -> (text: String, gear: String?) in (text: note.text, gear: nil) }
             let readText = texts.flatMap { $0.sections.flatMap(\.paragraphs) }.joined(separator: "\n")
             for item in items {
                 m.accepted += 1
