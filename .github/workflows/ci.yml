@@ -27,6 +27,8 @@ jobs:
           else
             echo "::notice::$(grep -E 'Executed [0-9]+ tests' test.log | tail -1)"
           fi
+          # The research benchmark's measurements (synthetic films; see ResearchBenchmarkTests).
+          grep -E "^BENCH\| " test.log | sed -E 's/^BENCH\| //' | head -8 | while read -r l; do echo "::notice::BENCH ${l}"; done
           exit $code
 
   live-match:

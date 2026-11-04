@@ -85,7 +85,13 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// gear of the film's; what a VFX publication or vendor names isn't the camera package (no Shot
     /// on tag, camera or lens from it alone); each reading keeps where its research stands
     /// (`research`); how the photography served the effects is a part of its own.
-    public static let currentVersion = 16
+    /// 17 (1.10.8): a page that isn't about the film (a contributor's profile, an interview about
+    /// another production, a news or company page) is read only for what's anchored to the film
+    /// (`PageContext`), and not at all when nothing is; a guess sets aside only the gear it qualifies
+    /// (`TechSpecs.hedges`); of two sources naming the same gear, one that can establish it is kept
+    /// (`TechSpecs.tidy`); coverage is by research question (`ResearchQuestions`): found in part, not
+    /// applicable, and the film's article not answering are said so.
+    public static let currentVersion = 17
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
@@ -102,7 +108,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 6 (1.10.7): the film's camera, lighting and VFX people are known (`CraftCrew`); for what a
     /// reading is missing, bounded searches by person and on VFX sites (`ResearchPlan`); Wikipedia's
     /// links to VFX and technical publications and to archived copies of pages are read.
-    public static let currentDiscovery = 6
+    /// 7 (1.10.8): research plans by open question and by the providers that can answer it
+    /// (`ResearchEngine`, `ResearchProvider`): a dimension found in part is still researched for the
+    /// rest; questions that don't apply (camera and VFX for a film without effects) aren't searched.
+    public static let currentDiscovery = 7
     /// A reading found before this discovery version is replaced whole by a newer one (what it no
     /// longer reads is gone): finding changed then in ways the rules for one tag couldn't follow.
     /// From there on, a reading read again by a newer discovery version is merged tag by tag like
