@@ -236,11 +236,14 @@ public enum CraftCrew {
                               !shortTitle.contains(name) else { continue }
                         guard !known.contains(where: { $0.name == name }), !found.contains(where: { $0.name == name }) else { continue }
                         if !titled {
+                            // At most three words between them, the role's own words aside.
                             let near = changes.contains { change in
-                                let gap = change.lowerBound >= range.upperBound
-                                    ? sentence.distance(from: range.upperBound, to: change.lowerBound)
-                                    : sentence.distance(from: change.upperBound, to: range.lowerBound)
-                                return gap <= 40
+                                let between = change.lowerBound >= range.upperBound
+                                    ? String(sentence[range.upperBound..<change.lowerBound]) : String(sentence[change.upperBound..<range.lowerBound])
+                                let words = between.replacingOccurrences(of: #"(?i)\b(?:cinematographer|director of photography|DoP|DP|the|as)\b"#,
+                                                                         with: " ", options: .regularExpression)
+                                    .split { !$0.isLetter }
+                                return words.count <= 3
                             }
                             guard near else { continue }
                         }
