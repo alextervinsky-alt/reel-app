@@ -111,6 +111,7 @@ final class ResearchCoverageTests: XCTestCase {
             "Tom Ashby was the cinematographer.",
             // In passing, about other work: not this film's crew.
             "The director's longtime cinematographer Roberto Vane shot his earlier films.",
+            "The film was originally set in Seattle, where cinematographer Ola Strand had shot the director's debut.",
         ], sources: [
             "Like cinematographer Wally Pfister on his last thriller, Ashby kept the camera moving.",
             "For The Long Quarantine, cinematographer Ann Vey photographed the Budapest pick-ups.",
@@ -132,6 +133,9 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertNil(CraftCrew.speaker(in: "The director told Tom Ashby: “shoot every scene handheld and close to them.”", crew: crew))
         // Another person of the same name.
         XCTAssertNil(CraftCrew.speaker(in: "“It never settles,” said Martin Campbell of his own films.", crew: crew))
+        // The speaker named first: "Forster said Ashby brought…" is Forster's words.
+        XCTAssertNil(CraftCrew.speaker(in: "The director said Ashby brought “a documentary approach to every single setup.”", crew: crew))
+        XCTAssertEqual(CraftCrew.speaker(in: "“The camera never settles in the chase,” says Lena Marsh.", crew: crew)?.name, "Lena Marsh")
         // A title in quotes isn't someone's words.
         XCTAssertFalse(CraftCrew.quotes("Ashby shot “Mank” and this film back to back."))
         XCTAssertTrue(CraftCrew.quotes("“We kept the camera low for the whole of the chase,” he says."))
@@ -191,6 +195,14 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertEqual(CameraSources.archived(url)?.host, "www.awn.com")
         XCTAssertEqual(CameraSources.archived(url)?.path, "/vfxworld/inside")
         XCTAssertNil(CameraSources.archived(try XCTUnwrap(URL(string: "https://www.awn.com/vfxworld/inside"))))
+        // Found by a search and cited from the archive: one article, read at its own address.
+        let live = try XCTUnwrap(URL(string: "https://theasc.com/article/inside/"))
+        let copy = try XCTUnwrap(URL(string: "https://web.archive.org/web/20260606003457/https://theasc.com/article/inside/"))
+        XCTAssertEqual(CameraSources.identity(copy), CameraSources.identity(live))
+        let merged = CameraSources.merge([(url: copy, site: "American Cinematographer", title: nil, cited: nil)],
+                                         adding: [(url: live, site: "American Cinematographer", title: "Inside", cited: nil)])
+        XCTAssertEqual(merged.links.map(\.url), [live])
+        XCTAssertEqual(merged.aliases.map(\.url), [copy])
     }
 
     func testAPageInAnotherLanguageIsSaidSo() async throws {
@@ -344,6 +356,10 @@ final class ResearchCoverageTests: XCTestCase {
         // A site of the first pass that didn't answer: not a verdict on anything not found.
         XCTAssertEqual(Set(ResearchCoverage.entries(found: [.camera], run: nil, readSomething: true, languageLimited: false, unavailable: true)
             .filter { $0.dimension != .camera }.map(\.state)), [.unavailable])
+        // A search this reading made still says what it came to while a site of the first pass is down.
+        let searched = ResearchRun(missing: [.lighting], outcomes: [ResearchOutcome(query: query(.lighting, "b"), result: .noCandidate(2))])
+        XCTAssertEqual(ResearchCoverage.entries(found: [], run: searched, readSomething: true, languageLimited: false, unavailable: true)
+            .first { $0.dimension == .lighting }?.state, .searchedNoSource)
     }
 
     func testAPageThatDidntAnswerIsNotKeptQuiet() {

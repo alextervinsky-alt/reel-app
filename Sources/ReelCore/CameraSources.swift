@@ -238,7 +238,9 @@ public enum CameraSources {
     /// trailing "/" and the query without tracking tags, whatever the scheme; and an article a site
     /// publishes under more than one address the same article (see `articleAliases`).
     public static func identity(_ url: URL) -> String {
-        let address = addressIdentity(url)
+        // An archived copy is the article it keeps (1.10.7): found by a search and cited from the
+        // archive, it's read once.
+        let address = addressIdentity(archived(url).map(secure) ?? url)
         for alias in articleAliases {
             if let range = address.range(of: alias.pattern, options: .regularExpression), range == address.startIndex..<address.endIndex {
                 return address.replacingOccurrences(of: alias.pattern, with: alias.article, options: .regularExpression)
@@ -293,7 +295,8 @@ public enum CameraSources {
                 foundTwice.append(link)
                 continue
             }
-            if !isCanonical(same.url), isCanonical(link.url) {
+            // The publication's own address over another; the live page over an archived copy.
+            if !isCanonical(same.url) && isCanonical(link.url) || archived(same.url) != nil && archived(link.url) == nil {
                 aliases.append(same)
                 kept[index] = (url: link.url, site: link.site, title: link.title ?? same.title, cited: link.cited)
             } else {
@@ -1347,7 +1350,7 @@ public struct CameraSourcesClient: Sendable {
                 let distinctive = filmTitleShort.split(separator: " ").count >= 2 && filmTitleShort.filter(\.isLetter).count >= 8
                 let folded = " " + CameraSources.fold(filmTitleShort) + " "
                 let people = (cinematographers + directors + crew.map(\.name)).compactMap { $0.split(separator: " ").last.map(String.init) }
-                    .filter { $0.count >= 3 }
+                    .filter { $0.count >= 4 }
                 let namesFilm: Bool
                 if distinctive {
                     namesFilm = (" " + body + " ").contains(folded) || (" " + CameraSources.fold(fetched.title) + " ").contains(folded)
