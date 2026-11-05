@@ -410,7 +410,7 @@ public struct TechSpecs: Equatable, Sendable {
                                                   options: [.regularExpression, .caseInsensitive]) == nil)
                             // "In 2007 Doe and Example collaborated on Glass Rivers.", "Glass Rivers (2007) was…",
                             // "her previous feature…": another production named as such, not this film (1.10.9).
-                            || (!namesTitle(sentence, title: title) && matches(namedAsAnotherProduction, main)
+                            || (!namesTitle(sentence, title: title) && (matches(namedAsAnotherProduction, main) || describesAnotherFilm(main, title: title))
                                 && main.range(of: #"\bthis (?:time|film|one|movie|picture)\b|\bhere\b"#, options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
@@ -1863,6 +1863,25 @@ public struct TechSpecs: Equatable, Sendable {
     /// Another production named as such, plainly (1.10.9): "collaborated on Glass Rivers", "the 2007
     /// feature Glass Rivers", "her previous feature, Glass Rivers", "Glass Rivers (2007)". Not "his film".
     static let namedAsAnotherProduction = try! NSRegularExpression(pattern: #"\b(?i:his|her|their|my|our)\s+(?:graduation|student|thesis|previous|earlier|next|other)\s+(?:short\s+)?(?:film|feature|short|project|picture|documentary)\b|\banother\s+(?:feature|film|movie|production|picture|project)[,:]?\s+[A-Z]|\b(?:his|her|their)\s+(?:follow-up|next one)\b|\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\s+[A-Z]|\b(?:an earlier|a previous|the previous|previous|earlier)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b,?\s+[A-Z]|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
+    /// "On the bakery film, we used…": a production called by what it's about. Another one unless that
+    /// word is in this film's title ("Crosswind Bakery"); never a genre or a description of a film
+    /// ("the war film", "the reversal film", "the motion picture").
+    static let describedFilm = try! NSRegularExpression(
+        pattern: #"\b(?i:on|for)\s+the\s+([a-z]+)\s+(?:film|movie|picture|shoot)\b"#)
+    static let notADescription: Set<String> = [
+        "film", "movie", "feature", "shoot", "picture", "production", "set", "day", "night", "first", "last", "whole", "entire", "main", "final", "finished", "same", "new", "current", "location", "studio", "short", "big", "actual", "real", "full", "original", "digital", "analog", "analogue", "black", "color", "colour", "silent", "documentary", "indie", "independent", "other", "earlier", "later", "previous", "next", "period", "second", "third", "this", "that", "war", "horror", "heist", "musical", "action", "crime", "comedy", "drama", "western", "thriller", "romance", "romantic", "animated", "animation", "motion", "reversal", "negative", "still", "test", "camera", "student", "feature-length", "art", "arthouse", "genre", "family", "kids", "children's", "sports", "fantasy", "mystery", "noir", "disaster", "spy", "monster", "superhero", "biopic", "historical", "costume", "road", "buddy", "teen", "coming-of-age", "zombie", "vampire", "space", "low-budget", "big-budget", "studio-era", "foreign", "local", "british", "french", "american", "two", "three", "one", "single", "principal", "reshoot", "pickup", "additional",
+    ]
+    static func describesAnotherFilm(_ text: String, title: String) -> Bool {
+        let titleWords = Set(TitleMatch.key(title).split(separator: " ").map(String.init))
+        for match in describedFilm.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range(at: 1), in: text) else { continue }
+            let word = text[range].lowercased()
+            if notADescription.contains(word) || titleWords.contains(word) { continue }
+            return true
+        }
+        return false
+    }
+
     /// Another production named: "his 2007 feature Glass Rivers", "her previous film", "Glass Rivers (2007)".
     static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
 
