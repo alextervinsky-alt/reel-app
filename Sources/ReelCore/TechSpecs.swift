@@ -410,7 +410,7 @@ public struct TechSpecs: Equatable, Sendable {
                                                   options: [.regularExpression, .caseInsensitive]) == nil)
                             // "In 2007 Doe and Example collaborated on Glass Rivers.", "Glass Rivers (2007) was…",
                             // "her previous feature…": another production named as such, not this film (1.10.9).
-                            || (!namesTitle(sentence, title: title) && (matches(namedAsAnotherProduction, main) || describesAnotherFilm(main, title: title))
+                            || (!namesTitle(sentence, title: title) && (matches(namedAsAnotherProduction, main) || describesAnotherFilm(main, title: title ?? ""))
                                 && main.range(of: #"\bthis (?:time|film|one|movie|picture)\b|\bhere\b"#, options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
