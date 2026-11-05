@@ -1286,7 +1286,12 @@ public struct TechSpecs: Equatable, Sendable {
             if let found = before.range(of: mark, options: .backwards), found.upperBound > clauseStart { clauseStart = found.upperBound }
         }
         let clause = String(before[clauseStart...]).replacingOccurrences(of: "not only", with: "")
-        if clause.range(of: deniedBefore, options: .regularExpression) != nil { return true }
+        if let found = clause.range(of: deniedBefore, options: .regularExpression) {
+            // Tested, and the sentence says it was then adopted ("…and the Hawks went on to shoot the
+            // whole film", 1.10.9): used, not set aside.
+            let tested = clause[found].range(of: #"^(?:tests? of|testing|tested)$"#, options: .regularExpression) != nil
+            if !(tested && ClaimFrame.adopted.firstMatch(in: after, range: NSRange(after.startIndex..., in: after)) != nil) { return true }
+        }
         if clause.range(of: planBefore, options: .regularExpression) != nil, after.range(of: planKept, options: .regularExpression) == nil {
             return true
         }
@@ -1323,7 +1328,7 @@ public struct TechSpecs: Equatable, Sendable {
     }
 
     static let clauseBreaks = [",", ";", ":", " — ", " – ", "(", ")", ". ", " but ", " while ", " whereas ", " although ", " though "]
-    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|planned to|plans to|hoped to|would have|could have|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|(?:initially|originally|at first) (?:wanted|planned|intended|hoped)|tests? of|testing|tested|versus|vs|compared (?:to|with)|lack(?:ed)? of|shortage of|short of|too (?:many|few) [a-z ]{0,40}enough|unable to (?:get|find|source)|couldn't (?:get|find|source)|prefer(?:s|red)?\s+(?!to\b)[^,;]{1,60}?\s+to|(?:better |best )?suited to|inspired by|influenced by|reminiscent of|evocative of|akin to|similar to)\b|n't\b"#
+    static let deniedBefore = #"\b(?:not|never|without|instead of|rather than|unlike|as opposed to|considered|contemplated|hoped to|would have(?! to)|could have(?! to)|had wanted to|originally intended|if|previous(?:ly)?|earlier films?|last film|next film|(?:decided|decision|chose|choosing|opted|argued|ruled) against|(?:initially|originally|at first) (?:wanted|planned|intended|hoped)|tests? of|testing|tested|versus|vs|compared (?:to|with)|lack(?:ed)? of|shortage of|short of|too (?:many|few) [a-z ]{0,40}enough|unable to (?:get|find|source)|couldn't (?:get|find|source)|prefer(?:s|red)?\s+(?!to\b)[^,;]{1,60}?\s+to|(?:better |best )?suited to|inspired by|influenced by|reminiscent of|evocative of|akin to|similar to)\b|n't\b"#
 
     /// What the film was finished or shown on, said in the clause: not what it was shot on.
     /// Film-out, the process of printing a digital finish back to film: written "film-out"; "film
@@ -2114,7 +2119,7 @@ public struct TechSpecs: Equatable, Sendable {
         Rule(.light, #"\bStageCraft\b|\bLED\s+volume\b"#, name: "LED volume"),
         Rule(.light, #"\bcandlelight\b|\bcandlelit\b|\blit\s+(?:\w+\s+){0,3}(?:by|with)\s+candles?\b"#, name: "Candlelight"),
         Rule(.light, #"\b(?:natural|available)\s+light(?:ing)?\b"#, name: "Natural light"),
-        Rule(.light, #"\bpractical\s+(?:lights?|lighting|lamps?|sources?)\b|\bpracticals\b"#, name: "Practicals"),
+        Rule(.light, #"\bpractical\s+(?:lights?|lighting|lamps?|sources?|fixtures?|units?|bulbs?)\b|\bpracticals\b"#, name: "Practicals"),
         Rule(.light, #"\b(?:magic|golden)\s+hour\b"#, name: "Magic hour"),
         Rule(.light, #"\bblue\s+hour\b"#, name: "Blue hour"),
         Rule(.light, #"\bnegative\s+fill\b"#, name: "Negative fill"),

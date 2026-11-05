@@ -161,7 +161,7 @@ final class SourceReconciliationTests: XCTestCase {
         _ = try JSONDecoder().decode(LibraryFile.self, from: Data(contentsOf: file))
         XCTAssertEqual(try Data(contentsOf: file), original)
         // Written by this Reel: version 5, which a 1.10.8 (version 4) Reel treats as newer and never writes over.
-        let written = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any])
+        let written = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(LibraryFile(films: decoded.films))) as? [String: Any])
         XCTAssertEqual(written["version"] as? Int, 5)
     }
 

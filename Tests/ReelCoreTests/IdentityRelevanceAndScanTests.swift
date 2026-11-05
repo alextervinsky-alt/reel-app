@@ -77,9 +77,10 @@ final class IdentityRelevanceAndScanTests: XCTestCase {
     func testADownloadRecordIsDroppedOnlyByACompleteScan() {
         let partial = entry("Pig.2021.1080p.mkv.crdownload")
         let other = entry("Pig.2021.1080p.mkv", drive: "Backup")
-        let library = [partial, other]
+        let neighbour = entry("Quiet.Harbour.2022.mkv", tmdb: 8)
+        let library = [partial, other, neighbour]
         // A complete scan that no longer lists it (or still lists it): Reel's record of it goes.
-        for files in [[ScannedFile](), [scanned("Pig.2021.1080p.mkv.crdownload")]] {
+        for files in [[scanned("Quiet.Harbour.2022.mkv")], [scanned("Quiet.Harbour.2022.mkv"), scanned("Pig.2021.1080p.mkv.crdownload")]] {
             let scan = DriveScan(files: files)
             XCTAssertEqual(ScanVerdict.of(scan, driveID: "Main", known: library, driveStillThere: true), .apply)
             let after = LibraryMerge.apply(scan: scan.files, driveID: "Main", to: library, now: Date())
@@ -87,9 +88,9 @@ final class IdentityRelevanceAndScanTests: XCTestCase {
             XCTAssertTrue(after.contains { $0.fileName == "Pig.2021.1080p.mkv" && $0.driveID == "Backup" }, "the film's other copy stays")
         }
         // An incomplete scan keeps everything it didn't see, the record included.
-        let unreadable = DriveScan(files: [], unreadable: ["Films"])
+        let unreadable = DriveScan(files: [scanned("Quiet.Harbour.2022.mkv")], unreadable: ["Films"])
         XCTAssertEqual(ScanVerdict.of(unreadable, driveID: "Main", known: library, driveStillThere: true), .keepUnseen(unreadable: ["Films"]))
-        let kept = LibraryMerge.apply(scan: [], driveID: "Main", to: library, now: Date(), keepingUnseen: true)
+        let kept = LibraryMerge.apply(scan: unreadable.files, driveID: "Main", to: library, now: Date(), keepingUnseen: true)
         XCTAssertTrue(kept.contains { $0.fileName.hasSuffix(".crdownload") })
         // A drive gone or a cancelled scan uses nothing.
         XCTAssertEqual(ScanVerdict.of(DriveScan(files: []), driveID: "Main", known: library, driveStillThere: false), .discard(.driveGone))
