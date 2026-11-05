@@ -591,7 +591,7 @@ public enum ClaimFrame {
             if negation, let tail = between.range(of: #"(\w+)\s+(?:on|in|at|for|during|from|inside|aboard)\s+(?:the|a|an|his|her|their|our|my|this|that)?\s*$"#,
                                                    options: [.regularExpression, .caseInsensitive]) {
                 let noun = between[tail].split(separator: " ").first.map { $0.lowercased() } ?? ""
-                adjunct = !["budget", "time", "room", "space", "money", "need", "permission", "permit", "chance", "opportunity", "reason",
+                adjunct = !["budget", "time", "room", "space", "money", "need", "permission", "chance", "opportunity", "reason",
                             "patience", "appetite", "call", "use", "place", "funds", "means", "access", "manpower", "power"].contains(noun)
             }
             if !excepted, !adjunct,
