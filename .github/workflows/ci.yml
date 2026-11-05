@@ -16,7 +16,7 @@ jobs:
         run: |
           swift test --filter LiveDiagnosisTests 2>&1 | tee diag.log | tail -5
           grep "^DIAG| " diag.log > diag.txt || true
-          wc -l diag.txt
+          cat diag.txt
       - uses: actions/upload-artifact@v4
         with:
           name: diag
