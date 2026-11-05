@@ -1867,9 +1867,9 @@ public struct TechSpecs: Equatable, Sendable {
     /// word is in this film's title ("Crosswind Bakery"); never a genre or a description of a film
     /// ("the war film", "the reversal film", "the motion picture").
     static let describedFilm = try! NSRegularExpression(
-        pattern: #"\b(?i:on|for)\s+the\s+([a-z]+)\s+(?:film|movie|picture|shoot)\b"#)
+        pattern: #"\b(?i:on|for)\s+the\s+([a-z]+)\s+(?:film|movie|picture)\b(?!\s+(?:sequence|scene|section|part|stock|look|format|camera))"#)
     static let notADescription: Set<String> = [
-        "film", "movie", "feature", "shoot", "picture", "production", "set", "day", "night", "first", "last", "whole", "entire", "main", "final", "finished", "same", "new", "current", "location", "studio", "short", "big", "actual", "real", "full", "original", "digital", "analog", "analogue", "black", "color", "colour", "silent", "documentary", "indie", "independent", "other", "earlier", "later", "previous", "next", "period", "second", "third", "this", "that", "war", "horror", "heist", "musical", "action", "crime", "comedy", "drama", "western", "thriller", "romance", "romantic", "animated", "animation", "motion", "reversal", "negative", "still", "test", "camera", "student", "feature-length", "art", "arthouse", "genre", "family", "kids", "children's", "sports", "fantasy", "mystery", "noir", "disaster", "spy", "monster", "superhero", "biopic", "historical", "costume", "road", "buddy", "teen", "coming-of-age", "zombie", "vampire", "space", "low-budget", "big-budget", "studio-era", "foreign", "local", "british", "french", "american", "two", "three", "one", "single", "principal", "reshoot", "pickup", "additional",
+        "film", "movie", "feature", "shoot", "picture", "production", "set", "day", "night", "first", "last", "whole", "entire", "main", "final", "finished", "same", "new", "current", "location", "studio", "short", "big", "actual", "real", "full", "original", "digital", "analog", "analogue", "black", "color", "colour", "silent", "documentary", "indie", "independent", "other", "earlier", "later", "previous", "next", "period", "second", "third", "this", "that", "war", "horror", "heist", "musical", "action", "crime", "comedy", "drama", "western", "thriller", "romance", "romantic", "animated", "animation", "motion", "reversal", "negative", "still", "test", "camera", "student", "feature-length", "art", "arthouse", "genre", "family", "kids", "children's", "sports", "fantasy", "mystery", "noir", "disaster", "spy", "monster", "superhero", "biopic", "historical", "costume", "road", "buddy", "teen", "coming-of-age", "zombie", "vampire", "space", "low-budget", "big-budget", "studio-era", "foreign", "local", "british", "french", "american", "two", "three", "one", "single", "debut", "underwater", "aerial", "car", "plate", "stunt", "principal", "reshoot", "pickup", "additional",
     ]
     static func describesAnotherFilm(_ text: String, title: String) -> Bool {
         let titleWords = Set(TitleMatch.key(title).split(separator: " ").map(String.init))
@@ -1877,6 +1877,10 @@ public struct TechSpecs: Equatable, Sendable {
             guard let range = Range(match.range(at: 1), in: text) else { continue }
             let word = text[range].lowercased()
             if notADescription.contains(word) || titleWords.contains(word) { continue }
+            // Adjectives describe the film ("the biographical film", "the opening film", "the animated
+            // film"): only a noun names what another film is about ("the bakery film").
+            if ["al", "ic", "ive", "ous", "ary", "ing", "ed", "ful", "less", "ish", "ian", "ese", "ern", "est", "er"].contains(where: { word.hasSuffix($0) }),
+               word.count > 4 { continue }
             return true
         }
         return false
