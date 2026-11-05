@@ -201,7 +201,9 @@ public enum SourceReconciliation {
             if settled.status == .carried || settled.status == .pending {
                 if settled.misses > CraftIndex.maxRetries {
                     settled.status = .retired
-                    settled.reason = (outcome.reason.map { $0 + "; " } ?? "") + "not settled in \(CraftIndex.maxRetries) readings"
+                    settled.reason = outcome.reason?.hasPrefix("not in what was read") == true
+                        ? "no longer in \(old.source) (\(CraftIndex.maxRetries) readings)"
+                        : (outcome.reason.map { $0 + "; " } ?? "") + "not settled in \(CraftIndex.maxRetries) readings"
                 }
             }
             if seen.insert(settled.key).inserted { claims.append(settled) }
@@ -243,15 +245,21 @@ public enum SourceReconciliation {
         let fetched = input.fetched[old.site] ?? []
         if paragraphs == nil && fetched.isEmpty {
             if input.unanswered.contains(old.site) { return (.carried, "\(old.site) didn't answer", false) }
-            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", false) }
+            // An incomplete page (a shell, an article that couldn't be told apart) is counted, as it
+            // is for Shot on tags (`CraftIndex.merging`): a page that never comes whole doesn't keep a
+            // finding for good.
+            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", true) }
             return (.carried, "\(old.source) wasn't found again", true)
         }
         let text = (paragraphs ?? []) + fetched.flatMap { $0 }
         guard contains(text, passage: passage) else {
             // Read in full and the passage isn't there: the page no longer says it (unless its page
             // came incomplete, which isn't a full reading).
-            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", false) }
-            return (.retired, "no longer in \(old.source)", false)
+            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", true) }
+            // Sources are labelled by site, so another article of the same site may have been read
+            // in its place: not shown, and retired only when `CraftIndex.maxRetries` readings in a row
+            // don't find it (a reading that finds it again confirms it).
+            return (.pending, "not in what was read from \(old.source)", true)
         }
         // The passage is there: what do these rules say of it? For a Shot on tag, only gear in the
         // passage that gives that tag speaks to it ("film" isn't ruled out by a denied Steadicam).
@@ -261,6 +269,10 @@ public enum SourceReconciliation {
             return old.kind == kind.rawValue && sameName(name, old.name) || old.kind == "name" && sameName(name, old.name)
         }
         if input.accepted.contains(where: { names($0.kind, $0.name) && samePassage($0.evidence ?? "", passage) && (tag == nil || $0.capture) }) {
+            // A tag this reading didn't settle on, though the passage still gives it: kept, not shown.
+            if let tag, input.shotOn[tag] == nil {
+                return (.pending, "the passage still says it, but this reading's tags don't include it", false)
+            }
             return (.confirmed, nil, false)
         }
         if let ruled = input.judged.first(where: { names($0.kind, $0.name) && samePassage($0.evidence, passage) }) {

@@ -442,9 +442,15 @@ public struct ResearchContext: Sendable {
             sentences.contains { regex.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) != nil }
         }
         // A sentence saying there were no effects ("no CGI was created") never establishes them.
-        let effects = sentences.contains { sentence in
-            let range = NSRange(sentence.startIndex..., in: sentence)
-            return Self.effectsWork.firstMatch(in: sentence, range: range) != nil && Self.noEffects.firstMatch(in: sentence, range: range) == nil
+        // Read clause by clause: "There was no CGI in the dogfights, though a studio created 2,400 VFX
+        // shots" has effects work in its second part.
+        let parts = sentences.flatMap { sentence in
+            sentence.replacingOccurrences(of: #",\s*(?:though|but|although|while|yet|whereas)\b|;"#, with: "\u{1}", options: [.regularExpression, .caseInsensitive])
+                .components(separatedBy: "\u{1}")
+        }
+        let effects = parts.contains { part in
+            let range = NSRange(part.startIndex..., in: part)
+            return Self.effectsWork.firstMatch(in: part, range: range) != nil && Self.noEffects.firstMatch(in: part, range: range) == nil
         }
         if crew.contains(where: { $0.role == .vfxSupervisor }) || !specs.cameraVFX.isEmpty || effects {
             vfxRelevance = .established

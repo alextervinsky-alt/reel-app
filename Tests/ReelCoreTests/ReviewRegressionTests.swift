@@ -44,16 +44,67 @@ final class ReviewRegressionTests: XCTestCase {
         XCTAssertEqual(reason("The Alexa 35 offers 17 stops of dynamic range and ARRIRAW recording.", "ARRIRAW", .format), .productCapability)
     }
 
+    /// Round 2: vendor credits, negations with exceptions, a negated object that isn't the gear.
+    func testVendorCreditsAndNegationExceptionsAreNotSetAside() {
+        let cases: [(String, String, TechSpecs.Kind)] = [
+            ("Panavision provided the C-series anamorphic lenses and two Millennium XL2 bodies.", "Millennium XL2", .camera),
+            ("Panavision Woodland Hills provided the Primo 70 lenses.", "Primo 70", .lens),
+            ("Keslow Camera provided the Alexa Mini LF.", "Alexa Mini LF", .camera),
+            ("ARRI Rental supplied the Alexa 65 and delivered the Prime 65 lenses.", "Prime 65", .lens),
+            ("The camera department delivers the Alexa Mini LF to set every morning.", "Alexa Mini LF", .camera),
+            ("The lens package offered a choice of Cooke S4s and Panavision Primos.", "Cooke S4s", .lens),
+            ("It allowed Doe to use SkyPanels everywhere.", "SkyPanels", .light),
+            ("We didn't use any lights except a single SkyPanel.", "SkyPanel", .light),
+            ("Doe didn't bring anything other than the Alexa Mini and two Cooke primes.", "Alexa Mini", .camera),
+            ("We didn't need more than two SkyPanels for the kitchen.", "SkyPanels", .light),
+            ("Doe wouldn't shoot on anything other than 35mm film.", "35mm", .format),
+            ("We didn't have a big crew on the Technocrane days.", "Technocrane", .support),
+            ("We didn't want anything fancy, so a single Steadicam did most of the work.", "Steadicam", .support),
+            ("We shot the night scenes without a permit on the Alexa Mini.", "Alexa Mini", .camera),
+        ]
+        for (sentence, gear, kind) in cases {
+            XCTAssertNil(reason(sentence, gear, kind), sentence)
+        }
+        // Another production's habit or a period's practice is still set aside.
+        let practice: [(String, String, TechSpecs.Kind)] = [
+            ("His usual lenses are Cooke S4s, but for this film he chose Panavision Primos.", "Cooke S4s", .lens),
+            ("Her go-to camera is the Alexa Mini, but this time she chose the Sony Venice.", "Alexa Mini", .camera),
+            ("Doe normally shoots on the Alexa Mini, but here she chose the Venice.", "Alexa Mini", .camera),
+            ("Everyone shot on film back then; Doe shot this one digitally.", "film", .format),
+            ("In the seventies everyone shot anamorphic.", "anamorphic", .lens),
+        ]
+        for (sentence, gear, kind) in practice {
+            XCTAssertEqual(reason(sentence, gear, kind), .otherPractice, sentence)
+        }
+        // …and the film's own choice in the same sentence stands.
+        XCTAssertNil(reason("His usual lenses are Cooke S4s, but for this film he chose Panavision Primos.", "Panavision Primos", .lens))
+    }
+
+    /// The same statements read whole: the gear isn't judged away.
+    func testVendorCreditsSurviveTheWholeReading() {
+        let sentences = ["Panavision provided the C-series anamorphic lenses and two Millennium XL2 bodies for The Quiet Harbour.",
+                         "Keslow Camera provided the Alexa Mini LF that Jane Doe used for The Quiet Harbour."]
+        let specs = TechSpecs.read(texts: [TechSpecs.Text(source: "Lens Weekly", paragraphs: sentences)], cinematographers: ["Jane Doe"],
+                                   directors: ["Carl Example"], year: 2022, title: "The Quiet Harbour")
+        XCTAssertFalse(specs.judged.contains { $0.reason == .productCapability }, "\(specs.judged.map { "\($0.name): \($0.reason)" })")
+        let practice = TechSpecs.read(texts: [TechSpecs.Text(source: "Lens Weekly", paragraphs: [
+            "Jane Doe's usual lenses are Cooke S4s, but for The Quiet Harbour she chose Panavision Primos."])],
+                                      cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022, title: "The Quiet Harbour")
+        XCTAssertFalse(practice.specs.contains { $0.name.lowercased().contains("cooke") }, "\(practice.specs.map(\.name))")
+    }
+
     func testNamedAsAnotherProductionIsNotEveryFilmNoun() {
         let regex = TechSpecs.namedAsAnotherProduction
         func matches(_ text: String) -> Bool { regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil }
         for text in ["Her latest film was shot on the Alexa 35.", "On the location shoot they used SkyPanels.",
                      "In the finished film, the grain is visible.", "It was the first film Doe shot on 65mm.",
-                     "For the short film sequence they used a Bolex."] {
+                     "For the short film sequence they used a Bolex.", "For the war film, Doe chose the Alexa Mini LF.",
+                     "On the musical feature, she used SkyPanels.", "They shot on the reversal film Ektachrome 100D.",
+                     "Kodak was selected for the motion picture."] {
             XCTAssertFalse(matches(text), text)
         }
         for text in ["Her graduation film was shot on 16mm.", "In 2007 Doe and Example collaborated on Glass Rivers.",
-                     "On the bakery film, she used tungsten."] {
+                     "Her previous feature, Glass Rivers, was shot on 16mm."] {
             XCTAssertTrue(matches(text), text)
         }
     }
@@ -88,6 +139,7 @@ final class ReviewRegressionTests: XCTestCase {
         XCTAssertEqual(relevance(["The lighting was all practical."]), .unknown, "practical lighting says nothing of effects")
         XCTAssertEqual(relevance(["The stunts were all practical effects."]), .notApplicable)
         XCTAssertEqual(relevance(["The stunts were all practical, but a Glasgow studio composited 300 visual effects shots."]), .established)
+        XCTAssertEqual(relevance(["There was no CGI in the dogfights, though a Glasgow studio created 2,400 VFX shots for the film."]), .established)
     }
 
     // MARK: V13 — titles
@@ -146,7 +198,7 @@ final class ReconciliationReviewTests: XCTestCase {
                         read: ["Lens Weekly": [lens]], unanswered: ["Grip Notes"]), now: now)
         let byLens = second.first { $0.kind == "shotOn" && $0.source == "Lens Weekly" }
         let byGrip = second.first { $0.kind == "shotOn" && $0.source == "Grip Notes" }
-        XCTAssertNotEqual(byLens?.status, .retired, "a denied Steadicam doesn't speak to film")
+        XCTAssertEqual(byLens?.status, .pending, "a denied Steadicam doesn't speak to film: not retired, not settled")
         XCTAssertEqual(byGrip?.status, .carried)
         XCTAssertTrue(second.contains { $0.kind == "shotOn" && $0.supports })
 
@@ -175,7 +227,14 @@ final class ReconciliationReviewTests: XCTestCase {
         let shell = SourceReconciliation.reconcile(previous: previous([confirmed]),
                                                    with: input(read: ["Grip Notes": ["Menu"]], incomplete: ["Grip Notes"]), now: now)
         XCTAssertEqual(shell.first?.status, .carried)
-        XCTAssertEqual(shell.first?.misses, 1, "an incomplete page uses up no try")
+        XCTAssertEqual(shell.first?.misses, 2, "an incomplete page uses up a try, as for tags: a page that's always a shell doesn't keep it for good")
+        let still = CraftIndex.Claim(name: "SkyPanels", kind: "light", text: grip, source: "Grip Notes", status: .carried,
+                                     since: then, rules: 18, misses: CraftIndex.maxRetries)
+        let given = SourceReconciliation.reconcile(previous: previous([still]),
+                                                   with: input(read: ["Grip Notes": ["Menu"]], incomplete: ["Grip Notes"]), now: now)
+        XCTAssertEqual(given.first?.status, .retired)
+        let down = SourceReconciliation.reconcile(previous: previous([still]), with: input(unanswered: ["Grip Notes"]), now: now)
+        XCTAssertEqual(down.first?.status, .carried, "a site that's down uses up no try")
     }
 
     /// The outcome is the same whatever order the reading's statements and the earlier findings come in.
@@ -206,6 +265,35 @@ final class ReconciliationReviewTests: XCTestCase {
         XCTAssertEqual(merged.index.shotOn, [.film], "carried while its site is down")
         XCTAssertTrue(merged.index.names.contains("SkyPanels"))
         XCTAssertFalse(merged.index.names.contains("Technocrane"), "retired by this reading")
+    }
+
+    /// N4: a tag whose stored source is retired stands on another source still carried.
+    func testATagStandsOnAnotherSourceStillCarried() {
+        let old = CraftIndex(readAt: then, shotOn: [.film], names: ["35 mm"],
+                             evidence: [CraftIndex.Evidence(shotOn: .film, text: lens, source: "Lens Weekly")], read: ["Lens Weekly", "Grip Notes"])
+        var new = CraftIndex(readAt: now, shotOn: [], names: [], read: ["Lens Weekly"], unanswered: ["Grip Notes"])
+        new.claims = [
+            CraftIndex.Claim(name: ShotOn.film.rawValue, kind: "shotOn", text: lens, source: "Lens Weekly", status: .retired,
+                             reason: ClaimReason.otherProduction.label, since: then, rules: 18),
+            CraftIndex.Claim(name: ShotOn.film.rawValue, kind: "shotOn", text: grip, source: "Grip Notes", status: .carried,
+                             reason: "Grip Notes didn't answer", since: then, rules: 18),
+        ]
+        let merged = CraftIndex.merging(old: old, new: new, now: now)
+        XCTAssertEqual(merged.index.shotOn, [.film])
+        XCTAssertEqual(merged.index.evidence.first?.source, "Grip Notes")
+        // Without the other source, the retired one drops it.
+        new.claims = [new.claims![0]]
+        XCTAssertEqual(CraftIndex.merging(old: old, new: new, now: now).index.shotOn, [])
+    }
+
+    /// N12: a tag whose passage is still accepted but which this reading didn't settle on is pending,
+    /// not silently dropped.
+    func testATagNotSettledOnIsPending() {
+        let first = CraftIndex.Claim(name: ShotOn.film.rawValue, kind: "shotOn", text: lens, source: "Lens Weekly", status: .confirmed,
+                                     since: then, rules: 18)
+        let result = SourceReconciliation.reconcile(previous: previous([first]),
+                                                    with: input(accepted: [capture(lens, "Lens Weekly")], read: ["Lens Weekly": [lens]]), now: now)
+        XCTAssertEqual(result.first { $0.kind == "shotOn" }?.status, .pending)
     }
 
     /// V14, V15: an unknown status reads as pending; names match exactly or by a plural.

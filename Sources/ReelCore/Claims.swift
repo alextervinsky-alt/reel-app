@@ -216,7 +216,7 @@ public struct ComparisonFrame: Sendable {
         Self.memo.lock.lock()
         let known = Self.memo.frames[key]
         Self.memo.lock.unlock()
-        if let known {
+        if let known, known.original.count == sentence.count {
             // Positions carried over by offset into this copy of the sentence.
             let spans = known.spans.map { span in
                 let lower = known.original.distance(from: known.original.startIndex, to: span.lowerBound)
@@ -434,7 +434,7 @@ public enum ClaimFrame {
 
     /// Avoided, rejected, ruled out, done without: the verb governs the gear.
     static let avoidance = try! NSRegularExpression(
-        pattern: #"\b(?:avoid(?:ed|ing|s)?|eschew(?:ed|ing|s)?|shun(?:ned|ning|s)?|reject(?:ed|ing|s)?|ruled out|rule out|ruling out|ditch(?:ed|ing)?|scrap(?:ped|ping)?|abandon(?:ed|ing)?|passed on|pass on|steer(?:ed|ing)? clear of|stay(?:ed)? away from|kept away from|gave up(?: on)?|giving up(?: on)?|(?:decided|decision|opted|chose|choosing|argued|ruled|went) against|resist(?:ed|ing)? (?:using|the temptation to use|the urge to use)|refus(?:ed|ing) to use|forwent|forgo(?:ing|ne)?|forego(?:ing|ne)?|dispens(?:ed|ing) with|did away with|do away with|without (?:using |any |a |an )?|no need for|banned|ban(?:ning)?|instead of|rather than|in place of|as opposed to|never (?:once )?(?:used?|using|touched|considered|needed|wanted)|not (?:using|use|used)|nothing like|not (?:a|an|any)\s|no (?:room|space|budget|time|place) for|(?:didn'?t|did not|don'?t|do not|doesn'?t|does not|couldn'?t|could not|wouldn'?t|would not|won'?t|will not) (?:\w+ ){0,2}?(?:use|using|need|want|bring|employ|rely on|shoot (?:on|with)|go with|choose|pick|like (?:the (?:look|effect|feel) of|using)|have (?:a|an|any|the)|carry|rent|touch)\b(?:[^,;]{0,40}\s)?)"#,
+        pattern: #"\b(?:avoid(?:ed|ing|s)?|eschew(?:ed|ing|s)?|shun(?:ned|ning|s)?|reject(?:ed|ing|s)?|ruled out|rule out|ruling out|ditch(?:ed|ing)?|scrap(?:ped|ping)?|abandon(?:ed|ing)?|passed on|pass on|steer(?:ed|ing)? clear of|stay(?:ed)? away from|kept away from|gave up(?: on)?|giving up(?: on)?|(?:decided|decision|opted|chose|choosing|argued|ruled|went) against|resist(?:ed|ing)? (?:using|the temptation to use|the urge to use)|refus(?:ed|ing) to use|forwent|forgo(?:ing|ne)?|forego(?:ing|ne)?|dispens(?:ed|ing) with|did away with|do away with|without (?:using |any |a |an )?|no need for|banned|ban(?:ning)?|instead of|rather than|in place of|as opposed to|never (?:once )?(?:used?|using|touched|considered|needed|wanted)|not (?:using|use|used)|nothing like|not (?:a|an|any)\s|no (?:room|space|budget|time|place) for|(?:didn'?t|did not|don'?t|do not|doesn'?t|does not|couldn'?t|could not|wouldn'?t|would not|won'?t|will not) (?:\w+ ){0,2}?(?:use|using|need|want|bring|employ|rely on|shoot (?:on|with)|go with|choose|pick|like (?:the (?:look|effect|feel) of|using)|have (?:a|an|any|the)|carry|rent|touch)\b)"#,
         options: [.caseInsensitive])
     /// "couldn't have done it without", "wouldn't work without", "impossible without": the gear was needed.
     static let necessity = try! NSRegularExpression(
@@ -475,7 +475,13 @@ public enum ClaimFrame {
 
     /// What other people do or did: other cinematographers, the period, a mentor's lessons, a habit.
     static let practice = try! NSRegularExpression(
-        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark)\s+(?:approach|way|practice|habit|method|choice)\b|\b(?:my|his|her|their|our)\s+(?:mentor|teacher|professor|old boss|hero|idol|predecessors?)\b|\b(?:the\s+)?(?:old|older|classic|old-school|traditional|studio-era|golden-age)\s+(?:\w+\s+)?(?:cameramen|cinematographers|dps|gaffers|crews|hands)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses|shoots|relies|prefers|favou?rs|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:used to|uses|would|shoots)\b"#,
+        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark)\s+(?:approach|way|practice|habit|method|choice)\b|\b(?:his|her|their|my|\w+'s)\s+(?:usual|typical|habitual|go-to|favou?rite|regular|default)\s+(?:[\w-]+\s+){0,2}?(?:is|are)\s+(?:the\s+|a\s+|an\s+)?$|\b(?:my|his|her|their|our)\s+(?:mentor|teacher|professor|old boss|hero|idol|predecessors?)\b|\b(?:the\s+)?(?:old|older|classic|old-school|traditional|studio-era|golden-age)\s+(?:\w+\s+)?(?:cameramen|cinematographers|dps|gaffers|crews|hands)\b|\b(?:usually|typically|generally|normally|always|traditionally|historically|conventionally|routinely|tends to)\s+(?:uses|use|shoots|shoot|relies|prefers|favou?rs|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:used to|uses|would|shoots)\b"#,
+        options: [.caseInsensitive])
+
+    /// The practice of a period: "In the seventies everyone shot anamorphic", "Everyone shot on film
+    /// back then".
+    static let era = try! NSRegularExpression(
+        pattern: #"\b(?:everyone|everybody|people|most (?:dps|cinematographers|films|productions|filmmakers))\s+(?:shot|used|lit)\b[^.;]*\b(?:back then|in those days|in the (?:\w+ )?(?:forties|fifties|sixties|seventies|eighties|nineties|(?:19)?\d0s))\b|\b(?:back then|in those days|in the (?:\w+ )?(?:forties|fifties|sixties|seventies|eighties|nineties|(?:19)?\d0s)),?\s+(?:everyone|everybody|people|most (?:dps|cinematographers|films|productions|filmmakers))\s+(?:shot|used|lit)\b"#,
         options: [.caseInsensitive])
 
     /// A simulation or a look, right by the gear.
@@ -503,7 +509,7 @@ public enum ClaimFrame {
         pattern: #"\b(?:key(?: light)?|main source|only source|lit (?:the|her|him|them|it|every|each|most)|to light|as (?:a |the )?(?:light )?source|lighting the|did the lighting)\b"#,
         options: [.caseInsensitive])
     static let productionAgent = try! NSRegularExpression(
-        pattern: #"\b(?:we|i|our|us|crew|grips?|gaffers?|dp|dop|cinematographer|camera team|production|filmmakers|rigged|rig|placed|mounted|hung|added|used|lit (?:the|them|it|her|him)|for the (?:shot|scene|camera))\b"#,
+        pattern: #"\b(?:we|i|our|us|crew|grips?|department|rental|rentals|house|vendor|supplier|supplied|provided|gaffers?|dp|dop|cinematographer|camera team|production|filmmakers|rigged|rig|placed|mounted|hung|added|used|lit (?:the|them|it|her|him)|for the (?:shot|scene|camera))\b"#,
         options: [.caseInsensitive])
     static let prop = try! NSRegularExpression(
         pattern: #"\b(?:prop|props|in-?story|on[- ]screen|diegetic|character(?:s|'s|’s)?|holds?|holding|carries|carrying)\b"#,
@@ -522,7 +528,7 @@ public enum ClaimFrame {
 
     /// A product and what it can do: "the Alexa offers…", "the light features…".
     static let capability = try! NSRegularExpression(
-        pattern: #"\b(?:offers?|(?:many |several |new |other )?features (?:like|such as|include|including|a|an|the)\b|provides?|boasts?|delivers?|allows?|enables?|lets\s+(?:you|users|filmmakers|operators)|can\b|is able to|are able to|is capable of|are capable of|comes? with|ships? with|supports?|promises?|(?:is|are|was|were|had been) designed (?:for|to)|records? up to|shoots? up to)"#,
+        pattern: #"\b(?:offers|offer|(?:many |several |new |other )?features (?:like|such as|include|including|a|an|the)|provides|provide|boasts|delivers|allows|enables|lets\s+(?:you|users|filmmakers|operators)|can|is able to|are able to|is capable of|are capable of|comes with|come with|ships with|supports|promises|(?:is|are) designed (?:for|to)|records up to|shoots up to)\b"#,
         options: [.caseInsensitive])
     static let productSubject = try! NSRegularExpression(
         pattern: #"\b(?:the|this|its|a|an|each|every)?\s*(?:camera|cameras|sensor|lens|lenses|fixture|fixtures|system|unit|model|body|bodies|series|range|product|line|panel|it)\b|\b(?:arri|alexa|red|sony|venice|canon|blackmagic|panavision|cooke|zeiss|leica|aputure|astera|creamsource|kino flo|skypanel|dji|ronin|fujinon|angenieux|angénieux)\b"#,
@@ -559,7 +565,19 @@ public enum ClaimFrame {
             // What lies between the verb and the gear must not start a new statement of use ("instead
             // deploying", "and went with").
             let between = String(clause[found.upperBound...])
-            if between.range(of: #"\b(?:instead|went with|switched to|opted for|chose|settled on|turned to|replaced (?:it|them) with|in favou?r of)\b"#,
+            let verb = String(clause[found]).lowercased()
+            // A negation's exception ("didn't use any lights except a SkyPanel", "nothing other than
+            // 35mm", "no more than two"), or a negated object that isn't the gear, the gear only in an
+            // adjunct after it ("didn't have a big crew on the Technocrane days", "without a permit on
+            // the Alexa Mini"), or a new clause ("…, so a single Steadicam did…").
+            let negation = verb.range(of: #"^(?:didn|did not|don|do not|doesn|does not|couldn|could not|wouldn|would not|won|will not|never|not|without|no need)"#,
+                                      options: .regularExpression) != nil
+            let excepted = between.range(of: #"\b(?:except|excepting|other than|more than|besides|apart from|aside from|beyond|but for|save for)\b|,\s*(?:so|and so|which|and then|and)\b"#,
+                                         options: [.regularExpression, .caseInsensitive]) != nil
+            let adjunct = negation && between.range(of: #"\S\s+(?:on|in|at|for|during|from|inside|aboard)\s+(?:the|a|an|his|her|their|our|my|this|that)?\s*$"#,
+                                                    options: [.regularExpression, .caseInsensitive]) != nil
+            if !excepted, !adjunct,
+               between.range(of: #"\b(?:instead|went with|switched to|opted for|chose|settled on|turned to|replaced (?:it|them) with|in favou?r of)\b"#,
                              options: [.regularExpression, .caseInsensitive]) == nil {
                 return .denied
             }
@@ -591,6 +609,7 @@ public enum ClaimFrame {
 
         // Other people's practice, a mentor's lesson, a habit.
         if has(practice, clause) { return .otherPractice }
+        if has(era, wholePart + " " + following(folded, after: gear)) { return .otherPractice }
 
         // A simulation or a look made, right by the gear.
         if !isLook, has(simulatedBefore, String(near.suffix(60))) || has(simulatedAfter, String(folded[gear.upperBound...].prefix(60))) {
