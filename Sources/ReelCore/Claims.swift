@@ -160,6 +160,9 @@ public struct ComparisonFrame: Sendable {
     static let leading = try! NSRegularExpression(
         pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+|very\s+much\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|he|she|they|we|i|it|was|did|had|has|before|previously|earlier)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|following\b)[^;]{0,160}?,\s*"#,
         options: [.caseInsensitive])
+    static let leadingWithClause = try! NSRegularExpression(
+        pattern: #"^\W*(?:unlike|like|as with|as on|compared (?:to|with))\s+[^,;]{1,80},\s*(?:which|who|where)\s+[^,;]{1,120},\s*"#,
+        options: [.caseInsensitive])
     static let trailing = try! NSRegularExpression(
         pattern: #"(?:,\s*|\s+)(?:just\s+|much\s+|exactly\s+)?(?:as\s+(?:it|they|he|she|we|i)\s+(?:had|did|was|were|has|does|is)\b|as\s+(?:on|in|with|for|when)\b|like\s+(?:on|in|with|for|when)\b)[^;]*$"#,
         options: [.caseInsensitive])
@@ -223,6 +226,11 @@ public struct ComparisonFrame: Sendable {
                 // naming both is still a comparison: the main clause must say something on its own.
                 spans.append(range)
             }
+        }
+        // "Unlike Odile's Garden, which she lit with HMIs, …": the clause that follows the comparison's
+        // title is part of it.
+        for match in Self.leadingWithClause.matches(in: sentence, range: ns) {
+            if let range = Range(match.range, in: sentence), namesOther(range, loose: true) { spans.append(range) }
         }
         add(Self.leading, loose: true)
         add(Self.trailing, loose: true)
@@ -364,7 +372,7 @@ public enum ClaimFrame {
 
     /// Avoided, rejected, ruled out, done without: the verb governs the gear.
     static let avoidance = try! NSRegularExpression(
-        pattern: #"\b(?:avoid(?:ed|ing|s)?|eschew(?:ed|ing|s)?|shun(?:ned|ning|s)?|reject(?:ed|ing|s)?|ruled out|rule out|ruling out|ditch(?:ed|ing)?|scrap(?:ped|ping)?|abandon(?:ed|ing)?|passed on|pass on|steer(?:ed|ing)? clear of|stay(?:ed)? away from|kept away from|gave up(?: on)?|giving up(?: on)?|(?:decided|decision|opted|chose|choosing|argued|ruled|went) against|resist(?:ed|ing)? (?:using|the temptation to use|the urge to use)|refus(?:ed|ing) to use|forwent|forgo(?:ing|ne)?|forego(?:ing|ne)?|dispens(?:ed|ing) with|did away with|do away with|without (?:using |any |a |an )?|no need for|banned|ban(?:ning)?|instead of|rather than|in place of|as opposed to|never (?:once )?(?:used?|using|touched|considered|needed|wanted)|not (?:using|use|used)|nothing like|no (?:room|space|budget|time|place) for|(?:didn'?t|did not|don'?t|do not|doesn'?t|does not|wasn'?t|weren'?t|was not|were not|couldn'?t|could not|wouldn'?t|would not) (?:\w+ ){0,4})"#,
+        pattern: #"\b(?:avoid(?:ed|ing|s)?|eschew(?:ed|ing|s)?|shun(?:ned|ning|s)?|reject(?:ed|ing|s)?|ruled out|rule out|ruling out|ditch(?:ed|ing)?|scrap(?:ped|ping)?|abandon(?:ed|ing)?|passed on|pass on|steer(?:ed|ing)? clear of|stay(?:ed)? away from|kept away from|gave up(?: on)?|giving up(?: on)?|(?:decided|decision|opted|chose|choosing|argued|ruled|went) against|resist(?:ed|ing)? (?:using|the temptation to use|the urge to use)|refus(?:ed|ing) to use|forwent|forgo(?:ing|ne)?|forego(?:ing|ne)?|dispens(?:ed|ing) with|did away with|do away with|without (?:using |any |a |an )?|no need for|banned|ban(?:ning)?|instead of|rather than|in place of|as opposed to|never (?:once )?(?:used?|using|touched|considered|needed|wanted)|not (?:using|use|used)|nothing like|not (?:a|an|any)\s|no (?:room|space|budget|time|place) for|(?:didn'?t|did not|don'?t|do not|doesn'?t|does not|wasn'?t|weren'?t|was not|were not|couldn'?t|could not|wouldn'?t|would not) (?:\w+ ){0,4})"#,
         options: [.caseInsensitive])
     /// "no Steadicam", "zero practicals": a determiner right before the gear.
     static let noneBefore = try! NSRegularExpression(pattern: #"\b(?:no|zero|nor|neither)\s+(?:[\w-]+\s+){0,2}$"#, options: [.caseInsensitive])
@@ -379,12 +387,12 @@ public enum ClaimFrame {
 
     /// A counterfactual or hypothetical, governing to the end of its part of the sentence.
     static let hypothetical = try! NSRegularExpression(
-        pattern: #"\b(?:might|could|would|should|may|must)(?:\s+not|n['’]t)?\s+(?:\w+\s+){0,2}?have\b(?!\s+to\b)|\bhad\s+(?:it|we|they|he|she|i|the (?:film|movie|production))\s+(?:been|shot|used|gone|chosen)\b|\bif\s+(?:we|it|they|he|she|i|you|the (?:film|movie|production))\s+(?:had|were|was|could|would)\b|\bwere\s+(?:it|we|they)\s+to\b|\b(?:one|you)\s+could\b|\bwhat if\b|\b(?:dream(?:ed|t|s)? of|fantasi[sz]ed about)\b|\bwish(?:ed|es)?\s+(?:we|they|he|she|i)\s+(?:had|could)\b|\bwould\s+(?:have\s+)?(?:look(?:ed)?|feel|felt)\b|\bin an? (?:ideal|perfect|alternate|different) world\b|\b(?:hypothetical(?:ly)?|in theory|theoretically)\b"#,
+        pattern: #"\b(?:might|could|would|should|may|must)(?:\s+not|n['’]t)?\s+(?:\w+\s+){0,2}?have\b(?!\s+to\b)|\bhad\s+(?:it|we|they|he|she|i|the (?:film|movie|production))\s+(?:been|shot|used|gone|chosen)\b|\bif\s+(?:we|it|they|he|she|i|you|the (?:film|movie|production))\s+(?:had|were|was|could|would)\b|\bwere\s+(?:it|we|they)\s+to\b|\b(?:one|you)\s+could\b|\bhad\s+(?:[\w'’:-]+\s+){1,5}?been\s+(?:shot|filmed|photographed|made|lit|lensed)\b|\b(?:might|may|could)\s+(?:well\s+)?be\s+(?:shot|filmed|photographed|used|lit)\b|\bif it happens\b|\bwhat if\b|\b(?:dream(?:ed|t|s)? of|fantasi[sz]ed about)\b|\bwish(?:ed|es)?\s+(?:we|they|he|she|i)\s+(?:had|could)\b|\bwould\s+(?:have\s+)?(?:look(?:ed)?|feel|felt)\b|\bin an? (?:ideal|perfect|alternate|different) world\b|\b(?:hypothetical(?:ly)?|in theory|theoretically)\b"#,
         options: [.caseInsensitive])
 
     /// A plan or intention, unless the sentence says it was carried out.
     static let plan = try! NSRegularExpression(
-        pattern: #"\b(?:had\s+)?(?:originally|initially|first|once)\s+(?:intended|planned|meant|hoped|wanted|set out|proposed|considered|thought)\b|\b(?:had\s+)?(?:intended|planned|meant|proposed|envisioned|envisaged)\s+(?:to|on)\s+(?:"# + planVerbs + #")\b|\b(?:the|our|my|his|her|their|an?)\s+(?:original\s+|initial\s+|early\s+|first\s+)?(?:plan|intention|proposal)\s+(?:was|had been|is)\s+(?:always\s+|originally\s+|initially\s+)?to\s+(?:"# + planVerbs + #")\b|\b(?:was|were)\s+(?:going|supposed|meant|slated)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\bat (?:first|one point)\b[^.;]{0,50}\b(?:wanted|planned|considered|thought|hoped)\b|\bwas to have\b"#,
+        pattern: #"\b(?:had\s+)?(?:originally|initially|first|once)\s+(?:intended|planned|meant|hoped|wanted|set out|proposed|considered|thought)\b|\b(?:had\s+)?(?:intended|planned|meant|proposed|envisioned|envisaged)\s+(?:to|on)\s+(?:"# + planVerbs + #")\b|\b(?:the|our|my|his|her|their|an?)\s+(?:original\s+|initial\s+|early\s+|first\s+)?(?:plan|intention|proposal)\s+(?:was|had been|is)\s+(?:always\s+|originally\s+|initially\s+)?to\s+(?:"# + planVerbs + #")\b|\b(?:was|were)\s+(?:going|supposed|meant|slated)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\bat (?:first|one point)\b[^.;]{0,50}\b(?:wanted|planned|considered|thought|hoped)\b|\bwas to have\b|\b(?:was|were)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\b(?:had\s+)?planned\s+(?:a|an|the|on a|on an)\b|\b(?:early|first|initial)\s+(?:draft|version|plan|idea)\b|\b(?:the\s+)?(?:financiers|producers|studio|network|distributor|executives|investors)\s+(?:wanted|asked for|pushed for|suggested|preferred|first suggested)\b"#,
         options: [.caseInsensitive])
     static let planVerbs = "shoot|shooting|shot|film|filming|filmed|use|using|used|capture|capturing|captured|photograph|photographing|photographed|go with|lens|lensed|light|lighting|lit|rent|rely on|employ|work with|frame|grade"
     static let planKept = try! NSRegularExpression(
@@ -401,7 +409,7 @@ public enum ClaimFrame {
 
     /// What other people do or did: other cinematographers, the period, a mentor's lessons, a habit.
     static let practice = try! NSRegularExpression(
-        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark|go-to)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses?|used|shoots?|shot|relies|rely|prefers?|favou?rs?|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:was|were|used|uses|would|shot)\b"#,
+        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark|go-to)\b|\b(?:my|his|her|their|our)\s+(?:mentor|teacher|professor|old boss|hero|idol|predecessors?)\b|\b(?:the\s+)?(?:old|older|classic|old-school|traditional|studio-era|golden-age)\s+(?:\w+\s+)?(?:cameramen|cinematographers|dps|gaffers|crews|hands)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses?|used|shoots?|shot|relies|rely|prefers?|favou?rs?|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:was|were|used|uses|would|shot)\b"#,
         options: [.caseInsensitive])
 
     /// A simulation or a look, right by the gear.
@@ -418,11 +426,11 @@ public enum ClaimFrame {
 
     /// An object in the story or the location, not equipment of the production.
     static let environmentSubject = try! NSRegularExpression(
-        pattern: #"\b(?:cars?|vehicles?|trucks?|bikes?|motorbikes?|trains?|ships?|boats?|planes?|aircraft|jets?|tracks?|circuits?|stadiums?|arenas?|streets?|buildings?|rooms?|bars?|clubs?|houses?|apartments?|hospitals?|offices?|stores?|shops?|restaurants?|diners?|casinos?|robots?|spaceships?|props?|scoreboards?|billboards?|signs?|towers?|city|town|venues?|set dressing|set decoration|lamps?)\s+(?:[\w'’-]+\s+){0,3}?(?:have|has|had|feature\w*|carr(?:y|ies)|contain\w*|sports?|display\w*|(?:is|are|was|were)\s+(?:commonly|usually|typically|often|normally|already|all)?\s*(?:bathed|lined|dotted|decorated|equipped|fitted|strung))\b"#,
+        pattern: #"\b(?:buses|bus|ceilings?|interiors?|cars?|vehicles?|trucks?|bikes?|motorbikes?|trains?|ships?|boats?|planes?|aircraft|jets?|tracks?|circuits?|stadiums?|arenas?|streets?|buildings?|rooms?|bars?|clubs?|houses?|apartments?|hospitals?|offices?|stores?|shops?|restaurants?|diners?|casinos?|robots?|spaceships?|props?|scoreboards?|billboards?|signs?|towers?|city|town|venues?|set dressing|set decoration|lamps?)\s+(?:[\w'’-]+\s+){0,3}?(?:have|has|had|feature\w*|carr(?:y|ies)|contain\w*|sports?|display\w*|(?:is|are|was|were)\s+(?:commonly|usually|typically|often|normally|already|all)?\s*(?:bathed|lined|dotted|decorated|equipped|fitted|strung))\b"#,
         options: [.caseInsensitive])
     /// Made or placed by the art department as part of the scene: set dressing, props.
     static let setDressing = try! NSRegularExpression(
-        pattern: #"\b(?:art department|production design(?:er)?|set dress\w*|set decorat\w*|as (?:a |the )?props?|prop (?:master|department)|part of the (?:set|decor|scenery)|on the (?:dashboard|fridge|wall|car|vehicle|console|screen|sign)s?|the character(?:'s|’s)?|, the character,)\b"#,
+        pattern: #"\b(?:decorative|ornamental|art department|production design(?:er)?|set dress\w*|set decorat\w*|as (?:a |the )?props?|prop (?:master|department)|part of the (?:set|decor|scenery)|on the (?:dashboard|fridge|wall|car|vehicle|console|screen|sign)s?|the character(?:'s|’s)?|, the character,)\b"#,
         options: [.caseInsensitive])
     /// …unless it's said to light the scene: "the neon practicals were the key light".
     static let lightsTheScene = try! NSRegularExpression(
@@ -494,7 +502,7 @@ public enum ClaimFrame {
 
         // A hypothetical: from its modal to the end of its part of the sentence, commas included.
         let part = governing(folded, before: gear, acrossCommas: true)
-        let wholePart = String(folded[segmentStart(folded, before: gear)..<gear.lowerBound])
+        let wholePart = String(folded[segmentStart(folded, before: gear)..<gear.upperBound])
         if has(hypothetical, wholePart) || has(hypothetical, part) { return .hypothetical }
 
         // A plan, unless it's said to have been carried out.
