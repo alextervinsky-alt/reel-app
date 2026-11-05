@@ -108,7 +108,10 @@ final class ClaimHoldoutTests: XCTestCase {
                 let accepted = specs.accepted.contains { spec in
                     let name = Self.squash(spec.name)
                     let evidence = Self.squash(spec.evidence ?? "")
-                    return (name.contains(term) || term.contains(name)) && !name.isEmpty
+                    // The same gear (a name of three letters or more inside the other) from the same passage
+                    // (its first 90 letters, or the evidence's first 60 when the evidence is the shorter).
+                    return name.count >= 3 && term.count >= 3 && (name.contains(term) || term.contains(name))
+                        && evidence.count >= 20 && passage.count >= 20
                         && (evidence.contains(passage) || passage.contains(String(evidence.prefix(60))))
                 }
                 let tag = claim.evidenceType

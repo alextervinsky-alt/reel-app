@@ -221,6 +221,7 @@ public struct PageContext: Equatable, Sendable {
         var anchor = false
         var sinceNamed = Int.max
         var question: Bool? = nil
+        var sinceQuestion = Int.max
         // A page that never turns away and names no other production keeps one subject throughout: the
         // two-paragraph bound is for pages that do.
         let oneSubject = !paragraphs.contains { paragraph in
@@ -241,12 +242,19 @@ public struct PageContext: Equatable, Sendable {
                 // The question sets what its answers are about: the film, another production, or (a
                 // follow-up naming neither) whatever the answers were about.
                 if sentences.contains(where: { names($0, title: title) }) { question = true } else if othersHere { question = false }
+                sinceQuestion = 0
                 anchor = false
                 return sentences.map { _ in false }
             }
             if sinceNamed != Int.max { sinceNamed += 1 }
-            let carried = inherit && acrossParagraphs && anchor && sinceNamed <= reach && !othersHere && !Self.turnsAway(paragraph)
-            anchor = (inherit && question == true && !othersHere) || carried
+            if sinceQuestion != Int.max { sinceQuestion += 1 }
+            let turns = Self.turnsAway(paragraph)
+            let carried = inherit && acrossParagraphs && anchor && sinceNamed <= reach && !othersHere && !turns
+            // A question about the film holds for its answers, as far as a subject carries (the same
+            // bound), and not into an answer that turns away or names another production.
+            let answering = inherit && question == true && sinceQuestion <= max(reach, 1) && !othersHere && !turns
+            if turns || othersHere { question = nil }
+            anchor = answering || carried
             return sentences.map { sentence in
                 let frame = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people)
                 let namesIt = names(sentence, title: title)
@@ -269,9 +277,10 @@ public struct PageContext: Equatable, Sendable {
     /// An interviewer's question: it ends with "?", or opens with the interviewer's tag ("Q:", "AC:").
     static func isQuestion(_ paragraph: String) -> Bool {
         let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: #"^(?:Q|Question|Interviewer|[A-Z]{2,4})\s*[:.]"#, options: .regularExpression) != nil,
+        if trimmed.range(of: #"^(?:Q|Question|Interviewer|[A-Z]{2,4})\s*:"#, options: .regularExpression) != nil,
            trimmed.hasSuffix("?") || trimmed.hasPrefix("Q") { return true }
-        return trimmed.hasSuffix("?") && trimmed.count < 400 && !trimmed.contains("\"")
+        // An untagged question: one short paragraph, a sentence or two, ending with "?".
+        return trimmed.hasSuffix("?") && trimmed.count < 300 && !trimmed.contains("\"") && Digest.sentences(in: trimmed).count <= 2
     }
 
     /// A paragraph turning to a career, a biography or another time: where a subject carried over
@@ -279,9 +288,9 @@ public struct PageContext: Equatable, Sendable {
     static func turnsAway(_ paragraph: String) -> Bool {
         // A production named by an opening ("Five years later, on The Lantern Keepers of Hollow Bay, …"):
         // capitalised words after "on", "for" or "with" up to a comma.
-        if paragraph.range(of: #"(?:^|[,.;]\s+|\s)(?i:on|for|with|during)\s+(?:The\s+|A\s+|An\s+)?[A-Z][\w'’-]+(?:\s+(?:of|the|and|a|an|in|on|for|to)?\s*[A-Z][\w'’-]+){0,6}(?:,|\s+(?i:he|she|they|we|i)\b)"#,
+        if paragraph.range(of: #"(?:^|[,.;]\s+|\s)(?i:on|for|with|during)\s+(?:The\s+|A\s+|An\s+)?(?!(?:ARRI|Arri|Alexa|ALEXA|Sony|Venice|RED|Red|Canon|Cooke|Zeiss|Panavision|Kodak|Fuji|Fujifilm|IMAX|Steadicam|Technocrane|Leica|Angenieux|Angénieux|Blackmagic|Super|Ultra|Panaflex|Aaton|Bolex|SkyPanel|SkyPanels|Astera|Kino|Hawk|Atlas|Master|Ektachrome|Vision|DJI|Ronin|Phantom|Easyrig|Moviecam|Arricam|Arriflex|Aputure|Creamsource|Dolby|Atmos|Avid|DaVinci|Resolve|LED|LEDs|HMI|HMIs)\b)[A-Z][\w'’-]+(?:\s+(?:of|the|and|a|an|in|on|for|to)?\s*[A-Z][\w'’-]+){0,6}(?:,|\s+(?i:he|she|they|we|i)\b)"#,
                            options: .regularExpression) != nil { return true }
-        return paragraph.range(of: #"\b(?:was born|grew up|began (?:his|her|their) career|started (?:out|his career|her career)|credits include|filmography|(?:his|her|their) (?:first|debut|previous|earlier|last|next|latest|newest|new) (?:feature|film|movie|project|picture|documentary)|debut|years (?:earlier|before|later)|a decade (?:earlier|before|later)|before that|after that,? (?:he|she|they)|looks back|went on to|is (?:now|currently) (?:prepping|shooting|working)|(?:next|current|new|latest|upcoming) (?:project|feature|film)|(?:his|her|their) (?:newest|latest|next|new|follow-up|current)\b|\b(?:now|these days|nowadays|today)\s+(?:teaches|runs|works|lives|flies|shoots|lectures|owns|uses|prefers)|\bteaches\b|in (?:19|20)\d{2},)"#,
+        return paragraph.range(of: #"\b(?:was born|grew up|began (?:his|her|their) career|started (?:out|his career|her career)|credits include|filmography|(?:his|her|their) (?:first|debut|previous|earlier|last|next|latest|newest|new) (?:feature|film|movie|project|picture|documentary)|(?:his|her|their|directorial|feature) debut|years (?:earlier|before|later)|a decade (?:earlier|before|later)|before that|after that,? (?:he|she|they)|looks back|went on to|is (?:now|currently) (?:prepping|shooting|working)|(?:next|current|new|latest|upcoming) (?:project|feature|film)|(?:his|her|their) (?:newest|latest|next|new|follow-up|current)\b|\b(?:now|these days|nowadays|today)\s+(?:teaches|runs|works|lives|flies|shoots|lectures|owns|uses|prefers)|\bteaches\b|in (?:19|20)\d{2},)"#,
                         options: [.regularExpression, .caseInsensitive]) != nil
     }
 

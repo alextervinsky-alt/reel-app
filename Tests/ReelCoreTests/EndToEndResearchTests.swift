@@ -70,16 +70,19 @@ final class EndToEndResearchTests: XCTestCase {
         XCTAssertEqual(web.fetched.count, Set(web.fetched).count, "no page asked for twice")
         XCTAssertLessThanOrEqual(web.searched, ResearchPlan.maxQueries)
         // Read again with its first page down (a timeout): what that page gave is carried, not lost.
-        let down = Set(film.firstPass.prefix(1))
-        let (second, secondLog) = await Self.read(film, corpus: corpus, web: Web(corpus, down: down), stored: first, now: t0.addingTimeInterval(86_400))
-        let site = corpus.pages[film.firstPass[0]]?.site ?? ""
+        // The page taken down is one that gave findings, so what's carried is checked, not assumed.
+        let given = try XCTUnwrap(film.firstPass.first { url in first.claimsKnown.contains { $0.site == corpus.pages[url]?.site } },
+                                  "a first-pass page gave findings")
+        let down = Set([given])
+        let (second, _) = await Self.read(film, corpus: corpus, web: Web(corpus, down: down), stored: first, now: t0.addingTimeInterval(86_400))
+        let site = corpus.pages[given]?.site ?? ""
         for claim in first.claimsKnown where claim.site == site {
             let now = second.claimsKnown.first { $0.name == claim.name && $0.source == claim.source }
             XCTAssertNotNil(now, "\(claim.name) from \(site) kept")
             XCTAssertTrue(now?.supports ?? false, "\(claim.name): \(String(describing: now?.status))")
         }
         XCTAssertNotNil(second.retryAt, "tried again later")
-        XCTAssertTrue(secondLog.contains("carried") || second.claimsKnown.contains { $0.status == .carried } || first.claimsKnown.allSatisfy { $0.site != site })
+        XCTAssertTrue(second.claimsKnown.contains { $0.status == .carried && $0.site == site }, "what the page gave is carried")
         // Retry after the failure, with the page back: confirmed again, nothing carried.
         let (third, _) = await Self.read(film, corpus: corpus, web: Web(corpus), stored: second, now: t0.addingTimeInterval(8 * 86_400))
         XCTAssertFalse(third.claimsKnown.contains { $0.status == .carried })

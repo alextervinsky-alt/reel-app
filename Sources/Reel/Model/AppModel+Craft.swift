@@ -237,7 +237,8 @@ extension AppModel {
         if let current, current.version == merged.index.version, current.discovery == merged.index.discovery,
            current.shotOn == merged.index.shotOn,
            current.names == merged.index.names, current.evidence == merged.index.evidence,
-           current.unanswered == merged.index.unanswered, current.limits == merged.index.limits {
+           current.unanswered == merged.index.unanswered, current.limits == merged.index.limits,
+           current.claims == merged.index.claims {
             return
         }
         storeCraft([details.id: merged.index])

@@ -9,6 +9,12 @@ extension CraftIndex {
     /// earlier statement never silently drops it (`SourceReconciliation`).
     public struct Claim: Codable, Equatable, Sendable {
         public enum Status: String, Codable, Sendable, CaseIterable {
+            /// A status a later Reel wrote that this one doesn't know reads as pending: kept, not shown.
+            public init(from decoder: Decoder) throws {
+                let raw = try decoder.singleValueContainer().decode(String.self)
+                self = Status(rawValue: raw) ?? .pending
+            }
+
             /// Read in this reading's text and accepted by its rules.
             case confirmed
             /// Its source couldn't be read again (didn't answer, an incomplete page, not found this
@@ -120,9 +126,16 @@ public enum SourceReconciliation {
         TitleMatch.fold(text).filter { $0.isLetter || $0.isNumber }
     }
 
+    /// The same name, by its letters and digits, a plural "s" aside: "Alexa Mini" isn't "Alexa Mini LF".
     static func sameName(_ a: String, _ b: String) -> Bool {
         let x = squash(a), y = squash(b)
-        return !x.isEmpty && !y.isEmpty && (x == y || x.contains(y) && y.count >= 4 || y.contains(x) && x.count >= 4)
+        guard !x.isEmpty, !y.isEmpty else { return false }
+        return x == y || x + "s" == y || y + "s" == x || x + "es" == y || y + "es" == x
+    }
+
+    /// The Shot on tags a gear name gives (`CraftIndex.shotOn`).
+    static func tags(_ kind: TechSpecs.Kind, _ name: String) -> Set<ShotOn> {
+        CraftIndex.shotOn(TechSpecs.Spec(kind: kind, name: name))
     }
 
     /// Whether `passage` is in `paragraphs` (by its first 90 letters and digits).
@@ -147,6 +160,17 @@ public enum SourceReconciliation {
                                          source: spec.source ?? "Wikipedia", status: .confirmed, since: now, rules: input.rules)
             if seen.insert(claim.key).inserted { claims.append(claim) }
         }
+        // A Shot on tag, once per source that says it: every accepted statement of capture that gives
+        // the tag, and the tag's own evidence (Wikidata, TMDB, a sentence saying "black-and-white").
+        let tagsFound = Set(input.shotOn.keys)
+        for spec in input.accepted where spec.capture {
+            for tag in CraftIndex.shotOn(spec).intersection(tagsFound).sorted(by: { $0.rawValue < $1.rawValue }) {
+                guard let text = spec.evidence else { continue }
+                let claim = CraftIndex.Claim(name: tag.rawValue, kind: "shotOn", text: String(text.prefix(400)), source: spec.source ?? "Wikipedia",
+                                             status: .confirmed, since: now, rules: input.rules)
+                if seen.insert(claim.key).inserted { claims.append(claim) }
+            }
+        }
         for (tag, evidence) in input.shotOn.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             let claim = CraftIndex.Claim(name: tag.rawValue, kind: "shotOn", text: evidence.text, source: evidence.source, status: .confirmed,
                                          since: now, rules: input.rules)
@@ -165,12 +189,16 @@ public enum SourceReconciliation {
             // Confirmed by this reading under another source or name form: already among its findings.
             if outcome.status == .confirmed { continue }
             var settled = old
-            settled.misses = old.misses + 1
             settled.status = outcome.status
             settled.reason = outcome.reason
-            if outcome.status == .carried || outcome.status == .pending {
-                // Counted only while its source answers: a site that's down doesn't use up a try.
-                if outcome.status == .carried, input.unanswered.contains(old.site) { settled.misses = old.misses }
+            settled.misses = old.misses + (outcome.counts ? 1 : 0)
+            // A finding not shown (pending) stays not shown while its source can't be read: an outage
+            // never brings back what a full reading couldn't settle.
+            if old.status == .pending, outcome.status == .carried {
+                settled.status = .pending
+                settled.reason = old.reason
+            }
+            if settled.status == .carried || settled.status == .pending {
                 if settled.misses > CraftIndex.maxRetries {
                     settled.status = .retired
                     settled.reason = (outcome.reason.map { $0 + "; " } ?? "") + "not settled in \(CraftIndex.maxRetries) readings"
@@ -197,49 +225,55 @@ public enum SourceReconciliation {
     }
 
     /// What a finding's own source says of it now.
-    static func outcome(of old: CraftIndex.Claim, input: Input) -> (status: CraftIndex.Claim.Status, reason: String?) {
+    /// `counts`: whether the reading uses up one of the finding's tries. Only a reading that could have
+    /// settled it does: its site answered, its page came whole, and its passage isn't still there
+    /// waiting to be read for this film (a passage still on the page is never retired for want of a
+    /// settled reading: it stays pending, not shown).
+    static func outcome(of old: CraftIndex.Claim, input: Input) -> (status: CraftIndex.Claim.Status, reason: String?, counts: Bool) {
         // A name kept from before 1.10.9 (no passage, no source): only a confirmation settles it.
         guard let passage = old.text, !old.source.isEmpty else {
             let named = input.accepted.contains { sameName($0.name, old.name) }
-            return named ? (.confirmed, nil) : (.pending, "found by rules \(old.rules); no passage was kept to read again")
+            return named ? (.confirmed, nil, false) : (.pending, "found by rules \(old.rules); no passage was kept to read again", true)
         }
         // Worked out from Wikidata or TMDB, not read from a page: the new reading's word stands.
         if old.site == "Wikidata" || old.site == "TMDB" {
-            return (.retired, "\(old.site) no longer says so")
+            return (.retired, "\(old.site) no longer says so", false)
         }
         let paragraphs = input.read[old.source]
         let fetched = input.fetched[old.site] ?? []
         if paragraphs == nil && fetched.isEmpty {
-            if input.unanswered.contains(old.site) { return (.carried, "\(old.site) didn't answer") }
-            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete") }
-            return (.carried, "\(old.source) wasn't found again")
+            if input.unanswered.contains(old.site) { return (.carried, "\(old.site) didn't answer", false) }
+            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", false) }
+            return (.carried, "\(old.source) wasn't found again", true)
         }
         let text = (paragraphs ?? []) + fetched.flatMap { $0 }
         guard contains(text, passage: passage) else {
             // Read in full and the passage isn't there: the page no longer says it (unless its page
             // came incomplete, which isn't a full reading).
-            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete") }
-            return (.retired, "no longer in \(old.source)")
+            if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", false) }
+            return (.retired, "no longer in \(old.source)", false)
         }
-        // The passage is there: what do these rules say of it?
-        let names: (String) -> Bool = { old.kind == "shotOn" ? true : sameName($0, old.name) }
-        if let ruled = input.judged.first(where: { names($0.name) && samePassage($0.evidence, passage) }) {
-            return (.retired, ruled.reason.label)
+        // The passage is there: what do these rules say of it? For a Shot on tag, only gear in the
+        // passage that gives that tag speaks to it ("film" isn't ruled out by a denied Steadicam).
+        let tag = old.kind == "shotOn" ? ShotOn(rawValue: old.name) : nil
+        let names: (TechSpecs.Kind, String) -> Bool = { kind, name in
+            if let tag { return tags(kind, name).contains(tag) }
+            return old.kind == kind.rawValue && sameName(name, old.name) || old.kind == "name" && sameName(name, old.name)
         }
-        if let named = input.mentioned.first(where: { names($0.name) && samePassage($0.evidence ?? "", passage) }) {
+        if input.accepted.contains(where: { names($0.kind, $0.name) && samePassage($0.evidence ?? "", passage) && (tag == nil || $0.capture) }) {
+            return (.confirmed, nil, false)
+        }
+        if let ruled = input.judged.first(where: { names($0.kind, $0.name) && samePassage($0.evidence, passage) }) {
+            return (.retired, ruled.reason.label, false)
+        }
+        if let named = input.mentioned.first(where: { names($0.kind, $0.name) && samePassage($0.evidence ?? "", passage) }) {
             if named.attribution == .otherProduction || named.attribution == .rejected || named.attribution == .reference {
-                return (.retired, ClaimReason.otherProduction.label)
+                return (.retired, ClaimReason.otherProduction.label, false)
             }
-            return (.pending, "read again; not settled whether it's said of this film")
+            return (.pending, "read again; not settled whether it's said of this film", false)
         }
-        if old.kind == "shotOn", input.accepted.contains(where: { samePassage($0.evidence ?? "", passage) && $0.capture }) {
-            // The sentence is still accepted (for other gear): only the tag it gave isn't, by these rules.
-            return (.retired, "the sentence no longer says it was shot that way")
-        }
-        if input.accepted.contains(where: { names($0.name) && samePassage($0.evidence ?? "", passage) }) {
-            return (.confirmed, nil)
-        }
-        // Present, but not read for this film (its page set aside, or the statement not tied to it).
-        return (.pending, "read again; these rules couldn't tie the passage to this film")
+        // Present, but not read for this film (its page set aside, the statement not tied to it, or
+        // no gear in it gives the tag by these rules).
+        return (.pending, "read again; these rules couldn't tie the passage to this film", false)
     }
 }

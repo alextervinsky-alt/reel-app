@@ -100,7 +100,7 @@ public enum ResearchEngine {
                     continue
                 }
                 // The same article as one already read or set aside, at another address (1.10.9): once.
-                if let same = (base.sources + sources + skipped.map(\.source)).first(where: { CameraSources.sameArticle($0, fetched) }) {
+                if let same = (base.sources + sources).first(where: { CameraSources.sameArticle($0, fetched) }) {
                     skipped.append(CameraReading.Skipped(source: fetched, reason: "the same article as \(same.url.absoluteString) (found searching for \(query.text))"))
                     passed.append(url.absoluteString)
                     if pagesLeft <= 0 { break }
