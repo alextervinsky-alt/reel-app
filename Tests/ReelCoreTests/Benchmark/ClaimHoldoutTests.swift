@@ -152,7 +152,7 @@ final class ClaimHoldoutTests: XCTestCase {
         // which no rule here can (see the handoff).
         XCTAssertLessThanOrEqual(score.crossFilm, 3, "cross-film contamination in the claim holdout")
         XCTAssertGreaterThanOrEqual(score.trueNegative, 121, "rejection floor (measured 121/129)")
-        XCTAssertGreaterThanOrEqual(score.truePositive, 79, "recall floor (measured 79/128)")
+        XCTAssertGreaterThanOrEqual(score.truePositive, 81, "recall floor (measured 81/128)")
         XCTAssertLessThanOrEqual(score.unsafe, 6, "abstentions accepted (measured 6/42)")
     }
 }

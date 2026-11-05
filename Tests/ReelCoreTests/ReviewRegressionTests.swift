@@ -90,12 +90,31 @@ final class ReviewRegressionTests: XCTestCase {
         XCTAssertEqual(reason("We didn't have the time or the space for a Technocrane.", "Technocrane", .support), .denied)
         XCTAssertEqual(reason("We didn't have the crew for the Technocrane.", "Technocrane", .support), .denied)
         XCTAssertEqual(reason("We didn't have the clearance for the drone.", "drone", .support), .denied)
+        // "didn't need X for the gear" says the gear was used.
+        XCTAssertNil(reason("We didn't need any special rigging for the Technocrane.", "Technocrane", .support))
+        XCTAssertNil(reason("We didn't need extra insurance for the Alexa 65.", "Alexa 65", .camera))
+        XCTAssertNil(reason("We didn't need much time for the Technocrane setups.", "Technocrane", .support))
+        // Indifference is not a statement of use (1.10.8's intended removal on a period-film page).
+        XCTAssertEqual(reason("Whether we shoot with a crane or dolly or whatever is less of a concern than achieving what he has on his list.", "crane", .support), .hypothetical)
+        XCTAssertEqual(reason("Whether we shoot with a crane or dolly or whatever is less of a concern than achieving what he has on his list.", "dolly", .support), .hypothetical)
+        XCTAssertNil(reason("Whether shooting day or night, we used SkyPanels above the dock.", "SkyPanels", .light))
         XCTAssertEqual(reason("The art department dressed the diner with Astera tubes as set dressing.", "Astera", .light), .environment)
         XCTAssertEqual(reason("The house has neon signs and Astera tubes strung along the porch.", "Astera", .light), .environment)
         XCTAssertNil(reason("On set we generally use two SkyPanels as a key.", "SkyPanels", .light))
         XCTAssertNil(reason("We always shoot with two cameras on this show, both Alexa Minis.", "Alexa Minis", .camera))
         XCTAssertEqual(reason("Doe tends to use Cooke S4s.", "Cooke S4s", .lens), .otherPractice)
         XCTAssertNil(reason("The Alexa Mini can record ProRes, and Doe used that for the dailies.", "ProRes", .format))
+        // A time spent on another production: "When I was in France working on <Other>…".
+        let other = TechSpecs.read(texts: [TechSpecs.Text(source: "Lens Weekly", paragraphs: [
+            "When I was in France working on Glass Rivers with Carl Example, I was very into desaturation with a bleach-bypass process."])],
+                                   cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022, title: "The Quiet Harbour")
+        XCTAssertFalse(other.specs.contains { $0.name.lowercased().contains("bleach") }, "\(other.specs.map(\.name))")
+        // A real trailing comparison after an opening one is still set aside.
+        let both = ComparisonFrame("Just as he had on Glass Rivers, Doe shot The Quiet Harbour on 500T, as he did on Salt Marsh with Kodak 5207.",
+                                   title: "The Quiet Harbour", otherTitles: ["Glass Rivers", "Salt Marsh"])
+        XCTAssertEqual(both.spans.count, 2)
+        XCTAssertFalse(both.main.contains("5207"))
+        XCTAssertTrue(both.main.contains("500T"))
         for text in ["For the underwater shoot, they used a Hydroflex housing on the Alexa Mini.", "For the aerial shoot, they used a Shotover F1.",
                      "For the opening film sequence, they used a Bolex.", "On the debut film, she used SkyPanels.",
                      "For the biographical film, Doe chose the Alexa 35."] {
