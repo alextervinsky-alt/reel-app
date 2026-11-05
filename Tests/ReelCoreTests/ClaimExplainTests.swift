@@ -18,6 +18,16 @@ final class ClaimExplainTests: XCTestCase {
             say("   spans: \(frame.spans.map { String(sentence[$0]) })")
             for rule in TechSpecs.rules {
                 for (name, at) in rule.found(in: sentence) {
+                    let main = frame.main
+                    let at2 = main.index(main.startIndex, offsetBy: sentence.distance(from: sentence.startIndex, to: at.lowerBound))
+                        ..< main.index(main.startIndex, offsetBy: sentence.distance(from: sentence.startIndex, to: at.upperBound))
+                    let whole = TechSpecs.segmentRange(of: main, around: at2)
+                    let part = String(main[whole])
+                    say("   main-reading \(TechSpecs.reading(main, at: at2, title: title, otherTitles: [], people: ["Jane Doe", "Carl Example"], kind: rule.kind)) "
+                        + "namesAnother=\(TechSpecs.namesAnotherFilm(part, title: title, otherTitles: [], people: ["Jane Doe", "Carl Example"])) "
+                        + "anotherPart=\(TechSpecs.namesAnotherPart(TechSpecs.scope(of: main, around: at2), title: title, otherTitles: [])) "
+                        + "saidOfAnother=\(TechSpecs.saidOfAnotherTitle(String(main[whole.lowerBound..<at2.upperBound]), title: title)) "
+                        + "hedges=\(TechSpecs.hedges(main, around: at2, within: whole)) part=[\(part.trimmingCharacters(in: .whitespaces))]")
                     say("   \(rule.kind) \(name): reason=\(String(describing: ClaimFrame.reason(sentence, at: at, kind: rule.kind, name: name))) "
                         + "setAside=\(String(describing: TechSpecs.setAside(sentence, at: at, title: title, people: ["Jane Doe", "Carl Example"])))")
                 }
