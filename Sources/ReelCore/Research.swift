@@ -214,8 +214,7 @@ public enum CraftCrew {
         let stop: Set<String> = ["The", "A", "An", "His", "Her", "Their", "Academy", "Award", "Society", "American", "British", "Best"]
         let shortTitle = title.split(separator: ":").first.map { String($0).trimmingCharacters(in: .whitespaces) } ?? title
         func namesFilm(_ sentence: String) -> Bool {
-            !shortTitle.isEmpty && sentence.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: shortTitle) + #"\b"#,
-                                                  options: .regularExpression) != nil
+            !shortTitle.isEmpty && TitleMatch.names(sentence, title: shortTitle, caseSensitive: true)
         }
         let change = #"\b(?:originally|initially|replac\w*|left the (?:film|project|production)|departed|exited|took over|stepped in|re-?shoots?|additional photography|second[- ]unit)\b"#
         var found: [Contributor] = []

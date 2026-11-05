@@ -152,6 +152,29 @@ public struct TechSpecs: Equatable, Sendable {
     public let specs: [Spec]
     /// Named, but not said of this film (another film's camera, gear in general): for diagnosis only.
     public var mentioned: [Spec] = []
+    /// Each gear statement read and not accepted, with why (1.10.9): avoided, a hypothetical, a plan,
+    /// another production's, a simulation… (`ClaimReason`). Not shown; read by the log and by the
+    /// reconciliation of what an earlier reading found (`SourceReconciliation`).
+    public var judged: [Judgement] = []
+
+    /// A gear statement set aside, and why.
+    public struct Judgement: Equatable, Sendable {
+        public let kind: Kind
+        public let name: String
+        public let evidence: String
+        public let source: String?
+        public let reason: ClaimReason
+        public var attribution: Attribution? = nil
+
+        public init(kind: Kind, name: String, evidence: String, source: String?, reason: ClaimReason, attribution: Attribution? = nil) {
+            self.kind = kind
+            self.name = name
+            self.evidence = evidence
+            self.source = source
+            self.reason = reason
+            self.attribution = attribution
+        }
+    }
     /// The texts read as round-ups of many films (only where they name this film), by source.
     public var roundups: [String] = []
     /// Sentences naming gear that aren't in the parts below (at most six).
@@ -217,6 +240,9 @@ public struct TechSpecs: Equatable, Sendable {
         var challenges: [Note] = []
         var collaboration: [Note] = []
         var cameraVFX: [Note] = []
+        // Each gear statement set aside, and why (1.10.9): what a reading's log and the reconciliation
+        // of earlier findings read (`SourceReconciliation`).
+        var judged: [Judgement] = []
         // The full name, and the first and last names alone ("Hong" for Hong Kyung-pyo, "Deakins"
         // for Roger Deakins), as articles write them.
         let particles: Set<String> = ["van", "von", "der", "den", "del", "della", "les", "dos", "das"]
@@ -268,7 +294,7 @@ public struct TechSpecs: Equatable, Sendable {
             // What on a page not about the film is anchored to it, paragraph by paragraph (1.10.8).
             let pageAnchors = text.aboutFilm || roundup ? nil
                 : PageContext.anchors(text.sections.flatMap(\.paragraphs), title: title ?? "", otherTitles: otherTitles,
-                                      people: names + directorNames, inherit: text.inheritsSubject)
+                                      people: names + directorNames, inherit: text.inheritsSubject, acrossParagraphs: true)
             var paragraphIndex = -1
             for section in text.sections {
                 answeringAboutAnother = 0
@@ -357,18 +383,24 @@ public struct TechSpecs: Equatable, Sendable {
                         let lowered = sentence.lowercased()
                         var gearNamed = 0
                         var namedHere: [String] = []
+                        // What the sentence asserts, apart from what it compares the film with (1.10.9):
+                        // "As with Top Gun: Maverick, they graded at Company 3" is this film's grading;
+                        // a part naming another production is set aside, the rest read for the film.
+                        let frame = ComparisonFrame(sentence, title: title, otherTitles: otherTitles,
+                                                    people: names + directorNames)
+                        let main = frame.main
                         // About another film ("his Super 16mm work on Carol", "Christopher Nolan's
                         // Oppenheimer", "in 1993, employing a Sony F900"): no gear is read from it,
                         // and it's kept only as how the cinematographer and the director met.
-                        let continued = previousOtherFilm && matches(continuesAbout, sentence) && !namesTitle(sentence, title: title)
+                        let continued = previousOtherFilm && matches(continuesAbout, main) && !namesTitle(sentence, title: title)
                         // Whether the sentence is about this film's production is settled before anything
                         // in it is read: "I knew the F65 from my work on Ex Machina, and shot with that
                         // alongside the F55" names the film only as earlier work.
                         let namesAsSubject = namesTitle(sentence, title: title) && !namesOnlyAsReference(sentence, title: title)
                         // Answering about another production, a sentence is this film's only when it says how
                         // this film was shot ("We shot Ex Machina on the F65"), not when it just names it.
-                        let otherFilm = aboutOtherFilm(sentence, year: year, people: names + directorNames, title: title) || continued
-                            || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(sentence, title: $0) }
+                        let otherFilm = aboutOtherFilm(main, year: year, people: names + directorNames, title: title) || continued
+                            || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(main, title: $0) }
                                 // "On Glass Rivers, I shot film, but this time we chose…": it turns to this film.
                                 // (Not "…, but the lenses were Cooke S4", nor "but we switched…": the turn must name this film.)
                                 && sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here)\b|\bthis time\b|\bon this (?:one|film)\b"#,
@@ -378,7 +410,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."
                         previousOtherFilm = continued || (otherFilm && !namesTitle(sentence, title: title)
-                            && (matches(anotherProduction, sentence) || aboutOtherFilm(sentence, year: nil, people: names + directorNames, title: title)))
+                            && (matches(anotherProduction, main) || aboutOtherFilm(main, year: nil, people: names + directorNames, title: title)))
                         // "I performed some simple tests. I shot 35mm Double-X, 35mm color film and with the
                         // Arri Alexa.": what was tried, not what it was shot on (unless it says what was chosen).
                         let tried = index > 0 && matches(testsDone, sentences[index - 1]) && !matches(chosenAfter, sentences[index - 1])
@@ -390,11 +422,43 @@ public struct TechSpecs: Equatable, Sendable {
                             let aboutRelease = release.contains { lowered.contains($0) }
                             for rule in rules {
                                 if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
-                                for (name, at) in rule.found(in: sentence) {
+                                for (name, place) in rule.found(in: sentence) {
+                                    let original = sentence
+                                    // Inside a part comparing the film with another production: that one's.
+                                    if frame.contains(place) {
+                                        judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
+                                                                source: text.source, reason: .otherProduction))
+                                        continue
+                                    }
+                                    // The same place in the sentence's own statement (comparisons blanked).
+                                    let at = main.index(main.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.lowerBound))
+                                        ..< main.index(main.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.upperBound))
+                                    let sentence = main
                                     // "shot digitally rather than on film", "Grand Prix is the touchstone — [that
                                     // film was] shot… in Super Panavision 70", "on Top Gun: Maverick, we opened
                                     // up to 1.43:1": not this film's (see `Attribution`).
-                                    if setAside(sentence, at: at, title: title, people: names + directorNames) != nil { continue }
+                                    if let aside = setAside(sentence, at: at, title: title, people: names + directorNames) {
+                                        judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)), source: text.source,
+                                                                reason: aside == .rejected ? .denied : .otherProduction, attribution: aside))
+                                        continue
+                                    }
+                                    // What the statement asserts of the gear (1.10.9, `ClaimFrame`): avoided, a
+                                    // hypothetical, a plan, a test, someone else's practice, a simulation, an
+                                    // object in the scene, a release format, a product's capability.
+                                    if let reason = ClaimFrame.reason(original, at: place, kind: rule.kind, name: name) {
+                                        judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
+                                                                source: text.source, reason: reason))
+                                        if reason.abstains {
+                                            // Neither confirmed nor ruled out: named, not this film's gear.
+                                            var spec = Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
+                                                            evidence: String(original.prefix(400)), source: text.source)
+                                            spec.aboutThisFilm = false
+                                            spec.capture = false
+                                            spec.attribution = .ambiguous
+                                            found.append(spec)
+                                        }
+                                        continue
+                                    }
                                     // "Barbie was her first digital shooting experience": only with the title.
                                     if rule.needsTitle, !titleGoverns(sentence, at: at, title: title) { continue }
                                     // "hybrid photochemical finishing", "70 mm prints": how it was
@@ -418,7 +482,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     let share = saidOfShare(sentence, at: at)
                                     let part = share || saidOfPart(sentence, at: at)
                                     found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
-                                                      evidence: String(sentence.prefix(400)), source: text.source,
+                                                      evidence: String(original.prefix(400)), source: text.source,
                                                       partial: part, share: share, wholeFilm: !part && saidOfWholeFilm(sentence, at: at),
                                                       direct: saidDirectly(sentence, at: at, title: title), sheet: isSpecList(sentence),
                                                       intended: saidAsIntended(sentence, at: at),
@@ -428,9 +492,9 @@ public struct TechSpecs: Equatable, Sendable {
                                                       aboutThisFilm: said.aboutThisFilm,
                                                       attribution: !said.aboutThisFilm ? .otherProduction
                                                         : establishes && said.captured && !tried && !speech && !testedOnly(sentence, at: at) ? .direct : .ambiguous,
-                                                      productionScope: ProductionScope.said(in: sentence),
-                                                      evidenceKind: SourceRegistry.evidence(source: text.source, text: sentence, isInterview: text.isInterview,
-                                                                                             speaker: CraftCrew.speaker(in: sentence, crew: crew))))
+                                                      productionScope: ProductionScope.said(in: original),
+                                                      evidenceKind: SourceRegistry.evidence(source: text.source, text: original, isInterview: text.isInterview,
+                                                                                             speaker: CraftCrew.speaker(in: original, crew: crew))))
                                 }
                             }
                         }
@@ -521,6 +585,7 @@ public struct TechSpecs: Equatable, Sendable {
         let shown = all.filter(isThisFilms)
         var specs = TechSpecs(specs: shown, sentences: ranked(gear, 6))
         specs.mentioned = all.filter { !isThisFilms($0) }
+        specs.judged = judged
         specs.roundups = roundups
         specs.approach = ranked(approach, 10)
         specs.intent = ranked(intent, 8)
@@ -1018,7 +1083,7 @@ public struct TechSpecs: Equatable, Sendable {
         let after = String(sentence[range.upperBound..<part.upperBound]).replacingOccurrences(of: "’", with: "'")
         // Said of another production: "…first digital shoot on The Irishman".
         if after.range(of: #"^\s+(?:on|for|with|in)\s+(?:the\s+)?[A-Z0-9]"#, options: .regularExpression) != nil { return false }
-        let escaped = NSRegularExpression.escapedPattern(for: title.replacingOccurrences(of: "’", with: "'"))
+        let escaped = TitleMatch.embeddable(title)
         let subject = #"(?<!\w)"# + escaped + #"(?!\w)\s+(?:was|is|became|marked|remains)\s+(?:also\s+)?(?:[\w'-]+\s+){0,3}$"#
         if before.range(of: subject, options: [.regularExpression, .caseInsensitive]) != nil { return true }
         let opening = #"^[^,;]{0,60},\s+"# + escaped + #"(?!\w)\s+(?:was|is|became|marked)\b"#
@@ -1037,6 +1102,8 @@ public struct TechSpecs: Equatable, Sendable {
         let own = (title ?? "").lowercased()
         let short = own.split(separator: ":").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? own
         if !own.isEmpty, lowered == own || lowered == short || lowered.hasPrefix(own + ":") { return false }
+        // The same title written another way ("Once Upon a Time in Hollywood") is this film (1.10.9).
+        if !own.isEmpty, TitleMatch.key(named) == TitleMatch.key(own) || TitleMatch.key(named) == TitleMatch.key(short) { return false }
         // Its subtitle alone ("Fury Road" for Mad Max: Fury Road, "Part Two" for Dune: Part Two).
         if let colon = own.firstIndex(of: ":") {
             let subtitle = own[own.index(after: colon)...].trimmingCharacters(in: .whitespaces)
@@ -1293,9 +1360,8 @@ public struct TechSpecs: Equatable, Sendable {
             }
         }
         for name in titles {
-            let escaped = NSRegularExpression.escapedPattern(for: name.replacingOccurrences(of: "’", with: "'"))
             // A short title ("Her", "Up") only as written, capitalised: not "shot her close-ups".
-            films.append(name.count <= 3 ? "(?-i:" + escaped + ")" : escaped)
+            films.append(TitleMatch.embeddable(name))
         }
         // The film itself, not "the film's opening" (and not a bare "it", which may be a scene).
         let film = #"(?<!\w)(?:"# + films.joined(separator: "|") + #")(?!\w)(?!'s)"#
@@ -1332,11 +1398,9 @@ public struct TechSpecs: Equatable, Sendable {
         if let short = title.split(separator: ":").first.map({ $0.trimmingCharacters(in: .whitespaces) }), short.count >= 3, short != title {
             titles.append(short)
         }
-        return titles.contains { name in
-            let escaped = NSRegularExpression.escapedPattern(for: name.replacingOccurrences(of: "’", with: "'"))
-            let pattern = #"(?<!\w)"# + (name.count <= 3 ? "(?-i:" + escaped + ")" : escaped) + #"(?!\w)"#
-            return folded.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
-        }
+        // The title's words in order, whatever the punctuation between them (1.10.9, `TitleMatch`):
+        // "Once Upon a Time… in Hollywood" and "Once Upon a Time in Hollywood" are the same title.
+        return titles.contains { name in TitleMatch.names(folded, title: name, caseSensitive: name.count <= 3) }
     }
 
     /// Whether the film's title appears only as a point of reference for other work: "from my work
@@ -1352,8 +1416,7 @@ public struct TechSpecs: Equatable, Sendable {
         }
         var found = false
         for name in titles {
-            let escaped = NSRegularExpression.escapedPattern(for: name.replacingOccurrences(of: "’", with: "'"))
-            let pattern = #"(?<!\w)"# + (name.count <= 3 ? "(?-i:" + escaped + ")" : escaped) + #"(?!\w)"#
+            let pattern = #"(?<!\w)"# + TitleMatch.embeddable(name) + #"(?!\w)"#
             guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
             for match in regex.matches(in: folded, range: NSRange(folded.startIndex..., in: folded)) {
                 guard let range = Range(match.range, in: folded) else { continue }
@@ -1391,8 +1454,7 @@ public struct TechSpecs: Equatable, Sendable {
         }
         let verbs = "shot|filmed|photographed|lensed|captured|shoot|shooting"
         return titles.contains { name in
-            let escaped = NSRegularExpression.escapedPattern(for: name.replacingOccurrences(of: "’", with: "'"))
-            let film = name.count <= 3 ? "(?-i:" + escaped + ")" : escaped
+            let film = TitleMatch.embeddable(name)
             return folded.range(of: #"(?<!\w)"# + film + #"(?!\w)"# + String(shotAfterTitle.dropFirst()), options: [.regularExpression, .caseInsensitive]) != nil
                 || folded.range(of: #"\b(?:"# + verbs + #")\s+"# + film + #"(?!\w)"#, options: [.regularExpression, .caseInsensitive]) != nil
         }
@@ -1664,7 +1726,8 @@ public struct TechSpecs: Equatable, Sendable {
             let named = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
             // "Dune: Part One" for Dune, unless that's another film of the collection.
             let subtitled = named.hasPrefix(own + ":") && !otherTitles.contains { $0.lowercased() == named }
-            return !own.isEmpty && (named == own || named == short || subtitled)
+            return !own.isEmpty && (named == own || named == short || subtitled
+                || TitleMatch.key(named) == TitleMatch.key(own) || TitleMatch.key(named) == TitleMatch.key(short))
         }
         let range = NSRange(part.startIndex..., in: part)
         // “Alien”, “Jurassic World Rebirth,”: a title (most words capitalised), not a quote, and not a
@@ -1683,7 +1746,7 @@ public struct TechSpecs: Equatable, Sendable {
             if !nickname, !isOwn(named) || collection { return true }
         }
         // The collection's other films, where this film's own title isn't what's written.
-        let owns = own.isEmpty ? [] : occurrences(of: title ?? "", in: part, options: .caseInsensitive)
+        let owns = own.isEmpty ? [] : TitleMatch.ranges(of: title ?? "", in: part)
         for other in otherTitles where other.count >= 4 && other.lowercased() != own {
             for found in occurrences(of: other, in: part) where !owns.contains(where: { $0.overlaps(found) }) {
                 let edgeBefore = found.lowerBound == part.startIndex || !(part[part.index(before: found.lowerBound)].isLetter)
