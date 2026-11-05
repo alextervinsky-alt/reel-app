@@ -16,6 +16,15 @@ final class ClaimExplainTests: XCTestCase {
             let others = parts.count == 3 ? parts[1].split(separator: ",").map(String.init) : []
             let frame = ComparisonFrame(sentence, title: title, otherTitles: others, people: ["Jane Doe", "Carl Example"])
             say("   main: [\(frame.main)]")
+            let ns = NSRange(sentence.startIndex..., in: sentence)
+            for m in ComparisonFrame.leading.matches(in: sentence, range: ns) {
+                if let r = Range(m.range, in: sentence) {
+                    let part = String(sentence[r])
+                    say("   leading=[\(part)] namesAnotherFilm=\(TechSpecs.namesAnotherFilm(part, title: title, otherTitles: others, people: ["Jane Doe", "Carl Example"])) "
+                        + "titles=\(others.map { TechSpecs.namesTitle(part, title: $0) }) own=\(TechSpecs.namesTitle(part, title: title)) "
+                        + "fresh=\(ComparisonFrame(computing: sentence, title: title, otherTitles: others, people: ["Jane Doe", "Carl Example"]).spans.count)")
+                }
+            }
             say("== [\(title)] \(sentence)")
             say("   spans: \(frame.spans.map { String(sentence[$0]) })")
             for rule in TechSpecs.rules {
