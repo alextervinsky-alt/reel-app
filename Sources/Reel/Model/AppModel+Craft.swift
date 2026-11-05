@@ -225,7 +225,8 @@ extension AppModel {
         // The article didn't come (not: there's no such article): Wikipedia didn't answer.
         let articleFailed = film.funFacts?.articleTitle != nil && article == nil && !articlesMissing.contains(details.id)
         let read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
-                                       colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details), articleFailed: articleFailed)
+                                       colour: film.funFacts?.quick?.colour, otherTitles: otherTitles(of: details), articleFailed: articleFailed,
+                                       previous: current)
         // A tab reading that wasn't researched (the background did it within the day) keeps the
         // stored research rather than replacing it with "nothing searched".
         var index = read.index

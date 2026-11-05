@@ -477,11 +477,11 @@ final class ResearchCoverageTests: XCTestCase {
     }
 
     func testALibraryFileOfVersionThreeIsReadAsIs() throws {
-        XCTAssertEqual(LibraryFile.currentVersion, 4)
+        XCTAssertEqual(LibraryFile.currentVersion, 5, "1.10.9: findings with their passages (CraftIndex.claims)")
         let film = FilmEntry(driveID: "Main", relativePath: "Q.mkv", fileName: "Q.mkv", size: 1, modified: nil, addedAt: Date())
         let encoded = try JSONEncoder().encode(LibraryFile(films: [film]))
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        XCTAssertEqual(object["version"] as? Int, 4)
+        XCTAssertEqual(object["version"] as? Int, 5)
         object["version"] = 3
         let decoded = try JSONDecoder().decode(LibraryFile.self, from: JSONSerialization.data(withJSONObject: object))
         XCTAssertEqual(decoded.films.map(\.fileName), ["Q.mkv"])
