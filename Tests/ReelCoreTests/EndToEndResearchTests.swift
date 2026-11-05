@@ -146,7 +146,7 @@ final class EndToEndResearchTests: XCTestCase {
         // Partial findings leave their questions open.
         for film in films {
             for entry in film.craft?.research ?? [] where entry.state == .partial {
-                XCTAssertFalse(entry.open?.isEmpty ?? true, "\(entry.dimension): a partial finding names what's still open")
+                XCTAssertFalse(entry.open.isEmpty, "\(entry.dimension): a partial finding names what's still open")
             }
         }
         // Read again a day later: nothing is due but the films a site didn't answer for (no needless repeats).
