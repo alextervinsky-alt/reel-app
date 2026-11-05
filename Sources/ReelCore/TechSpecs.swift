@@ -417,7 +417,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."
                         previousOtherFilm = continued || (otherFilm && !namesTitle(sentence, title: title)
-                            && (matches(anotherProduction, main) || aboutOtherFilm(main, year: nil, people: names + directorNames, title: title)))
+                            && (matches(anotherProduction, sentence) || aboutOtherFilm(sentence, year: nil, people: names + directorNames, title: title)))
                         // "I performed some simple tests. I shot 35mm Double-X, 35mm color film and with the
                         // Arri Alexa.": what was tried, not what it was shot on (unless it says what was chosen).
                         let tried = index > 0 && matches(testsDone, sentences[index - 1]) && !matches(chosenAfter, sentences[index - 1])

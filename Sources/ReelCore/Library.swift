@@ -571,6 +571,11 @@ public struct LibraryFile: Codable, Equatable, Sendable {
 }
 
 public enum LibraryMerge {
+    /// A file name of a download in progress (`FilenameParser`'s incomplete extensions).
+    public static func isIncompleteDownload(_ fileName: String) -> Bool {
+        FilenameParser.parse(fileName).isIncomplete
+    }
+
     /// Applies a fresh scan of one drive to the library.
     /// - Known files keep their match.
     /// - A file moved to another folder (same name and size) keeps its match.
@@ -601,13 +606,18 @@ public enum LibraryMerge {
         }
     }
 
-    private static func merge(scan: [ScannedFile], driveID: String, to existing: [FilmEntry], now: Date)
+    private static func merge(scan given: [ScannedFile], driveID: String, to existing: [FilmEntry], now: Date)
         -> (films: [FilmEntry], unseen: [FilmEntry]) {
         let others = existing.filter { $0.driveID != driveID }
         let mine = existing.filter { $0.driveID == driveID }
+        // A download still in progress (".crdownload", ".part") is never a film (1.10.9): not added,
+        // and a record of one kept from before is among the unseen, so only a complete scan of its
+        // drive drops it (an incomplete scan keeps everything unseen, as ever). The file itself is
+        // never touched: only Reel's record of it goes.
+        let scan = given.filter { !isIncompleteDownload($0.fileName) }
 
         var byPath: [String: FilmEntry] = [:]
-        for e in mine { byPath[e.relativePath] = e }
+        for e in mine where !isIncompleteDownload(e.fileName) { byPath[e.relativePath] = e }
         let scannedPaths = Set(scan.map { $0.relativePath })
         var missing = mine.filter { !scannedPaths.contains($0.relativePath) }
 

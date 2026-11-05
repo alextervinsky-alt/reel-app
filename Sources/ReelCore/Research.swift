@@ -409,16 +409,45 @@ public enum SourceRegistry {
 public struct ResearchContext: Sendable {
     public let crew: [CraftCrew.Contributor]
     public let specs: TechSpecs
-    public let vfxRelevant: Bool
+    /// Whether the film's visual effects are a question for it (1.10.9): established by a reliable
+    /// sign, not applicable on stated grounds, or unknown. Unknown isn't "none": no visual effects
+    /// supervisor on TMDB proves nothing, so it isn't called not applicable either; it's just not
+    /// researched with searches of its own.
+    public enum VFXRelevance: String, Sendable {
+        /// A visual effects supervisor credited; the photography's part in the effects read; or a
+        /// statement about the film's effects work (created, composited, supervised, a vendor, an
+        /// award or nomination for them).
+        case established
+        /// The film's texts say it had none ("no visual effects", "without CGI", "entirely in camera").
+        case notApplicable
+        /// Nothing either way: a word in passing ("visual effects" in a list of credits or a review).
+        case unknown
+    }
+    public let vfxRelevance: VFXRelevance
+    public var vfxRelevant: Bool { vfxRelevance == .established }
+
+    static let effectsWork = try! NSRegularExpression(
+        pattern: #"\b(?:visual effects|vfx|cgi|computer[- ]generated|digital effects|green ?screen|blue ?screen|digital (?:set )?extensions?|composit\w*|matte paintings?)\b[^.]{0,120}\b(?:created|creating|built|rendered|composited|added|designed|delivered|supervised|handled|produced|vendor|studio|company|houses?|shots?|plates?|elements|work|team|artists|nominat\w*|award\w*)\b|\b(?:created|built|rendered|composited|added|designed|delivered|supervised|handled|nominat\w*|award\w*)\b[^.]{0,80}\b(?:visual effects|vfx|cgi|computer[- ]generated|digital effects)\b"#,
+        options: [.caseInsensitive])
+    static let noEffects = try! NSRegularExpression(
+        pattern: #"\b(?:no|without(?: any)?|zero|never used|avoided|eschewed|free of)\s+(?:visual effects|vfx|cgi|cg|computer[- ]generated (?:imagery|effects)|digital effects)\b|\b(?:entirely|all|everything|completely)\s+(?:in[- ]camera|practical)\b"#,
+        options: [.caseInsensitive])
 
     public init(crew: [CraftCrew.Contributor], specs: TechSpecs, texts: [TechSpecs.Text]) {
         self.crew = crew
         self.specs = specs
-        let mentions = texts.flatMap { $0.sections.flatMap(\.paragraphs) }.contains {
-            $0.range(of: #"\b(?:visual effects|VFX|CGI|CG |computer[- ]generated|digital effects|green ?screen|blue ?screen)\b"#,
-                     options: [.regularExpression, .caseInsensitive]) != nil
+        let paragraphs = texts.flatMap { $0.sections.flatMap(\.paragraphs) }
+        let sentences = paragraphs.flatMap { Digest.sentences(in: $0) }
+        func any(_ regex: NSRegularExpression) -> Bool {
+            sentences.contains { regex.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) != nil }
         }
-        vfxRelevant = crew.contains { $0.role == .vfxSupervisor } || !specs.cameraVFX.isEmpty || mentions
+        if crew.contains(where: { $0.role == .vfxSupervisor }) || !specs.cameraVFX.isEmpty || any(Self.effectsWork) {
+            vfxRelevance = .established
+        } else if any(Self.noEffects) {
+            vfxRelevance = .notApplicable
+        } else {
+            vfxRelevance = .unknown
+        }
     }
 }
 
@@ -716,7 +745,8 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         case unsupportedLanguage
         /// Not looked for beyond the first pass (no slot left, or nothing to search by).
         case notSearched
-        /// No question of it applies to this film (1.10.8): camera and VFX for a film without effects.
+        /// No question of it applies to this film (1.10.8): camera and VFX for a film whose texts say it
+        /// had no effects (1.10.9: only on such grounds; no sign either way is `notSearched`).
         case notApplicable
         /// Saved by a later Reel with a state this one doesn't know.
         case unknown
@@ -841,7 +871,11 @@ public enum ResearchCoverage {
                                      discovery: discovery)
             }
             let relevant = ResearchQuestions.catalogue.filter { $0.dimension == dimension && $0.isApplicable(context) }
-            if relevant.isEmpty { return ResearchEntry(dimension: dimension, state: .notApplicable, discovery: discovery) }
+            if relevant.isEmpty {
+                // Not applicable only on grounds (1.10.9); with nothing either way, VFX is not searched yet.
+                let unknown = dimension == .vfx && context.vfxRelevance == .unknown
+                return ResearchEntry(dimension: dimension, state: unknown ? .notSearched : .notApplicable, discovery: discovery)
+            }
             let open = relevant.filter { !$0.isAnswered(context.specs) }.map(\.id)
             if open.isEmpty {
                 return ResearchEntry(dimension: dimension, state: .found, queries: keys, discovery: discovery, searchedAt: searchedAt)

@@ -172,7 +172,9 @@ public struct ComparisonFrame: Sendable {
     static let referencePhrase = try! NSRegularExpression(
         pattern: #"\b(?:inspired by|influenced by|model(?:l)?ed (?:on|after)|borrowed from|reminiscent of|evocative of|in the (?:vein|style|tradition|spirit) of|a nod to|an? homage to|homage to|harking back to|recalling)\b[^,;]*"#,
         options: [.caseInsensitive])
-    static let parenthesis = try! NSRegularExpression(pattern: #"\([^()]{2,120}\)"#)
+    /// Brackets with words in them ("(as on The Irishman)"), not a title's year alone ("(2007)", which
+    /// stays: it's what says the title before it is another production).
+    static let parenthesis = try! NSRegularExpression(pattern: #"\((?![\s\d–-]*\))[^()]{2,120}\)"#)
 
     /// A title-like name: capitalised words after "on/in/for/with/from/of" ("on The Irishman",
     /// "for Industrial Light & Magic", "from In the Mood for Love"), or a year in brackets.
@@ -502,8 +504,12 @@ public enum ClaimFrame {
         if has(rumour, wholePart) || has(rumour, String(folded[gear.upperBound...])) { return .uncertain }
 
         // Tried out only (unless the sentence says it was then chosen).
-        if has(tried, near.isEmpty ? clause : clause), !has(adopted, String(folded[gear.upperBound...])),
-           !has(adopted, clause) {
+        // Not when the film itself comes between ("We shot tests on 35mm and the film on 65mm").
+        if let match = tried.firstMatch(in: clause, range: NSRange(clause.startIndex..., in: clause)),
+           let found = Range(match.range, in: clause),
+           String(clause[found.lowerBound...]).range(of: #"\b(?:the (?:film|movie|feature|shoot|production|picture)|principal|main unit)\b"#,
+                                                    options: [.regularExpression, .caseInsensitive]) == nil,
+           !has(adopted, String(folded[gear.upperBound...])), !has(adopted, clause) {
             return .testOnly
         }
 
