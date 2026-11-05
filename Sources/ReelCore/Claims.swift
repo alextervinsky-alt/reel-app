@@ -51,7 +51,8 @@ public enum TitleMatch {
 
     /// The pattern for the title's words (folded, see `ranges`), between letter-or-digit boundaries.
     public static func pattern(for title: String) -> String? {
-        let words = words(fold(title))
+        // Accents folded (as the text is, in `ranges`); case left to the caller's option.
+        let words = words(title.folding(options: [.diacriticInsensitive], locale: Locale(identifier: "en_US")))
         guard !words.isEmpty else { return nil }
         var pattern = #"(?<![\p{L}\p{N}])"#
         for (index, word) in words.enumerated() {
@@ -373,8 +374,9 @@ public enum ClaimFrame {
 
     /// A plan or intention, unless the sentence says it was carried out.
     static let plan = try! NSRegularExpression(
-        pattern: #"\b(?:had\s+)?(?:originally|initially|first|once)\s+(?:intended|planned|meant|hoped|wanted|set out|proposed|considered|thought)\b|\b(?:had\s+)?(?:intended|planned|meant|proposed|envisioned|envisaged)\s+(?:to|on)\b|\b(?:the|our|my|his|her|their|an?)\s+(?:original\s+|initial\s+|early\s+|first\s+)?(?:plan|intention|proposal)\s+(?:was|had been|is)\s+(?:always\s+|originally\s+|initially\s+)?to\b|\b(?:was|were)\s+(?:going|supposed|meant|slated)\s+to\b|\bat (?:first|one point)\b[^.;]{0,50}\b(?:wanted|planned|considered|thought|hoped)\b|\bwas to have\b"#,
+        pattern: #"\b(?:had\s+)?(?:originally|initially|first|once)\s+(?:intended|planned|meant|hoped|wanted|set out|proposed|considered|thought)\b|\b(?:had\s+)?(?:intended|planned|meant|proposed|envisioned|envisaged)\s+(?:to|on)\s+(?:"# + planVerbs + #")\b|\b(?:the|our|my|his|her|their|an?)\s+(?:original\s+|initial\s+|early\s+|first\s+)?(?:plan|intention|proposal)\s+(?:was|had been|is)\s+(?:always\s+|originally\s+|initially\s+)?to\s+(?:"# + planVerbs + #")\b|\b(?:was|were)\s+(?:going|supposed|meant|slated)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\bat (?:first|one point)\b[^.;]{0,50}\b(?:wanted|planned|considered|thought|hoped)\b|\bwas to have\b"#,
         options: [.caseInsensitive])
+    static let planVerbs = "shoot|shooting|shot|film|filming|filmed|use|using|used|capture|capturing|captured|photograph|photographing|photographed|go with|lens|lensed|light|lighting|lit|rent|rely on|employ|work with|frame|grade"
     static let planKept = try! NSRegularExpression(
         pattern: #"\b(?:as (?:planned|intended)|and (?:that'?s what )?(?:we|they|he|she|i) did|which (?:we|they|he|she|i) did|stuck (?:to|with) (?:it|that|the plan)|stayed with|in the end (?:we|they|he|she|i) (?:did|used|shot)|ended up (?:using|shooting|doing)|and did|so (?:we|they|he|she) did)\b"#,
         options: [.caseInsensitive])
@@ -428,7 +430,7 @@ public enum ClaimFrame {
 
     /// A product and what it can do: "the Alexa offers…", "the light features…".
     static let capability = try! NSRegularExpression(
-        pattern: #"\b(?:offers?|features?|provides?|boasts?|delivers?|allows?|enables?|lets\s+(?:you|users|filmmakers|operators)|can\b|is able to|are able to|is capable of|are capable of|comes? with|ships? with|supports?|promises?|(?:is|are|was|were|had been) designed (?:for|to)|records? up to|shoots? up to)"#,
+        pattern: #"\b(?:offers?|(?:many |several |new |other )?features (?:like|such as|include|including|a|an|the)\b|provides?|boasts?|delivers?|allows?|enables?|lets\s+(?:you|users|filmmakers|operators)|can\b|is able to|are able to|is capable of|are capable of|comes? with|ships? with|supports?|promises?|(?:is|are|was|were|had been) designed (?:for|to)|records? up to|shoots? up to)"#,
         options: [.caseInsensitive])
     static let productSubject = try! NSRegularExpression(
         pattern: #"\b(?:the|this|its|a|an|each|every)?\s*(?:camera|cameras|sensor|lens|lenses|light|lights|fixture|fixtures|system|unit|model|body|bodies|series|range|product|line|panel|it)\b|\b(?:arri|alexa|red|sony|venice|canon|blackmagic|panavision|cooke|zeiss|leica|aputure|astera|creamsource|kino flo|skypanel|dji|ronin|fujinon|angenieux|angénieux)\b"#,
@@ -514,10 +516,18 @@ public enum ClaimFrame {
     static func segmentStart(_ sentence: String, before range: Range<String.Index>) -> String.Index {
         let lead = sentence[..<range.lowerBound].lowercased()
         var start = 0
-        for mark in ["; ", " but ", " however", ". ", " instead", " in the end", " ultimately", " eventually", " whereas ", " yet ", " then ",
-                     " and went ", " and chose ", " and opted ", " and settled ", " and switched ", " and ended up "] {
+        for mark in strongBreaks where mark != ": " {
             if let found = lead.range(of: mark, options: .backwards) {
                 start = max(start, lead.distance(from: lead.startIndex, to: found.upperBound))
+            }
+        }
+        // ", and the production went with…", ", so he shot…": a new clause, unless it's only more of a list.
+        for mark in [", and ", ", so ", ", which ", ", who ", " and the ", " and then ", " so he ", " so she ", " so they ", " so we ", " so i "] {
+            if let found = lead.range(of: mark, options: .backwards) {
+                let offset = lead.distance(from: lead.startIndex, to: found.upperBound)
+                guard offset > start else { continue }
+                let rest = String(lead[found.upperBound...])
+                if !isContinuation(rest) || mark.contains("so ") { start = offset }
             }
         }
         return sentence.index(sentence.startIndex, offsetBy: start)

@@ -176,14 +176,7 @@ public struct PageContext: Equatable, Sendable {
         // A profile, an obituary or a news page is about its person or company, whatever it says of the
         // film after (an interview titled with its subject's name isn't: it can be about the film).
         let personal = profileCues.firstMatch(in: heading, range: range) != nil || corporateCues.firstMatch(in: heading, range: range) != nil
-        // A page about one production only (1.10.9): it names the film in its opening and no other
-        // production anywhere, and isn't a profile or a news item. Every statement on it is the film's,
-        // as on a page titled with it: there's nothing else for them to be about.
-        let single = !otherTitled && !personal && lede && others.isEmpty && paragraphs.count >= 3
-            && !paragraphs.contains { paragraph in
-                Digest.sentences(in: paragraph).contains { TechSpecs.namesAnotherFilm($0, title: title, otherTitles: otherTitles, people: people) }
-            }
-        if named && !otherTitled || single || (!otherTitled && !personal && lede && naming.filter { $0 }.count >= 2 && share >= 0.25) {
+        if named && !otherTitled || (!otherTitled && !personal && lede && naming.filter { $0 }.count >= 2 && share >= 0.25) {
             return PageContext(kind: .targetFilm, anchored: paragraphs.reduce(0) { $0 + Digest.sentences(in: $1).count }, productions: others)
         }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
@@ -270,7 +263,11 @@ public struct PageContext: Equatable, Sendable {
     /// A paragraph turning to a career, a biography or another time: where a subject carried over
     /// from the paragraph before would leak.
     static func turnsAway(_ paragraph: String) -> Bool {
-        paragraph.range(of: #"\b(?:was born|grew up|began (?:his|her|their) career|started (?:out|his career|her career)|credits include|filmography|(?:his|her|their) (?:first|debut|previous|earlier|last|next|latest|newest|new) (?:feature|film|movie|project|picture|documentary)|debut|years (?:earlier|before|later)|a decade (?:earlier|before|later)|before that|after that,? (?:he|she|they)|looks back|went on to|is (?:now|currently) (?:prepping|shooting|working)|next project|in (?:19|20)\d{2},)"#,
+        // A production named by an opening ("Five years later, on The Lantern Keepers of Hollow Bay, …"):
+        // capitalised words after "on", "for" or "with" up to a comma.
+        if paragraph.range(of: #"(?:^|[,.;]\s+|\s)(?:on|for|with|during)\s+(?:The\s+|A\s+|An\s+)?[A-Z][\w'’-]+(?:\s+(?:of|the|and|a|an|in|on|for|to)?\s*[A-Z][\w'’-]+){0,6},"#,
+                           options: .regularExpression) != nil { return true }
+        return paragraph.range(of: #"\b(?:was born|grew up|began (?:his|her|their) career|started (?:out|his career|her career)|credits include|filmography|(?:his|her|their) (?:first|debut|previous|earlier|last|next|latest|newest|new) (?:feature|film|movie|project|picture|documentary)|debut|years (?:earlier|before|later)|a decade (?:earlier|before|later)|before that|after that,? (?:he|she|they)|looks back|went on to|is (?:now|currently) (?:prepping|shooting|working)|(?:next|current|new|latest|upcoming) (?:project|feature|film)|in (?:19|20)\d{2},)"#,
                         options: [.regularExpression, .caseInsensitive]) != nil
     }
 

@@ -156,6 +156,9 @@ public struct TechSpecs: Equatable, Sendable {
     /// another production's, a simulation… (`ClaimReason`). Not shown; read by the log and by the
     /// reconciliation of what an earlier reading found (`SourceReconciliation`).
     public var judged: [Judgement] = []
+    /// Every statement accepted, before the same gear from several statements is merged (`tidy`): which
+    /// passage established what (1.10.9), for the reconciliation of earlier findings and the benchmark.
+    public var accepted: [Spec] = []
 
     /// A gear statement set aside, and why.
     public struct Judgement: Equatable, Sendable {
@@ -586,6 +589,7 @@ public struct TechSpecs: Equatable, Sendable {
         var specs = TechSpecs(specs: shown, sentences: ranked(gear, 6))
         specs.mentioned = all.filter { !isThisFilms($0) }
         specs.judged = judged
+        specs.accepted = found.filter(isThisFilms)
         specs.roundups = roundups
         specs.approach = ranked(approach, 10)
         specs.intent = ranked(intent, 8)
