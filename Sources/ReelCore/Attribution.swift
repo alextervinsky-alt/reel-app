@@ -76,8 +76,13 @@ public struct PageContext: Equatable, Sendable {
             try! NSRegularExpression(pattern: #"\b(?:shot|photographed|lensed|filmed|lit)\s+"# + multi + #"(?=\s+(?:with|on|in|for|using|entirely|mostly|back)\b|[,.;])"#),
             // "Lowland Cantata, his first digital feature, …".
             try! NSRegularExpression(pattern: multi + #",\s+(?:his|her|their|the|our|my)\s+(?:\w+\s+){0,3}(?:feature|film|picture|movie|documentary|series|short)\b"#),
-            // "On The Quiet Ledger, a few years earlier, …" (an opening naming a production).
-            try! NSRegularExpression(pattern: #"(?:^|[.!?]\s+)(?:On|For|With|During)\s+"# + multi + #","#),
+            // "On The Quiet Ledger, a few years earlier, …", "On Overpass she worked…" (an opening naming a production).
+            try! NSRegularExpression(pattern: #"(?:^|[.!?:]\s+)(?:On|For|With|During)\s+"# + multi + #"(?:,|(?=\s+(?:he|she|they|we|I|I'd|we'd)\b))"#),
+            try! NSRegularExpression(pattern: #"(?:^|[.!?:]\s+)(?:On|For|With|During)\s+"# + titled + #"(?=\s+(?:he|she|they|we|I|I'd|we'd)\b)"#),
+            // "Her follow-up, Static Bloom,", "another feature, Fieldnote,", "coming off The Copper Season,".
+            try! NSRegularExpression(pattern: #"\b(?:[Hh]is|[Hh]er|[Tt]heir)\s+(?:follow-up|next(?:\s+(?:film|feature|project))?|previous\s+(?:film|feature)|newest|latest|debut|first\s+feature),?\s+"# + titled),
+            try! NSRegularExpression(pattern: #"\banother\s+(?:feature|film|movie|production|picture|project),?\s+"# + titled),
+            try! NSRegularExpression(pattern: #"\b(?:coming|fresh|straight)\s+(?:off|from)\s+"# + titled),
             // "the miniseries Dust", "the feature Low Country", "on the set of Kiln" (one word or more).
             try! NSRegularExpression(pattern: #"\b(?:the|a|his|her|their|our|my)\s+(?:mini-?series|series|show|feature|film|documentary|commercial|short|movie|pilot|sequel|remake)\s+"#
                                      + titled + #"(?=[\s,.;:!?)]|$)"#),

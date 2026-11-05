@@ -424,6 +424,16 @@ public struct TechSpecs: Equatable, Sendable {
                             && !matches(chosenAfter, sentence)
                         // "Initially, the traditional hair-and-make up tests were shot in black-and-white."
                         // is how the tests were shot, not the film (checked at each name below).
+                        // About another production: its gear is recorded as such (what reconciling an earlier
+                        // finding from this sentence reads, 1.10.9), and nothing is read from it.
+                        if otherFilm, triggers.contains(where: { lowered.contains($0) }) {
+                            for rule in rules {
+                                for (name, _) in rule.found(in: sentence) {
+                                    judged.append(Judgement(kind: rule.kind, name: name, evidence: String(sentence.prefix(400)),
+                                                            source: text.source, reason: .otherProduction))
+                                }
+                            }
+                        }
                         if !otherFilm, triggers.contains(where: { lowered.contains($0) }) {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
@@ -1167,7 +1177,7 @@ public struct TechSpecs: Equatable, Sendable {
     /// An opening naming a title, ended by a comma, at the start of a clause: "— on Top Gun:
     /// Maverick, we…", "On Carol, I…". Group 1: the title.
     static let onAnotherTitle = try! NSRegularExpression(
-        pattern: #"(?:^[\W]*|[—–;:(]\s*|,\s+|\.\s+)(?i:on)\s+((?:The\s+)?[A-Z0-9][\w'.&-]*(?:\s+(?:(?:of|the|and|a|an|in|to|for|at|on)\s+)?[A-Z0-9][\w'.&-]*)*(?::\s+[A-Z0-9][\w'.&-]*(?:\s+[A-Z0-9][\w'.&-]*)*)?)\s*,"#)
+        pattern: #"(?:^[\W]*|[—–;:(]\s*|,\s+|\.\s+)(?i:on)\s+((?:The\s+)?[A-Z0-9][\w'.&-]*(?:\s+(?:(?:of|the|and|a|an|in|to|for|at|on)\s+)?[A-Z0-9][\w'.&-]*)*(?::\s+[A-Z0-9][\w'.&-]*(?:\s+[A-Z0-9][\w'.&-]*)*)?)\s*(?:,|(?=\s+(?i:he|she|they|we|i|i'd|we'd|i've|we've|it|the crew|the team)\b))"#)
 
     /// "<Title> is the touchstone", "<Title> was our main reference": group 1, the title.
     static let referenceTitle = try! NSRegularExpression(
@@ -1468,7 +1478,7 @@ public struct TechSpecs: Equatable, Sendable {
         }
     }
 
-    static let referenceBefore = #"(?:\bfrom\s+(?:my|our|his|her|their)\s+(?:work|time|experience|days)\s+(?:on|in|with)|\bas\s+(?:we\s+did\s+|i\s+did\s+)?(?:on|in|with)|\bunlike|\b(?:like|than)\s+(?:on|in|with))\s+$"#
+    static let referenceBefore = #"(?:\b(?:coming|fresh|straight)\s+(?:off|from)|\bafter\s+(?:finishing|wrapping|completing)|\bhaving\s+(?:just\s+)?(?:finished|wrapped|shot)|\bfrom\s+(?:my|our|his|her|their)\s+(?:work|time|experience|days)\s+(?:on|in|with)|\bas\s+(?:we\s+did\s+|i\s+did\s+)?(?:on|in|with)|\bunlike|\b(?:like|than)\s+(?:on|in|with))\s+$"#
     /// After the title, what makes it the subject of how it was shot ("Since <title> was shot on
     /// film…", "like <title>, which was shot on 35mm"): not a reference.
     static let shotAfterTitle = #"^\W{0,3}(?:which\s+|that\s+)?(?:was|were|is)\s+(?:(?:mostly|mainly|largely|entirely|also|all|partly|primarily)\s+)?(?:shot|filmed|photographed|lensed|captured)\b"#
@@ -1835,7 +1845,7 @@ public struct TechSpecs: Equatable, Sendable {
     static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|That)\b(?!\s+time\b)|^\W*This\b(?!\s+(?:time|film|movie|picture|feature|one|project)\b)"#)
     /// Another production named as such, plainly (1.10.9): "collaborated on Glass Rivers", "the 2007
     /// feature Glass Rivers", "her previous feature, Glass Rivers", "Glass Rivers (2007)". Not "his film".
-    static let namedAsAnotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\s+[A-Z]|\b(?:an earlier|a previous|the previous|previous|earlier|last|first|debut)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b,?\s+[A-Z]|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
+    static let namedAsAnotherProduction = try! NSRegularExpression(pattern: #"\b(?:his|her|their|my|our)\s+(?:graduation|student|thesis|previous|earlier|next|newest|latest|other)\s+(?:short\s+)?(?:film|feature|short|project|picture|documentary)\b|\b(?i:on|for|in)\s+the\s+(?!(?:film|movie|feature|shoot|picture|production|set|day|night|first|last|whole|entire|main|final|same|new|current)\b)[a-z]+\s+(?:film|movie|feature|picture|shoot)\b|\banother\s+(?:feature|film|movie|production|picture|project)[,:]?\s+[A-Z]|\b(?:his|her|their)\s+(?:follow-up|next one)\b|\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\s+[A-Z]|\b(?:an earlier|a previous|the previous|previous|earlier|last|first|debut)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b,?\s+[A-Z]|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
     /// Another production named: "his 2007 feature Glass Rivers", "her previous film", "Glass Rivers (2007)".
     static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
 
