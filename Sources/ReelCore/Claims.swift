@@ -276,9 +276,13 @@ public struct ComparisonFrame: Sendable {
             }
             return false
         }
-        func add(_ regex: NSRegularExpression, loose: Bool) {
+        func add(_ regex: NSRegularExpression, loose: Bool, apart: Bool = false) {
             for match in regex.matches(in: sentence, range: ns) {
-                guard let range = Range(match.range, in: sentence), namesOther(range, loose: loose) else { continue }
+                guard let range = Range(match.range, in: sentence) else { continue }
+                // A trailing comparison starts after an opening one, never inside it: "Just as he had on
+                // <Other>, <Film> was shot…" is an opening comparison, not "as he had…" to the end.
+                if apart, spans.contains(where: { $0.overlaps(range) }) { continue }
+                guard namesOther(range, loose: loose) else { continue }
                 // The film itself named only inside the part is no reason to set it aside, but a part
                 // naming both is still a comparison: the main clause must say something on its own.
                 spans.append(range)
@@ -290,18 +294,12 @@ public struct ComparisonFrame: Sendable {
             if let range = Range(match.range, in: sentence), namesOther(range, loose: true) { spans.append(range) }
         }
         add(Self.leading, loose: true)
-        add(Self.trailing, loose: true)
-        add(Self.continuing, loose: true)
+        add(Self.trailing, loose: true, apart: true)
+        add(Self.continuing, loose: true, apart: true)
         add(Self.relative, loose: false)
         add(Self.referencePhrase, loose: false)
         // Brackets aren't blanked: "Robert Elswit (“There Will Be Blood”)" is often all a sentence says of
         // whose film it is about (the 1.10.9 live check).
-        // A part that holds another part whole is the same comparison read twice, the larger reaching
-        // past it ("Just as he had on <Other>, <Film> was shot…" also matches a trailing "as he had…"
-        // to the end): the smaller one is the comparison.
-        spans = spans.filter { span in
-            !spans.contains { other in other != span && span.lowerBound <= other.lowerBound && other.upperBound <= span.upperBound }
-        }
         // Nothing left to assert: the whole sentence is the comparison, so nothing is set aside.
         var chars = Array(sentence)
         var offsets: [Range<Int>] = []
