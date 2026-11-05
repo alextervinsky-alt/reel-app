@@ -556,7 +556,12 @@ public struct LibraryFile: Codable, Equatable, Sendable {
     /// 4 (1.10.7): readings keep where their research stands (`CraftIndex.research`) and a page in
     /// another language as such (`SourceLimit.Kind.language`). A version 3 file reads as it is (the
     /// research is nil until the film is read again); Reel 1.10.6 and older won't write over a 4.
-    public static let currentVersion = 4
+    /// 5 (1.10.9): readings keep every finding with its passage, and earlier findings carried,
+    /// pending reassessment or retired (`CraftIndex.claims`). A version 4 file reads as it is (no
+    /// migration step: claims are nil until the film is read again, and the reading before's tags
+    /// and names are reconciled then, `SourceReconciliation.earlier`); Reel 1.10.8 and older won't
+    /// write over a 5, so a pending finding can't be dropped by an older Reel.
+    public static let currentVersion = 5
 
     public init(films: [FilmEntry] = []) {
         self.version = LibraryFile.currentVersion

@@ -333,6 +333,10 @@ public enum ClaimFrame {
         let item = lowered.replacingOccurrences(of: #"^(?:and|or|nor|as well as|plus|even)\s+"#, with: "", options: .regularExpression)
         let words = item.split(separator: " ")
         if words.count > 7 { return false }
+        // "…, relying on a dolly", "…, instead using…": a new action, not more of a list.
+        if let first = words.first, first.hasSuffix("ing"), !["including", "something", "nothing", "anything", "everything", "lighting", "string", "ceiling", "building", "evening", "morning", "opening", "ending", "spring"].contains(String(first)) {
+            return false
+        }
         return finiteVerb.firstMatch(in: item, range: NSRange(item.startIndex..., in: item)) == nil
             && item.range(of: #"\b(?:we|i|he|she|they)\b"#, options: .regularExpression) == nil
     }
@@ -363,6 +367,10 @@ public enum ClaimFrame {
     /// "no Steadicam", "zero practicals": a determiner right before the gear.
     static let noneBefore = try! NSRegularExpression(pattern: #"\b(?:no|zero|nor|neither)\s+(?:[\w-]+\s+){0,2}$"#, options: [.caseInsensitive])
     /// After the gear: "…Steadicam was out of the question", "…cranes were never an option".
+    /// "A Steadicam was considered for the stairwells but was never brought aboard": weighed, then not used.
+    static let consideredNot = try! NSRegularExpression(
+        pattern: #"^\W*(?:[\w'’-]+\s+){0,4}?(?:was|were|had been|got)\s+(?:briefly\s+|also\s+)?(?:considered|discussed|proposed|suggested|floated|explored|looked at|tested|tried)\b[^.;]*\bbut\b[^.;]*\b(?:never|not|n['’]t|dropped|abandoned|rejected|ruled out|scrapped|cut|shelved)\b"#,
+        options: [.caseInsensitive])
     static let deniedAfter = try! NSRegularExpression(
         pattern: #"^\W*(?:[\w'’-]+\s+){0,5}?(?:was|were|is|are|would be|had been)\s+(?:never|not|n['’]t|out of the question|ruled out|abandoned|rejected|dropped|scrapped|off the table|unnecessary|too (?:big|heavy|expensive|slow)|impossible)\b|^\W*(?:[\w'’-]+\s+){0,3}?(?:wasn['’]t|weren['’]t|isn['’]t|aren['’]t)\b"#,
         options: [.caseInsensitive])
@@ -383,15 +391,15 @@ public enum ClaimFrame {
 
     /// Tried out, not necessarily used.
     static let tried = try! NSRegularExpression(
-        pattern: #"\b(?:experiment(?:ed|ing)?\s+with|tri(?:ed|al(?:l)?ed)\s+(?:out\s+)?(?!to\b)|test(?:ed|ing)\s+(?:out\s+)?(?!to\b)|auditioned|screen[- ]tested|compar(?:ed|ing))\b[^.;]*$"#,
+        pattern: #"\b(?:tests?|test days?|test shoots?|a day of tests|camera tests)\s+(?:on|with|using)\b|\b(?:experiment(?:ed|ing)?\s+with|tri(?:ed|al(?:l)?ed)\s+(?:out\s+)?(?!to\b)|test(?:ed|ing)\s+(?:out\s+)?(?!to\b)|auditioned|screen[- ]tested|compar(?:ed|ing))\b[^.;]*$"#,
         options: [.caseInsensitive])
     static let adopted = try! NSRegularExpression(
-        pattern: #"\b(?:chose|chosen|choose|went with|settled on|ended up|adopted|became (?:the|our)|carried (?:through|over) (?:into|to) (?:the|principal)|for the (?:film|shoot|production|movie|whole)|used (?:it|them) (?:for|on|throughout)|and (?:it|they) (?:stayed|stuck)|kept (?:it|them) for)\b"#,
+        pattern: #"\b(?:went on to (?:shoot|be used|photograph|cover|do)|made it (?:into|onto) (?:the|our) (?:film|final|movie|picture|cut)|stayed (?:on|for) the (?:whole |entire )?(?:shoot|film|production)|chose|chosen|choose|went with|settled on|ended up|adopted|became (?:the|our)|carried (?:through|over) (?:into|to) (?:the|principal)|for the (?:film|shoot|production|movie|whole)|used (?:it|them) (?:for|on|throughout)|and (?:it|they) (?:stayed|stuck)|kept (?:it|them) for)\b"#,
         options: [.caseInsensitive])
 
     /// What other people do or did: other cinematographers, the period, a mentor's lessons, a habit.
     static let practice = try! NSRegularExpression(
-        pattern: #"\b(?:all|many|most|some|other|lots of|plenty of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark|go-to)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses?|used|shoots?|shot|relies|rely|prefers?|favou?rs?|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:was|were|used|uses|would|shot)\b"#,
+        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark|go-to)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses?|used|shoots?|shot|relies|rely|prefers?|favou?rs?|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:was|were|used|uses|would|shot)\b"#,
         options: [.caseInsensitive])
 
     /// A simulation or a look, right by the gear.
@@ -409,6 +417,14 @@ public enum ClaimFrame {
     /// An object in the story or the location, not equipment of the production.
     static let environmentSubject = try! NSRegularExpression(
         pattern: #"\b(?:cars?|vehicles?|trucks?|bikes?|motorbikes?|trains?|ships?|boats?|planes?|aircraft|jets?|tracks?|circuits?|stadiums?|arenas?|streets?|buildings?|rooms?|bars?|clubs?|houses?|apartments?|hospitals?|offices?|stores?|shops?|restaurants?|diners?|casinos?|robots?|spaceships?|props?|scoreboards?|billboards?|signs?|towers?|city|town|venues?|set dressing|set decoration|lamps?)\s+(?:[\w'’-]+\s+){0,3}?(?:have|has|had|feature\w*|carr(?:y|ies)|contain\w*|sports?|display\w*|(?:is|are|was|were)\s+(?:commonly|usually|typically|often|normally|already|all)?\s*(?:bathed|lined|dotted|decorated|equipped|fitted|strung))\b"#,
+        options: [.caseInsensitive])
+    /// Made or placed by the art department as part of the scene: set dressing, props.
+    static let setDressing = try! NSRegularExpression(
+        pattern: #"\b(?:art department|production design(?:er)?|set dress\w*|set decorat\w*|as (?:a |the )?props?|prop (?:master|department)|part of the (?:set|decor|scenery)|on the (?:dashboard|fridge|wall|car|vehicle|console|screen|sign)s?|the character(?:'s|’s)?|, the character,)\b"#,
+        options: [.caseInsensitive])
+    /// …unless it's said to light the scene: "the neon practicals were the key light".
+    static let lightsTheScene = try! NSRegularExpression(
+        pattern: #"\b(?:key(?: light)?|main source|only source|lit (?:the|her|him|them|it|every|each|most)|to light|as (?:a |the )?(?:light )?source|lighting the|did the lighting)\b"#,
         options: [.caseInsensitive])
     static let productionAgent = try! NSRegularExpression(
         pattern: #"\b(?:we|i|our|us|crew|grips?|gaffers?|dp|dop|cinematographer|camera team|production|filmmakers|rigged|rig|placed|mounted|hung|added|used|lit (?:the|them|it|her|him)|for the (?:shot|scene|camera))\b"#,
@@ -439,6 +455,12 @@ public enum ClaimFrame {
         pattern: #"\b(?:we|i|our|us|he|she|they|the (?:production|crew|film|movie|filmmakers|dp|cinematographer|director))\b"#,
         options: [.caseInsensitive])
 
+    /// Reports and rumours, and things nobody would confirm: "Some reports say…", "reportedly",
+    /// "there may be one or two drone shots", "declined to confirm it". Not settled either way.
+    static let rumour = try! NSRegularExpression(
+        pattern: #"\b(?:some|several|unconfirmed|anecdotal|other)\s+(?:reports?|accounts?|sources?|stories|people)\s+(?:say|said|suggest|suggested|claim|claimed|have it)\b|\breportedly\b|\ballegedly\b|\brumou?r\w*|\b(?:is|was|were|are)\s+(?:said|rumou?red|reported|thought|believed|supposed)\s+to\b|\bthere\s+(?:may|might|could)\s+(?:be|have been)\b|\b(?:declined|refused)\s+to\s+confirm\b|\b(?:couldn['’]?t|could not|can['’]?t|cannot|nobody\s+(?:we\s+spoke\s+to\s+)?could)\s+confirm\b|\bunconfirmed\b|\bnot sure (?:if|whether)\b|\bi (?:think|believe) (?:there|we|they) (?:may|might)\b"#,
+        options: [.caseInsensitive])
+
     /// The reason the gear at `range` isn't this film's, if the sentence's own words give one.
     /// `kind`: the gear's kind (a ratio's presentation matters, a light in a scene matters).
     public static func reason(_ sentence: String, at range: Range<String.Index>, kind: TechSpecs.Kind, name: String) -> ClaimReason? {
@@ -466,6 +488,7 @@ public enum ClaimFrame {
         }
         if has(noneBefore, String(near.suffix(30))) { return .denied }
         if has(deniedAfter, after) { return .denied }
+        if has(consideredNot, String(folded[gear.upperBound...])) { return .denied }
 
         // A hypothetical: from its modal to the end of its part of the sentence, commas included.
         let part = governing(folded, before: gear, acrossCommas: true)
@@ -474,6 +497,9 @@ public enum ClaimFrame {
 
         // A plan, unless it's said to have been carried out.
         if has(plan, wholePart), !has(planKept, String(folded[gear.upperBound...])) { return .abandonedPlan }
+
+        // Reported, rumoured, unconfirmed: neither confirmed nor ruled out.
+        if has(rumour, wholePart) || has(rumour, String(folded[gear.upperBound...])) { return .uncertain }
 
         // Tried out only (unless the sentence says it was then chosen).
         if has(tried, near.isEmpty ? clause : clause), !has(adopted, String(folded[gear.upperBound...])),
@@ -493,6 +519,13 @@ public enum ClaimFrame {
             return .simulated
         }
 
+        // Set dressing or a prop, not equipment lighting or photographing the film (unless it's said to
+        // light the scene): "LED panels built by the art department as props", "the character keeps
+        // an old Super 8 camera".
+        if [.light, .camera, .format, .support].contains(kind), has(setDressing, wholePart + " " + String(folded[gear.upperBound...])),
+           !has(lightsTheScene, wholePart + " " + String(folded[gear.upperBound...])) {
+            return .environment
+        }
         // An object in the scene or the location (lights and grip; a prop camera).
         if kind == .light || kind == .support, has(environmentSubject, clause), !has(productionAgent, clause) { return .environment }
         if kind == .camera, has(prop, near) || has(prop, after), !has(productionAgent, near) { return .environment }

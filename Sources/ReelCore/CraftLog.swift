@@ -74,6 +74,33 @@ public enum CraftLog {
                 lines.append("• \(spec.kind.rawValue): \(spec.name) — \(why)" + said(spec))
             }
         }
+        if !specs.judged.isEmpty {
+            // What each statement set aside says of the gear (1.10.9, `ClaimFrame`), once per name and reason.
+            lines.append("")
+            lines.append("SET ASIDE (what the statement says of it)")
+            var shown = Set<String>()
+            for judged in specs.judged where shown.insert(judged.name.lowercased() + "|" + judged.reason.rawValue + "|" + String(judged.evidence.prefix(60))).inserted {
+                lines.append("• \(judged.kind.rawValue): \(judged.name) — \(judged.reason.label): \(judged.source ?? "Wikipedia"): “\(judged.evidence.prefix(240))”")
+            }
+        }
+        let earlier = index.claimsKnown.filter { $0.status != .confirmed }
+        if !earlier.isEmpty {
+            // What became of the reading before's findings (1.10.9, `SourceReconciliation`).
+            lines.append("")
+            lines.append("EARLIER FINDINGS, READ AGAIN")
+            for claim in earlier {
+                let what = claim.kind == "shotOn" ? "Shot on " + (ShotOn(rawValue: claim.name)?.title ?? claim.name) : claim.name
+                let status: String
+                switch claim.status {
+                case .carried: status = "carried (source not read again)"
+                case .pending: status = "pending reassessment (kept, not shown as found)"
+                case .retired: status = "retired"
+                case .confirmed: status = "confirmed"
+                }
+                let from = claim.source.isEmpty ? "found by rules \(claim.rules), no passage kept" : "\(claim.source)"
+                lines.append("• \(what) — \(status): \(claim.reason ?? "") — \(from)" + (claim.text.map { ": “\($0.prefix(200))”" } ?? ""))
+            }
+        }
         lines += research(reading: reading, specs: specs, index: index)
         return lines.joined(separator: "\n") + "\n"
     }
