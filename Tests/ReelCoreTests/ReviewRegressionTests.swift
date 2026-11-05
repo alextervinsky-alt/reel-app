@@ -80,6 +80,29 @@ final class ReviewRegressionTests: XCTestCase {
         XCTAssertNil(reason("His usual lenses are Cooke S4s, but for this film he chose Panavision Primos.", "Panavision Primos", .lens))
     }
 
+    /// Round 3: lists stay lists, a missing budget is still a reason, scenery stays scenery, "we
+    /// generally use" is this production, and a product the production used isn't a capability.
+    func testRoundThreeContaminationPaths() {
+        XCTAssertEqual(reason("Doe avoided zooms, Steadicam, and drones.", "drones", .support), .denied)
+        XCTAssertEqual(reason("We didn't use cranes, dollies, and Steadicam.", "Steadicam", .support), .denied)
+        XCTAssertNil(reason("We didn't use the crane, and the crew relied on a Technocrane instead.", "Technocrane", .support))
+        XCTAssertEqual(reason("We didn't have the budget for the Technocrane.", "Technocrane", .support), .denied)
+        XCTAssertEqual(reason("We didn't have the time or the space for a Technocrane.", "Technocrane", .support), .denied)
+        XCTAssertEqual(reason("We didn't have the crew for the Technocrane.", "Technocrane", .support), .denied)
+        XCTAssertEqual(reason("We didn't have the clearance for the drone.", "drone", .support), .denied)
+        XCTAssertEqual(reason("The art department dressed the diner with Astera tubes as set dressing.", "Astera", .light), .environment)
+        XCTAssertEqual(reason("The house has neon signs and Astera tubes strung along the porch.", "Astera", .light), .environment)
+        XCTAssertNil(reason("On set we generally use two SkyPanels as a key.", "SkyPanels", .light))
+        XCTAssertNil(reason("We always shoot with two cameras on this show, both Alexa Minis.", "Alexa Minis", .camera))
+        XCTAssertEqual(reason("Doe tends to use Cooke S4s.", "Cooke S4s", .lens), .otherPractice)
+        XCTAssertNil(reason("The Alexa Mini can record ProRes, and Doe used that for the dailies.", "ProRes", .format))
+        for text in ["For the underwater shoot, they used a Hydroflex housing on the Alexa Mini.", "For the aerial shoot, they used a Shotover F1.",
+                     "For the opening film sequence, they used a Bolex.", "On the debut film, she used SkyPanels.",
+                     "For the biographical film, Doe chose the Alexa 35."] {
+            XCTAssertFalse(TechSpecs.describesAnotherFilm(text, title: "Fieldnote"), text)
+        }
+    }
+
     /// The same statements read whole: the gear isn't judged away.
     func testVendorCreditsSurviveTheWholeReading() {
         let sentences = ["Panavision provided the C-series anamorphic lenses and two Millennium XL2 bodies for The Quiet Harbour.",
