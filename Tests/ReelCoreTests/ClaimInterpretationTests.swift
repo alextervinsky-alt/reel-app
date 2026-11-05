@@ -142,6 +142,8 @@ final class ClaimInterpretationTests: XCTestCase {
         let other = accepted(["Unlike Glass Rivers, which was shot on the RED Monstro, The Quiet Harbour was shot on the Sony Venice."])
         XCTAssertTrue(has(other, "venice"))
         XCTAssertFalse(has(other, "monstro"), "\(other)")
+        // A bracketed credit is what says whose film a sentence is about: not blanked.
+        XCTAssertFalse(has(accepted(["Oscar-winning cinematographer Robert Elswit (“There Will Be Blood”) shot the jungle flashbacks on anamorphic film, with the remainder shot digitally."], title: "La La Land"), "digital"))
         // And a sentence about the other film alone stays the other film's.
         XCTAssertFalse(has(accepted(["On Glass Rivers (2019), Doe shot everything on the RED Monstro."]), "monstro"))
     }

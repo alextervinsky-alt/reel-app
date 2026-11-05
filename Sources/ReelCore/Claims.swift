@@ -237,7 +237,8 @@ public struct ComparisonFrame: Sendable {
         add(Self.continuing, loose: true)
         add(Self.relative, loose: false)
         add(Self.referencePhrase, loose: false)
-        add(Self.parenthesis, loose: false)
+        // Brackets aren't blanked: "Robert Elswit (“There Will Be Blood”)" is often all a sentence says of
+        // whose film it is about (the 1.10.9 live check).
         // Nothing left to assert: the whole sentence is the comparison, so nothing is set aside.
         var chars = Array(sentence)
         var offsets: [Range<Int>] = []
