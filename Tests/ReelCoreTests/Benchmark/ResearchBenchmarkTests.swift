@@ -114,10 +114,10 @@ final class ResearchBenchmarkTests: XCTestCase {
                 let owners = claims.filter { item.text.contains($0.claim.text) || $0.claim.text.contains(item.text) }.map(\.claim.film)
                 if owners.contains(where: { !$0.isEmpty && $0 != film.title }) {
                     m.contaminated += 1
-                    if m.examples.count < 6 { m.examples.append("\(film.title) ← “\(item.text.prefix(110))”" + (item.gear.map { " [\($0)]" } ?? "")) }
+                    if m.examples.count < 40 { m.examples.append("\(film.title) ← “\(item.text.prefix(110))”" + (item.gear.map { " [\($0)]" } ?? "")) }
                 } else if item.gear != nil, owners.contains(""), !owners.contains(film.title) {
                     m.unattributed += 1
-                    if m.examples.count < 6 { m.examples.append("\(film.title) ← (about no film) “\(item.text.prefix(100))” [\(item.gear!)]") }
+                    if m.examples.count < 40 { m.examples.append("\(film.title) ← (about no film) “\(item.text.prefix(100))” [\(item.gear!)]") }
                 }
                 if item.gear != nil, !readText.contains(item.text.prefix(60)) { m.untraceable += 1 }
             }

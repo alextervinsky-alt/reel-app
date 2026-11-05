@@ -161,7 +161,7 @@ public struct ComparisonFrame: Sendable {
         pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+|very\s+much\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|he|she|they|we|i|it|was|did|had|has|before|previously|earlier)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|following\b)[^;]{0,160}?,\s*"#,
         options: [.caseInsensitive])
     static let trailing = try! NSRegularExpression(
-        pattern: #"(?:,\s*|\s+)(?:just\s+|much\s+|exactly\s+)?(?:as\s+(?:it|they|he|she|we|i|was|did|had|were)\b|as\s+(?:on|in|with|for|when)\b|like\s+(?:on|in|with|for|when)\b|(?:just\s+)?as\s+(?:he|she|they|we|i)\s+(?:had|did)\b)[^;]*$"#,
+        pattern: #"(?:,\s*|\s+)(?:just\s+|much\s+|exactly\s+)?(?:as\s+(?:it|they|he|she|we|i)\s+(?:had|did|was|were|has|does|is)\b|as\s+(?:on|in|with|for|when)\b|like\s+(?:on|in|with|for|when)\b)[^;]*$"#,
         options: [.caseInsensitive])
     static let continuing = try! NSRegularExpression(
         pattern: #",\s*(?:continuing|following|extending|reprising|repeating|building on|carrying over|picking up|resuming)\b[^;]*$"#,
