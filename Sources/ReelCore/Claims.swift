@@ -218,13 +218,12 @@ public struct ComparisonFrame: Sendable {
         Self.memo.lock.unlock()
         if let known {
             // Positions carried over by offset into this copy of the sentence.
-            spans = known.spans.map { span in
+            let spans = known.spans.map { span in
                 let lower = known.original.distance(from: known.original.startIndex, to: span.lowerBound)
                 let upper = known.original.distance(from: known.original.startIndex, to: span.upperBound)
                 return sentence.index(sentence.startIndex, offsetBy: lower)..<sentence.index(sentence.startIndex, offsetBy: upper)
             }
-            original = sentence
-            main = known.main
+            self.init(spans: spans, original: sentence, main: known.main)
             return
         }
         self.init(computing: sentence, title: title, otherTitles: otherTitles, people: people)
@@ -232,6 +231,12 @@ public struct ComparisonFrame: Sendable {
         if Self.memo.frames.count > 4000 { Self.memo.frames.removeAll(keepingCapacity: true) }
         Self.memo.frames[key] = self
         Self.memo.lock.unlock()
+    }
+
+    init(spans: [Range<String.Index>], original: String, main: String) {
+        self.spans = spans
+        self.original = original
+        self.main = main
     }
 
     init(computing sentence: String, title: String?, otherTitles: [String], people: [String]) {
