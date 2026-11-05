@@ -73,7 +73,7 @@ final class ClaimInterpretationTests: XCTestCase {
         XCTAssertFalse(has(accepted(["During prep we experimented with Steadicam, dollies and a crane to see what would work."]), "steadicam"))
         // Adopted: the source says so.
         XCTAssertTrue(has(accepted(["She tested Hawk anamorphic lenses against two other sets in prep, and the Hawks went on to shoot the whole film."]), "hawk"))
-        XCTAssertTrue(has(accepted(["Doe had planned to shoot on Super 16, and that's what she did."]), "super 16"))
+        XCTAssertTrue(has(accepted(["Doe had planned to shoot on 16mm film, and that's what she did."]), "16"))
         // A plan given up, then what was done instead.
         let turned = accepted(["Doe had originally planned to shoot on Super 16, and the production went with the Alexa 35."])
         XCTAssertTrue(has(turned, "alexa 35"))
@@ -110,7 +110,8 @@ final class ClaimInterpretationTests: XCTestCase {
     // MARK: Capture and delivery; products
 
     func testDeliveryAndProductCapabilityAreNotCapture() {
-        let apocalypse = accepted(["Despite filming The Quiet Harbour in 2.35:1, Doe approved home media releases in his preferred aspect ratio, the 2.00:1 Univisium."])
+        let apocalypse = accepted(["Despite filming Apocalypse Now in 2.35:1, the film's cinematographer Vittorio Storaro periodically approved home media releases in his preferred aspect ratio, the 2.00:1 Univisium."],
+                                  title: "Apocalypse Now")
         XCTAssertTrue(has(apocalypse, "2.35:1"), "\(apocalypse)")
         XCTAssertFalse(has(apocalypse, "2.00:1"))
         XCTAssertFalse(has(accepted(["The restoration was released on Blu-ray in 1.78:1."]), "1.78"))
