@@ -296,6 +296,12 @@ public struct ComparisonFrame: Sendable {
         add(Self.referencePhrase, loose: false)
         // Brackets aren't blanked: "Robert Elswit (“There Will Be Blood”)" is often all a sentence says of
         // whose film it is about (the 1.10.9 live check).
+        // A part that holds another part whole is the same comparison read twice, the larger reaching
+        // past it ("Just as he had on <Other>, <Film> was shot…" also matches a trailing "as he had…"
+        // to the end): the smaller one is the comparison.
+        spans = spans.filter { span in
+            !spans.contains { other in other != span && span.lowerBound <= other.lowerBound && other.upperBound <= span.upperBound }
+        }
         // Nothing left to assert: the whole sentence is the comparison, so nothing is set aside.
         var chars = Array(sentence)
         var offsets: [Range<Int>] = []
@@ -581,7 +587,9 @@ public enum ClaimFrame {
                                          options: [.regularExpression, .caseInsensitive]) != nil
             // ", and …" starts a new clause only when what follows isn't more of the list ("avoided
             // zooms, Steadicam, and drones" is still one list).
-            if !excepted, let and = between.range(of: #",\s*and\s+"#, options: [.regularExpression, .backwards]),
+            // (The last ", and": a regular-expression search doesn't go backwards, so the matches are listed.)
+            let ands = try! NSRegularExpression(pattern: #",\s*and\s+"#).matches(in: between, range: NSRange(between.startIndex..., in: between))
+            if !excepted, let last = ands.last, let and = Range(last.range, in: between),
                !isContinuation(String(between[and.upperBound...])) {
                 excepted = true
             }
@@ -590,9 +598,13 @@ public enum ClaimFrame {
             var adjunct = false
             if negation, let tail = between.range(of: #"(\w+)\s+(?:on|in|at|for|during|from|inside|aboard)\s+(?:the|a|an|his|her|their|our|my|this|that)?\s*$"#,
                                                    options: [.regularExpression, .caseInsensitive]) {
-                let noun = between[tail].split(separator: " ").first.map { $0.lowercased() } ?? ""
-                adjunct = !["budget", "time", "room", "space", "money", "need", "permission", "chance", "opportunity", "reason",
-                            "patience", "appetite", "call", "use", "place", "funds", "means", "access", "manpower", "power"].contains(noun)
+                let words = between[tail].split(separator: " ").map { $0.lowercased() }
+                let noun = words.first ?? "", preposition = words.count > 1 ? words[1] : ""
+                // "the budget for", "the crew for", "clearance for": what the gear needed, so still a denial.
+                let needed = ["budget", "time", "room", "space", "money", "need", "permission", "chance", "opportunity", "reason",
+                              "patience", "appetite", "call", "use", "place", "funds", "means", "access", "manpower", "power",
+                              "crew", "resources", "clearance", "clearances", "insurance", "license", "licence", "rigging", "power"]
+                adjunct = !(needed.contains(noun) && (preposition == "for" || !["crew"].contains(noun)))
             }
             if !excepted, !adjunct,
                between.range(of: #"\b(?:instead|went with|switched to|opted for|chose|settled on|turned to|replaced (?:it|them) with|in favou?r of)\b"#,

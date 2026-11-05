@@ -88,6 +88,8 @@ final class ReviewRegressionTests: XCTestCase {
         XCTAssertNil(reason("We didn't use the crane, and the crew relied on a Technocrane instead.", "Technocrane", .support))
         XCTAssertEqual(reason("We didn't have the budget for the Technocrane.", "Technocrane", .support), .denied)
         XCTAssertEqual(reason("We didn't have the time or the space for a Technocrane.", "Technocrane", .support), .denied)
+        XCTAssertEqual(reason("We didn't have the crew for the Technocrane.", "Technocrane", .support), .denied)
+        XCTAssertEqual(reason("We didn't have the clearance for the drone.", "drone", .support), .denied)
         XCTAssertEqual(reason("The art department dressed the diner with Astera tubes as set dressing.", "Astera", .light), .environment)
         XCTAssertEqual(reason("The house has neon signs and Astera tubes strung along the porch.", "Astera", .light), .environment)
         XCTAssertNil(reason("On set we generally use two SkyPanels as a key.", "SkyPanels", .light))

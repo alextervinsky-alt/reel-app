@@ -135,6 +135,13 @@ final class ClaimInterpretationTests: XCTestCase {
         // The film's claim in the main clause is the film's.
         XCTAssertTrue(has(accepted(["As with Top Gun: Maverick, Doe and Example spent four weeks grading with Company 3's colourist."], title: "F1"), "company 3"))
         XCTAssertTrue(has(accepted(["Just as he had on Call Me by Your Name and Suspiria, Mukdeeprom shot Challengers on Kodak Vision3 500T."], title: "Challengers"), "vision3"))
+        // …also when the other productions are known to the page (a trailing "as he had…" reaching to
+        // the end once blanked the whole sentence, and nothing was set aside).
+        let known = TechSpecs.read(texts: [TechSpecs.Text(source: "Kodak", paragraphs: [
+            "Just as he had on Call Me by Your Name and Suspiria, Mukdeeprom shot Challengers using just one filmstock, namely KODAK VISION3 500T Color Negative Film 5219."])],
+                                   cinematographers: ["Sayombhu Mukdeeprom"], directors: ["Luca Guadagnino"], year: 2024, title: "Challengers",
+                                   otherTitles: ["Call Me by Your Name", "Suspiria"])
+        XCTAssertTrue(known.specs.contains { $0.name.lowercased().contains("vision3") }, "\(known.specs.map(\.name)) \(known.mentioned.map(\.name))")
         XCTAssertTrue(has(accepted(["Natural light was also a valuable creative tool, as it was when Davis lensed Three Billboards Outside Ebbing, Missouri."]), "natural light"))
         XCTAssertTrue(has(accepted(["Company 3 colourist Yvan Lucas joined him in the LUT experimentation, continuing the journey they began on The Irishman (2019)."]), "company 3"))
         XCTAssertTrue(has(accepted(["The production used StageCraft technology that Fraser helped develop on the series The Mandalorian (2019–2023), particularly for consistent golden hour lighting inspired by the lighting from In the Mood for Love (2000)."]), "magic hour"))
