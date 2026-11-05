@@ -11,9 +11,11 @@ final class ClaimExplainTests: XCTestCase {
               let lines = try? String(contentsOfFile: path, encoding: .utf8) else { throw XCTSkip("development aid") }
         func say(_ line: String) { FileHandle.standardOutput.write(Data(("EXPLAIN| " + line + "\n").utf8)) }
         for line in lines.split(separator: "\n") where line.contains("|") {
-            let parts = line.split(separator: "|", maxSplits: 1).map(String.init)
-            let title = parts[0], sentence = parts[1]
-            let frame = ComparisonFrame(sentence, title: title, otherTitles: [], people: ["Jane Doe", "Carl Example"])
+            let parts = line.split(separator: "|", maxSplits: 2).map(String.init)
+            let title = parts[0], sentence = parts.count == 3 ? parts[2] : parts[1]
+            let others = parts.count == 3 ? parts[1].split(separator: ",").map(String.init) : []
+            let frame = ComparisonFrame(sentence, title: title, otherTitles: others, people: ["Jane Doe", "Carl Example"])
+            say("   main: [\(frame.main)]")
             say("== [\(title)] \(sentence)")
             say("   spans: \(frame.spans.map { String(sentence[$0]) })")
             for rule in TechSpecs.rules {
@@ -23,9 +25,9 @@ final class ClaimExplainTests: XCTestCase {
                         ..< main.index(main.startIndex, offsetBy: sentence.distance(from: sentence.startIndex, to: at.upperBound))
                     let whole = TechSpecs.segmentRange(of: main, around: at2)
                     let part = String(main[whole])
-                    say("   main-reading \(TechSpecs.reading(main, at: at2, title: title, otherTitles: [], people: ["Jane Doe", "Carl Example"], kind: rule.kind)) "
-                        + "namesAnother=\(TechSpecs.namesAnotherFilm(part, title: title, otherTitles: [], people: ["Jane Doe", "Carl Example"])) "
-                        + "anotherPart=\(TechSpecs.namesAnotherPart(TechSpecs.scope(of: main, around: at2), title: title, otherTitles: [])) "
+                    say("   main-reading \(TechSpecs.reading(main, at: at2, title: title, otherTitles: others, people: ["Jane Doe", "Carl Example"], kind: rule.kind)) "
+                        + "namesAnother=\(TechSpecs.namesAnotherFilm(part, title: title, otherTitles: others, people: ["Jane Doe", "Carl Example"])) "
+                        + "anotherPart=\(TechSpecs.namesAnotherPart(TechSpecs.scope(of: main, around: at2), title: title, otherTitles: others)) "
                         + "saidOfAnother=\(TechSpecs.saidOfAnotherTitle(String(main[whole.lowerBound..<at2.upperBound]), title: title)) "
                         + "hedges=\(TechSpecs.hedges(main, around: at2, within: whole)) part=[\(part.trimmingCharacters(in: .whitespaces))]")
                     say("   \(rule.kind) \(name): reason=\(String(describing: ClaimFrame.reason(sentence, at: at, kind: rule.kind, name: name))) "
@@ -33,7 +35,7 @@ final class ClaimExplainTests: XCTestCase {
                 }
             }
             let specs = TechSpecs.read(texts: [TechSpecs.Text(source: nil, sections: [FilmArticle.Section(id: 0, title: "", paragraphs: [sentence])], isInterview: false)],
-                                       cinematographers: ["Jane Doe"], directors: ["Carl Example"], title: title)
+                                       cinematographers: ["Jane Doe"], directors: ["Carl Example"], title: title, otherTitles: others)
             say("   → accepted \(specs.specs.map(\.name)) mentioned \(specs.mentioned.map(\.name)) judged \(specs.judged.map { "\($0.name):\($0.reason)" })")
         }
     }
