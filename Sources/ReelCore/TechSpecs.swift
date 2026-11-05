@@ -459,6 +459,18 @@ public struct TechSpecs: Equatable, Sendable {
                                                                 reason: aside == .rejected ? .denied : .otherProduction, attribution: aside))
                                         continue
                                     }
+                                    // On a page about another production, a part of the sentence turned to "here" or
+                                    // "this time" is that page's own film, not this one (1.10.9): "On <this film> we had
+                                    // Kodak; here we had a LUT".
+                                    if !text.aboutFilm, namesTitle(original, title: title) {
+                                        let part = segment(of: original, around: place)
+                                        if !namesTitle(part, title: title),
+                                           part.range(of: #"\b(?:here|this time|on this (?:one|film|show|project))\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
+                                            judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
+                                                                    source: text.source, reason: .otherProduction))
+                                            continue
+                                        }
+                                    }
                                     // What the statement asserts of the gear (1.10.9, `ClaimFrame`): avoided, a
                                     // hypothetical, a plan, a test, someone else's practice, a simulation, an
                                     // object in the scene, a release format, a product's capability.
