@@ -281,7 +281,16 @@ public struct ComparisonFrame: Sendable {
                 guard let range = Range(match.range, in: sentence) else { continue }
                 // A trailing comparison starts after an opening one, never inside it: "Just as he had on
                 // <Other>, <Film> was shot…" is an opening comparison, not "as he had…" to the end.
-                if apart, spans.contains(where: { $0.overlaps(range) }) { continue }
+                if apart, let opening = spans.first(where: { $0.overlaps(range) }) {
+                    // …and a real trailing comparison after the opening one is still found: search again
+                    // from where the opening one ends.
+                    let rest = NSRange(opening.upperBound..., in: sentence)
+                    if let again = regex.firstMatch(in: sentence, range: rest), let later = Range(again.range, in: sentence),
+                       !spans.contains(where: { $0.overlaps(later) }), namesOther(later, loose: loose) {
+                        spans.append(later)
+                    }
+                    continue
+                }
                 guard namesOther(range, loose: loose) else { continue }
                 // The film itself named only inside the part is no reason to set it aside, but a part
                 // naming both is still a comparison: the main clause must say something on its own.
@@ -457,7 +466,7 @@ public enum ClaimFrame {
 
     /// A counterfactual or hypothetical, governing to the end of its part of the sentence.
     static let hypothetical = try! NSRegularExpression(
-        pattern: #"\b(?:might|could|would|should|may|must)(?:\s+not|n['’]t)?\s+(?:\w+\s+){0,2}?have\b(?!\s+to\b)|\bhad\s+(?:it|we|they|he|she|i|the (?:film|movie|production))\s+(?:been|shot|used|gone|chosen)\b|\bif\s+(?:we|it|they|he|she|i|you|the (?:film|movie|production))\s+(?:had|were|was|could|would)\b|\bwere\s+(?:it|we|they)\s+to\b|\b(?:one|you)\s+could\b|(?:^|[,;:]\s*|\bthat\s+|\bif\s+)had\s+(?!(?:already|just|previously|originally|all|not|never|long)\b)(?:[\w'’:-]+\s+){1,5}?been\s+(?:shot|filmed|photographed|made|lit|lensed)\b|\b(?:might|may|could)\s+(?:well\s+)?be\s+(?:shot|filmed|photographed)\b|\bif it happens\b|\bwhat if\b|\b(?:dream(?:ed|t|s)? of|fantasi[sz]ed about)\b|\bwish(?:ed|es)?\s+(?:we|they|he|she|i)\s+(?:had|could)\b|\bwould\s+(?:have\s+)?(?:look(?:ed)?|feel|felt)\b|\bin an? (?:ideal|perfect|alternate|different) world\b|\b(?:hypothetical(?:ly)?|in theory|theoretically)\b"#,
+        pattern: #"\bwhether\s+(?:we|i|you|they|he|she|it|one)\b[^.;,]{0,40}$|\b(?:might|could|would|should|may|must)(?:\s+not|n['’]t)?\s+(?:\w+\s+){0,2}?have\b(?!\s+to\b)|\bhad\s+(?:it|we|they|he|she|i|the (?:film|movie|production))\s+(?:been|shot|used|gone|chosen)\b|\bif\s+(?:we|it|they|he|she|i|you|the (?:film|movie|production))\s+(?:had|were|was|could|would)\b|\bwere\s+(?:it|we|they)\s+to\b|\b(?:one|you)\s+could\b|(?:^|[,;:]\s*|\bthat\s+|\bif\s+)had\s+(?!(?:already|just|previously|originally|all|not|never|long)\b)(?:[\w'’:-]+\s+){1,5}?been\s+(?:shot|filmed|photographed|made|lit|lensed)\b|\b(?:might|may|could)\s+(?:well\s+)?be\s+(?:shot|filmed|photographed)\b|\bif it happens\b|\bwhat if\b|\b(?:dream(?:ed|t|s)? of|fantasi[sz]ed about)\b|\bwish(?:ed|es)?\s+(?:we|they|he|she|i)\s+(?:had|could)\b|\bwould\s+(?:have\s+)?(?:look(?:ed)?|feel|felt)\b|\bin an? (?:ideal|perfect|alternate|different) world\b|\b(?:hypothetical(?:ly)?|in theory|theoretically)\b"#,
         options: [.caseInsensitive])
 
     /// A plan or intention, unless the sentence says it was carried out.
@@ -602,7 +611,8 @@ public enum ClaimFrame {
                 let needed = ["budget", "time", "room", "space", "money", "need", "permission", "chance", "opportunity", "reason",
                               "patience", "appetite", "call", "use", "place", "funds", "means", "access", "manpower", "power",
                               "crew", "resources", "clearance", "clearances", "insurance", "license", "licence", "rigging", "power"]
-                adjunct = !(needed.contains(noun) && (preposition == "for" || !["crew"].contains(noun)))
+                // Only "didn't have the budget for": "didn't need any rigging for the Technocrane" says it was used.
+                adjunct = !(needed.contains(noun) && preposition == "for" && verb.contains("have"))
             }
             if !excepted, !adjunct,
                between.range(of: #"\b(?:instead|went with|switched to|opted for|chose|settled on|turned to|replaced (?:it|them) with|in favou?r of)\b"#,
