@@ -107,6 +107,11 @@ final class ReviewRegressionTests: XCTestCase {
                      "Her previous feature, Glass Rivers, was shot on 16mm."] {
             XCTAssertTrue(matches(text), text)
         }
+        // A production called by what it's about: another one, unless that's this film's title.
+        XCTAssertTrue(TechSpecs.describesAnotherFilm("On the bakery film we used a single Kino Flo unit.", title: "Fieldnote"))
+        XCTAssertFalse(TechSpecs.describesAnotherFilm("On the bakery film we used a single Kino Flo unit.", title: "Crosswind Bakery"))
+        XCTAssertFalse(TechSpecs.describesAnotherFilm("For the war film, Doe chose the Alexa Mini LF.", title: "Fieldnote"))
+        XCTAssertFalse(TechSpecs.describesAnotherFilm("Kodak was selected for the motion picture.", title: "Fieldnote"))
     }
 
     // MARK: V7 — a question's subject is bounded, and gear isn't a turn
