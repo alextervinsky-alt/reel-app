@@ -122,6 +122,9 @@ final class LiveDiagnosisTests: XCTestCase {
             }
             let specs = TechSpecs.read(texts: texts, cinematographers: c.dps, directors: c.directors, year: c.year, title: c.title, otherTitles: c.others)
             say("ACCEPTED: " + specs.specs.map { "\($0.name)" }.joined(separator: ", "))
+            for spec in specs.specs where ["bleach bypass", "crane", "dolly", "65 mm", "vintage", "practicals"].contains(spec.name.lowercased()) {
+                say("  EVIDENCE \(spec.name) ← \(spec.evidence ?? "")")
+            }
             for spec in specs.mentioned.prefix(25) {
                 say("mentioned-only: \(spec.name) attr=\(spec.attribution) about=\(spec.aboutThisFilm) capture=\(spec.capture) ← \((spec.evidence ?? "").prefix(160))")
             }
