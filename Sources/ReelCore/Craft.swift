@@ -393,6 +393,19 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 let reason: String
                 // A reading by 1.10.9 rules says what became of the tag's own sentence (`SourceReconciliation`):
                 // retired with why, pending while its rules can't settle it (kept, not shown), or carried.
+                // Another source's claim for the tag still carried (its site is down): the tag stands on
+                // that, whatever became of this one (1.10.9; one source ruled out never takes away another's).
+                if let other = new.claims?.first(where: { $0.kind == "shotOn" && $0.name == kind.rawValue && $0.source != evidence.source
+                                                          && $0.status == .carried }),
+                   let claim = new.claims?.first(where: { $0.kind == "shotOn" && $0.name == kind.rawValue && $0.source == evidence.source }),
+                   !claim.supports {
+                    var kept = Evidence(shotOn: kind, text: other.text ?? evidence.text, source: other.source)
+                    kept.carriedFrom = other.since
+                    kept.carriedRules = other.rules
+                    kept.misses = other.misses
+                    carried.append(kept)
+                    continue
+                }
                 if let claim = new.claims?.first(where: { $0.kind == "shotOn" && $0.name == kind.rawValue && $0.source == evidence.source }),
                    claim.status != .confirmed {
                     switch claim.status {

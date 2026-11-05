@@ -277,7 +277,7 @@ public struct PageContext: Equatable, Sendable {
     /// An interviewer's question: it ends with "?", or opens with the interviewer's tag ("Q:", "AC:").
     static func isQuestion(_ paragraph: String) -> Bool {
         let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: #"^(?:Q|Question|Interviewer|[A-Z]{2,4})\s*:"#, options: .regularExpression) != nil,
+        if trimmed.range(of: #"^(?:(?:Q|Question|Interviewer|[A-Z]{2,4})\s*:|Q\.\s)"#, options: .regularExpression) != nil,
            trimmed.hasSuffix("?") || trimmed.hasPrefix("Q") { return true }
         // An untagged question: one short paragraph, a sentence or two, ending with "?".
         return trimmed.hasSuffix("?") && trimmed.count < 300 && !trimmed.contains("\"") && Digest.sentences(in: trimmed).count <= 2
@@ -288,7 +288,7 @@ public struct PageContext: Equatable, Sendable {
     static func turnsAway(_ paragraph: String) -> Bool {
         // A production named by an opening ("Five years later, on The Lantern Keepers of Hollow Bay, …"):
         // capitalised words after "on", "for" or "with" up to a comma.
-        if paragraph.range(of: #"(?:^|[,.;]\s+|\s)(?i:on|for|with|during)\s+(?:The\s+|A\s+|An\s+)?(?!(?:ARRI|Arri|Alexa|ALEXA|Sony|Venice|RED|Red|Canon|Cooke|Zeiss|Panavision|Kodak|Fuji|Fujifilm|IMAX|Steadicam|Technocrane|Leica|Angenieux|Angénieux|Blackmagic|Super|Ultra|Panaflex|Aaton|Bolex|SkyPanel|SkyPanels|Astera|Kino|Hawk|Atlas|Master|Ektachrome|Vision|DJI|Ronin|Phantom|Easyrig|Moviecam|Arricam|Arriflex|Aputure|Creamsource|Dolby|Atmos|Avid|DaVinci|Resolve|LED|LEDs|HMI|HMIs)\b)[A-Z][\w'’-]+(?:\s+(?:of|the|and|a|an|in|on|for|to)?\s*[A-Z][\w'’-]+){0,6}(?:,|\s+(?i:he|she|they|we|i)\b)"#,
+        if paragraph.range(of: #"(?:^|[,.;]\s+|\s)(?i:on|for|with|during)\s+(?:The\s+|A\s+|An\s+)?(?!(?:ARRI|Arri|Alexa|ALEXA|Sony|Venice|RED|Red|Canon|Cooke|Zeiss|Panavision|Kodak|Fuji|Fujifilm|IMAX|Steadicam|Technocrane|Leica|Angenieux|Angénieux|Blackmagic|Super|Ultra|Panaflex|Aaton|Bolex|SkyPanel|SkyPanels|Astera|Kino|Hawk|Atlas|Master|Ektachrome|Vision|DJI|Ronin|Phantom|Easyrig|Moviecam|Arricam|Arriflex|Aputure|Creamsource|Dolby|Atmos|Avid|DaVinci|Resolve|LED|LEDs|HMI|HMIs|Fujinon|Signature|Monstro|Komodo|Raptor|Primo|Primos|Supreme|Ultra Prime|Vision\d*|Eastman|Double-X|Tri-X|Kino Flos?|Libra|Scorpio|MoVI|Easyrig|Alexa\d*)\b)[A-Z][\w'’-]+(?:\s+(?:of|the|and|a|an|in|on|for|to)?\s*[A-Z][\w'’-]+){0,6}(?:,|\s+(?i:he|she|they|we|i)\b)"#,
                            options: .regularExpression) != nil { return true }
         return paragraph.range(of: #"\b(?:was born|grew up|began (?:his|her|their) career|started (?:out|his career|her career)|credits include|filmography|(?:his|her|their) (?:first|debut|previous|earlier|last|next|latest|newest|new) (?:feature|film|movie|project|picture|documentary)|(?:his|her|their|directorial|feature) debut|years (?:earlier|before|later)|a decade (?:earlier|before|later)|before that|after that,? (?:he|she|they)|looks back|went on to|is (?:now|currently) (?:prepping|shooting|working)|(?:next|current|new|latest|upcoming) (?:project|feature|film)|(?:his|her|their) (?:newest|latest|next|new|follow-up|current)\b|\b(?:now|these days|nowadays|today)\s+(?:teaches|runs|works|lives|flies|shoots|lectures|owns|uses|prefers)|\bteaches\b|in (?:19|20)\d{2},)"#,
                         options: [.regularExpression, .caseInsensitive]) != nil

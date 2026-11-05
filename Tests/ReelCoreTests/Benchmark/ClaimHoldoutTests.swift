@@ -151,7 +151,8 @@ final class ClaimHoldoutTests: XCTestCase {
         // that a bare word ("Kettle" in "Q: Kettle seems lit by the windows") is another film's title,
         // which no rule here can (see the handoff).
         XCTAssertLessThanOrEqual(score.crossFilm, 3, "cross-film contamination in the claim holdout")
-        XCTAssertGreaterThanOrEqual(score.trueNegative, 115, "rejection floor")
-        XCTAssertGreaterThanOrEqual(score.truePositive, 75, "recall floor")
+        XCTAssertGreaterThanOrEqual(score.trueNegative, 121, "rejection floor (measured 121/129)")
+        XCTAssertGreaterThanOrEqual(score.truePositive, 78, "recall floor (measured 78/128)")
+        XCTAssertLessThanOrEqual(score.unsafe, 6, "abstentions accepted (measured 6/42)")
     }
 }

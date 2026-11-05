@@ -54,11 +54,22 @@ final class SourceReconciliationTests: XCTestCase {
         XCTAssertEqual(outcome(result, "SkyPanels")?.reason, ClaimReason.denied.label)
     }
 
+    /// Sources are labelled by site, so a page read in full without the passage may be another article
+    /// of that site: not shown at once, and retired ("no longer in …") when `maxRetries` readings in a
+    /// row don't find it.
     func testAPassageNoLongerOnAFullyReadPageIsRetired() {
-        let result = SourceReconciliation.reconcile(previous: previous([claim("SkyPanels", text: passage)]),
-                                                    with: input(read: ["Lens Weekly": ["The page now says something else entirely about the courtroom."]]), now: now)
-        XCTAssertEqual(outcome(result, "SkyPanels")?.status, .retired)
-        XCTAssertTrue(outcome(result, "SkyPanels")?.reason?.contains("no longer") ?? false)
+        let other = input(read: ["Lens Weekly": ["The page now says something else entirely about the courtroom."]])
+        let first = SourceReconciliation.reconcile(previous: previous([claim("SkyPanels", text: passage)]), with: other, now: now)
+        XCTAssertEqual(outcome(first, "SkyPanels")?.status, .pending)
+        XCTAssertFalse(outcome(first, "SkyPanels")?.supports ?? true, "not shown")
+        let last = SourceReconciliation.reconcile(previous: previous([claim("SkyPanels", text: passage, status: .pending, misses: CraftIndex.maxRetries)]),
+                                                  with: other, now: now)
+        XCTAssertEqual(outcome(last, "SkyPanels")?.status, .retired)
+        XCTAssertTrue(outcome(last, "SkyPanels")?.reason?.contains("no longer") ?? false)
+        // Found again in the meantime: confirmed.
+        let back = SourceReconciliation.reconcile(previous: previous([claim("SkyPanels", text: passage, status: .pending, misses: 2)]),
+                                                  with: input(accepted: [spec("SkyPanels", evidence: passage)], read: ["Lens Weekly": [passage]]), now: now)
+        XCTAssertEqual(outcome(back, "SkyPanels")?.status, .confirmed)
     }
 
     func testAPassageThereButNotSettledIsPendingNotDropped() {
