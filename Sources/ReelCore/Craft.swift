@@ -460,7 +460,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 // Its names too, when read by these rules: search still finds what that page named.
                 if old.version == new.version {
                     var names = merged.names
-                    for name in old.names where !names.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { names.append(name) }
+                    // Not a name this reading read again and retired or left pending (1.10.9).
+                    let withdrawn = Set((new.claims ?? []).filter { $0.kind != "shotOn" && !$0.supports }.map { TitleMatch.key($0.name) })
+                        .subtracting((new.claims ?? []).filter { $0.kind != "shotOn" && $0.supports }.map { TitleMatch.key($0.name) })
+                    for name in old.names where !names.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+                        && !withdrawn.contains(TitleMatch.key(name)) { names.append(name) }
                     merged.names = Array(names.prefix(30))
                 }
             }

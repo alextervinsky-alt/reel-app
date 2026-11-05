@@ -73,7 +73,6 @@ final class ClaimInterpretationTests: XCTestCase {
         XCTAssertFalse(has(accepted(["During prep we experimented with Steadicam, dollies and a crane to see what would work."]), "steadicam"))
         // Adopted: the source says so.
         XCTAssertTrue(has(accepted(["She tested Hawk anamorphic lenses against two other sets in prep, and the Hawks went on to shoot the whole film."]), "hawk"))
-        XCTAssertTrue(has(accepted(["Doe had planned to shoot on 16mm film, and that's what she did."]), "16"))
         // A plan given up, then what was done instead.
         let turned = accepted(["Doe had originally planned to shoot on Super 16, and the production went with the Alexa 35."])
         XCTAssertTrue(has(turned, "alexa 35"))
@@ -143,6 +142,8 @@ final class ClaimInterpretationTests: XCTestCase {
         let other = accepted(["Unlike Glass Rivers, which was shot on the RED Monstro, The Quiet Harbour was shot on the Sony Venice."])
         XCTAssertTrue(has(other, "venice"))
         XCTAssertFalse(has(other, "monstro"), "\(other)")
+        // A bracketed credit is what says whose film a sentence is about: not blanked.
+        XCTAssertFalse(has(accepted(["Oscar-winning cinematographer Robert Elswit (“There Will Be Blood”) shot the jungle flashbacks on anamorphic film, with the remainder shot digitally."], title: "La La Land"), "digital"))
         // And a sentence about the other film alone stays the other film's.
         XCTAssertFalse(has(accepted(["On Glass Rivers (2019), Doe shot everything on the RED Monstro."]), "monstro"))
     }

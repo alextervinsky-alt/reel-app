@@ -996,7 +996,12 @@ public struct CameraSourcesClient: Sendable {
         for page in found where page.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: page.title, cinematographers: cinematographers, site: page.site)
             && !passing(page) {
             // The same article at another address (1.10.9: a re-filed slug, an AMP or archived copy): once.
-            if readable.contains(where: { CameraSources.sameArticle($0, page) }) { continue }
+            // The fuller copy is the one read.
+            if let index = readable.firstIndex(where: { CameraSources.sameArticle($0, page) }) {
+                let length: (CameraReading.Source) -> Int = { $0.paragraphs.reduce(0) { $0 + $1.count } }
+                if length(page) > length(readable[index]) { readable[index] = page }
+                continue
+            }
             readable.append(page)
         }
         var read = Array(readable.prefix(CameraSources.readLimit))

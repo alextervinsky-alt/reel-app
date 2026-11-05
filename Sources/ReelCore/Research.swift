@@ -430,7 +430,7 @@ public struct ResearchContext: Sendable {
         pattern: #"\b(?:visual effects|vfx|cgi|computer[- ]generated|digital effects|green ?screen|blue ?screen|digital (?:set )?extensions?|composit\w*|matte paintings?)\b[^.]{0,120}\b(?:created|creating|built|rendered|composited|added|designed|delivered|supervised|handled|produced|vendor|studio|company|houses?|shots?|plates?|elements|work|team|artists|nominat\w*|award\w*)\b|\b(?:created|built|rendered|composited|added|designed|delivered|supervised|handled|nominat\w*|award\w*)\b[^.]{0,80}\b(?:visual effects|vfx|cgi|computer[- ]generated|digital effects)\b"#,
         options: [.caseInsensitive])
     static let noEffects = try! NSRegularExpression(
-        pattern: #"\b(?:no|without(?: any)?|zero|never used|avoided|eschewed|free of)\s+(?:visual effects|vfx|cgi|cg|computer[- ]generated (?:imagery|effects)|digital effects)\b|\b(?:entirely|all|everything|completely)\s+(?:in[- ]camera|practical)\b"#,
+        pattern: #"\b(?:no|without(?: any)?|zero|never used|avoided|eschewed|free of)\s+(?:visual effects|vfx|cgi|cg|computer[- ]generated (?:imagery|effects)|digital effects)\b|\b(?:entirely|all|everything|completely)\s+(?:in[- ]camera|practical\s+(?:effects|stunts|fx))\b"#,
         options: [.caseInsensitive])
 
     public init(crew: [CraftCrew.Contributor], specs: TechSpecs, texts: [TechSpecs.Text]) {
@@ -441,7 +441,12 @@ public struct ResearchContext: Sendable {
         func any(_ regex: NSRegularExpression) -> Bool {
             sentences.contains { regex.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) != nil }
         }
-        if crew.contains(where: { $0.role == .vfxSupervisor }) || !specs.cameraVFX.isEmpty || any(Self.effectsWork) {
+        // A sentence saying there were no effects ("no CGI was created") never establishes them.
+        let effects = sentences.contains { sentence in
+            let range = NSRange(sentence.startIndex..., in: sentence)
+            return Self.effectsWork.firstMatch(in: sentence, range: range) != nil && Self.noEffects.firstMatch(in: sentence, range: range) == nil
+        }
+        if crew.contains(where: { $0.role == .vfxSupervisor }) || !specs.cameraVFX.isEmpty || effects {
             vfxRelevance = .established
         } else if any(Self.noEffects) {
             vfxRelevance = .notApplicable

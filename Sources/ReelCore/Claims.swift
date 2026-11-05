@@ -55,13 +55,14 @@ public enum TitleMatch {
         let words = words(title.folding(options: [.diacriticInsensitive], locale: Locale(identifier: "en_US")))
         guard !words.isEmpty else { return nil }
         var pattern = #"(?<![\p{L}\p{N}])"#
+        let gap = separator(for: title)
         for (index, word) in words.enumerated() {
             if index > 0 {
                 // "&" may be written against its neighbours ("Fast&Furious"); words otherwise need a break.
-                pattern += (word == "&" || words[index - 1] == "&") ? #"[\s\p{P}\p{S}]*"# : #"[\s\p{P}\p{S}]+"#
+                pattern += (word == "&" || words[index - 1] == "&") ? gap + "*" : gap + "+"
             }
-            if word == "&" || word == "and" {
-                pattern += "(?:and|&|＆)"
+            if word == "&" || word.lowercased() == "and" {
+                pattern += "(?i:and|&|＆)"
             } else {
                 pattern += word.split(separator: "'", omittingEmptySubsequences: false)
                     .map { NSRegularExpression.escapedPattern(for: String($0)) }
@@ -71,17 +72,26 @@ public enum TitleMatch {
         return pattern + #"(?![\p{L}\p{N}])"#
     }
 
+    /// What may stand between two of the title's words: spaces, punctuation and symbols, but not a
+    /// sentence's end (". ", "! ", "? ") unless the title has one itself ("Dr. Strangelove"); an
+    /// ellipsis always may ("Once Upon a Time... in Hollywood").
+    static func separator(for title: String) -> String {
+        if title.range(of: #"[.!?]"#, options: .regularExpression) != nil { return #"[\s\p{P}\p{S}]"# }
+        return #"(?:[[\s\p{P}\p{S}]--[.!?]]|\.\.\.)"#
+    }
+
     /// The title's pattern to embed in a larger one, without its boundaries (the caller adds its
     /// own) and unfolded (it runs on the text as written): a short title (three characters or
     /// fewer, "Her", "F1") is matched as written, case and all.
     public static func embeddable(_ title: String) -> String {
         let words = words(title)
         guard !words.isEmpty else { return NSRegularExpression.escapedPattern(for: title) }
+        let gap = separator(for: title)
         var pattern = ""
         for (index, word) in words.enumerated() {
-            if index > 0 { pattern += (word == "&" || words[index - 1] == "&") ? #"[\s\p{P}\p{S}]*"# : #"[\s\p{P}\p{S}]+"# }
+            if index > 0 { pattern += (word == "&" || words[index - 1] == "&") ? gap + "*" : gap + "+" }
             if word == "&" || word.lowercased() == "and" {
-                pattern += "(?:and|&|＆)"
+                pattern += "(?i:and|&|＆)"
             } else {
                 pattern += word.split(separator: "'", omittingEmptySubsequences: false)
                     .map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: "['’‘ʼ]?")
@@ -182,13 +192,55 @@ public struct ComparisonFrame: Sendable {
     /// A title-like name: capitalised words after "on/in/for/with/from/of" ("on The Irishman",
     /// "for Industrial Light & Magic", "from In the Mood for Love"), or a year in brackets.
     static let titleAfterPreposition = try! NSRegularExpression(
-        pattern: #"\b(?:on|in|for|with|from|of|lensed|shot|photographed|filmed)\s+(?:the\s+)?(?:[A-Z][\w'’:&!.-]*|[A-Z0-9]{2,})(?:\s+(?:of|the|and|a|an|in|on|to|for|by|&)?\s*[A-Z0-9][\w'’:&!.-]*){0,7}"#)
+        pattern: #"\b(?:on|for|with|lensed|shot|photographed|filmed)\s+(?:the\s+)?(?:[A-Z][\w'’:&!.-]*|[A-Z0-9]{2,})(?:\s+(?:of|the|and|a|an|in|on|to|for|by|&)?\s*[A-Z0-9][\w'’:&!.-]*){0,7}"#)
     /// "the series The Mandalorian", "his earlier film Kiln", "the 2019 feature …".
     static let productionNoun = try! NSRegularExpression(
         pattern: #"\b(?:the|a|his|her|their|our|my|an earlier|a previous|the previous|earlier|last|next)\s+(?:[\w+-]+\s+){0,3}?(?:mini-?series|series|show|feature|film|documentary|commercial|short|movie|pilot|sequel|remake|production)\s+(?:[A-Z][\w'’:&!.-]*)"#)
     static let bracketYear = try! NSRegularExpression(pattern: #"\((?:19|20)\d{2}(?:[–-](?:19|20)?\d{2,4})?\)"#)
 
+    /// The words every part set aside starts with: a sentence with none of them has none.
+    static let cue = try! NSRegularExpression(
+        pattern: #"\b(?:as|like|unlike|compared|contrast|similar|following|continuing|extending|reprising|repeating|building|carrying|picking|resuming|that|which|who|inspired|influenced|model(?:l)?ed|borrowed|reminiscent|evocative|vein|style|tradition|spirit|nod|homage|harking|recalling)\b"#,
+        options: [.caseInsensitive])
+
+    final class Memo: @unchecked Sendable {
+        let lock = NSLock()
+        var frames: [String: ComparisonFrame] = [:]
+    }
+    static let memo = Memo()
+
+    /// The frame of a sentence, worked out once per sentence and context (pages read the same
+    /// sentence for anchors, classification and gear).
     public init(_ sentence: String, title: String?, otherTitles: [String], people: [String] = []) {
+        let key = sentence + "\u{1}" + (title ?? "") + "\u{1}" + otherTitles.joined(separator: "\u{2}") + "\u{1}" + people.joined(separator: "\u{2}")
+        Self.memo.lock.lock()
+        let known = Self.memo.frames[key]
+        Self.memo.lock.unlock()
+        if let known {
+            // Positions carried over by offset into this copy of the sentence.
+            spans = known.spans.map { span in
+                let lower = known.original.distance(from: known.original.startIndex, to: span.lowerBound)
+                let upper = known.original.distance(from: known.original.startIndex, to: span.upperBound)
+                return sentence.index(sentence.startIndex, offsetBy: lower)..<sentence.index(sentence.startIndex, offsetBy: upper)
+            }
+            original = sentence
+            main = known.main
+            return
+        }
+        self.init(computing: sentence, title: title, otherTitles: otherTitles, people: people)
+        Self.memo.lock.lock()
+        if Self.memo.frames.count > 4000 { Self.memo.frames.removeAll(keepingCapacity: true) }
+        Self.memo.frames[key] = self
+        Self.memo.lock.unlock()
+    }
+
+    init(computing sentence: String, title: String?, otherTitles: [String], people: [String]) {
+        if Self.cue.firstMatch(in: sentence, range: NSRange(sentence.startIndex..., in: sentence)) == nil {
+            spans = []
+            original = sentence
+            main = sentence
+            return
+        }
         var spans: [Range<String.Index>] = []
         let ns = NSRange(sentence.startIndex..., in: sentence)
         // A comparison ("Just as he had on <Other>,") names a production by a capitalised name after
@@ -212,8 +264,8 @@ public struct ComparisonFrame: Sendable {
                 if let title, TechSpecs.namesTitle(words, title: title) { continue }
                 if people.contains(where: { person in person.split(separator: " ").contains { words.contains($0) } }) { continue }
                 if !TechSpecs.isOtherTitle(words, title: title) { continue }
-                let read = TechSpecs.read([words + " was used."])
-                if !read.specs.isEmpty || !read.mentioned.isEmpty { continue }
+                // Gear ("on the Alexa 65", "with Cooke S4s"): what the gear rules find in the words.
+                if TechSpecs.rules.contains(where: { !$0.found(in: words).isEmpty }) { continue }
                 // A single short word ("In", "The") isn't a name.
                 if words.filter(\.isLetter).count >= 3 { return true }
             }
@@ -237,7 +289,8 @@ public struct ComparisonFrame: Sendable {
         add(Self.continuing, loose: true)
         add(Self.relative, loose: false)
         add(Self.referencePhrase, loose: false)
-        add(Self.parenthesis, loose: false)
+        // Brackets aren't blanked: "Robert Elswit (“There Will Be Blood”)" is often all a sentence says of
+        // whose film it is about (the 1.10.9 live check).
         // Nothing left to assert: the whole sentence is the comparison, so nothing is set aside.
         var chars = Array(sentence)
         var offsets: [Range<Int>] = []
@@ -303,18 +356,16 @@ public enum ClaimFrame {
     /// it is only more of a list ("Super 35, or Super 16"; "Steadicam, dollies and a crane").
     static let strongBreaks = ["; ", " but ", " however", ". ", " instead", " while ", " whereas ", " although ", " though ", " yet ",
                                " in the end", " ultimately", " eventually", " so we ", " so they ", " so he ", " so she ", " – ", " — ", ": ",
-                               " then ", " and went ", " and chose ", " and opted ", " and settled ", " and switched ", " and ended up "]
+                               " then ", " and went ", " and chose ", " and opted ", " and settled ", " and switched ", " and ended up ",
+                               " and shot ", " and used ", " and lit ", " and filmed ", " and photographed ", " and pulled ", " and got "]
 
     /// The text before the gear that governs it: back to the last strong break, and across commas
     /// only while what lies between is a list or an example ("like…", "such as…").
     static func governing(_ sentence: String, before range: Range<String.Index>, acrossCommas: Bool) -> String {
         let lead = String(sentence[..<range.lowerBound])
         var start = lead.startIndex
-        let lower = lead.lowercased()
         for mark in strongBreaks {
-            if let found = lower.range(of: mark, options: .backwards), found.upperBound > start {
-                start = lead.index(lead.startIndex, offsetBy: lower.distance(from: lower.startIndex, to: found.upperBound))
-            }
+            if let found = lead.range(of: mark, options: [.backwards, .caseInsensitive]), found.upperBound > start { start = found.upperBound }
         }
         var text = String(lead[start...])
         guard acrossCommas else {
@@ -332,7 +383,7 @@ public enum ClaimFrame {
     }
 
     static let finiteVerb = try! NSRegularExpression(
-        pattern: #"\b(?:was|were|is|are|had|has|have|did|does|do|shot|used|lit|chose|went|decided|opted|deployed|captured|filmed|photographed|graded|rigged|built|made|took|kept|ran|operated|mounted|turned|switched|settled|ended|needed|wanted|tested|tried|preferred|favou?red|carried|paired|rented|bought|got|gave|found|created|added|placed|hung|put|set)\b"#,
+        pattern: #"\b(?:was|were|is|are|had|has|have|did|does|do|shot|used|lit|chose|went|decided|opted|deployed|captured|filmed|photographed|graded|rigged|built|made|took|kept|ran|operated|mounted|turned|switched|settled|ended|needed|wanted|tested|tried|preferred|favou?red|carried|paired|rented|bought|got|gave|found|created|added|placed|hung|put|set|relies|rely|relied|uses|employs|brings|brought|takes|gives|makes|lights|shoots|needs|wants|keeps|goes|went|came|comes|arrived|pulled|helped|let|lets|allowed|meant|said|says|felt|feels|thought|knew|saw|became|stayed|worked|works)\b"#,
         options: [.caseInsensitive])
 
     /// A part after a comma that continues what came before rather than starting a clause.
@@ -345,6 +396,12 @@ public enum ClaimFrame {
         if words.count > 7 { return false }
         // "…, relying on a dolly", "…, instead using…": a new action, not more of a list.
         if let first = words.first, first.hasSuffix("ing"), !["including", "something", "nothing", "anything", "everything", "lighting", "string", "ceiling", "building", "evening", "morning", "opening", "ending", "spring"].contains(String(first)) {
+            return false
+        }
+        // "…, relied on a dolly", "…, pulled it off": a past verb leading the part, followed by what
+        // it governs ("a modified dolly" is still a list item).
+        if words.count >= 2, words[0].count >= 5, words[0].hasSuffix("ed"),
+           ["on", "with", "the", "a", "an", "it", "them", "to", "in", "for", "up", "out", "down", "off", "that", "his", "her", "their", "our", "by", "back"].contains(String(words[1])) {
             return false
         }
         return finiteVerb.firstMatch(in: item, range: NSRange(item.startIndex..., in: item)) == nil
@@ -372,7 +429,11 @@ public enum ClaimFrame {
 
     /// Avoided, rejected, ruled out, done without: the verb governs the gear.
     static let avoidance = try! NSRegularExpression(
-        pattern: #"\b(?:avoid(?:ed|ing|s)?|eschew(?:ed|ing|s)?|shun(?:ned|ning|s)?|reject(?:ed|ing|s)?|ruled out|rule out|ruling out|ditch(?:ed|ing)?|scrap(?:ped|ping)?|abandon(?:ed|ing)?|passed on|pass on|steer(?:ed|ing)? clear of|stay(?:ed)? away from|kept away from|gave up(?: on)?|giving up(?: on)?|(?:decided|decision|opted|chose|choosing|argued|ruled|went) against|resist(?:ed|ing)? (?:using|the temptation to use|the urge to use)|refus(?:ed|ing) to use|forwent|forgo(?:ing|ne)?|forego(?:ing|ne)?|dispens(?:ed|ing) with|did away with|do away with|without (?:using |any |a |an )?|no need for|banned|ban(?:ning)?|instead of|rather than|in place of|as opposed to|never (?:once )?(?:used?|using|touched|considered|needed|wanted)|not (?:using|use|used)|nothing like|not (?:a|an|any)\s|no (?:room|space|budget|time|place) for|(?:didn'?t|did not|don'?t|do not|doesn'?t|does not|wasn'?t|weren'?t|was not|were not|couldn'?t|could not|wouldn'?t|would not) (?:\w+ ){0,4})"#,
+        pattern: #"\b(?:avoid(?:ed|ing|s)?|eschew(?:ed|ing|s)?|shun(?:ned|ning|s)?|reject(?:ed|ing|s)?|ruled out|rule out|ruling out|ditch(?:ed|ing)?|scrap(?:ped|ping)?|abandon(?:ed|ing)?|passed on|pass on|steer(?:ed|ing)? clear of|stay(?:ed)? away from|kept away from|gave up(?: on)?|giving up(?: on)?|(?:decided|decision|opted|chose|choosing|argued|ruled|went) against|resist(?:ed|ing)? (?:using|the temptation to use|the urge to use)|refus(?:ed|ing) to use|forwent|forgo(?:ing|ne)?|forego(?:ing|ne)?|dispens(?:ed|ing) with|did away with|do away with|without (?:using |any |a |an )?|no need for|banned|ban(?:ning)?|instead of|rather than|in place of|as opposed to|never (?:once )?(?:used?|using|touched|considered|needed|wanted)|not (?:using|use|used)|nothing like|not (?:a|an|any)\s|no (?:room|space|budget|time|place) for|(?:didn'?t|did not|don'?t|do not|doesn'?t|does not|couldn'?t|could not|wouldn'?t|would not|won'?t|will not) (?:\w+ ){0,2}?(?:use|using|need|want|bring|employ|rely on|shoot (?:on|with)|go with|choose|pick|like (?:the (?:look|effect|feel) of|using)|have (?:a|an|any|the)|carry|rent|touch)\b(?:[^,;]{0,40}\s)?)"#,
+        options: [.caseInsensitive])
+    /// "couldn't have done it without", "wouldn't work without", "impossible without": the gear was needed.
+    static let necessity = try! NSRegularExpression(
+        pattern: #"\b(?:couldn'?t|could not|wouldn'?t|would not|can'?t|cannot|never could|impossible|unthinkable)\b[^.;]{0,80}\bwithout\s+(?:[\w'-]+\s+){0,3}$"#,
         options: [.caseInsensitive])
     /// "no Steadicam", "zero practicals": a determiner right before the gear.
     static let noneBefore = try! NSRegularExpression(pattern: #"\b(?:no|zero|nor|neither)\s+(?:[\w-]+\s+){0,2}$"#, options: [.caseInsensitive])
@@ -382,12 +443,12 @@ public enum ClaimFrame {
         pattern: #"^\W*(?:[\w'’-]+\s+){0,4}?(?:was|were|had been|got)\s+(?:briefly\s+|also\s+)?(?:considered|discussed|proposed|suggested|floated|explored|looked at|tested|tried)\b[^.;]*\bbut\b[^.;]*\b(?:never|not|n['’]t|dropped|abandoned|rejected|ruled out|scrapped|cut|shelved)\b"#,
         options: [.caseInsensitive])
     static let deniedAfter = try! NSRegularExpression(
-        pattern: #"^\W*(?:[\w'’-]+\s+){0,5}?(?:was|were|is|are|would be|had been)\s+(?:never|not|n['’]t|out of the question|ruled out|abandoned|rejected|dropped|scrapped|off the table|unnecessary|too (?:big|heavy|expensive|slow)|impossible)\b|^\W*(?:[\w'’-]+\s+){0,3}?(?:wasn['’]t|weren['’]t|isn['’]t|aren['’]t)\b"#,
+        pattern: #"^\W*(?:[\w'’-]+\s+){0,5}?(?:was|were|is|are|would be|had been)\s+(?:never(?! the only)|not(?! the only| only| just| alone| enough)|n['’]t(?! the only| only| just| alone| enough)|out of the question|ruled out|abandoned|rejected|dropped|scrapped|off the table|unnecessary|too (?:big|heavy|expensive|slow)|impossible)\b(?!\s+(?:the only|only|just|alone|enough))|^\W*(?:[\w'’-]+\s+){0,3}?(?:wasn['’]t|weren['’]t|isn['’]t|aren['’]t)\s+(?:used|an option|available|possible|allowed|chosen|needed|on set|brought|considered|wanted|part of)\b"#,
         options: [.caseInsensitive])
 
     /// A counterfactual or hypothetical, governing to the end of its part of the sentence.
     static let hypothetical = try! NSRegularExpression(
-        pattern: #"\b(?:might|could|would|should|may|must)(?:\s+not|n['’]t)?\s+(?:\w+\s+){0,2}?have\b(?!\s+to\b)|\bhad\s+(?:it|we|they|he|she|i|the (?:film|movie|production))\s+(?:been|shot|used|gone|chosen)\b|\bif\s+(?:we|it|they|he|she|i|you|the (?:film|movie|production))\s+(?:had|were|was|could|would)\b|\bwere\s+(?:it|we|they)\s+to\b|\b(?:one|you)\s+could\b|\bhad\s+(?:[\w'’:-]+\s+){1,5}?been\s+(?:shot|filmed|photographed|made|lit|lensed)\b|\b(?:might|may|could)\s+(?:well\s+)?be\s+(?:shot|filmed|photographed)\b|\bif it happens\b|\bwhat if\b|\b(?:dream(?:ed|t|s)? of|fantasi[sz]ed about)\b|\bwish(?:ed|es)?\s+(?:we|they|he|she|i)\s+(?:had|could)\b|\bwould\s+(?:have\s+)?(?:look(?:ed)?|feel|felt)\b|\bin an? (?:ideal|perfect|alternate|different) world\b|\b(?:hypothetical(?:ly)?|in theory|theoretically)\b"#,
+        pattern: #"\b(?:might|could|would|should|may|must)(?:\s+not|n['’]t)?\s+(?:\w+\s+){0,2}?have\b(?!\s+to\b)|\bhad\s+(?:it|we|they|he|she|i|the (?:film|movie|production))\s+(?:been|shot|used|gone|chosen)\b|\bif\s+(?:we|it|they|he|she|i|you|the (?:film|movie|production))\s+(?:had|were|was|could|would)\b|\bwere\s+(?:it|we|they)\s+to\b|\b(?:one|you)\s+could\b|(?:^|[,;:]\s*|\bthat\s+|\bif\s+)had\s+(?!(?:already|just|previously|originally|all|not|never|long)\b)(?:[\w'’:-]+\s+){1,5}?been\s+(?:shot|filmed|photographed|made|lit|lensed)\b|\b(?:might|may|could)\s+(?:well\s+)?be\s+(?:shot|filmed|photographed)\b|\bif it happens\b|\bwhat if\b|\b(?:dream(?:ed|t|s)? of|fantasi[sz]ed about)\b|\bwish(?:ed|es)?\s+(?:we|they|he|she|i)\s+(?:had|could)\b|\bwould\s+(?:have\s+)?(?:look(?:ed)?|feel|felt)\b|\bin an? (?:ideal|perfect|alternate|different) world\b|\b(?:hypothetical(?:ly)?|in theory|theoretically)\b"#,
         options: [.caseInsensitive])
 
     /// A plan or intention, unless the sentence says it was carried out.
@@ -396,12 +457,12 @@ public enum ClaimFrame {
         options: [.caseInsensitive])
     static let planVerbs = "shoot|shooting|shot|film|filming|filmed|use|using|used|capture|capturing|captured|photograph|photographing|photographed|go with|lens|lensed|light|lighting|lit|rent|rely on|employ|work with|frame|grade"
     static let planKept = try! NSRegularExpression(
-        pattern: #"\b(?:as (?:planned|intended)|and (?:that'?s what )?(?:we|they|he|she|i) did|which (?:we|they|he|she|i) did|stuck (?:to|with) (?:it|that|the plan)|stayed with|in the end (?:we|they|he|she|i) (?:did|used|shot)|ended up (?:using|shooting|doing)|and did|so (?:we|they|he|she) did)\b"#,
+        pattern: #"\b(?:as (?:planned|intended)|and (?:that'?s what )?(?:we|they|he|she|i) did|which (?:we|they|he|she|i) did|stuck (?:to|with) (?:it|that|the plan)|stayed with|in the end (?:we|they|he|she|i) (?:did|used|shot)|ended up (?:using|shooting|doing)|and did|so (?:we|they|he|she) did|pulled it off|and got (?:it|them|its way|their way)|got (?:its|their|his|her) way|and it worked|it happened|went ahead)\b"#,
         options: [.caseInsensitive])
 
     /// Tried out, not necessarily used.
     static let tried = try! NSRegularExpression(
-        pattern: #"\b(?:tests?|test days?|test shoots?|a day of tests|camera tests)\s+(?:on|with|using)\b|\b(?:experiment(?:ed|ing)?\s+with|tri(?:ed|al(?:l)?ed)\s+(?:out\s+)?(?!to\b)|test(?:ed|ing)\s+(?:out\s+)?(?!to\b)|auditioned|screen[- ]tested|compar(?:ed|ing))\b[^.;]*$"#,
+        pattern: #"\b(?:tests?|test days?|test shoots?|a day of tests|camera tests)\s+(?:on|with|using)\b|\b(?:experiment(?:ed|ing)?\s+with|tri(?:ed|al(?:l)?ed)\s+(?:out\s+)?(?!to\b)|test(?:ed|ing)\s+(?:out\s+)?(?!to\b)|auditioned|screen[- ]tested)\b[^.;]*$"#,
         options: [.caseInsensitive])
     static let adopted = try! NSRegularExpression(
         pattern: #"\b(?:went on to (?:shoot|be used|photograph|cover|do)|made it (?:into|onto) (?:the|our) (?:film|final|movie|picture|cut)|stayed (?:on|for) the (?:whole |entire )?(?:shoot|film|production)|chose|chosen|choose|went with|settled on|ended up|adopted|became (?:the|our)|carried (?:through|over) (?:into|to) (?:the|principal)|for the (?:film|shoot|production|movie|whole)|used (?:it|them) (?:for|on|throughout)|and (?:it|they) (?:stayed|stuck)|kept (?:it|them) for)\b"#,
@@ -409,7 +470,7 @@ public enum ClaimFrame {
 
     /// What other people do or did: other cinematographers, the period, a mentor's lessons, a habit.
     static let practice = try! NSRegularExpression(
-        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark|go-to)\b|\b(?:my|his|her|their|our)\s+(?:mentor|teacher|professor|old boss|hero|idol|predecessors?)\b|\b(?:the\s+)?(?:old|older|classic|old-school|traditional|studio-era|golden-age)\s+(?:\w+\s+)?(?:cameramen|cinematographers|dps|gaffers|crews|hands)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses?|used|shoots?|shot|relies|rely|prefers?|favou?rs?|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:was|were|used|uses|would|shot)\b"#,
+        pattern: #"\b(?:a lot of|lots of|many of|most of|some of|all of)?\s*(?:my|our|his|her|their)\s+(?:colleagues|peers|contemporaries|fellow (?:dps|cinematographers|operators|gaffers))\b|\b(?:all|many|most|some|other|lots of|plenty of|a lot of)\s+(?:of\s+)?(?:the\s+)?(?:[\w'’-]+\s+){0,3}?(?:colleagues|peers|dps|dops|cinematographers|directors|filmmakers|photographers|camera\s?(?:men|people|operators)|crews|productions)\b|\b(?:dps|dops|cinematographers|filmmakers|directors)\s+(?:of|from|in)\s+(?:the|that|this)\s+(?:period|era|time|day|decade|generation)\b|\bthings\s+(?:that\s+)?(?:we|i|you|he|she|they)\s+(?:learn|learned|learnt|picked up|took)\s+from\b|\b(?:taught|teaches|teach)\s+(?:me|us|him|her|them)\b|\b(?:his|her|their)\s+(?:usual|typical|signature|habitual|trademark)\s+(?:approach|way|practice|habit|method|choice)\b|\b(?:my|his|her|their|our)\s+(?:mentor|teacher|professor|old boss|hero|idol|predecessors?)\b|\b(?:the\s+)?(?:old|older|classic|old-school|traditional|studio-era|golden-age)\s+(?:\w+\s+)?(?:cameramen|cinematographers|dps|gaffers|crews|hands)\b|\b(?:usually|typically|generally|always|traditionally|historically|conventionally|routinely)\s+(?:uses|shoots|relies|prefers|favou?rs|reaches for|works with)\b|\bused to\s+(?:use|shoot|light|work)\b|\bin (?:those|these) days\b|\b(?:everyone|everybody|people)\s+(?:used to|uses|would|shoots)\b"#,
         options: [.caseInsensitive])
 
     /// A simulation or a look, right by the gear.
@@ -430,7 +491,7 @@ public enum ClaimFrame {
         options: [.caseInsensitive])
     /// Made or placed by the art department as part of the scene: set dressing, props.
     static let setDressing = try! NSRegularExpression(
-        pattern: #"\b(?:decorative|ornamental|art department|production design(?:er)?|set dress\w*|set decorat\w*|as (?:a |the )?props?|prop (?:master|department)|part of the (?:set|decor|scenery)|on the (?:dashboard|fridge|wall|car|vehicle|console|screen|sign)s?|the character(?:'s|’s)?|, the character,)\b"#,
+        pattern: #"\b(?:decorative|ornamental|art department|production design(?:er)?|set dress\w*|set decorat\w*|as (?:a |the )?props?|prop (?:master|department)|part of the (?:set|decor|scenery)|on the (?:dashboard|fridge|console|sign)s?|the character(?:'s|’s)?\s+(?:own\s+)?(?:keeps|owns|has|carries|holds|uses|treasures)|,\s+the character,\s+(?:keeps|owns|has|carries|holds|uses))\b"#,
         options: [.caseInsensitive])
     /// …unless it's said to light the scene: "the neon practicals were the key light".
     static let lightsTheScene = try! NSRegularExpression(
@@ -459,7 +520,7 @@ public enum ClaimFrame {
         pattern: #"\b(?:offers?|(?:many |several |new |other )?features (?:like|such as|include|including|a|an|the)\b|provides?|boasts?|delivers?|allows?|enables?|lets\s+(?:you|users|filmmakers|operators)|can\b|is able to|are able to|is capable of|are capable of|comes? with|ships? with|supports?|promises?|(?:is|are|was|were|had been) designed (?:for|to)|records? up to|shoots? up to)"#,
         options: [.caseInsensitive])
     static let productSubject = try! NSRegularExpression(
-        pattern: #"\b(?:the|this|its|a|an|each|every)?\s*(?:camera|cameras|sensor|lens|lenses|light|lights|fixture|fixtures|system|unit|model|body|bodies|series|range|product|line|panel|it)\b|\b(?:arri|alexa|red|sony|venice|canon|blackmagic|panavision|cooke|zeiss|leica|aputure|astera|creamsource|kino flo|skypanel|dji|ronin|fujinon|angenieux|angénieux)\b"#,
+        pattern: #"\b(?:the|this|its|a|an|each|every)?\s*(?:camera|cameras|sensor|lens|lenses|fixture|fixtures|system|unit|model|body|bodies|series|range|product|line|panel|it)\b|\b(?:arri|alexa|red|sony|venice|canon|blackmagic|panavision|cooke|zeiss|leica|aputure|astera|creamsource|kino flo|skypanel|dji|ronin|fujinon|angenieux|angénieux)\b"#,
         options: [.caseInsensitive])
     static let personalAgent = try! NSRegularExpression(
         pattern: #"\b(?:we|i|our|us|he|she|they|the (?:production|crew|film|movie|filmmakers|dp|cinematographer|director))\b"#,
@@ -484,9 +545,11 @@ public enum ClaimFrame {
         let lowered = name.lowercased()
         let isLook = lowered.contains("lut") || lowered.contains("look")
 
+        // Necessity, not denial or a hypothetical: "we couldn't have done it without the Steadicam".
+        let needed = has(necessity, clause)
         // Denied: the verb of avoidance or a negation governs it ("avoided Steadicam", "no
         // practicals", "decided against anamorphic"), or the clause after says so.
-        if let match = avoidance.matches(in: clause, range: NSRange(clause.startIndex..., in: clause)).last,
+        if !needed, let match = avoidance.matches(in: clause, range: NSRange(clause.startIndex..., in: clause)).last,
            let found = Range(match.range, in: clause) {
             // What lies between the verb and the gear must not start a new statement of use ("instead
             // deploying", "and went with").
@@ -503,7 +566,7 @@ public enum ClaimFrame {
         // A hypothetical: from its modal to the end of its part of the sentence, commas included.
         let part = governing(folded, before: gear, acrossCommas: true)
         let wholePart = String(folded[segmentStart(folded, before: gear)..<gear.upperBound])
-        if has(hypothetical, wholePart) || has(hypothetical, part) { return .hypothetical }
+        if !needed, has(hypothetical, wholePart) || has(hypothetical, part) { return .hypothetical }
 
         // A plan, unless it's said to have been carried out.
         if has(plan, wholePart), !has(planKept, String(folded[gear.upperBound...])) { return .abandonedPlan }
@@ -536,8 +599,9 @@ public enum ClaimFrame {
         // Set dressing or a prop, not equipment lighting or photographing the film (unless it's said to
         // light the scene): "LED panels built by the art department as props", "the character keeps
         // an old Super 8 camera".
-        if [.light, .camera, .format, .support].contains(kind), has(setDressing, wholePart + " " + String(folded[gear.upperBound...])),
-           !has(lightsTheScene, wholePart + " " + String(folded[gear.upperBound...])) {
+        let dressingScope = wholePart + " " + following(folded, after: gear)
+        if [.light, .camera, .format, .support].contains(kind), has(setDressing, dressingScope),
+           !has(lightsTheScene, dressingScope), !has(productionAgent, near) {
             return .environment
         }
         // An object in the scene or the location (lights and grip; a prop camera).
@@ -554,23 +618,28 @@ public enum ClaimFrame {
         }
 
         // A product's capability, with no one using it.
-        if has(capability, clause), has(productSubject, clause), !has(personalAgent, clause) { return .productCapability }
+        // The product is the subject, the capability verb follows it, and the gear is what it offers.
+        if let verb = capability.firstMatch(in: clause, range: NSRange(clause.startIndex..., in: clause)),
+           let verbRange = Range(verb.range, in: clause) {
+            let subject = String(clause[..<verbRange.lowerBound])
+            if has(productSubject, subject), !has(personalAgent, clause), !has(productionAgent, subject) { return .productCapability }
+        }
         return nil
     }
 
     /// Where the gear's part of the sentence starts: the last strong break before it (commas don't
     /// end a hypothetical or a plan: "might have been shot in Super 35, or Super 16").
     static func segmentStart(_ sentence: String, before range: Range<String.Index>) -> String.Index {
-        let lead = sentence[..<range.lowerBound].lowercased()
+        let lead = sentence[..<range.lowerBound]
         var start = 0
         for mark in strongBreaks where mark != ": " {
-            if let found = lead.range(of: mark, options: .backwards) {
+            if let found = lead.range(of: mark, options: [.backwards, .caseInsensitive]) {
                 start = max(start, lead.distance(from: lead.startIndex, to: found.upperBound))
             }
         }
         // ", and the production went with…", ", so he shot…": a new clause, unless it's only more of a list.
         for mark in [", and ", ", so ", ", which ", ", who ", " and the ", " and then ", " so he ", " so she ", " so they ", " so we ", " so i "] {
-            if let found = lead.range(of: mark, options: .backwards) {
+            if let found = lead.range(of: mark, options: [.backwards, .caseInsensitive]) {
                 let offset = lead.distance(from: lead.startIndex, to: found.upperBound)
                 guard offset > start else { continue }
                 let rest = String(lead[found.upperBound...])
