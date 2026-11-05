@@ -14,7 +14,7 @@ jobs:
         env:
           REEL_DIAGNOSE: "1"
         run: |
-          swift test --filter LiveDiagnosisTests/testTraceSentences 2>&1 | tee diag.log | tail -5
+          swift test --filter LiveDiagnosisTests/testTraceRegressions 2>&1 | tee diag.log | tail -5
           grep "^DIAG| " diag.log > diag.txt || true
           cat diag.txt
       - uses: actions/upload-artifact@v4
