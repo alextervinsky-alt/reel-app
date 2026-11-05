@@ -221,6 +221,15 @@ public struct PageContext: Equatable, Sendable {
         var anchor = false
         var sinceNamed = Int.max
         var question: Bool? = nil
+        // A page that never turns away and names no other production keeps one subject throughout: the
+        // two-paragraph bound is for pages that do.
+        let oneSubject = !paragraphs.contains { paragraph in
+            Self.turnsAway(paragraph) || Digest.sentences(in: paragraph).contains { sentence in
+                let main = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people).main
+                return !names(main, title: title) && TechSpecs.namesAnotherFilm(main, title: title, otherTitles: otherTitles, people: people)
+            }
+        }
+        let reach = oneSubject ? Int.max - 1 : 2
         return paragraphs.map { paragraph in
             let isQuestion = Self.isQuestion(paragraph)
             let sentences = Digest.sentences(in: paragraph)
@@ -236,7 +245,7 @@ public struct PageContext: Equatable, Sendable {
                 return sentences.map { _ in false }
             }
             if sinceNamed != Int.max { sinceNamed += 1 }
-            let carried = inherit && acrossParagraphs && anchor && sinceNamed <= 2 && !othersHere && !Self.turnsAway(paragraph)
+            let carried = inherit && acrossParagraphs && anchor && sinceNamed <= reach && !othersHere && !Self.turnsAway(paragraph)
             anchor = (inherit && question == true && !othersHere) || carried
             return sentences.map { sentence in
                 let frame = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people)

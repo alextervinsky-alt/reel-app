@@ -103,7 +103,10 @@ final class EndToEndResearchTests: XCTestCase {
         }
         XCTAssertEqual(films.count, 270)
         // One site's pages time out throughout: those films are still read, the rest aren't blocked.
-        let downSite = "British Cinematographer"
+        // The least common site among the films' first pages: some films depend on it, most don't.
+        let firstSites = corpus.films.flatMap(\.firstPass).compactMap { corpus.pages[$0]?.site }
+        let counts = Dictionary(grouping: firstSites, by: { $0 }).mapValues(\.count)
+        let downSite = try XCTUnwrap(counts.filter { $0.value > 0 }.min { $0.value < $1.value || ($0.value == $1.value && $0.key < $1.key) }?.key)
         let down = Set(corpus.pages.values.filter { $0.site == downSite }.map(\.url))
         let web = Web(corpus, down: down)
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("reel-e2e-\(UUID().uuidString)")
