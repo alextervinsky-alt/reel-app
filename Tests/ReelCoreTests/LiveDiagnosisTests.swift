@@ -44,6 +44,42 @@ final class LiveDiagnosisTests: XCTestCase {
              site: "Variety", wikipedia: nil, terms: []),
     ]
 
+
+    static let inline: [(title: String, year: Int, dps: [String], directors: [String], text: String)] = [
+        ("F1", 2025, ["Claudio Miranda"], ["Joseph Kosinski"], "As with Top Gun: Maverick, Miranda and Kosinski were involved in all stages of the process through to post-production, spending four weeks grading with Company 3’s founder and CEO Stefan Sonnenfeld."),
+        ("F1", 2025, ["Claudio Miranda"], ["Joseph Kosinski"], "For nighttime events, the tracks are commonly bathed in LED floodlights from tall towers, and the cars have rear lights and LED panels."),
+        ("Barbie", 2023, ["Rodrigo Prieto"], ["Greta Gerwig"], "Prieto’s frequent collaborator, Company 3 colourist Yvan Lucas, joined him in the LUT experimentation, continuing the journey they began on The Irishman (2019) developing grading software PPL with Philippe Panzini from Codex."),
+        ("The Banshees of Inisherin", 2022, ["Ben Davis"], ["Martin McDonagh"], "Natural light was also a valuable creative tool, as it was when Davis lensed McDonagh’s Three Billboards Outside Ebbing, Missouri."),
+        ("Challengers", 2024, ["Sayombhu Mukdeeprom"], ["Luca Guadagnino"], "He avoided Steadicam for the tennis action, instead deploying a Scorpio 45 crane with a Libra head."),
+        ("Challengers", 2024, ["Sayombhu Mukdeeprom"], ["Luca Guadagnino"], "Guadagnino unleashes one impossible shot after another in this finale: first-person-perspective shots of the ball speeding from racquet to racquet, a faux-double split-diopter composite shot of all three players, a moment where the players appear."),
+        ("Uncut Gems", 2019, ["Darius Khondji"], ["Josh Safdie"], "Darius Khondji: Without me, the film might have easily been shot in Super 35, or Super 16."),
+        ("Nomadland", 2021, ["Joshua James Richards"], ["Chloé Zhao"], "And beyond all these nice things that we learn from Terry, like shooting at magic hour, or with wide angle lenses, the most important thing is what cinema really means to a filmmaker."),
+        ("The Holdovers", 2023, ["Eigil Bryld"], ["Alexander Payne"], "And all the DPs of the period that I really admired would push the film stock or they would do handheld or whatever."),
+        ("Dallas Buyers Club", 2013, ["Yves Bélanger"], ["Jean-Marc Vallée"], "Like the RED, the Alexa offers a broad spectrum of colors and shadows in even the darkest natural lighting conditions."),
+        ("No Country for Old Men", 2007, ["Roger Deakins"], ["Joel Coen"], "It was presented in its theatrical 2.35:1 anamorphic widescreen aspect ratio and in Dolby Digital 5.1 (English, Spanish)."),
+        ("The Irishman", 2019, ["Rodrigo Prieto"], ["Martin Scorsese"], "The sort of weaving aspect–or the word you used, “jankiness”–was not totally purposeful, and Scorsese usually complains about Steadicam not being really steady, like a dolly shot, so he’s not a fan, even though he’s used Steadicam classically in some unforgettable shots."),
+        ("Interstellar", 2014, ["Hoyte van Hoytema"], ["Christopher Nolan"], "The extended, unbroken nature of the shots was planned in rehearsal and accomplished with Steadicam and hand-held cameras, with blocking and dialog timed perfectly with the sweeping camera movement."),
+        ("Shutter Island", 2010, ["Robert Richardson"], ["Martin Scorsese"], "The film needed two looks: a Kodachrome look and an emulation of the ENR silver-retention process."),
+    ]
+
+    func testTraceSentences() throws {
+        guard ProcessInfo.processInfo.environment["REEL_DIAGNOSE"] == "1" else { throw XCTSkip("diagnostic only") }
+        for c in Self.inline {
+            let people = c.dps + c.directors
+            say("===== \(c.title): \(c.text.prefix(200))")
+            say("   aboutOtherFilm=\(TechSpecs.aboutOtherFilm(c.text, year: c.year, people: people, title: c.title)) namesAnotherFilm=\(TechSpecs.namesAnotherFilm(c.text, title: c.title, otherTitles: [], people: people)) productions=\(PageContext.productions(in: [c.text], title: c.title, people: people))")
+            for rule in TechSpecs.rules {
+                for (name, at) in rule.found(in: c.text) {
+                    let whole = TechSpecs.segmentRange(of: c.text, around: at)
+                    let r = TechSpecs.reading(c.text, at: at, title: c.title, otherTitles: [], people: people, kind: rule.kind)
+                    say("   \(rule.kind) \(name) setAside=\(String(describing: TechSpecs.setAside(c.text, at: at, title: c.title, people: people))) denied=\(TechSpecs.denied(c.text, at: at)) hedges=\(TechSpecs.hedges(c.text, around: at, within: whole)) about=\(r.aboutThisFilm) captured=\(r.captured) tested=\(TechSpecs.testedOnly(c.text, at: at)) intended=\(TechSpecs.saidAsIntended(c.text, at: at)) finishing=\(TechSpecs.aboutFinishing(c.text, at: at))")
+                }
+            }
+            let one = TechSpecs.read(texts: [TechSpecs.Text(source: "British Cinematographer", paragraphs: [c.text])], cinematographers: c.dps, directors: c.directors, year: c.year, title: c.title)
+            say("   → accepted [\(one.specs.map(\.name).joined(separator: ", "))] mentioned [\(one.mentioned.map { "\($0.name)/\($0.attribution)" }.joined(separator: ", "))]")
+        }
+    }
+
     func say(_ line: String) { FileHandle.standardOutput.write(Data(("DIAG| " + line + "\n").utf8)) }
 
     func testTraceRegressions() async throws {
