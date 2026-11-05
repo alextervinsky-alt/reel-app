@@ -76,9 +76,12 @@ final class AttributionTests: XCTestCase {
         ])
         XCTAssertEqual(PageContext.anchors(["Ada Brisk has shot features on three continents.", "The Copper Lantern was her hardest shoot.",
                                             "We shot it on the Sony Venice with Cooke S4 lenses.", "“Glass Rivers” was a different story: we shot it handheld."],
-                                           title: film, otherTitles: [], people: []), [[false], [true], [false], [false]],
-                       "within its paragraph only: across paragraphs leaked another film's gear in the holdout")
-        XCTAssertEqual(interview.anchored, 1)
+                                           title: film, otherTitles: [], people: [], acrossParagraphs: true), [[false], [true], [true], [false]],
+                       "1.10.9: the film stays the subject into the next paragraph (bounded), until another production is named")
+        XCTAssertEqual(interview.anchored, 2)
+        // Within its paragraph only when nothing bounds the context (the 1.10.8 rule, still the default).
+        XCTAssertEqual(PageContext.anchors(["The Copper Lantern was her hardest shoot.", "We shot it on the Sony Venice with Cooke S4 lenses."],
+                                           title: film, otherTitles: [], people: []), [[true], [false]])
         // On a profile the person stays the subject.
         XCTAssertEqual(PageContext.anchors(["The Copper Lantern was her hardest shoot.", "We shot it on the Sony Venice."], title: film,
                                            otherTitles: [], people: [], inherit: false), [[true], [false]])

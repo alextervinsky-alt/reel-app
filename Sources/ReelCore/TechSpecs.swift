@@ -408,6 +408,10 @@ public struct TechSpecs: Equatable, Sendable {
                                 // (Not "…, but the lenses were Cooke S4", nor "but we switched…": the turn must name this film.)
                                 && sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here)\b|\bthis time\b|\bon this (?:one|film)\b"#,
                                                   options: [.regularExpression, .caseInsensitive]) == nil)
+                            // "In 2007 Doe and Example collaborated on Glass Rivers.", "Glass Rivers (2007) was…",
+                            // "her previous feature…": another production named as such, not this film (1.10.9).
+                            || (!namesTitle(sentence, title: title) && matches(namedAsAnotherProduction, main)
+                                && main.range(of: #"\bthis (?:time|film|one|movie|picture)\b|\bhere\b"#, options: [.regularExpression, .caseInsensitive]) == nil)
                             || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
                         // Only a sentence that names another production is followed by "It…" about it: not
@@ -1829,6 +1833,9 @@ public struct TechSpecs: Equatable, Sendable {
     /// shot…", "in general", "you have to", "especially when", "a beautifully shot film on film".
     /// A sentence going on about what the one before was about: "It was shot…", "They used…".
     static let continuesAbout = try! NSRegularExpression(pattern: #"^\W*(?:It|That)\b(?!\s+time\b)|^\W*This\b(?!\s+(?:time|film|movie|picture|feature|one|project)\b)"#)
+    /// Another production named as such, plainly (1.10.9): "collaborated on Glass Rivers", "the 2007
+    /// feature Glass Rivers", "her previous feature, Glass Rivers", "Glass Rivers (2007)". Not "his film".
+    static let namedAsAnotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\s+[A-Z]|\b(?:an earlier|a previous|the previous|previous|earlier|last|first|debut)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b,?\s+[A-Z]|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
     /// Another production named: "his 2007 feature Glass Rivers", "her previous film", "Glass Rivers (2007)".
     static let anotherProduction = try! NSRegularExpression(pattern: #"\b(?:collaborat\w*|worked(?: together)?|teamed up|reunited)\s+on\s+(?:the\s+)?[A-Z]|\b(?:19|20)\d{2}(?:'s)?\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary|short|series)\b|\b(?:his|her|their|an earlier|a previous|the previous|previous|earlier|last)\s+(?:\w+\s+)?(?:feature|film|movie|picture|documentary)\b|\b[A-Z][\w'’\-]*\s*\((?:19|20)\d{2}\)"#)
 
