@@ -109,6 +109,15 @@ final class ReviewRegressionTests: XCTestCase {
             "When I was in France working on Glass Rivers with Carl Example, I was very into desaturation with a bleach-bypass process."])],
                                    cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022, title: "The Quiet Harbour")
         XCTAssertFalse(other.specs.contains { $0.name.lowercased().contains("bleach") }, "\(other.specs.map(\.name))")
+        // …but a place, gear or a day being shot isn't another production.
+        let regex = TechSpecs.namedAsAnotherProduction
+        for text in ["When we were shooting London's night exteriors, we used SkyPanels on condors.",
+                     "When we were shooting IMAX on the plane, the camera had to be strapped down.",
+                     "When we were lighting Times Square, we used two 18K HMIs.",
+                     "When I was doing Steadicam on the stairs, the rig weighed 80 pounds.",
+                     "When we were shooting Day 12, the Technocrane broke."] {
+            XCTAssertNil(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), text)
+        }
         // A real trailing comparison after an opening one is still set aside.
         let both = ComparisonFrame("Just as he had on Glass Rivers, Doe shot The Quiet Harbour on 500T, as he did on Salt Marsh with Kodak 5207.",
                                    title: "The Quiet Harbour", otherTitles: ["Glass Rivers", "Salt Marsh"])
