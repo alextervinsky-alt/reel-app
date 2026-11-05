@@ -27,7 +27,7 @@ public enum CraftReader {
 
     /// The summary and the reading it came from.
     static func evaluate(_ details: TMDBMovieDetails, article: FilmArticle?, reading: CameraReading?, colour: [String]?,
-                         otherTitles: [String], articleFailed: Bool = false, now: Date) -> (index: CraftIndex, specs: TechSpecs) {
+                         otherTitles: [String], articleFailed: Bool = false, previous: CraftIndex? = nil, now: Date) -> (index: CraftIndex, specs: TechSpecs) {
         let texts = texts(article: article, reading: reading, hiding: false)
         let people = reading?.research?.contributors ?? Self.crew(of: details, article: article, reading: reading)
         let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
@@ -52,7 +52,36 @@ public enum CraftReader {
             // A site that didn't answer, the film's own article included (1.10.8): not a verdict on what
             // it might have said, for the dimensions this reading's searches didn't settle.
             unavailable: !index.unanswered.isEmpty || articleFailed, now: now)
+        // Every finding with its passage, and the reading before's reconciled with this one (1.10.9).
+        index.claims = SourceReconciliation.reconcile(previous: previous, with: reconciliationInput(specs: specs, index: index, texts: texts,
+                                                                                                   reading: reading, articleFailed: articleFailed),
+                                                      now: now)
+        // A gear name carried while its source can't be read is still shown (as a carried tag is).
+        for claim in index.claimsKnown where claim.status == .carried && claim.kind != "shotOn"
+            && !index.names.contains(where: { SourceReconciliation.sameName($0, claim.name) }) && index.names.count < 30 {
+            index.names.append(claim.name)
+        }
         return (index, specs)
+    }
+
+    /// What reconciling the reading before needs: what was accepted, set aside and mentioned, the text
+    /// of each source read, the pages fetched and set aside, and the sites that didn't answer or came
+    /// incomplete.
+    static func reconciliationInput(specs: TechSpecs, index: CraftIndex, texts: [TechSpecs.Text], reading: CameraReading?,
+                                    articleFailed: Bool) -> SourceReconciliation.Input {
+        var read: [String: [String]] = [:]
+        for text in texts { read[text.source ?? "Wikipedia", default: []] += text.sections.flatMap(\.paragraphs) }
+        var fetched: [String: [[String]]] = [:]
+        for skipped in reading?.skipped ?? [] where !skipped.source.paragraphs.isEmpty && skipped.limit == nil {
+            fetched[skipped.source.site, default: []].append(skipped.source.paragraphs)
+        }
+        let incomplete = Set(index.limits.filter { $0.detail.contains(CameraSources.incompletePage) || $0.detail.contains(CameraSources.unboundedArticle)
+            || $0.kind == .thin }.map(\.site))
+        var shotOn: [ShotOn: CraftIndex.Evidence] = [:]
+        for evidence in index.evidence { shotOn[evidence.shotOn] = evidence }
+        return SourceReconciliation.Input(accepted: specs.accepted, judged: specs.judged, mentioned: specs.mentioned, shotOn: shotOn, read: read,
+                                          fetched: fetched, unanswered: Set(index.unanswered + (articleFailed ? ["Wikipedia"] : [])),
+                                          incomplete: incomplete, rules: index.version)
     }
 
     /// The film's camera, lighting, colour and VFX people: credited on TMDB, and directors of
@@ -105,7 +134,8 @@ public enum CraftReader {
                                                              year: details.year, otherTitles: otherTitles,
                                                              crew: Self.crew(of: details, article: article, reading: first), previous: previous)
         let now = Date()
-        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, articleFailed: articleFailed, now: now)
+        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, articleFailed: articleFailed,
+                                 previous: previous, now: now)
         var read = evaluated.index
         noteArticle(&read, articleTitle: articleTitle, article: article, failed: articleFailed)
         return Reading(index: read, log: CraftLog.text(details: details, articleTitle: articleTitle, articleRead: article != nil,
@@ -129,8 +159,10 @@ public enum CraftReader {
     /// and its log: the same rules and the same log as the background reading.
     /// `articleFailed`: the article was asked for and Wikipedia didn't answer (not: there's no such article).
     public static func reading(of details: TMDBMovieDetails, articleTitle: String?, article: FilmArticle?, reading: CameraReading?,
-                               colour: [String]?, otherTitles: [String] = [], articleFailed: Bool = false, now: Date = Date()) -> Reading {
-        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, articleFailed: articleFailed, now: now)
+                               colour: [String]?, otherTitles: [String] = [], articleFailed: Bool = false, previous: CraftIndex? = nil,
+                               now: Date = Date()) -> Reading {
+        let evaluated = evaluate(details, article: article, reading: reading, colour: colour, otherTitles: otherTitles, articleFailed: articleFailed,
+                                 previous: previous, now: now)
         let sources = reading ?? CameraReading(sources: [], more: [], cinematographer: nil)
         var index = evaluated.index
         noteArticle(&index, articleTitle: articleTitle, article: article, failed: articleFailed)

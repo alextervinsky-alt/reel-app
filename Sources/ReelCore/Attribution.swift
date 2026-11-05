@@ -58,14 +58,17 @@ public struct PageContext: Equatable, Sendable {
             let name = raw.trimmingCharacters(in: CharacterSet(charactersIn: " ,.;:“”\"'‘’()"))
                 .replacingOccurrences(of: #"^(?:and|or|the films?|including|include|includes)\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
             let words = name.split(separator: " ")
+            // A date, a time or an attribution isn't a production (1.10.9): "On January 26, AC joined…",
+            // "In 2000, …", "According to Coppola, …".
+            if name.range(of: Self.notATitle, options: .regularExpression) != nil { return }
             guard (1...6).contains(words.count), name.count >= 3, let first = name.first, first.isUppercase || first.isNumber,
                   !TechSpecs.namesTitle(name, title: title), !TechSpecs.namesTitle(title, title: name),
                   !found.contains(name) else { return }
             found.append(name)
         }
-        let titled = #"([A-Z0-9][\w'’:&!-]*(?:\s+(?:[A-Z0-9][\w'’:&!-]*|of|the|and|a|an|in|on|to|for))*)"#
+        let titled = #"([A-Z0-9][\w'’:&!-]*(?:\s+(?:[A-Z0-9][\w'’:&!-]*|of|the|and|a|an|in|on|to|for|by))*)"#
         // Two words or more, capitalised (a title, not "Tuesday" or "Location").
-        let multi = #"((?:The |A |An )?[A-Z0-9][\w'’:&!-]*(?:\s+(?:of|the|and|a|an|in|on|to|for)?\s*[A-Z0-9][\w'’:&!-]*)+)"#
+        let multi = #"((?:The |A |An )?[A-Z0-9][\w'’:&!-]*(?:\s+(?:of|the|and|a|an|in|on|to|for|by)?\s*[A-Z0-9][\w'’:&!-]*)+)"#
         let cues = [
             // "Glass Rivers (2019)".
             try! NSRegularExpression(pattern: titled + #"\s+\((?:19|20)\d\d\)"#),
@@ -73,8 +76,13 @@ public struct PageContext: Equatable, Sendable {
             try! NSRegularExpression(pattern: #"\b(?:shot|photographed|lensed|filmed|lit)\s+"# + multi + #"(?=\s+(?:with|on|in|for|using|entirely|mostly|back)\b|[,.;])"#),
             // "Lowland Cantata, his first digital feature, …".
             try! NSRegularExpression(pattern: multi + #",\s+(?:his|her|their|the|our|my)\s+(?:\w+\s+){0,3}(?:feature|film|picture|movie|documentary|series|short)\b"#),
-            // "On The Quiet Ledger, a few years earlier, …" (an opening naming a production).
-            try! NSRegularExpression(pattern: #"(?:^|[.!?]\s+)(?:On|For|With|During)\s+"# + multi + #","#),
+            // "On The Quiet Ledger, a few years earlier, …", "On Overpass she worked…" (an opening naming a production).
+            try! NSRegularExpression(pattern: #"(?:^|[.!?:]\s+)(?:On|For|With|During)\s+"# + multi + #"(?:,|(?=\s+(?:he|she|they|we|I|I'd|we'd)\b))"#),
+            try! NSRegularExpression(pattern: #"(?:^|[.!?:]\s+)(?:On|For|With|During)\s+"# + titled + #"(?=\s+(?:he|she|they|we|I|I'd|we'd)\b)"#),
+            // "Her follow-up, Static Bloom,", "another feature, Fieldnote,", "coming off The Copper Season,".
+            try! NSRegularExpression(pattern: #"\b(?:[Hh]is|[Hh]er|[Tt]heir)\s+(?:follow-up|next(?:\s+(?:film|feature|project))?|previous\s+(?:film|feature)|newest|latest|debut|first\s+feature),?\s+"# + titled),
+            try! NSRegularExpression(pattern: #"\banother\s+(?:feature|film|movie|production|picture|project),?\s+"# + titled),
+            try! NSRegularExpression(pattern: #"\b(?:coming|fresh|straight)\s+(?:off|from)\s+"# + titled),
             // "the miniseries Dust", "the feature Low Country", "on the set of Kiln" (one word or more).
             try! NSRegularExpression(pattern: #"\b(?:the|a|his|her|their|our|my)\s+(?:mini-?series|series|show|feature|film|documentary|commercial|short|movie|pilot|sequel|remake)\s+"#
                                      + titled + #"(?=[\s,.;:!?)]|$)"#),
@@ -113,6 +121,10 @@ public struct PageContext: Equatable, Sendable {
         return found
     }
 
+    /// Dates, times and attributions that open a sentence like a title would ("On January 26,",
+    /// "In 2000,", "According to Coppola,", "By the 1970s,").
+    static let notATitle = #"^(?:(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?(?:\s+\d{1,2}(?:st|nd|rd|th)?)?(?:,?\s+\d{4})?|(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b.*|(?:In|By|Since|From|Until|Around|After|Before|During|Through|Throughout)\s+(?:the\s+)?(?:\d{1,4}(?:s|st|nd|rd|th)?|early|late|mid|summer|winter|spring|autumn|fall)\b.*|According\s+to\b.*|\d+(?:st|nd|rd|th)?|(?:Day|Week|Night|Episode|Season|Year)\s+\d+)$"#
+
     /// Profile and news cues in a page's title or address: what the page is when it isn't the film's.
     static let profileCues = try! NSRegularExpression(
         pattern: #"\b(?:in memoriam|obituary|dies at|has died|remembering|tribute to|welcomes?|welcomed|joins?|joined|new (?:active |associate )?members?|members|membership|knighted|honou?red|lifetime achievement|appointed|career|retrospective|biography)\b"#,
@@ -135,8 +147,8 @@ public struct PageContext: Equatable, Sendable {
         if isDistinctive(title) { return TechSpecs.namesTitle(text, title: title) }
         let short = (title.split(separator: ":").first.map(String.init) ?? title).trimmingCharacters(in: .whitespaces)
         guard !short.isEmpty else { return false }
-        let pattern = #"(?<![\w’'])"# + NSRegularExpression.escapedPattern(for: short) + #"(?!\w)"#
-        return text.replacingOccurrences(of: "’", with: "'").range(of: pattern, options: .regularExpression) != nil
+        // As written (case and all), whatever the punctuation between its words (1.10.9).
+        return TitleMatch.names(text.replacingOccurrences(of: "’", with: "'"), title: short, caseSensitive: true)
     }
 
     public static func classify(pageTitle: String, url: URL, paragraphs: [String], title: String, otherTitles: [String],
@@ -150,7 +162,10 @@ public struct PageContext: Equatable, Sendable {
         let confirmed = isDistinctive(title) || paragraphs.contains { paragraph in
             names(paragraph, title: title) && (year.map { paragraph.contains(String($0)) } ?? false || surnames.contains { paragraph.contains($0) })
         }
+        // An address that is the title itself ("/blog-post/challengers/") names it too, once the title
+        // is confirmed (1.10.9): a short title's address otherwise says nothing.
         let named = confirmed && (names(pageTitle, title: title) || isDistinctive(title) && TechSpecs.namesTitle(address, title: title)
+            || TitleMatch.isSlug(of: title, url: url)
             || CameraSources.isAbout(title: title, articleTitle: pageTitle, url: url.absoluteString) && names(pageTitle + " " + body, title: title))
         // Named outside a list of credits: "her credits include…" says nothing about the film.
         let naming = paragraphs.map { paragraph in
@@ -171,7 +186,8 @@ public struct PageContext: Equatable, Sendable {
         }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
             : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
-        let count = anchors(paragraphs, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction)
+        let count = anchors(paragraphs, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction,
+                            acrossParagraphs: true)
             .joined().filter { $0 }.count
         return PageContext(kind: kind, anchored: count, productions: others)
     }
@@ -192,25 +208,90 @@ public struct PageContext: Equatable, Sendable {
     /// on an interview (`inherit`), not across paragraphs: a round-table or an interview moving to
     /// another production often names it in a way no rule can tell from a name ("looks back further,
     /// to Saints of the Low Meridian"), and the holdout showed carrying it over leaks that film's gear.
+    ///
+    /// 1.10.9: the film stays the subject across paragraphs only in a bounded context that says so
+    /// (`continues`): an interview's question naming the film holds for its answers until the next
+    /// question; a paragraph continues the one before only when the film was still the subject at its
+    /// end, it names no other production, it doesn't turn to a career, a biography or another time
+    /// ("Her first feature…", "Years earlier…"), and at most two paragraphs have passed since the film
+    /// was named. A comparison inside a sentence ("Just as on <Other>, …") doesn't end the subject:
+    /// what the sentence asserts is read apart from what it compares (`ComparisonFrame`).
     public static func anchors(_ paragraphs: [String], title: String, otherTitles: [String], people: [String],
                                inherit: Bool = true, acrossParagraphs: Bool = false) -> [[Bool]] {
         var anchor = false
-        return paragraphs.map { paragraph in
-            if !acrossParagraphs { anchor = false }
-            return Digest.sentences(in: paragraph).map { sentence in
-            let namesIt = names(sentence, title: title)
-            let other = TechSpecs.namesAnotherFilm(sentence, title: title, otherTitles: otherTitles, people: people)
-            if namesIt, !isCreditList(sentence, title: title) {
-                anchor = true
-                return true
-            }
-            if namesIt || other {
-                anchor = false
-                return false
-            }
-            return inherit && anchor
+        var sinceNamed = Int.max
+        var question: Bool? = nil
+        var sinceQuestion = Int.max
+        // A page that never turns away and names no other production keeps one subject throughout: the
+        // two-paragraph bound is for pages that do.
+        let oneSubject = !paragraphs.contains { paragraph in
+            Self.turnsAway(paragraph) || Digest.sentences(in: paragraph).contains { sentence in
+                let main = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people).main
+                return !names(main, title: title) && TechSpecs.namesAnotherFilm(main, title: title, otherTitles: otherTitles, people: people)
             }
         }
+        let reach = oneSubject ? Int.max - 1 : 2
+        return paragraphs.map { paragraph in
+            let isQuestion = Self.isQuestion(paragraph)
+            let sentences = Digest.sentences(in: paragraph)
+            let othersHere = sentences.contains { sentence in
+                let main = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people).main
+                return !names(main, title: title) && TechSpecs.namesAnotherFilm(main, title: title, otherTitles: otherTitles, people: people)
+            }
+            if isQuestion {
+                // The question sets what its answers are about: the film, another production, or (a
+                // follow-up naming neither) whatever the answers were about.
+                if sentences.contains(where: { names($0, title: title) }) { question = true } else if othersHere { question = false }
+                sinceQuestion = 0
+                anchor = false
+                return sentences.map { _ in false }
+            }
+            if sinceNamed != Int.max { sinceNamed += 1 }
+            if sinceQuestion != Int.max { sinceQuestion += 1 }
+            let turns = Self.turnsAway(paragraph)
+            let carried = inherit && acrossParagraphs && anchor && sinceNamed <= reach && !othersHere && !turns
+            // A question about the film holds for its answers, as far as a subject carries (the same
+            // bound), and not into an answer that turns away or names another production.
+            let answering = inherit && question == true && sinceQuestion <= max(reach, 1) && !othersHere && !turns
+            if turns || othersHere { question = nil }
+            anchor = answering || carried
+            return sentences.map { sentence in
+                let frame = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people)
+                let namesIt = names(sentence, title: title)
+                let other = TechSpecs.namesAnotherFilm(frame.main, title: title, otherTitles: otherTitles, people: people)
+                    && !names(frame.main, title: title)
+                if namesIt, !isCreditList(sentence, title: title), names(frame.main, title: title) || !other {
+                    anchor = true
+                    sinceNamed = 0
+                    return true
+                }
+                if namesIt || other {
+                    anchor = false
+                    return false
+                }
+                return inherit && anchor
+            }
+        }
+    }
+
+    /// An interviewer's question: it ends with "?", or opens with the interviewer's tag ("Q:", "AC:").
+    static func isQuestion(_ paragraph: String) -> Bool {
+        let trimmed = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: #"^(?:(?:Q|Question|Interviewer|[A-Z]{2,4})\s*:|Q\.\s)"#, options: .regularExpression) != nil,
+           trimmed.hasSuffix("?") || trimmed.hasPrefix("Q") { return true }
+        // An untagged question: one short paragraph, a sentence or two, ending with "?".
+        return trimmed.hasSuffix("?") && trimmed.count < 300 && !trimmed.contains("\"") && Digest.sentences(in: trimmed).count <= 2
+    }
+
+    /// A paragraph turning to a career, a biography or another time: where a subject carried over
+    /// from the paragraph before would leak.
+    static func turnsAway(_ paragraph: String) -> Bool {
+        // A production named by an opening ("Five years later, on The Lantern Keepers of Hollow Bay, …"):
+        // capitalised words after "on", "for" or "with" up to a comma.
+        if paragraph.range(of: #"(?:^|[,.;]\s+|\s)(?i:on|for|with|during)\s+(?:The\s+|A\s+|An\s+)?(?!(?:ARRI|Arri|Alexa|ALEXA|Sony|Venice|RED|Red|Canon|Cooke|Zeiss|Panavision|Kodak|Fuji|Fujifilm|IMAX|Steadicam|Technocrane|Leica|Angenieux|Angénieux|Blackmagic|Super|Ultra|Panaflex|Aaton|Bolex|SkyPanel|SkyPanels|Astera|Kino|Hawk|Atlas|Master|Ektachrome|Vision|DJI|Ronin|Phantom|Easyrig|Moviecam|Arricam|Arriflex|Aputure|Creamsource|Dolby|Atmos|Avid|DaVinci|Resolve|LED|LEDs|HMI|HMIs|Fujinon|Signature|Monstro|Komodo|Raptor|Primo|Primos|Supreme|Ultra Prime|Vision\d*|Eastman|Double-X|Tri-X|Kino Flos?|Libra|Scorpio|MoVI|Easyrig|Alexa\d*)\b)[A-Z][\w'’-]+(?:\s+(?:of|the|and|a|an|in|on|for|to)?\s*[A-Z][\w'’-]+){0,6}(?:,|\s+(?i:he|she|they|we|i)\b)"#,
+                           options: .regularExpression) != nil { return true }
+        return paragraph.range(of: #"\b(?:was born|grew up|began (?:his|her|their) career|started (?:out|his career|her career)|credits include|filmography|(?:his|her|their) (?:first|debut|previous|earlier|last|next|latest|newest|new) (?:feature|film|movie|project|picture|documentary)|(?:his|her|their|directorial|feature) debut|years (?:earlier|before|later)|a decade (?:earlier|before|later)|before that|after that,? (?:he|she|they)|looks back|went on to|is (?:now|currently) (?:prepping|shooting|working)|(?:next|current|new|latest|upcoming) (?:project|feature|film)|(?:his|her|their) (?:newest|latest|next|new|follow-up|current)\b|\b(?:now|these days|nowadays|today)\s+(?:teaches|runs|works|lives|flies|shoots|lectures|owns|uses|prefers)|\bteaches\b|in (?:19|20)\d{2},)"#,
+                        options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// "Her credits include A, B and C", "known for A, B and C", "(A, B, C)": a list of work.

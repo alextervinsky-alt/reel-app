@@ -91,7 +91,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// (`TechSpecs.hedges`); of two sources naming the same gear, one that can establish it is kept
     /// (`TechSpecs.tidy`); coverage is by research question (`ResearchQuestions`): found in part, not
     /// applicable, and the film's article not answering are said so.
-    public static let currentVersion = 17
+    /// 18 (1.10.9): what a statement asserts decides whether its gear is the film's (`ClaimFrame`:
+    /// avoided, a hypothetical, an abandoned plan, a test, someone else's practice, a simulation, an
+    /// object in the scene, a delivery format, a product's capability, a report nobody confirmed);
+    /// a sentence comparing the film with another production is read for what it says of each
+    /// (`ComparisonFrame`); titles are matched whatever their punctuation (`TitleMatch`); the film
+    /// stays the subject across paragraphs only in a bounded context; every finding keeps its passage,
+    /// and the reading before's are reconciled source by source (`SourceReconciliation`).
+    public static let currentVersion = 18
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
@@ -111,7 +118,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// 7 (1.10.8): research plans by open question and by the providers that can answer it
     /// (`ResearchEngine`, `ResearchProvider`): a dimension found in part is still researched for the
     /// rest; questions that don't apply (camera and VFX for a film without effects) aren't searched.
-    public static let currentDiscovery = 7
+    /// 8 (1.10.9): a page whose address is the film's title, once the title is confirmed, is the
+    /// film's; dates aren't other productions; an article reached at two addresses (live, AMP,
+    /// archived, a site's alias) is read once; a dedicated VFX search only where the film's effects
+    /// are established (`ResearchContext.vfxRelevance`).
+    public static let currentDiscovery = 8
     /// A reading found before this discovery version is replaced whole by a newer one (what it no
     /// longer reads is gone): finding changed then in ways the rules for one tag couldn't follow.
     /// From there on, a reading read again by a newer discovery version is merged tag by tag like
@@ -195,6 +206,10 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// Where its research stands, dimension by dimension (1.10.7): what was found, searched for and
     /// not found, unavailable, or not searched yet. Nil for readings before 1.10.7.
     public var research: [ResearchEntry]?
+    /// Every finding and the passage it stands on, and what became of the reading before's (1.10.9,
+    /// `SourceReconciliation`): confirmed, carried while its source can't be read, pending while these
+    /// rules can't settle it, or retired with why. Nil for readings before 1.10.9.
+    public var claims: [Claim]?
 
     public init(version: Int = CraftIndex.currentVersion, readAt: Date = Date(), shotOn: [ShotOn], names: [String],
                 evidence: [Evidence] = [], sources: Int = 0, read: [String] = [], discovery: Int = CraftIndex.currentDiscovery,
@@ -227,6 +242,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         retries = try c.decodeIfPresent(Int.self, forKey: .retries) ?? 0
         retryAt = try c.decodeIfPresent(Date.self, forKey: .retryAt)
         research = try c.decodeIfPresent([ResearchEntry].self, forKey: .research)
+        claims = try c.decodeIfPresent([Claim].self, forKey: .claims)
     }
 
     /// Tries in a row while a tag is carried over because its page wasn't found again (every site
@@ -375,6 +391,34 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 let misses = (evidence.misses ?? 0) + 1
                 let carry: Bool
                 let reason: String
+                // A reading by 1.10.9 rules says what became of the tag's own sentence (`SourceReconciliation`):
+                // retired with why, pending while its rules can't settle it (kept, not shown), or carried.
+                // Another source's claim for the tag still carried (its site is down): the tag stands on
+                // that, whatever became of this one (1.10.9; one source ruled out never takes away another's).
+                if let other = new.claims?.first(where: { $0.kind == "shotOn" && $0.name == kind.rawValue && $0.source != evidence.source
+                                                          && $0.status == .carried }),
+                   let claim = new.claims?.first(where: { $0.kind == "shotOn" && $0.name == kind.rawValue && $0.source == evidence.source }),
+                   !claim.supports {
+                    var kept = Evidence(shotOn: kind, text: other.text ?? evidence.text, source: other.source)
+                    kept.carriedFrom = other.since
+                    kept.carriedRules = other.rules
+                    kept.misses = other.misses
+                    carried.append(kept)
+                    continue
+                }
+                if let claim = new.claims?.first(where: { $0.kind == "shotOn" && $0.name == kind.rawValue && $0.source == evidence.source }),
+                   claim.status != .confirmed {
+                    switch claim.status {
+                    case .retired:
+                        dropped.append(Dropped(shotOn: kind, reason: claim.reason ?? "ruled out by rules \(new.version)"))
+                        continue
+                    case .pending:
+                        dropped.append(Dropped(shotOn: kind, reason: "pending reassessment, kept with the reading: " + (claim.reason ?? "")))
+                        continue
+                    default:
+                        break
+                    }
+                }
                 if new.discovery > old.discovery && old.discovery < findingChanged {
                     carry = false
                     reason = "found again a better way, which no longer reads its source"
@@ -429,15 +473,20 @@ public struct CraftIndex: Codable, Equatable, Sendable {
                 // Its names too, when read by these rules: search still finds what that page named.
                 if old.version == new.version {
                     var names = merged.names
-                    for name in old.names where !names.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) { names.append(name) }
+                    // Not a name this reading read again and retired or left pending (1.10.9).
+                    let withdrawn = Set((new.claims ?? []).filter { $0.kind != "shotOn" && !$0.supports }.map { TitleMatch.key($0.name) })
+                        .subtracting((new.claims ?? []).filter { $0.kind != "shotOn" && $0.supports }.map { TitleMatch.key($0.name) })
+                    for name in old.names where !names.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+                        && !withdrawn.contains(TitleMatch.key(name)) { names.append(name) }
                     merged.names = Array(names.prefix(30))
                 }
             }
         }
+        let carriedClaims = new.claims?.contains { $0.status == .carried } ?? false
         if !new.unanswered.isEmpty {
             merged.retries = tries
             merged.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: true))
-        } else if !carried.isEmpty {
+        } else if !carried.isEmpty || carriedClaims {
             merged.retries = tries
             merged.retryAt = now.addingTimeInterval(retryDelay(tries, unanswered: false))
         } else {

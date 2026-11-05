@@ -333,7 +333,8 @@ final class ResearchCoverageTests: XCTestCase {
     }
 
     func testAQuestionThatDoesntApplyIsNotSearchedOrMissing() {
-        // No VFX credit and nothing read about effects: camera and VFX doesn't apply.
+        // No VFX credit and nothing read about effects: VFX relevance is unknown (1.10.9: not "not
+        // applicable", which needs grounds), so it isn't searched, and coverage says not searched.
         var details = quarantine()
         details.credits = TMDBCredits(cast: [], crew: [TMDBCrewMember(name: "Tom Ashby", job: "Director of Photography")])
         let crew = CraftCrew.credited(details)
@@ -341,9 +342,20 @@ final class ResearchCoverageTests: XCTestCase {
         XCTAssertFalse(context.vfxRelevant)
         XCTAssertFalse(ResearchPlan.open(context).contains { $0.dimension == .vfx })
         XCTAssertEqual(ResearchCoverage.entries(context: context, run: nil, readSomething: true, languageLimited: false)
-            .first { $0.dimension == .vfx }?.state, .notApplicable)
+            .first { $0.dimension == .vfx }?.state, .notSearched)
+        XCTAssertEqual(context.vfxRelevance, .unknown)
         XCTAssertFalse(ResearchPlan.plan(open: ResearchPlan.open(context), crew: crew, title: "The Long Quarantine", previous: nil)
             .contains { $0.site == "Cinesite" })
+        // Grounds for not applicable: the film's texts say it had none.
+        let none = knowing(["For The Long Quarantine, Ashby shot everything in camera, with no visual effects at all."], crew: crew)
+        XCTAssertEqual(none.vfxRelevance, .notApplicable)
+        XCTAssertEqual(ResearchCoverage.entries(context: none, run: nil, readSomething: true, languageLimited: false)
+            .first { $0.dimension == .vfx }?.state, .notApplicable)
+        // Established: a statement about the film's effects work, though no supervisor is credited.
+        let work = knowing(["The visual effects were created by a small Glasgow studio, with 140 shots composited in-house."], crew: crew)
+        XCTAssertEqual(work.vfxRelevance, .established)
+        // A word in passing (a review praising "the visual effects") isn't enough either way.
+        XCTAssertEqual(knowing(["Critics praised the visual effects."], crew: crew).vfxRelevance, .unknown)
     }
 
     func testASearchThatFoundNothingWaitsAYearAndStaysSaid() {
@@ -477,11 +489,11 @@ final class ResearchCoverageTests: XCTestCase {
     }
 
     func testALibraryFileOfVersionThreeIsReadAsIs() throws {
-        XCTAssertEqual(LibraryFile.currentVersion, 4)
+        XCTAssertEqual(LibraryFile.currentVersion, 5, "1.10.9: findings with their passages (CraftIndex.claims)")
         let film = FilmEntry(driveID: "Main", relativePath: "Q.mkv", fileName: "Q.mkv", size: 1, modified: nil, addedAt: Date())
         let encoded = try JSONEncoder().encode(LibraryFile(films: [film]))
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        XCTAssertEqual(object["version"] as? Int, 4)
+        XCTAssertEqual(object["version"] as? Int, 5)
         object["version"] = 3
         let decoded = try JSONDecoder().decode(LibraryFile.self, from: JSONSerialization.data(withJSONObject: object))
         XCTAssertEqual(decoded.films.map(\.fileName), ["Q.mkv"])

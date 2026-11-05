@@ -270,7 +270,12 @@ public enum CameraSources {
     public static func addressIdentity(_ url: URL) -> String {
         var host = (url.host ?? "").lowercased()
         if host.hasPrefix("www.") { host.removeFirst(4) }
-        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        // An AMP copy is the article (1.10.9): "amp.site.com/…", "…/article/amp/", "…/article.amp".
+        if host.hasPrefix("amp.") { host.removeFirst(4) }
+        var path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if path.hasSuffix("/amp") { path.removeLast(4) } else if path == "amp" { path = "" }
+        if path.hasPrefix("amp/") { path.removeFirst(4) }
+        if path.hasSuffix(".amp") { path.removeLast(4) }
         let query = (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
             .filter { item in
                 let name = item.name.lowercased()
@@ -282,7 +287,26 @@ public enum CameraSources {
     }
 
     /// Query items that only say where a link was shared from.
-    static let trackingTags: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "ref", "src", "amp", "igshid", "cmpid", "ito"]
+    static let trackingTags: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "ref", "src", "amp", "igshid", "cmpid", "ito", "outputtype",
+                                            "_gl", "share", "via", "smid", "mod"]
+
+    /// Whether two pages of one site are the same article under two addresses (1.10.9): an article
+    /// re-filed under a new slug ("…/pat-scola-new-asc-member/" and "…/pat-scola-welcomed-as-asc-member/")
+    /// has the same headline and the same opening. Both are needed: two articles can share a title
+    /// ("Clubhouse Conversations") and differ in what they say, and a site's boilerplate opening
+    /// doesn't make two articles one.
+    public static func sameArticle(_ a: CameraReading.Source, _ b: CameraReading.Source) -> Bool {
+        guard (a.url.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "")
+                == (b.url.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "") || a.site == b.site else { return false }
+        if identity(a.url) == identity(b.url) { return true }
+        let titleA = TitleMatch.key(a.title), titleB = TitleMatch.key(b.title)
+        guard titleA.split(separator: " ").count >= 3, titleA == titleB else { return false }
+        func opening(_ source: CameraReading.Source) -> String {
+            String(SourceReconciliation.squash(source.paragraphs.prefix(2).joined(separator: " ")).prefix(160))
+        }
+        let openA = opening(a), openB = opening(b)
+        return openA.count >= 60 && openA == openB
+    }
 
     typealias Link = (url: URL, site: String, title: String?, cited: URL?)
 
@@ -968,8 +992,17 @@ public struct CameraSourcesClient: Sendable {
             return !CameraSources.isListPage(title: page.title, url: page.url)
                 && !TechSpecs.isRoundup(TechSpecs.Text(source: page.site, paragraphs: page.paragraphs), title: filmTitle)
         }
-        let readable = found.filter {
-            $0.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: $0.title, cinematographers: cinematographers, site: $0.site) && !passing($0)
+        var readable: [CameraReading.Source] = []
+        for page in found where page.paragraphs.count >= 3 && !CameraSources.isOtherCraft(title: page.title, cinematographers: cinematographers, site: page.site)
+            && !passing(page) {
+            // The same article at another address (1.10.9: a re-filed slug, an AMP or archived copy): once.
+            // The fuller copy is the one read.
+            if let index = readable.firstIndex(where: { CameraSources.sameArticle($0, page) }) {
+                let length: (CameraReading.Source) -> Int = { $0.paragraphs.reduce(0) { $0 + $1.count } }
+                if length(page) > length(readable[index]) { readable[index] = page }
+                continue
+            }
+            readable.append(page)
         }
         var read = Array(readable.prefix(CameraSources.readLimit))
         var more = pages.filter { page in !read.contains { $0.url == page.2.url } && !otherFilm.contains(page.2.url) }.map { $0.1 ?? $0.2 }
@@ -983,6 +1016,9 @@ public struct CameraSourcesClient: Sendable {
             }
             if let judged = found.first(where: { $0.url == page.url }), passing(judged), let context = judged.context {
                 return CameraSources.passingMention + " (\(context.kind.label))"
+            }
+            if let same = readable.first(where: { $0.url != page.url && CameraSources.sameArticle($0, page) }) {
+                return "the same article as \(same.url.absoluteString), which was read"
             }
             return "six sources were already read"
         }
