@@ -85,7 +85,19 @@ final class KnowledgeIntegrityTests: XCTestCase {
             previous: previous([old]),
             with: input(read: ["Lens Weekly": ["An interview about another film entirely."]], articles: ["lensweekly.example/other-film"]), now: now)
         XCTAssertEqual(claims.first?.status, .carried)
-        XCTAssertEqual(claims.first?.misses, 0, "no try used: a reading that didn't read its article can't settle it")
+        XCTAssertEqual(claims.first?.misses, 1, "a try used, against twice the usual allowance")
+        var unread = previous([old])
+        var kept: CraftIndex.Claim?
+        for _ in 0..<(2 * CraftIndex.maxRetries) {
+            let read = SourceReconciliation.reconcile(previous: unread, with: input(read: ["Lens Weekly": ["Another film."]],
+                                                                                     articles: ["lensweekly.example/other-film"]), now: now)
+            kept = read.first
+            unread = previous(read)
+        }
+        XCTAssertEqual(kept?.status, .carried, "kept through twice the allowance")
+        let last = SourceReconciliation.reconcile(previous: unread, with: input(read: ["Lens Weekly": ["Another film."]],
+                                                                                 articles: ["lensweekly.example/other-film"]), now: now)
+        XCTAssertEqual(last.first?.status, .retired, "then retired: an article dropped from search isn't kept for ever")
         // Its own article read in full, and the passage gone: pending, then retired after `maxRetries`.
         var index = previous([old])
         var last: CraftIndex.Claim?

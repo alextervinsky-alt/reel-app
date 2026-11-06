@@ -409,8 +409,9 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         if has(sequenceCue, lead) || has(sequenceCue, after) { return .sequence }
         // (Its own clause: "presented at 2.39:1 in cinemas, but we composed for 2.00:1" frames the 2.00:1.)
         if has(framingCue, scope) { return .framing }
+        // (Released, shown or projected at it: what was shown, even after "shot on 35mm and…".)
+        if has(theatricalCue, scope) || has(releasedCue, lead) { return .theatrical }
         if has(captureCue, scope) { return .capture }
-        if has(theatricalCue, scope) { return .theatrical }
         return nil
     }
 }
