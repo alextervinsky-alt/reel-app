@@ -135,7 +135,7 @@ public struct ClauseMap: Sendable {
             while j < count, chars[j] != ",", chars[j] != ";", chars[j] != ".", chars[j] != "–", chars[j] != "—" { j += 1 }
             let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
             let words = segment.split(separator: " ")
-            guard !words.isEmpty, words.count <= 5 else { return false }
+            guard !words.isEmpty, words.count <= 7 else { return false }
             if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|his|her|their|its|our|my|here|there)\b|^(?:and\s+|or\s+)?(?:this|these|that)\s+(?:one|ones|film|movie|picture|time|production|feature)\b"#,
                              options: [.regularExpression, .caseInsensitive]) != nil { return false }
             return segment.range(of: ClauseProduction.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
