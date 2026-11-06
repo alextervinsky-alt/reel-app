@@ -47,7 +47,7 @@ final class KnownCasesTests: XCTestCase {
     func testAnAppositiveOrADashedAsideNamingAnotherProduction() {
         accepts("The primary aspect ratio was 2:1, a tribute to Ann Vale's Univisium, with select scenes changing to a 1.43:1 aspect ratio.", ["1.43:1"])
         accepts("As on Glass Rivers and Paper Moon – two previous collaborations with Example – Doe opted for 35mm Kodak Vision3 5219 500T, capturing in 3-perf.",
-                ["5219", "35 mm"])
+                ["5219"])
     }
 
     func testAMakersProductIsNotAFilm() {

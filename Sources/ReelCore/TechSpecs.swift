@@ -488,9 +488,24 @@ public struct TechSpecs: Equatable, Sendable {
                             let aboutShooting = shooting.contains { lowered.contains($0) }
                             let aboutRelease = release.contains { lowered.contains($0) }
                             for rule in rules {
-                                if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
+                                // A rule that needs the sentence to be about shooting: a ratio is let through when its
+                                // own words say the stage of the film's image ("composed for 2.39:1", "a 2.39:1
+                                // extraction", "released theatrically at 1.85:1"), and said to be a later release's
+                                // when they say that (1.10.10). Anything else still needs shooting words.
+                                let shootingGate = rule.needsShooting && (!aboutShooting || (aboutRelease && !strongShooting(lowered)))
                                 for (name, place) in rule.found(in: sentence) {
                                     let original = sentence
+                                    if shootingGate {
+                                        guard name.contains(":1") || name.range(of: #"^\d(?:\.\d+)?:\d"#, options: .regularExpression) != nil,
+                                              let stage = FormatStage.of(main, at: main.index(main.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.lowerBound))
+                                                ..< main.index(main.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.upperBound)),
+                                                                         name: name, context: section.title) else { continue }
+                                        if !stage.isFilmImage {
+                                            judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
+                                                                    source: text.source, reason: .delivery))
+                                            continue
+                                        }
+                                    }
                                     // Inside a part comparing the film with another production, or a clause about
                                     // another production (1.10.10): that one's.
                                     let offset = original.distance(from: original.startIndex, to: place.lowerBound)
