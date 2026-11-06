@@ -95,9 +95,9 @@ final class KnowledgeIntegrityTests: XCTestCase {
             unread = previous(read)
         }
         XCTAssertEqual(kept?.status, .carried, "kept through twice the allowance")
-        let last = SourceReconciliation.reconcile(previous: unread, with: input(read: ["Lens Weekly": ["Another film."]],
-                                                                                 articles: ["lensweekly.example/other-film"]), now: now)
-        XCTAssertEqual(last.first?.status, .retired, "then retired: an article dropped from search isn't kept for ever")
+        let finalRead = SourceReconciliation.reconcile(previous: unread, with: input(read: ["Lens Weekly": ["Another film."]],
+                                                                                      articles: ["lensweekly.example/other-film"]), now: now)
+        XCTAssertEqual(finalRead.first?.status, .retired, "then retired: an article dropped from search isn't kept for ever")
         // Its own article read in full, and the passage gone: pending, then retired after `maxRetries`.
         var index = previous([old])
         var last: CraftIndex.Claim?
