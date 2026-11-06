@@ -418,10 +418,13 @@ final class ResearchCoverageTests: XCTestCase {
         let down = ResearchCoverage.entries(context: camera, run: nil, readSomething: true, languageLimited: false, unavailable: true)
         XCTAssertEqual(down.first { $0.dimension == .camera }?.state, .found)
         XCTAssertEqual(down.first { $0.dimension == .lighting }?.state, .unavailable)
-        // A search this reading made still says what it came to while a site of the first pass is down.
+        // 1.10.10: source outcomes come before coverage. A search that found nothing doesn't say there's
+        // nothing while a site of the first pass is down: unavailable (the search keeps its year of quiet).
         let searched = ResearchRun(missing: [.lighting], outcomes: [ResearchOutcome(query: query(.lighting, "b"), result: .noCandidate(2))])
-        XCTAssertEqual(first(ResearchCoverage.entries(context: nothing, run: searched, readSomething: true, languageLimited: false,
-                                                      unavailable: true)), .searchedNoSource)
+        let whileDown = ResearchCoverage.entries(context: nothing, run: searched, readSomething: true, languageLimited: false, unavailable: true)
+        XCTAssertEqual(first(whileDown), .unavailable)
+        XCTAssertFalse(whileDown.first { $0.dimension == .lighting }?.queries.isEmpty ?? true, "its search is kept, not repeated within the year")
+        XCTAssertEqual(first(ResearchCoverage.entries(context: nothing, run: searched, readSomething: true, languageLimited: false)), .searchedNoSource)
     }
 
     func testAPageThatDidntAnswerIsNotKeptQuiet() {
@@ -489,11 +492,11 @@ final class ResearchCoverageTests: XCTestCase {
     }
 
     func testALibraryFileOfVersionThreeIsReadAsIs() throws {
-        XCTAssertEqual(LibraryFile.currentVersion, 5, "1.10.9: findings with their passages (CraftIndex.claims)")
+        XCTAssertEqual(LibraryFile.currentVersion, 6, "1.10.10: legacy findings and article identity (LibraryMigration)")
         let film = FilmEntry(driveID: "Main", relativePath: "Q.mkv", fileName: "Q.mkv", size: 1, modified: nil, addedAt: Date())
         let encoded = try JSONEncoder().encode(LibraryFile(films: [film]))
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        XCTAssertEqual(object["version"] as? Int, 5)
+        XCTAssertEqual(object["version"] as? Int, 6)
         object["version"] = 3
         let decoded = try JSONDecoder().decode(LibraryFile.self, from: JSONSerialization.data(withJSONObject: object))
         XCTAssertEqual(decoded.films.map(\.fileName), ["Q.mkv"])

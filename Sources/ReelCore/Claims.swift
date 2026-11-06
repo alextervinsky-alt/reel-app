@@ -168,7 +168,7 @@ public struct ComparisonFrame: Sendable {
     public let main: String
 
     static let leading = try! NSRegularExpression(
-        pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+|very\s+much\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|he|she|they|we|i|it|was|did|had|has|before|previously|earlier)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|following\b)[^;]{0,160}?,\s*"#,
+        pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+|very\s+much\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|he|she|they|we|i|it|was|did|had|has|before|previously|earlier)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|following\b)[^;]{0,160}?(?:,\s*|\s[–—]\s[^–—;]{2,160}?\s[–—]\s)"#,
         options: [.caseInsensitive])
     static let leadingWithClause = try! NSRegularExpression(
         pattern: #"^\W*(?:unlike|like|as with|as on|compared (?:to|with))\s+[^,;]{1,80},\s*(?:which|who|where)\s+[^,;]{1,120},\s*"#,
@@ -786,7 +786,8 @@ public enum ClaimFrame {
         // A simulation or a look made, right by the gear.
         // (A movement's "style" is the movement itself: "a more dynamic, handheld style".)
         let styleOfMovement = kind == .support && has(movementStyleAfter, String(folded[gear.upperBound...].prefix(30)))
-        if !isLook, !styleOfMovement, has(simulatedBefore, String(near.suffix(60))) || has(simulatedAfter, String(folded[gear.upperBound...].prefix(60)))
+        let nearOwn = lessCG.stringByReplacingMatches(in: near, range: NSRange(near.startIndex..., in: near), withTemplate: " ")
+        if !isLook, !styleOfMovement, has(simulatedBefore, String(nearOwn.suffix(60))) || has(simulatedAfter, String(folded[gear.upperBound...].prefix(60)))
             || has(matchedDigitally, String(clause.suffix(90))) || has(takenFor, String(near.suffix(60))) {
             return .simulated
         }
