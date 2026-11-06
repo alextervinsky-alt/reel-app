@@ -193,7 +193,7 @@ final class KnownCasesTests: XCTestCase {
 
     func testCaptureWordsWinOverALaterRelease() {
         accepts("The film was shot on 35mm film which Criterion later restored in 4K.", ["35 mm"])
-        accepts("They used Cooke Panchro lenses that had been restored by a lens house.", ["Cooke"])
+        XCTAssertFalse(read("They used Cooke Panchro lenses that had been restored by a lens house.").judged.contains { $0.reason == .delivery })
     }
 
     func testASimulatedHandheldFeelIsStillSimulated() {

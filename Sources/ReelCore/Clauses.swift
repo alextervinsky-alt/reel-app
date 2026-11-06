@@ -294,17 +294,18 @@ public struct ClauseProduction: Sendable {
             }
         }
         self.other = other
-        // A clause naming another production that comes before the sentence's verb, in brackets, between
-        // commas or dashes, or as "which…", is about the sentence's subject: the subject is that production
-        // ("Glass Rivers, her previous feature, was shot on 16mm", "Glass Rivers (her 2019 debut) was…").
-        // (Not "who/whom": a person, "Colourist Ann Bloom, who also worked on <Other>, graded…".)
+        // An appositive or brackets naming another production before the sentence's verb rename the
+        // sentence's subject: the subject is that production ("Glass Rivers, her previous feature, was shot
+        // on 16mm", "Glass Rivers (her 2019 debut) was…"). Not a relative clause ("The Alexa, which Doe
+        // also used on <Other>, …" is about the camera), and not one hanging on an opening comparison
+        // ("Unlike her previous film, <Other>, which…, this one…").
         let chars = Array(sentence)
+        let comparisonEnd = comparisons.map(\.upper).max() ?? 0
         subjectIsOther = other.contains { clause in
-            guard clause.role == .appositive || clause.role == .parenthetical
-                    || (clause.role == .relative && map.text(clause).range(of: #"^\W*(?:(?:with|for|on|in|of|by|from|to|through)\s+)?(?:who|whom|whose)\b"#,
-                                                                            options: [.regularExpression, .caseInsensitive]) == nil) else { return false }
-            let before = String(chars[0..<min(clause.lower, chars.count)])
-            return before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
+            guard clause.role == .appositive || clause.role == .parenthetical, clause.lower >= comparisonEnd else { return false }
+            let before = String(chars[comparisonEnd..<min(clause.lower, chars.count)])
+            return before.contains(where: \.isLetter)
+                && before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
         }
         confined = !independentSignal && !subjectIsOther && independentText.filter(\.isLetter).count >= 12
     }
