@@ -188,7 +188,7 @@ public struct PageContext: Equatable, Sendable {
         }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
             : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
-        let headline = headlineProduction(pageTitle, title: title)
+        let headline = headlineProduction(pageTitle, title: title, known: otherTitles + others)
         let count = anchors(paragraphs, title: title, otherTitles: otherTitles + others + (headline.map { [$0] } ?? []), people: people,
                             inherit: kind == .otherProduction, acrossParagraphs: true, bounded: headline != nil)
             .joined().filter { $0 }.count
@@ -304,7 +304,7 @@ public struct PageContext: Equatable, Sendable {
     /// The production a page's headline names in quotes, when it isn't the film (1.10.10): "‘Supergirl’:
     /// Rob Hardy on…", "Inside 'Glass Rivers'". Single or double, straight or curly quotes; an apostrophe
     /// inside a word ("Director's") isn't a quote.
-    public static func headlineProduction(_ pageTitle: String, title: String) -> String? {
+    public static func headlineProduction(_ pageTitle: String, title: String, known: [String] = []) -> String? {
         guard let match = try? NSRegularExpression(pattern: #"(?:^|[\s:(—–-])[‘'“"]([A-Z0-9][^’'”"]{1,60}?)[’'”"](?=[\s:,.;)!?—–-]|$)"#)
             .firstMatch(in: pageTitle, range: NSRange(pageTitle.startIndex..., in: pageTitle)),
             let range = Range(match.range(at: 1), in: pageTitle) else { return nil }
@@ -314,14 +314,19 @@ public struct PageContext: Equatable, Sendable {
               !names(pageTitle, title: title) else { return nil }
         // A title's shape: up to six words, each capitalised or a small word, and no verb (a quoted remark,
         // "'IMAX Was the Only Choice'", isn't a production).
+        // A title the page or the collection already knows as a production: one, whatever its words
+        // ("It Follows", "There Will Be Blood").
+        if known.contains(where: { TitleMatch.key($0) == TitleMatch.key(named) }) { return named }
         let words = named.split(separator: " ").filter { !["–", "—", "-", "&", ":"].contains(String($0)) }
         guard (1...9).contains(words.count),
               words.allSatisfy({ $0.first?.isUppercase == true || $0.first?.isNumber == true
                   || ["of", "the", "a", "an", "and", "in", "on", "to", "for", "at", "by", "with", "or", "from", "into"].contains($0.lowercased()) }),
               // A quoted remark has a subject and a verb ("I Was Never Sure", "We Had One Shot"): a title can
               // have a verb ("There Will Be Blood"), but not a speaker.
-              named.range(of: #"^(?:I|We|You|He|She|They|It)\s+\w+|\b(?:I|We|You|He|She|They)\s+(?:is|are|was|were|has|have|had|did|do|will|can|could|would|should|shot|used)\b"#,
-                          options: .regularExpression) == nil else { return nil }
+              // An unknown phrase with a verb is taken for a remark ("IMAX Was the Only Choice"): a missed
+              // title only leaves the page unbounded, as before 1.10.10.
+              named.range(of: #"\b(?:is|are|was|were|has|have|had|did|does|do|will|can|could|would|should|need|needs|had to|felt|feel|said|says|live|lives|follows?)\b|^(?:I|We|You|He|She|They|It)\b"#,
+                          options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
         return named
     }
 

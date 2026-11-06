@@ -49,6 +49,11 @@ extension CraftIndex {
         public var rules: Int
         /// Readings in a row it's been carried or pending without being settled.
         public var misses: Int = 0
+        /// Readings in a row its article wasn't read at all (another article of its site was; 1.10.10):
+        /// counted apart from `misses`, against twice `CraftIndex.maxRetries`, and never for a finding
+        /// pending reassessment (its passage was there when last read).
+        /// (Optional, so libraries written before 1.10.10 decode: a missing key is 0.)
+        public var unread: Int? = nil
         /// The article it was read from, by its canonical address (1.10.10; nil for a finding read
         /// before, or from Wikipedia): what tells two articles of one site apart.
         public var article: String? = nil
@@ -210,7 +215,10 @@ public enum SourceReconciliation {
             var settled = old
             settled.status = outcome.status
             settled.reason = outcome.reason
-            settled.misses = old.misses + (outcome.counts ? 1 : 0)
+            let unreadArticle = outcome.reason?.hasPrefix("its article on") == true
+            settled.misses = old.misses + (outcome.counts && !unreadArticle ? 1 : 0)
+            let unreadNow = unreadArticle ? (old.unread ?? 0) + (old.status == .pending ? 0 : 1) : 0
+            settled.unread = unreadNow == 0 ? nil : unreadNow
             // A finding with no passage stays as it was recorded until a reading confirms or denies it
             // (1.10.10): not finding it again disproves nothing.
             if outcome.status == .legacy { settled.misses = old.misses }
@@ -221,8 +229,10 @@ public enum SourceReconciliation {
                 settled.reason = old.reason
             }
             if settled.status == .carried || settled.status == .pending {
-                let allowance = settled.reason?.hasPrefix("its article on") == true ? 2 * CraftIndex.maxRetries : CraftIndex.maxRetries
-                if settled.misses > allowance {
+                if (settled.unread ?? 0) > 2 * CraftIndex.maxRetries {
+                    settled.status = .retired
+                    settled.reason = "its article on \(old.site) not read in \(2 * CraftIndex.maxRetries) readings"
+                } else if settled.misses > CraftIndex.maxRetries {
                     settled.status = .retired
                     settled.reason = outcome.reason?.hasPrefix("not in what was read") == true
                         ? "no longer in \(old.source) (\(CraftIndex.maxRetries) readings)"

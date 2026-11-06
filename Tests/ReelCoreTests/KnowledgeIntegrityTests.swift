@@ -85,7 +85,19 @@ final class KnowledgeIntegrityTests: XCTestCase {
             previous: previous([old]),
             with: input(read: ["Lens Weekly": ["An interview about another film entirely."]], articles: ["lensweekly.example/other-film"]), now: now)
         XCTAssertEqual(claims.first?.status, .carried)
-        XCTAssertEqual(claims.first?.misses, 1, "a try used, against twice the usual allowance")
+        XCTAssertEqual(claims.first?.misses, 0, "counted apart")
+        XCTAssertEqual(claims.first?.unread, 1, "a reading its article wasn't read in")
+        // A finding pending reassessment (its passage was there when last read) never counts them.
+        var pendingOld = old
+        pendingOld.status = .pending
+        pendingOld.reason = ClaimReason.presentation.label
+        var pendingIndex = previous([pendingOld])
+        for _ in 0..<12 {
+            let read = SourceReconciliation.reconcile(previous: pendingIndex, with: input(read: ["Lens Weekly": ["Another film."]],
+                                                                                           articles: ["lensweekly.example/other-film"]), now: now)
+            XCTAssertEqual(read.first?.status, .pending)
+            pendingIndex = previous(read)
+        }
         var unread = previous([old])
         var kept: CraftIndex.Claim?
         for _ in 0..<(2 * CraftIndex.maxRetries) {
@@ -178,6 +190,13 @@ final class KnowledgeIntegrityTests: XCTestCase {
         guard case .loaded(let saved) = LibraryOpening.open(url) else { return XCTFail() }
         XCTAssertEqual(saved.version, 6)
         XCTAssertEqual(saved.films, second.films)
+    }
+
+    func testAClaimWrittenBy1109Decodes() throws {
+        let json = #"{"name":"Technocrane","kind":"support","text":"We had a Technocrane.","source":"Lens Weekly","status":"confirmed","since":"2026-01-01T00:00:00Z","rules":18,"misses":0}"#
+        let claim = try JSONStore.decode(CraftIndex.Claim.self, from: Data(json.utf8))
+        XCTAssertNil(claim.unread)
+        XCTAssertNil(claim.article)
     }
 
     func testANewerLibraryIsNeverWritten() {

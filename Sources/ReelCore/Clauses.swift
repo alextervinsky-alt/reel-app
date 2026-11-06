@@ -136,7 +136,7 @@ public struct ClauseMap: Sendable {
             let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
             let words = segment.split(separator: " ")
             guard !words.isEmpty, words.count <= 5 else { return false }
-            if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|a|an|the|his|her|their|its|our|my|this|these|here|there|it|that)\b"#,
+            if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|a|an|the|his|her|their|its|our|my|here|there)\b|^(?:and\s+|or\s+)?(?:this|these|that)\s+(?:one|ones|film|movie|picture|time|production|feature)\b"#,
                              options: [.regularExpression, .caseInsensitive]) != nil { return false }
             return segment.range(of: ClauseProduction.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
         }
@@ -309,7 +309,7 @@ public struct ClauseProduction: Sendable {
             let before = String(chars[comparisonEnd..<min(clause.lower, chars.count)])
             return before.contains(where: \.isLetter)
                 && before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
-                && !own(before) && !own(sentence)
+                && !own(before)
         }
         confined = !independentSignal && !subjectIsOther && independentText.filter(\.isLetter).count >= 12
     }
@@ -396,8 +396,13 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         func has(_ regex: NSRegularExpression, _ text: String) -> Bool { ClaimFrame.has(regex, text) }
         // Shot in so many words, in its own clause before it: capture, whatever a later clause says of a
         // release ("shot on 35mm film which Criterion later restored").
-        if has(captureCue, lead), !has(homeMediaCue, lead), !has(streamingCue, lead), !has(restorationCue, lead),
-           !has(theatricalCue, lead), !has(releasedCue, lead) {
+        // (A release or projection after the last capture word takes it over: "shot on 35mm and released
+        // in cinemas at 1.85:1"; one before it doesn't: "the film Neon released was shot in 1.66:1".)
+        func last(_ regex: NSRegularExpression) -> Int {
+            regex.matches(in: lead, range: NSRange(lead.startIndex..., in: lead)).map(\.range.location).max() ?? -1
+        }
+        let releasedAfterCapture = max(last(theatricalCue), last(releasedCue)) > last(captureCue)
+        if has(captureCue, lead), !has(homeMediaCue, lead), !has(streamingCue, lead), !has(restorationCue, lead), !releasedAfterCapture {
             return isRatio ? (has(extractionCue, scope) ? .extraction : .capture) : .capture
         }
         // A later release, by its own words or its section's.
@@ -410,7 +415,7 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         // (Its own clause: "presented at 2.39:1 in cinemas, but we composed for 2.00:1" frames the 2.00:1.)
         if has(framingCue, scope) { return .framing }
         // (Released, shown or projected at it: what was shown, even after "shot on 35mm and…".)
-        if has(theatricalCue, scope) || has(releasedCue, lead) { return .theatrical }
+        if has(theatricalCue, scope) || releasedAfterCapture { return .theatrical }
         if has(captureCue, scope) { return .capture }
         return nil
     }
