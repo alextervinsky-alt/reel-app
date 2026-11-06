@@ -143,6 +143,9 @@ public struct TechSpecs: Equatable, Sendable {
         /// the film's own Wikipedia article and the cinematographer's): two articles of one site are two
         /// sources (1.10.10).
         public var article: String? = nil
+        /// The page's headline names another production as its subject (1.10.10): no subject reaches
+        /// across the whole page (`PageContext.anchors`).
+        public var boundedSubject = false
         public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool, isList: Bool = false) {
             self.source = source
             self.sections = sections
@@ -310,10 +313,26 @@ public struct TechSpecs: Equatable, Sendable {
             // What on a page not about the film is anchored to it, paragraph by paragraph (1.10.8).
             let pageAnchors = text.aboutFilm || roundup ? nil
                 : PageContext.anchors(text.sections.flatMap(\.paragraphs), title: title ?? "", otherTitles: otherTitles,
-                                      people: names + directorNames, inherit: text.inheritsSubject, acrossParagraphs: true)
+                                      people: names + directorNames, inherit: text.inheritsSubject, acrossParagraphs: true,
+                                      bounded: text.boundedSubject)
             var paragraphIndex = -1
             for section in text.sections {
                 answeringAboutAnother = 0
+                // A section headed by another production ("On Glass Rivers", "Glass Rivers (2019)", a title
+                // the page names as a production) is about that production throughout (1.10.10), unless a
+                // statement in it names this film as its subject.
+                if !section.title.isEmpty, !namesTitle(section.title, title: title ?? ""),
+                   pageOthers.contains(where: { namesTitle(section.title, title: $0) })
+                    || section.title.range(of: #"^\s*(?:On|For|About|Inside|Making|Shooting|Lighting)\s+(?:The\s+|A\s+|An\s+)?[A-Z0-9][\w'’.…:-]*(?:\s+(?:[A-Z0-9][\w'’.…:-]*|of|the|and|a|an|in|on|to|for|…|\.\.\.)){0,8}\s*$"#,
+                                           options: .regularExpression) != nil && !TitleMatch.names(section.title, title: title ?? "")
+                        && TechSpecs.read([section.title + " was used."]).specs.isEmpty
+                        // (Not the shoot's own vocabulary: "On Location", "On Set", "Lighting the Night".)
+                        && !["location", "set", "stage", "photography", "production", "camera", "lens", "light", "colou", "color", "grade",
+                             "grading", "night", "day", "film", "look", "prep", "post", "sound", "scene", "sequence", "shoot", "movement",
+                             "format", "story", "vfx", "effects", "craft", "approach", "visual", "tests", "testing"]
+                            .contains(where: { section.title.lowercased().contains($0) }) {
+                    answeringAboutAnother = section.paragraphs.count + 1
+                }
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
                 let commentary = !offTopic.contains { heading.contains($0) } && !Spoilers.isAfterSection([section.title])
@@ -1359,7 +1378,9 @@ public struct TechSpecs: Equatable, Sendable {
         for mark in clauseBreaks {
             if let found = after.range(of: mark), found.lowerBound < clauseEnd { clauseEnd = found.lowerBound }
         }
-        return String(after[..<clauseEnd]).range(of: deniedAfter, options: .regularExpression) != nil
+        // (Only as far as it still says something of the gear: "…stock with which the labs were not
+        // familiar" is the labs', 1.10.10.)
+        return ClaimFrame.ownPredicate(String(after[..<clauseEnd])).range(of: deniedAfter, options: .regularExpression) != nil
     }
 
     /// A ratio's colon ("1.43:1", "2.39 : 1", "17:9") isn't a clause break: "We're not hitting the

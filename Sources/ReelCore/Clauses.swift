@@ -55,8 +55,10 @@ public struct ClauseMap: Sendable {
         pattern: #",\s*(?:(?:with|for|on|in|of|by|from|to|through)\s+)?(?:which|who|whom|whose)\b|(?<=[a-z])\s+(?:which|who|whom)\s+(?=(?:was|were|is|are|had|has|have|recalled|recalls|used|uses|also|later|previously|once|famously)\b)"#,
         options: [.caseInsensitive])
     /// ", a tribute to …", ", an homage to …", ", a nod to …", ", the director's previous film…".
+    /// (A production noun only with a word that makes it another one: ", the production was shot…" is the
+    /// sentence's own subject, not an appositive.)
     static let appositiveStart = try! NSRegularExpression(
-        pattern: #",\s*(?:itself\s+)?(?:a|an|the)\s+(?:[\w'’-]+\s+){0,3}?(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|follow-up|sequel|remake|collaboration|collaborations|film|feature|movie|series|production|picture|documentary|technique|trick|approach|method|habit|idea)\b"#,
+        pattern: #",\s*(?:itself\s+)?(?:a|an|the)\s+(?:[\w'’-]+\s+){0,3}?(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|technique|trick|habit|idea)\b|,\s*(?:a|an|the|his|her|their|its)\s+(?:[\w'’-]+\s+){0,2}?(?:previous|earlier|last|next|first|debut|other|prior|later|recent)\s+(?:[\w'’-]+\s+){0,2}?(?:films?|features?|movies?|series|productions?|pictures?|documentar(?:y|ies)|projects?|collaborations?)\b|,\s*(?:a|an|the)\s+(?:follow-up|sequel|remake|prequel)\b"#,
         options: [.caseInsensitive])
     static let leadingComparison = try! NSRegularExpression(
         pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|before|previously|earlier|he|she|they|we|i)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b)"#,

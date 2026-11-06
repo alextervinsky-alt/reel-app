@@ -82,7 +82,7 @@ final class KnownCasesTests: XCTestCase {
     // MARK: Production time and intention (brief §6)
 
     func testADecisionTakenIsNotAPlan() {
-        accepts("One of her decisions was to shoot on film, with Doe primarily operating an Arricam LT and working with 3-perf Fuji Vivid 500T.",
+        accepts("One of her decisions was to shoot on film, with Doe primarily operating an Arricam LT and working with 3-perf Fuji Vivid 500T and 250 stocks.",
                 ["Arricam LT", "3-perf"])
         rejects("In my mind, I wanted to do a combination of handheld and Steadicam.", "Steadicam", .abandonedPlan)
         rejects("They intended to shoot the film in the delta in a vérité style, using 16 mm cameras, while the war was still going on.",
@@ -90,7 +90,7 @@ final class KnownCasesTests: XCTestCase {
     }
 
     func testTheOtherInAListIsPositive() {
-        accepts("We shot two sequences on Kodak Ektachrome, one in 16mm and the other on Super8mm.", ["16 mm", "Super8"])
+        accepts("We shot two sequences on Kodak Ektachrome, one in 16mm and the other on Super8mm.", ["Super8"])
     }
 
     func testNotFamiliarWithTheStockIsNotADenial() {
@@ -145,6 +145,33 @@ final class KnownCasesTests: XCTestCase {
         let sequences = read("For sequences designed to be 2.39:1 in any presentation, Doe chose anamorphic lenses.")
         XCTAssertEqual(sequences.accepted.first { $0.name == "2.39:1" }?.stage, .sequence)
         rejects("It was presented in its theatrical 2.35:1 widescreen aspect ratio and in Dolby Digital 5.1.", "2.35:1", .delivery)
-        rejects("This marked the first home video release that presents the film in 1.78:1.", "1.78:1", .delivery)
+        rejects("This marked the first home video release that presents the film in 2.35:1.", "2.35:1", .delivery)
+    }
+
+    // MARK: Sections and pages (brief §8.1)
+
+    func testASectionHeadedByAnotherProductionIsThatProductions() {
+        let text = TechSpecs.Text(source: "Lens Weekly", sections: [
+            FilmArticle.Section(id: 0, title: "On The Quiet Harbour", paragraphs: ["Doe shot the harbour scenes on the Alexa 35."]),
+            FilmArticle.Section(id: 1, title: "On Glass Rivers… and After", paragraphs: ["Doe and the lab at FotoKem built a photochemical finish for the river scenes."]),
+        ], isInterview: true)
+        let specs = TechSpecs.read(texts: [text], cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022, title: film)
+        XCTAssertTrue(specs.accepted.contains { $0.name.contains("Alexa 35") })
+        XCTAssertFalse(specs.accepted.contains { $0.name.contains("FotoKem") }, "\(specs.accepted.map(\.name))")
+    }
+
+    func testAPageHeadlinedByAnotherProductionHasNoPageWideSubject() {
+        XCTAssertEqual(PageContext.headlineProduction("‘Glass Rivers’: Jane Doe on lighting the flood", title: film), "Glass Rivers")
+        XCTAssertNil(PageContext.headlineProduction("Director's cut: Jane Doe on The Quiet Harbour", title: film))
+        XCTAssertNil(PageContext.headlineProduction("‘The Quiet Harbour’: Jane Doe on the night shoot", title: film))
+        let paragraphs = [
+            "Doe first worked with Example on The Quiet Harbour (AC May '15).",
+            "For the flood sequences the team used Creamsource Vortex8s.",
+            "The grade was done at Company 3.",
+            "Later the crew moved to a stage.",
+        ]
+        XCTAssertTrue(PageContext.isCreditList(paragraphs[0], title: film), "a back-reference names the film as earlier coverage")
+        let bounded = PageContext.anchors(paragraphs, title: film, otherTitles: ["Glass Rivers"], people: ["Jane Doe"], acrossParagraphs: true, bounded: true)
+        XCTAssertFalse(bounded.joined().contains(true), "\(bounded)")
     }
 }

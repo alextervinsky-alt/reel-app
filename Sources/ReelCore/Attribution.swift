@@ -42,6 +42,8 @@ public struct PageContext: Equatable, Sendable {
     /// and titles given with their year ("Glass Rivers (2019)"). A statement naming one is about that
     /// production, on any page.
     public var productions: [String] = []
+    /// The production the page's headline names in quotes, when the page isn't the film's (1.10.10).
+    public var headline: String? = nil
 
     public var aboutFilm: Bool { kind == .targetFilm }
 
@@ -186,10 +188,13 @@ public struct PageContext: Equatable, Sendable {
         }
         let kind: Kind = corporateCues.firstMatch(in: heading, range: range) != nil ? .newsItem
             : profileCues.firstMatch(in: heading, range: range) != nil ? .contributorProfile : .otherProduction
-        let count = anchors(paragraphs, title: title, otherTitles: otherTitles + others, people: people, inherit: kind == .otherProduction,
-                            acrossParagraphs: true)
+        let headline = headlineProduction(pageTitle, title: title)
+        let count = anchors(paragraphs, title: title, otherTitles: otherTitles + others + (headline.map { [$0] } ?? []), people: people,
+                            inherit: kind == .otherProduction, acrossParagraphs: true, bounded: headline != nil)
             .joined().filter { $0 }.count
-        return PageContext(kind: kind, anchored: count, productions: others)
+        var context = PageContext(kind: kind, anchored: count, productions: others)
+        context.headline = headline
+        return context
     }
 
     /// For each statement of a paragraph on a page that isn't about the film: whether it's anchored
@@ -216,15 +221,17 @@ public struct PageContext: Equatable, Sendable {
     /// ("Her first feature…", "Years earlier…"), and at most two paragraphs have passed since the film
     /// was named. A comparison inside a sentence ("Just as on <Other>, …") doesn't end the subject:
     /// what the sentence asserts is read apart from what it compares (`ComparisonFrame`).
+    /// `bounded` (1.10.10): the page's own subject is another production (its headline names one), so no
+    /// subject reaches across the whole page, however rarely it names that production again.
     public static func anchors(_ paragraphs: [String], title: String, otherTitles: [String], people: [String],
-                               inherit: Bool = true, acrossParagraphs: Bool = false) -> [[Bool]] {
+                               inherit: Bool = true, acrossParagraphs: Bool = false, bounded: Bool = false) -> [[Bool]] {
         var anchor = false
         var sinceNamed = Int.max
         var question: Bool? = nil
         var sinceQuestion = Int.max
         // A page that never turns away and names no other production keeps one subject throughout: the
         // two-paragraph bound is for pages that do.
-        let oneSubject = !paragraphs.contains { paragraph in
+        let oneSubject = !bounded && !paragraphs.contains { paragraph in
             Self.turnsAway(paragraph) || Digest.sentences(in: paragraph).contains { sentence in
                 let main = ComparisonFrame(sentence, title: title, otherTitles: otherTitles, people: people).main
                 return !names(main, title: title) && TechSpecs.namesAnotherFilm(main, title: title, otherTitles: otherTitles, people: people)
@@ -294,6 +301,18 @@ public struct PageContext: Equatable, Sendable {
                         options: [.regularExpression, .caseInsensitive]) != nil
     }
 
+    /// The production a page's headline names in quotes, when it isn't the film (1.10.10): "‘Supergirl’:
+    /// Rob Hardy on…", "Inside 'Glass Rivers'". Single or double, straight or curly quotes; an apostrophe
+    /// inside a word ("Director's") isn't a quote.
+    public static func headlineProduction(_ pageTitle: String, title: String) -> String? {
+        guard let match = try? NSRegularExpression(pattern: #"(?:^|[\s:(—–-])[‘'“"]([A-Z0-9][^’'”"]{1,60}?)[’'”"](?=[\s:,.;)!?—–-]|$)"#)
+            .firstMatch(in: pageTitle, range: NSRange(pageTitle.startIndex..., in: pageTitle)),
+            let range = Range(match.range(at: 1), in: pageTitle) else { return nil }
+        let named = String(pageTitle[range])
+        guard !TechSpecs.namesTitle(named, title: title), !TechSpecs.namesTitle(title, title: named), !TitleMatch.names(named, title: title) else { return nil }
+        return named
+    }
+
     /// "Her credits include A, B and C", "known for A, B and C", "(A, B, C)": a list of work.
     /// A list of work said as one: "her credits include…", "known for…", "whose films…".
     static func namesCredits(_ sentence: String) -> Bool {
@@ -303,6 +322,10 @@ public struct PageContext: Equatable, Sendable {
 
     public static func isCreditList(_ sentence: String, title: String? = nil) -> Bool {
         if namesCredits(sentence) { return true }
+        // The film given with a magazine's back-reference ("…Ex Machina (AC May '15)", 1.10.10): named
+        // as earlier coverage, not talked about.
+        if let title, sentence.range(of: NSRegularExpression.escapedPattern(for: title) + #"['’]?\s*\((?:AC|American Cinematographer|ASC|AC Magazine)\s+[A-Z][a-z]{2,9}\.?\s+['’]?\d{2,4}\)"#,
+                                     options: [.regularExpression, .caseInsensitive]) != nil { return true }
         // Three titles or more in quotes.
         if TechSpecs.quotedTitle.numberOfMatches(in: sentence, range: NSRange(sentence.startIndex..., in: sentence)) >= 3 { return true }
         // The film as one item of a run of capitalised names ("…Glass Rivers, The Long Quarantine, Moth
