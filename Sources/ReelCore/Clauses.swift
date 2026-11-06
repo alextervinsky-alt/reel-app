@@ -27,7 +27,8 @@ public struct ClauseMap: Sendable {
         case appositive
         /// Between brackets or dashes.
         case parenthetical
-        /// An opening comparison or a time apart ("As on <Other>, …", "When I was working on <Other>, …").
+        /// An opening comparison ("As on <Other>, …", "Unlike <Other>, …"). (Not "When I was working on
+        /// <Other>, I…": a time apart governs the whole statement after it.)
         case comparison
     }
 
@@ -58,7 +59,7 @@ public struct ClauseMap: Sendable {
         pattern: #",\s*(?:itself\s+)?(?:a|an|the)\s+(?:[\w'’-]+\s+){0,3}?(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|follow-up|sequel|remake|collaboration|collaborations|film|feature|movie|series|production|picture|documentary)\b"#,
         options: [.caseInsensitive])
     static let leadingComparison = try! NSRegularExpression(
-        pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|before|previously|earlier|he|she|they|we|i)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|(?:back\s+)?when\s+(?:i|we|he|she|they)\s+(?:was|were)\b)"#,
+        pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|before|previously|earlier|he|she|they|we|i)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b)"#,
         options: [.caseInsensitive])
     static let coordinateBreak = try! NSRegularExpression(
         pattern: #";\s+|,?\s+but\s+|,?\s+whereas\s+|,\s+while\s+|,\s+and\s+(?=(?:i|we|he|she|they|it|the|his|her|their|our)\s+\w+)"#,
@@ -298,7 +299,8 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         pattern: #"\b(?:for|in) (?:the |some |select |certain |several )?(?:sequences?|scenes?|shots?|segments?)\b|\b(?:select|certain|some) (?:sequences?|scenes?|shots?)\b"#,
         options: [.caseInsensitive])
     static let theatricalCue = try! NSRegularExpression(
-        pattern: #"\b(?:theatrical(?:ly)?|in (?:cinemas|theaters|theatres)|projected|projection)\b|^\W*(?:the (?:film|movie|picture)|it) (?:is|was) presented in\b"#,
+        // (Not "presented in its theatrical 2.35:1": a presentation that may be any release stays undecided.)
+        pattern: #"\b(?:theatrical(?:ly)? (?:release|run|projection|prints?|exhibition)|released theatrically|in (?:cinemas|theaters|theatres)|projected|projection)\b"#,
         options: [.caseInsensitive])
     static let captureCue = try! NSRegularExpression(
         pattern: #"\b(?:shot|shoot|shooting|filmed|filming|photographed|captured|capturing|lensed|recorded|acquired|originated|sensor|gate|negative)\b"#,

@@ -589,6 +589,8 @@ public enum ClaimFrame {
                                                        options: [.caseInsensitive])
     static let definitionNoun = try! NSRegularExpression(pattern: #"^\W*(?:[\w-]+\s+){0,1}?(?:process|technique|method|type|kind|term|system)\b(?!\s+(?:we|i|they|he|she)\b)"#,
                                                      options: [.caseInsensitive])
+    static let definitionCopula = try! NSRegularExpression(
+        pattern: #"^\s*(?:is|are)\s+(?:a|an)\s+(?:[\w-]+\s+){0,3}?(?:process|technique|method|type|kind|term)\b"#, options: [.caseInsensitive])
     static let crewRoleAfter = try! NSRegularExpression(pattern: #"^\s*(?:grips?|key grip|dolly grips?)\b"#, options: [.caseInsensitive])
     static let genericBefore = try! NSRegularExpression(pattern: #"\b(?:a|an|any)\s+$"#, options: [.caseInsensitive])
     static let genericCapabilityAfter = try! NSRegularExpression(
@@ -629,7 +631,7 @@ public enum ClaimFrame {
         pattern: #"\b(?:research|references?|reference photos|photos|photographs|archives?)\s+(?:\w+\s+)?(?:indicated|showed|shows|suggested|revealed|found)\b"#,
         options: [.caseInsensitive])
     static let carriedByRig = try! NSRegularExpression(
-        pattern: #"\b(?:drones?|gimbals?|cranes?|rigs?|arms?|heads?|mounts?|helicopters?|copters?|cars?|vehicles?|bikes?|steadicams?|technocranes?|ronins?|movis?|cable ?cams?|spidercams?|[A-Z][\w-]*\s+[A-Z0-9][\w-]*)\s+(?:[\w-]+\s+){0,3}?(?:carrying|carries|carried|holding|holds|with)\s+(?:an?\s+|the\s+|two\s+|its\s+)?(?:[\w-]+\s+){0,2}$"#,
+        pattern: #"\b(?:drones?|gimbals?|cranes?|rigs?|arms?|heads?|mounts?|helicopters?|copters?|cars?|vehicles?|bikes?|steadicams?|technocranes?|ronins?|movis?|cable ?cams?|spidercams?)\s+(?:[\w-]+\s+){0,3}?(?:carrying|carries|carried|holding|holds)\s+(?:an?\s+|the\s+|two\s+|its\s+)?(?:[\w-]+\s+){0,2}$"#,
         options: [.caseInsensitive])
     static let payloadAfter = try! NSRegularExpression(pattern: #"^\W*(?:[\w-]+\s+){0,2}?payloads?\b"#, options: [.caseInsensitive])
 
@@ -702,7 +704,7 @@ public enum ClaimFrame {
         // A definition or the history of the gear (1.10.10): "ENR is a silver retention process named for
         // its inventor…".
         let rest = String(folded[gear.upperBound...].prefix(100))
-        if has(definitionAfter, rest) || (has(definitionBefore, near) && has(definitionNoun, rest)) { return .definition }
+        if has(definitionAfter, rest) || has(definitionCopula, rest) || (has(definitionBefore, near) && has(definitionNoun, rest)) { return .definition }
         // A crew member's job ("his dolly grip Lowell Richardson"): every production has one; it says
         // nothing of how this film was shot.
         if kind == .support, has(crewRoleAfter, rest) { return .insufficientContext }

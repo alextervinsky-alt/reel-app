@@ -15,24 +15,67 @@ final class ClaimHoldoutTests: XCTestCase {
             let crew: [Member]
             let article: [String]
             let firstPass: [String]
+            enum Keys: String, CodingKey { case id, title, year, director, crew, article, firstPass }
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: Keys.self)
+                id = try c.decode(Int.self, forKey: .id); title = try c.decode(String.self, forKey: .title)
+                year = try c.decode(Int.self, forKey: .year); director = (try? c.decode(String.self, forKey: .director)) ?? ""
+                crew = (try? c.decode([Member].self, forKey: .crew)) ?? []
+                article = (try? c.decode([String].self, forKey: .article)) ?? []
+                firstPass = (try? c.decode([String].self, forKey: .firstPass)) ?? []
+            }
         }
         struct Page: Decodable { let url: String, site: String, title: String; let paragraphs: [String]; let failure: String? }
         struct Hit: Decodable { let title: String, url: String }
         struct Search: Decodable { let provider: String, query: String; let hits: [Hit] }
+        /// (1.10.10) A film is named by its title or its id, and `aboutFilm` is the production the
+        /// passage is about (a title) or whether it's this film's (true/false): every corpus is read the same.
         struct Claim: Decodable {
-            let id: String, film: String, source: String, passage: String, term: String, property: String, expected: String
-            let aboutFilm: String, evidenceType: String
+            var id: String, film: String, source: String, passage: String, term: String, property: String, expected: String
+            var aboutFilm: String, evidenceType: String
+            var filmID: Int?
+            var aboutThisFilm: Bool?
+            var stage: String?
+            enum Keys: String, CodingKey { case id, film, source, passage, term, property, expected, aboutFilm, evidenceType, stage }
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: Keys.self)
+                id = try c.decode(String.self, forKey: .id)
+                if let number = try? c.decode(Int.self, forKey: .film) { filmID = number; film = "" } else { film = try c.decode(String.self, forKey: .film) }
+                source = try c.decode(String.self, forKey: .source); passage = try c.decode(String.self, forKey: .passage)
+                term = try c.decode(String.self, forKey: .term); property = (try? c.decode(String.self, forKey: .property)) ?? ""
+                expected = try c.decode(String.self, forKey: .expected)
+                if let flag = try? c.decode(Bool.self, forKey: .aboutFilm) { aboutThisFilm = flag; aboutFilm = "" } else {
+                    aboutFilm = (try? c.decode(String.self, forKey: .aboutFilm)) ?? ""
+                }
+                evidenceType = (try? c.decode(String.self, forKey: .evidenceType)) ?? ""
+                stage = try? c.decode(String.self, forKey: .stage)
+            }
         }
         let films: [Film]
         let pages: [Page]
         let searches: [Search]
-        let claims: [Claim]
+        var claims: [Claim]
+
+        /// Claims named by film id, read as named by title (and `aboutFilm` as a title, "" for the film's own).
+        mutating func normalise() {
+            let titles = Dictionary(films.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
+            for i in claims.indices {
+                if let id = claims[i].filmID { claims[i].film = titles[id] ?? "" }
+                if let flag = claims[i].aboutThisFilm { claims[i].aboutFilm = flag ? claims[i].film : "another production" }
+            }
+        }
     }
 
-    static func load() throws -> File {
+    static func load(_ name: String = "claim-holdout.json") throws -> File {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/claim-holdout.json")
-        return try JSONDecoder().decode(File.self, from: Data(contentsOf: url))
+            .appendingPathComponent("Fixtures/" + name)
+        return try decode(Data(contentsOf: url))
+    }
+
+    static func decode(_ data: Data) throws -> File {
+        var file = try JSONDecoder().decode(File.self, from: data)
+        file.normalise()
+        return file
     }
 
     /// The file as the benchmark's corpus (claims labelled with the production they establish gear for).
@@ -65,10 +108,18 @@ final class ClaimHoldoutTests: XCTestCase {
         var accept = 0, truePositive = 0, falseNegative = 0, unreached = 0
         var reject = 0, trueNegative = 0, falsePositive = 0, crossFilm = 0
         var abstain = 0, abstained = 0, unsafe = 0
+        /// Pipeline stages (1.10.10), for each labelled passage: its source was read (discovery), the
+        /// passage is in what was read (extraction), it was read as this film's at all (attribution: a
+        /// spec from it, accepted or kept as mentioned), and the decision.
+        var labelled = 0, discovered = 0, extracted = 0, attributed = 0
+        var passageless = 0
         var byType: [String: (right: Int, total: Int)] = [:]
         var errors: [String] = []
         var precision: Double { truePositive + falsePositive == 0 ? 1 : Double(truePositive) / Double(truePositive + falsePositive) }
         var recall: Double { accept == 0 ? 1 : Double(truePositive) / Double(accept) }
+        var stages: String {
+            "stages: labelled \(labelled), source read \(discovered), passage extracted \(extracted), attributed to the film \(attributed); accepted without a passage \(passageless)"
+        }
         var description: String {
             String(format: "accept %d: accepted %d, missed %d (of them unreached %d) | reject %d: rejected %d, wrongly accepted %d (cross-film %d) | abstain %d: held back %d, accepted %d | precision %.3f, recall %.3f, rejection %.3f",
                    accept, truePositive, falseNegative, unreached, reject, trueNegative, falsePositive, crossFilm, abstain, abstained, unsafe,
@@ -78,11 +129,9 @@ final class ClaimHoldoutTests: XCTestCase {
 
     func say(_ line: String) { FileHandle.standardOutput.write(Data(("BENCH| " + line + "\n").utf8)) }
 
-    func testTheIndependentClaimHoldout() async throws {
-        let file = try Self.load()
-        XCTAssertEqual(file.films.count, 30)
-        XCTAssertEqual(file.claims.count, 299)
-        let corpus = Self.corpus(file)
+    /// Every film of a corpus in this form read through the production path, and each labelled passage scored.
+    static func score(_ file: File) async -> Score {
+        let corpus = ClaimHoldoutTests.corpus(file)
         var score = Score()
         for film in corpus.films {
             let transport = ResearchBenchmarkTests.Transport(corpus)
@@ -102,12 +151,23 @@ final class ClaimHoldoutTests: XCTestCase {
             let specs = TechSpecs.read(texts: texts, cinematographers: details.cinematographers, directors: details.directors,
                                        year: film.year, title: film.title, otherTitles: [], crew: crew)
             let read = Set(researched.sources.map(\.url.absoluteString) + (article == nil ? [] : ["article:" + film.title]))
+            score.passageless += specs.accepted.filter { ($0.evidence ?? "").trimmingCharacters(in: .whitespaces).isEmpty }.count
+            let readText = ClaimHoldoutTests.squash(texts.flatMap { $0.sections.flatMap(\.paragraphs) }.joined(separator: " "))
             for claim in file.claims where claim.film == film.title {
-                let term = Self.squash(claim.term)
-                let passage = Self.squash(String(claim.passage.prefix(90)))
+                let term = ClaimHoldoutTests.squash(claim.term)
+                let passage = ClaimHoldoutTests.squash(String(claim.passage.prefix(90)))
+                // Pipeline stages: discovery, extraction, attribution.
+                score.labelled += 1
+                if read.contains(claim.source) { score.discovered += 1 }
+                if passage.count >= 20, readText.contains(passage) { score.extracted += 1 }
+                if (specs.accepted + specs.mentioned).contains(where: { spec in
+                    let name = ClaimHoldoutTests.squash(spec.name), evidence = ClaimHoldoutTests.squash(spec.evidence ?? "")
+                    return name.count >= 3 && (name.contains(term) || term.contains(name)) && evidence.count >= 20
+                        && (evidence.contains(passage) || passage.contains(String(evidence.prefix(60))))
+                }) { score.attributed += 1 }
                 let accepted = specs.accepted.contains { spec in
-                    let name = Self.squash(spec.name)
-                    let evidence = Self.squash(spec.evidence ?? "")
+                    let name = ClaimHoldoutTests.squash(spec.name)
+                    let evidence = ClaimHoldoutTests.squash(spec.evidence ?? "")
                     // The same gear (a name of three letters or more inside the other) from the same passage
                     // (its first 90 letters, or the evidence's first 60 when the evidence is the shorter).
                     return name.count >= 3 && term.count >= 3 && (name.contains(term) || term.contains(name))
@@ -144,7 +204,16 @@ final class ClaimHoldoutTests: XCTestCase {
                 score.byType[tag] = entry
             }
         }
-        say("claim holdout, 1.10.9: \(score)")
+        return score
+    }
+
+    func testTheIndependentClaimHoldout() async throws {
+        let file = try Self.load()
+        XCTAssertEqual(file.films.count, 30)
+        XCTAssertEqual(file.claims.count, 299)
+        let score = await Self.score(file)
+        say("claim holdout, 1.10.10: \(score)")
+        say("claim holdout " + score.stages)
         say("claim holdout by type: " + score.byType.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value.right)/\($0.value.total)" }.joined(separator: ", "))
         for error in score.errors { say("claim holdout " + error) }
         // Pinned at what 1.10.9 reaches, so a change either way shows: the remaining cases need to know
