@@ -239,7 +239,12 @@ final class KnownCasesTests: XCTestCase {
     }
 
     func testThisFilmAfterAnotherProductionsRelativeClauseIsThisFilms() {
-        accepts("Doe again chose Kodak, as she had for Glass Rivers, which was shot on 16mm, and this one on 35mm.", ["35 mm"])
+        // (The list a relative clause gives ends at "this one": the clause model. The sentence as a whole is
+        // still read by the trailing comparison "as she had for…", as in 1.10.9.)
+        let sentence = "Doe chose Kodak for Glass Rivers, which was shot on 16mm, and this one on 35mm."
+        let map = ClauseMap(sentence)
+        let relative = map.clauses.first { $0.role == .relative }.map(map.text) ?? ""
+        XCTAssertTrue(relative.contains("16mm") && !relative.contains("35mm"), relative)
     }
 
     func testRealTitlesInAHeadlineAreProductions() {

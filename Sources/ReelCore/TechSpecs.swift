@@ -2079,7 +2079,9 @@ public struct TechSpecs: Equatable, Sendable {
                 rule.found(in: possessed).first { possessed.distance(from: possessed.startIndex, to: $0.at.lowerBound) == 0 }?.at
             }.max { possessed.distance(from: $0.lowerBound, to: $0.upperBound) < possessed.distance(from: $1.lowerBound, to: $1.upperBound) }
             // (A firm's possessive only for gear: "The Weinstein Company's Glass Rivers" is a film.)
-            if gearFirst != nil, corporateNouns.contains(surname) { continue }
+            if corporateNouns.contains(surname), gearFirst != nil
+                || possessed.range(of: #"^(?:\S+\s+){0,3}(?:digital\s+)?(?:cameras?|lens(?:es)?|format|stock|system|sensor)\b"#,
+                                   options: [.regularExpression, .caseInsensitive]) != nil { continue }
             if let gearFirst {
                 let rest = String(possessed[gearFirst.upperBound...])
                 if rest.range(of: #"^(?:\s+(?:digital|film|motion picture|cinema|large[- ]format))?(?:\s+(?:cameras?|lens(?:es)?|format|process|system|stock|sensor|ratio|primes?))?\s*(?:[,.;:)]|$|\s+(?:and|with|for|on|in|to|was|were|is|which|that|chosen|used)\b)"#,
