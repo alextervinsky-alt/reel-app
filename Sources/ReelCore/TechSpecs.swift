@@ -66,6 +66,8 @@ public struct TechSpecs: Equatable, Sendable {
         public var namesFilm = false
         /// For a ratio or a format: the stage of the image it's said of (1.10.10; nil when not said).
         public var stage: FormatStage? = nil
+        /// The article it was read from (`Text.article`, 1.10.10).
+        public var article: String? = nil
         /// Its clause says it was the film's main coverage ("Sony Venice 2 bodies for traditional
         /// coverage", "most off-track scenes were shot… with", "captured mostly in", "the main
         /// cameras"): the stronger reason among sentences that say as much of the film. It says
@@ -137,6 +139,10 @@ public struct TechSpecs: Equatable, Sendable {
         /// about it too (an interview about productions), or not (a profile, an obituary, a news item).
         public var inheritsSubject = true
 
+        /// The article it was read from, by its canonical address (`CraftIndex.articleIdentity`; nil for
+        /// the film's own Wikipedia article and the cinematographer's): two articles of one site are two
+        /// sources (1.10.10).
+        public var article: String? = nil
         public init(source: String?, sections: [FilmArticle.Section], isInterview: Bool, isList: Bool = false) {
             self.source = source
             self.sections = sections
@@ -154,6 +160,11 @@ public struct TechSpecs: Equatable, Sendable {
     public let specs: [Spec]
     /// Named, but not said of this film (another film's camera, gear in general): for diagnosis only.
     public var mentioned: [Spec] = []
+
+    /// The stage a ratio or format is said of, from the first accepted statement that says (1.10.10).
+    public func stage(of name: String) -> FormatStage? {
+        accepted.first { $0.kind == .format && $0.name == name && $0.stage != nil }?.stage
+    }
     /// Each gear statement read and not accepted, with why (1.10.9): avoided, a hypothetical, a plan,
     /// another production's, a simulation… (`ClaimReason`). Not shown; read by the log and by the
     /// reconciliation of what an earlier reading found (`SourceReconciliation`).
@@ -430,7 +441,7 @@ public struct TechSpecs: Equatable, Sendable {
                         // another production's name is that production's, even when the sentence isn't.
                         // (Only where it can matter: gear named, or the sentence set aside as a whole.)
                         let clauses = wholeOther || triggers.contains(where: { lowered.contains($0) })
-                            ? ClauseProduction(sentence, main: main) { namesOther($0) } : nil
+                            ? ClauseProduction(sentence, main: main, title: title) { namesOther($0) } : nil
                         let confined = wholeOther && !contextOther && (clauses.map { $0.confined && !$0.other.isEmpty } ?? false)
                         let otherFilm = (wholeOther && !confined) || contextOther
                         let clauseMain = clauses.map { $0.other.isEmpty ? main : $0.map.blanking($0.other, in: main) } ?? main
@@ -548,6 +559,7 @@ public struct TechSpecs: Equatable, Sendable {
                                                       evidenceKind: SourceRegistry.evidence(source: text.source, text: original, isInterview: text.isInterview,
                                                                                              speaker: CraftCrew.speaker(in: original, crew: crew)))
                                     if rule.kind == .format { spec.stage = FormatStage.of(main, at: at, name: name, context: section.title) }
+                                    spec.article = text.article
                                     found.append(spec)
                                 }
                             }
@@ -1336,7 +1348,8 @@ public struct TechSpecs: Equatable, Sendable {
         // emulate 35mm film", "anything shot digitally" isn't this film's.
         let start = sentence.distance(from: sentence.startIndex, to: range.lowerBound)
         let lead = String(chars[..<min(start, chars.count)]).suffix(40)
-        if lead.range(of: #"\b(?:every|any|all|most|many|other)(?:\s+[a-z\-]+)?\s*$|\b(?:anything|everything|something|nothing|whatever)\s*$"#,
+        // (Not "the other": "one in 16mm and the other on Super 8" names the second of two, 1.10.10.)
+        if lead.range(of: #"\b(?:every|any|all|most|many|(?<!\bthe\s)(?<!\bthe\s\s)other)(?:\s+[a-z\-]+)?\s*$|\b(?:anything|everything|something|nothing|whatever)\s*$"#,
                       options: .regularExpression) != nil { return true }
         // Set against it as a product ("a direct competitor to SkyPanels", "an alternative to the Alexa").
         if lead.range(of: #"\b(?:competitors?|alternatives?|rivals?|challengers?|answer|successors?)\s+to\s+(?:the\s+)?$|\b(?:rivals?|outperforms?|replaces?)\s+(?:the\s+)?$"#,

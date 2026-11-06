@@ -425,6 +425,8 @@ public struct ResearchContext: Sendable {
     }
     public let vfxRelevance: VFXRelevance
     public var vfxRelevant: Bool { vfxRelevance == .established }
+    /// What the relevance rests on, for the log (1.10.10).
+    public let vfxBasis: String
 
     static let effectsWork = try! NSRegularExpression(
         pattern: #"\b(?:visual effects|vfx|cgi|computer[- ]generated|digital effects|green ?screen|blue ?screen|digital (?:set )?extensions?|composit\w*|matte paintings?)\b[^.]{0,120}\b(?:created|creating|built|rendered|composited|added|designed|delivered|supervised|handled|produced|vendor|studio|company|houses?|shots?|plates?|elements|work|team|artists|nominat\w*|award\w*)\b|\b(?:created|built|rendered|composited|added|designed|delivered|supervised|handled|nominat\w*|award\w*)\b[^.]{0,80}\b(?:visual effects|vfx|cgi|computer[- ]generated|digital effects)\b"#,
@@ -448,16 +450,25 @@ public struct ResearchContext: Sendable {
             sentence.replacingOccurrences(of: #",\s*(?:though|but|although|while|yet|whereas)\b|;"#, with: "\u{1}", options: [.regularExpression, .caseInsensitive])
                 .components(separatedBy: "\u{1}")
         }
-        let effects = parts.contains { part in
+        let effects = parts.first { part in
             let range = NSRange(part.startIndex..., in: part)
             return Self.effectsWork.firstMatch(in: part, range: range) != nil && Self.noEffects.firstMatch(in: part, range: range) == nil
         }
-        if crew.contains(where: { $0.role == .vfxSupervisor }) || !specs.cameraVFX.isEmpty || effects {
+        if let supervisor = crew.first(where: { $0.role == .vfxSupervisor }) {
             vfxRelevance = .established
-        } else if any(Self.noEffects) {
+            vfxBasis = "a credited visual effects supervisor: \(supervisor.name)"
+        } else if let note = specs.cameraVFX.first {
+            vfxRelevance = .established
+            vfxBasis = "the photography's part in the effects: “\(note.text.prefix(120))”"
+        } else if let effects {
+            vfxRelevance = .established
+            vfxBasis = "a statement about effects work: “\(effects.trimmingCharacters(in: .whitespaces).prefix(120))”"
+        } else if let none = sentences.first(where: { Self.noEffects.firstMatch(in: $0, range: NSRange($0.startIndex..., in: $0)) != nil }) {
             vfxRelevance = .notApplicable
+            vfxBasis = "the film's texts say it had none: “\(none.prefix(120))”"
         } else {
             vfxRelevance = .unknown
+            vfxBasis = "no sign either way (no visual effects supervisor credited, no statement about effects work)"
         }
     }
 }
@@ -797,6 +808,9 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
     public var searchedAt: Date?
     /// Its questions still open (1.10.8), by id (`ResearchQuestions`).
     public var open: [String] = []
+    /// For visual effects (1.10.10): what its relevance rests on, as logged ("a credited visual effects
+    /// supervisor: …", "a statement about effects work: “…”", "no sign either way").
+    public var basis: String? = nil
 
     public init(dimension: ResearchDimension, state: State, queries: [String] = [], discovery: Int = CraftIndex.currentDiscovery,
                 searchedAt: Date? = nil, open: [String] = []) {
@@ -808,7 +822,7 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         self.open = open
     }
 
-    enum CodingKeys: String, CodingKey { case dimension, state, queries, discovery, searchedAt, open }
+    enum CodingKeys: String, CodingKey { case dimension, state, queries, discovery, searchedAt, open, basis }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -819,6 +833,7 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         discovery = try c.decodeIfPresent(Int.self, forKey: .discovery) ?? 6
         searchedAt = try c.decodeIfPresent(Date.self, forKey: .searchedAt)
         open = try c.decodeIfPresent([String].self, forKey: .open) ?? []
+        basis = try c.decodeIfPresent(String.self, forKey: .basis)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -829,6 +844,7 @@ public struct ResearchEntry: Codable, Equatable, Sendable {
         try c.encode(discovery, forKey: .discovery)
         try c.encodeIfPresent(searchedAt, forKey: .searchedAt)
         if !open.isEmpty { try c.encode(open, forKey: .open) }
+        try c.encodeIfPresent(basis, forKey: .basis)
     }
 }
 
@@ -882,18 +898,24 @@ public enum ResearchCoverage {
                                      discovery: discovery)
             }
             let relevant = ResearchQuestions.catalogue.filter { $0.dimension == dimension && $0.isApplicable(context) }
+            // (Each VFX entry keeps what its relevance rests on, 1.10.10.)
+            func entry(_ made: ResearchEntry) -> ResearchEntry {
+                var made = made
+                if dimension == .vfx { made.basis = context.vfxBasis }
+                return made
+            }
             if relevant.isEmpty {
                 // Not applicable only on grounds (1.10.9); with nothing either way, VFX is not searched yet.
                 let unknown = dimension == .vfx && context.vfxRelevance == .unknown
-                return ResearchEntry(dimension: dimension, state: unknown ? .notSearched : .notApplicable, discovery: discovery)
+                return entry(ResearchEntry(dimension: dimension, state: unknown ? .notSearched : .notApplicable, discovery: discovery))
             }
             let open = relevant.filter { !$0.isAnswered(context.specs) }.map(\.id)
             if open.isEmpty {
-                return ResearchEntry(dimension: dimension, state: .found, queries: keys, discovery: discovery, searchedAt: searchedAt)
+                return entry(ResearchEntry(dimension: dimension, state: .found, queries: keys, discovery: discovery, searchedAt: searchedAt))
             }
             if open.count < relevant.count {
-                return ResearchEntry(dimension: dimension, state: .partial, queries: keys, discovery: discovery, searchedAt: searchedAt,
-                                     open: open)
+                return entry(ResearchEntry(dimension: dimension, state: .partial, queries: keys, discovery: discovery, searchedAt: searchedAt,
+                                     open: open))
             }
             func any(_ test: (ResearchOutcome.Result) -> Bool) -> Bool { outcomes.contains { test($0.result) } }
             let state: ResearchEntry.State
@@ -903,6 +925,10 @@ public enum ResearchCoverage {
                 state = .unavailable
             } else if any({ if case .read = $0 { true } else { false } }) {
                 state = .readNoFindings
+            } else if unavailable {
+                // A source of the first pass didn't answer (1.10.10): what it holds is unknown, so no
+                // search's empty result says there's nothing. Source outcomes come before coverage.
+                state = .unavailable
             } else if any({ if case .pageLanguage = $0 { true } else { false } }) {
                 state = .unsupportedLanguage
             } else if any({ if case .pageUnreadable = $0 { true } else { false } }) {
@@ -923,7 +949,7 @@ public enum ResearchCoverage {
             } else {
                 state = readSomething ? .readNoFindings : .notSearched
             }
-            return ResearchEntry(dimension: dimension, state: state, queries: keys, discovery: discovery, searchedAt: searchedAt, open: open)
+            return entry(ResearchEntry(dimension: dimension, state: state, queries: keys, discovery: discovery, searchedAt: searchedAt, open: open))
         }
     }
 }

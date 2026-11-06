@@ -56,7 +56,7 @@ public struct ClauseMap: Sendable {
         options: [.caseInsensitive])
     /// ", a tribute to …", ", an homage to …", ", a nod to …", ", the director's previous film…".
     static let appositiveStart = try! NSRegularExpression(
-        pattern: #",\s*(?:itself\s+)?(?:a|an|the)\s+(?:[\w'’-]+\s+){0,3}?(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|follow-up|sequel|remake|collaboration|collaborations|film|feature|movie|series|production|picture|documentary)\b"#,
+        pattern: #",\s*(?:itself\s+)?(?:a|an|the)\s+(?:[\w'’-]+\s+){0,3}?(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|follow-up|sequel|remake|collaboration|collaborations|film|feature|movie|series|production|picture|documentary|technique|trick|approach|method|habit|idea)\b"#,
         options: [.caseInsensitive])
     static let leadingComparison = try! NSRegularExpression(
         pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|before|previously|earlier|he|she|they|we|i)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b)"#,
@@ -224,9 +224,26 @@ public struct ClauseProduction: Sendable {
     /// `main`: the sentence with the parts already set aside as comparisons blanked (`ComparisonFrame`),
     /// what the sentence's own statement is read from; dependent clauses and what they're about are
     /// read as written.
-    public init(_ sentence: String, main: String? = nil, signal: (String) -> Bool) {
+    /// A relative clause about a person, naming their other work ("…Okafor, who shot Lantern Season on
+    /// the Alexa Mini, …"): a capitalised title as what they shot, not this film's.
+    static let personWork = try! NSRegularExpression(
+        pattern: #"^\W*(?:who|whom|whose)\b[^,;]{0,40}?\b(?:shot|lensed|photographed|lit|filmed|directed|made|graded|cut)\s+((?:[A-Z][\w'’-]*)(?:\s+(?:[A-Z][\w'’-]*|of|the|and|a|in|on|to)){0,6})"#)
+
+    public init(_ sentence: String, main: String? = nil, title: String? = nil, signal: (String) -> Bool) {
         let map = ClauseMap(sentence)
         let mainChars = Array(main ?? sentence)
+        let comparisons = map.clauses.filter { $0.role == .comparison }
+        func namesOtherWork(_ text: String) -> Bool {
+            guard let match = Self.personWork.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  let found = Range(match.range(at: 1), in: text) else { return false }
+            var named = String(text[found])
+            while let last = named.split(separator: " ").last, ["of", "the", "and", "a", "in", "on", "to"].contains(String(last)) {
+                named = named.split(separator: " ").dropLast().joined(separator: " ")
+            }
+            guard named.count >= 3 else { return false }
+            guard let title else { return true }
+            return !TitleMatch.names(named, title: title) && !TitleMatch.names(title, title: named)
+        }
         self.map = map
         var other: [ClauseMap.Clause] = []
         var independentSignal = false
@@ -235,7 +252,15 @@ public struct ClauseProduction: Sendable {
             let text = map.text(clause)
             if clause.isDependent {
                 let antecedentOther = (clause.role == .relative || clause.role == .appositive)
-                    && map.antecedentText(clause).map(signal) == true
+                    && (map.antecedentText(clause).map(signal) == true
+                        // Hanging on what an opening comparison compares with ("Unlike Glass Rivers, which
+                        // was shot on 35mm, …", "Unlike her previous film, Paper Moon, which…").
+                        || comparisons.contains { comparison in
+                            comparison.upper <= clause.lower
+                                && map.text(ClauseMap.Clause(lower: comparison.upper, upper: clause.lower, role: .main, antecedent: nil))
+                                    .split(whereSeparator: { $0.isWhitespace }).count <= 4
+                        })
+                    || (clause.role == .relative && namesOtherWork(text))
                     // A relative clause naming this film's people as its subject is about them, not
                     // the production before it ("…Lubezki, with whom Iñárritu also collaborated on…"):
                     // that one is caught by its own words.

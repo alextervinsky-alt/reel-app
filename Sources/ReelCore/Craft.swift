@@ -98,7 +98,14 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// (`ComparisonFrame`); titles are matched whatever their punctuation (`TitleMatch`); the film
     /// stays the subject across paragraphs only in a bounded context; every finding keeps its passage,
     /// and the reading before's are reconciled source by source (`SourceReconciliation`).
-    public static let currentVersion = 18
+    /// 19 (1.10.10): whose production a statement is about is decided clause by clause (`ClauseMap`):
+    /// another production named in a relative clause, an appositive, brackets, dashes or an opening
+    /// comparison no longer sets the whole sentence aside, and gear in a clause about another production
+    /// is that production's; a ratio keeps the stage of the image it's said of (`FormatStage`); reasons
+    /// told apart (a definition, a crew member's job, a product's capability, a habit, a decision taken
+    /// as against a plan, a camera carried as a payload, a treatment as against a fake); findings keep
+    /// their article, and those recorded before passages were kept are legacy, shown apart.
+    public static let currentVersion = 19
     /// Bump when finding what to read improves, or what a reading's log says of it: films read
     /// from too little (their article alone, or nothing on what they were shot on) and the films of
     /// a collection (`CraftQueue.state`) are read again; the rest keep their reading.
@@ -334,6 +341,15 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// "Wikipedia" for "Wikipedia: Roger Deakins": the site a source is on, as `unanswered` names it.
     public static func site(of source: String) -> String {
         source.components(separatedBy: ": ").first ?? source
+    }
+
+    /// An article's canonical identity (1.10.10): its host without "www." and its path without a
+    /// trailing slash, lowercased; the query, the fragment and the scheme don't make another article.
+    public static func articleIdentity(_ url: URL) -> String {
+        let host = (url.host ?? "").lowercased().replacingOccurrences(of: #"^www\."#, with: "", options: .regularExpression)
+        var path = url.path.lowercased()
+        while path.hasSuffix("/") { path.removeLast() }
+        return host + path
     }
 
     /// A tag the new reading no longer has, and why it wasn't kept.

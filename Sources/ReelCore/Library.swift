@@ -561,12 +561,61 @@ public struct LibraryFile: Codable, Equatable, Sendable {
     /// migration step: claims are nil until the film is read again, and the reading before's tags
     /// and names are reconciled then, `SourceReconciliation.earlier`); Reel 1.10.8 and older won't
     /// write over a 5, so a pending finding can't be dropped by an older Reel.
-    public static let currentVersion = 5
+    /// 6 (1.10.10): a finding recorded before passages were kept is `legacy` (shown apart, awaiting
+    /// verification, never retired for not being found), and findings keep their article. A version 5
+    /// file is upgraded on opening (`LibraryMigration.upgrade`): its pending findings with no passage
+    /// become legacy; nothing else changes, and nothing is dropped. The upgraded file is written only
+    /// by the next ordinary save, atomically, so an interrupted upgrade leaves the version 5 file as it
+    /// was and is simply done again. Reel 1.10.9 and older won't write over a 6.
+    public static let currentVersion = 6
 
-    public init(films: [FilmEntry] = []) {
+    /// The Reel that last wrote the file ("1.10.10 (380)"; 1.10.10 on): what wrote a library is read from
+    /// the library itself, not guessed from what it holds.
+    public var writtenBy: String?
+    /// Each drive's last scan, by drive id (1.10.10): when, whether it was read in full, and how many
+    /// films it gave.
+    public var scans: [String: Scan]?
+
+    public struct Scan: Codable, Equatable, Sendable {
+        public var at: Date
+        public var complete: Bool
+        public var films: Int
+        public init(at: Date, complete: Bool, films: Int) {
+            self.at = at
+            self.complete = complete
+            self.films = films
+        }
+    }
+
+    public init(films: [FilmEntry] = [], writtenBy: String? = nil, scans: [String: Scan]? = nil) {
         self.version = LibraryFile.currentVersion
         self.films = films
         self.drives = nil
+        self.writtenBy = writtenBy
+        self.scans = scans
+    }
+}
+
+/// Upgrading an older library on opening (1.10.10). Pure and repeatable: upgrading an upgraded file
+/// changes nothing.
+public enum LibraryMigration {
+    public static func upgrade(_ file: LibraryFile) -> LibraryFile {
+        guard file.version < LibraryFile.currentVersion else { return file }
+        var upgraded = file
+        if file.version <= 5 {
+            for i in upgraded.films.indices {
+                guard var craft = upgraded.films[i].craft, var claims = craft.claims else { continue }
+                for j in claims.indices where claims[j].status == .pending && (claims[j].text == nil || claims[j].source.isEmpty) {
+                    claims[j].status = .legacy
+                    claims[j].reason = "recorded by rules \(claims[j].rules), before passages were kept; awaiting verification"
+                    claims[j].misses = 0
+                }
+                craft.claims = claims
+                upgraded.films[i].craft = craft
+            }
+        }
+        upgraded.version = LibraryFile.currentVersion
+        return upgraded
     }
 }
 

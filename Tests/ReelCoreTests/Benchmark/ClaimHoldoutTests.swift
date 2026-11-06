@@ -85,7 +85,8 @@ final class ClaimHoldoutTests: XCTestCase {
             let claims = file.claims.filter { $0.source == page.url && $0.expected == "accept" }
                 .map { BenchClaim(text: $0.passage, film: $0.film, gear: [$0.term]) }
             pages[page.url] = BenchPage(title: page.title, url: page.url, site: page.site, paragraphs: page.paragraphs, claims: claims,
-                                        failure: page.failure == nil ? nil : .unanswered("didn't answer"))
+                                        failure: page.failure == nil || page.failure == "incomplete" ? nil : .unanswered("didn't answer"))
+            // ("incomplete": served as it is, cut off mid-sentence, as an incomplete page comes.)
         }
         let films = file.films.map { film -> BenchFilm in
             var bench = BenchFilm(id: film.id, title: film.title, year: film.year, director: film.director,
@@ -182,7 +183,16 @@ final class ClaimHoldoutTests: XCTestCase {
                     if accepted { score.truePositive += 1; right = true } else {
                         score.falseNegative += 1
                         if !read.contains(claim.source) { score.unreached += 1 }
-                        score.errors.append("MISS \(claim.id) [\(tag)] \(film.title) ← \(claim.term): \(claim.passage.prefix(110))")
+                        // What Reel did with it instead (1.10.10 diagnostics): set aside with a reason, kept as
+                        // mentioned, or not recognised at all.
+                        let sameGear: (String, String?) -> Bool = { name, evidence in
+                            let n = ClaimHoldoutTests.squash(name), e = ClaimHoldoutTests.squash(evidence ?? "")
+                            return n.count >= 3 && (n.contains(term) || term.contains(n)) && e.count >= 20
+                                && (e.contains(passage) || passage.contains(String(e.prefix(60))))
+                        }
+                        let did = specs.judged.first { sameGear($0.name, $0.evidence) }.map { "set aside: \($0.reason)" }
+                            ?? (specs.mentioned.contains { sameGear($0.name, $0.evidence) } ? "mentioned only" : "not recognised")
+                        score.errors.append("MISS \(claim.id) [\(tag)] \(film.title) ← \(claim.term) (\(did)): \(claim.passage.prefix(110))")
                     }
                 case "reject":
                     score.reject += 1

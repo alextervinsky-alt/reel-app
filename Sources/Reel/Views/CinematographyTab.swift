@@ -88,6 +88,7 @@ struct CinematographyTab: View {
             if !team.isEmpty { crewGrid(team) }
             reads(reading)
             researchStands(film.craft?.research)
+            awaitingVerification(film.craft?.claimsKnown ?? [])
             links(article: article)
         }
         .frame(maxWidth: 820, alignment: .leading)
@@ -377,6 +378,30 @@ struct CinematographyTab: View {
                 ForEach(lines, id: \.self) { line in
                     Text(line).font(.system(size: 12.5)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// What an earlier reading recorded and this one hasn't verified (1.10.10): never shown as found,
+    /// never hidden either. A finding from before passages were kept, and one whose passage is still
+    /// there but couldn't be settled, each with why.
+    @ViewBuilder
+    private func awaitingVerification(_ claims: [CraftIndex.Claim]) -> some View {
+        let waiting = claims.filter(\.awaitingVerification)
+        if !waiting.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Previously Recorded — Awaiting Verification").font(.system(size: 15, weight: .semibold))
+                Text("Found by an earlier reading and not confirmed by the latest. Not counted as how the film was shot until a reading settles it.")
+                    .font(.system(size: 12)).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(waiting.enumerated()), id: \.offset) { _, claim in
+                    let name = claim.kind == "shotOn" ? (ShotOn(rawValue: claim.name)?.title ?? claim.name) : claim.name
+                    let source = claim.source.isEmpty ? "" : " · " + claim.source
+                    Text(name + source + (claim.reason.map { " — " + $0 } ?? ""))
+                        .font(.system(size: 12.5)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(claim.text ?? "No passage was kept for this finding.")
                 }
             }
         }
@@ -779,7 +804,9 @@ struct SpecSheet {
             Row(title: "Camera", icon: "video", values: specs.names(.camera)),
             Row(title: "Lenses", icon: "camera.aperture", values: specs.names(.lens)),
             Row(title: "Film and Format", icon: "film", values: media),
-            Row(title: "Aspect Ratio", icon: "rectangle.ratio.16.to.9", values: ratios.isEmpty ? (quick?.aspectRatios ?? []) : ratios),
+            // Each ratio with the stage it's said of, when its sentence says (1.10.10).
+            Row(title: "Aspect Ratio", icon: "rectangle.ratio.16.to.9",
+                values: ratios.isEmpty ? (quick?.aspectRatios ?? []) : ratios.map { ratio in specs.stage(of: ratio).map { "\(ratio) (\($0.label))" } ?? ratio }),
             Row(title: "Frame Rate", icon: "speedometer", values: speeds),
             Row(title: "Colour", icon: "paintpalette", values: colour),
             Row(title: "Lighting", icon: "lightbulb", values: specs.names(.light)),

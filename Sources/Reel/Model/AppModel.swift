@@ -301,6 +301,8 @@ final class AppModel {
     /// False when Library.json is there but couldn't be opened, or a newer Reel wrote it: not
     /// written this session (see `LibraryOpening`).
     var libraryWritable = true
+    /// Each drive's last scan, kept in Library.json (1.10.10).
+    @ObservationIgnored var libraryScans: [String: LibraryFile.Scan] = [:]
     @ObservationIgnored var settingsWritable = true
     @ObservationIgnored var warnedNotesReadOnly = false
 
@@ -383,7 +385,7 @@ final class AppModel {
     private func openLibrary() async {
         let libraryURL = folder.library
         let knownDrives = drives
-        let (opening, legacy, found, prebuilt) = await Task.detached(priority: .userInitiated) {
+        let (opening, legacy, found, prebuilt, upgraded) = await Task.detached(priority: .userInitiated) {
             // A library that's there and can't be used is never replaced by an empty one (see
             // `LibraryOpening`).
             let opening = LibraryOpening.open(libraryURL)
@@ -398,10 +400,17 @@ final class AppModel {
             let prebuilt = AppModel.makeItems(films: ordered, online: Set(found.keys)) { film in
                 film.tmdb.map { MoodClassifier.moods(genres: $0.genreNames, keywords: $0.keywordNames, runtime: $0.runtime) } ?? []
             }.items
-            return (opening, legacy, found, prebuilt)
+            // Opened from an older format and upgraded (`LibraryMigration`): written back in this one.
+            let header = (try? Data(contentsOf: libraryURL)).flatMap { try? JSONStore.decode(LibraryVersionHeader.self, from: $0) }
+            let upgraded = opening.writable && opening.file != nil && (header?.version ?? LibraryFile.currentVersion) < LibraryFile.currentVersion
+            return (opening, legacy, found, prebuilt, upgraded)
         }.value
         let library = opening.file
         applyLibraryOpening(opening)
+        libraryScans = opening.file?.scans ?? [:]
+        // An older library upgraded on opening is written back in the new format (atomically, by the
+        // ordinary save: until then the file on disk is the old one, untouched).
+        if upgraded { scheduleSave(.library) }
 
         var loaded = library?.films ?? []
         // Lookups that failed or found nothing last time are retried (the file-name reader may
