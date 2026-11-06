@@ -455,7 +455,7 @@ public struct TechSpecs: Equatable, Sendable {
                         let clauses = wholeOther || triggers.contains(where: { lowered.contains($0) })
                             ? ClauseProduction(sentence, main: main, title: title) { namesOther($0) } : nil
                         let confined = wholeOther && !contextOther && (clauses.map { $0.confined && !$0.other.isEmpty } ?? false)
-                        let otherFilm = (wholeOther && !confined) || contextOther
+                        let otherFilm = (wholeOther && !confined) || contextOther || clauses?.subjectIsOther == true
                         let clauseMain = clauses.map { $0.other.isEmpty ? main : $0.map.blanking($0.other, in: main) } ?? main
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."

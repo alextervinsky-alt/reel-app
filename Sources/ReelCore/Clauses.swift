@@ -233,6 +233,9 @@ public struct ClauseProduction: Sendable {
     /// Whether every mention of another production in the sentence is in a dependent clause, and
     /// something is left: the sentence's own statement is free of it.
     public let confined: Bool
+    /// A clause naming another production says what the sentence's subject is ("Glass Rivers, her previous
+    /// feature, was shot on 16mm"): the whole statement is that production's.
+    public let subjectIsOther: Bool
 
     /// `signal`: whether a piece of text is about another production (the sentence-level test, applied
     /// to a clause).
@@ -296,7 +299,7 @@ public struct ClauseProduction: Sendable {
         // ("Glass Rivers, her previous feature, was shot on 16mm", "Glass Rivers (her 2019 debut) was…").
         // (Not "who/whom": a person, "Colourist Ann Bloom, who also worked on <Other>, graded…".)
         let chars = Array(sentence)
-        let subjectIsOther = other.contains { clause in
+        subjectIsOther = other.contains { clause in
             guard clause.role == .appositive || clause.role == .parenthetical
                     || (clause.role == .relative && map.text(clause).range(of: #"^\W*(?:(?:with|for|on|in|of|by|from|to|through)\s+)?(?:who|whom|whose)\b"#,
                                                                             options: [.regularExpression, .caseInsensitive]) == nil) else { return false }
