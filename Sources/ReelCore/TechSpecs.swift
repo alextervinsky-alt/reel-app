@@ -505,6 +505,11 @@ public struct TechSpecs: Equatable, Sendable {
                                                                     source: text.source, reason: .delivery))
                                             continue
                                         }
+                                        // Only the image as made (captured, framed, extracted) lets a ratio through
+                                        // without shooting words: a presentation in cinemas, or a release's version
+                                        // of some sequences ("The IMAX release expanded the ratio to 1.90:1 for some
+                                        // scenes"), says what was shown, not how the film was made.
+                                        guard [.capture, .framing, .extraction].contains(stage) || (stage == .sequence && !aboutRelease) else { continue }
                                     }
                                     // Inside a part comparing the film with another production, or a clause about
                                     // another production (1.10.10): that one's.
