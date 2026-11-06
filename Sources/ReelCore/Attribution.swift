@@ -314,12 +314,14 @@ public struct PageContext: Equatable, Sendable {
               !names(pageTitle, title: title) else { return nil }
         // A title's shape: up to six words, each capitalised or a small word, and no verb (a quoted remark,
         // "'IMAX Was the Only Choice'", isn't a production).
-        let words = named.split(separator: " ")
-        guard (1...6).contains(words.count),
+        let words = named.split(separator: " ").filter { !["–", "—", "-", "&", ":"].contains(String($0)) }
+        guard (1...9).contains(words.count),
               words.allSatisfy({ $0.first?.isUppercase == true || $0.first?.isNumber == true
-                  || ["of", "the", "a", "an", "and", "in", "on", "to", "for", "at", "by", "&"].contains($0.lowercased()) }),
-              named.range(of: #"\b(?:is|are|was|were|has|have|had|did|does|do|will|can|could|would|should)\b"#,
-                          options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
+                  || ["of", "the", "a", "an", "and", "in", "on", "to", "for", "at", "by", "with", "or", "from", "into"].contains($0.lowercased()) }),
+              // A quoted remark has a subject and a verb ("I Was Never Sure", "We Had One Shot"): a title can
+              // have a verb ("There Will Be Blood"), but not a speaker.
+              named.range(of: #"^(?:I|We|You|He|She|They|It)\s+\w+|\b(?:I|We|You|He|She|They)\s+(?:is|are|was|were|has|have|had|did|do|will|can|could|would|should|shot|used)\b"#,
+                          options: .regularExpression) == nil else { return nil }
         return named
     }
 

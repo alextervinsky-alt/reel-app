@@ -347,7 +347,7 @@ public struct CraftIndex: Codable, Equatable, Sendable {
     /// host without "www.", no trailing "/", no tracking tags, an archived copy as its article, a site's
     /// known aliases as one), so an article is one article whichever of its addresses was read.
     public static func articleIdentity(_ url: URL) -> String {
-        CameraSources.identity(url)
+        CameraSources.identity(url).lowercased()
     }
 
     /// A tag the new reading no longer has, and why it wasn't kept.

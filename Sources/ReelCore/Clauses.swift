@@ -136,7 +136,7 @@ public struct ClauseMap: Sendable {
             let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
             let words = segment.split(separator: " ")
             guard !words.isEmpty, words.count <= 5 else { return false }
-            if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|a|an|the|his|her|their|its|our|my)\b"#,
+            if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|a|an|the|his|her|their|its|our|my|this|these|here|there|it|that)\b"#,
                              options: [.regularExpression, .caseInsensitive]) != nil { return false }
             return segment.range(of: ClauseProduction.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
         }
@@ -250,7 +250,10 @@ public struct ClauseProduction: Sendable {
     /// A verb of the sentence's own statement (enough to tell whether a clause comes before it).
     static let finiteVerb = #"\b(?:is|are|was|were|has|have|had|did|does|do|shot|used|chose|opted|lit|filmed|photographed|captured|lensed|graded|helped|became|went|made|took|gave|got|said|says|\w{3,}ed)\b"#
 
-    public init(_ sentence: String, main: String? = nil, title: String? = nil, signal: (String) -> Bool) {
+    /// `own`: whether a piece of text names this film or one of its people (then the subject is this film's,
+    /// whatever an aside says: "Jane Doe (Glass Rivers, 2015) shot The Quiet Harbour on 35mm").
+    public init(_ sentence: String, main: String? = nil, title: String? = nil, own: (String) -> Bool = { _ in false },
+                signal: (String) -> Bool) {
         let map = ClauseMap(sentence)
         let mainChars = Array(main ?? sentence)
         let comparisons = map.clauses.filter { $0.role == .comparison }
@@ -306,6 +309,7 @@ public struct ClauseProduction: Sendable {
             let before = String(chars[comparisonEnd..<min(clause.lower, chars.count)])
             return before.contains(where: \.isLetter)
                 && before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
+                && !own(before) && !own(sentence)
         }
         confined = !independentSignal && !subjectIsOther && independentText.filter(\.isLetter).count >= 12
     }
@@ -369,6 +373,11 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         // (Not "presented in its theatrical 2.35:1": a presentation that may be any release stays undecided.)
         pattern: #"\b(?:theatrical(?:ly)? (?:release|run|projection|prints?|exhibition)|released theatrically|in (?:cinemas|theaters|theatres)|projected|projection)\b"#,
         options: [.caseInsensitive])
+    /// A release after the capture words, in the same lead ("shot on 35mm and released in cinemas at 1.85:1").
+    static let releasedCue = try! NSRegularExpression(pattern: #"\b(?:released|distributed|exhibited|presented|shown|screened|projected)\b"#,
+                                                      options: [.caseInsensitive])
+    /// TV or other protection: not the film's frame.
+    public static let protectedCue = try! NSRegularExpression(pattern: #"\bprotect(?:ed|ing|ion)?\s+(?:for|to)\s+$"#, options: [.caseInsensitive])
     static let captureCue = try! NSRegularExpression(
         pattern: #"\b(?:shot|shoot|shooting|filmed|filming|photographed|captured|capturing|lensed|recorded|acquired|originated|sensor|gate|negative)\b"#,
         options: [.caseInsensitive])
@@ -387,7 +396,8 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         func has(_ regex: NSRegularExpression, _ text: String) -> Bool { ClaimFrame.has(regex, text) }
         // Shot in so many words, in its own clause before it: capture, whatever a later clause says of a
         // release ("shot on 35mm film which Criterion later restored").
-        if has(captureCue, lead), !has(homeMediaCue, lead), !has(streamingCue, lead), !has(restorationCue, lead) {
+        if has(captureCue, lead), !has(homeMediaCue, lead), !has(streamingCue, lead), !has(restorationCue, lead),
+           !has(theatricalCue, lead), !has(releasedCue, lead) {
             return isRatio ? (has(extractionCue, scope) ? .extraction : .capture) : .capture
         }
         // A later release, by its own words or its section's.

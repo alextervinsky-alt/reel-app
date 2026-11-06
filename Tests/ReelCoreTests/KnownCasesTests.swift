@@ -219,7 +219,38 @@ final class KnownCasesTests: XCTestCase {
     func testRatiosInOneSentenceKeepTheirOwnStages() {
         let specs = read("We shot on 35mm, composed for 2.39:1 and protected for 1.78:1.")
         XCTAssertEqual(specs.accepted.first { $0.name == "2.39:1" }?.stage, .framing)
-        XCTAssertNotEqual(specs.accepted.first { $0.name == "1.78:1" }?.stage, .framing)
+        XCTAssertFalse(specs.accepted.contains { $0.name == "1.78:1" }, "a protection ratio isn't the film's frame")
+    }
+
+    // MARK: Independent review, round 2
+
+    func testAnAsideNeverTakesTheFilmsOwnStatement() {
+        accepts("Jane Doe (Glass Rivers, 2015) shot The Quiet Harbour on 35mm.", ["35 mm"])
+        accepts("The Quiet Harbour, the sequel to Glass Rivers (2015), was shot on 35mm.", ["35 mm"])
+    }
+
+    func testACollectionTitleAsAPlainWordIsNoSection() {
+        let text = TechSpecs.Text(source: "Lens Weekly", sections: [
+            FilmArticle.Section(id: 0, title: "Making It Real", paragraphs: ["Doe shot the whole film on the Alexa 35."]),
+        ], isInterview: true)
+        let specs = TechSpecs.read(texts: [text], cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022,
+                                   title: "It Chapter Three", otherTitles: ["It", "It Chapter Two"])
+        XCTAssertTrue(specs.accepted.contains { $0.name.contains("Alexa 35") }, "\(specs.judged)")
+    }
+
+    func testThisFilmAfterAnotherProductionsRelativeClauseIsThisFilms() {
+        accepts("Doe again chose Kodak, as she had for Glass Rivers, which was shot on 16mm, and this one on 35mm.", ["35 mm"])
+    }
+
+    func testRealTitlesInAHeadlineAreProductions() {
+        XCTAssertEqual(PageContext.headlineProduction("‘There Will Be Blood’: lighting the oil fields", title: film), "There Will Be Blood")
+        XCTAssertEqual(PageContext.headlineProduction("‘Gone with the Wind’ at 85", title: film), "Gone with the Wind")
+        XCTAssertNil(PageContext.headlineProduction("Doe: ‘We Had One Shot at It’", title: film))
+    }
+
+    func testARatioAfterAReleaseIsNotAsShot() {
+        let specs = read("It was shot on 35mm and released in cinemas at 1.85:1.")
+        XCTAssertNotEqual(specs.accepted.first { $0.name == "1.85:1" }?.stage, .capture)
     }
 }
 
