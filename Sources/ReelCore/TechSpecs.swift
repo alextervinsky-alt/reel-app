@@ -323,7 +323,9 @@ public struct TechSpecs: Equatable, Sendable {
                 // unless a statement in it names this film as its subject. A heading alone ("On Collaboration",
                 // "Making Of") never is.
                 if !section.title.isEmpty, !namesTitle(section.title, title: title ?? ""),
-                   (pageOthers + otherTitles).contains(where: { namesTitle(section.title, title: $0) || TitleMatch.names(section.title, title: $0) }) {
+                   // (The page's own productions only: a collection's title as a bare word — "It", "Saw" — is
+                   // too often an ordinary word in a heading.)
+                   pageOthers.filter({ $0.count >= 4 }).contains(where: { namesTitle(section.title, title: $0) || TitleMatch.names(section.title, title: $0) }) {
                     answeringAboutAnother = section.paragraphs.count + 1
                 }
                 let heading = section.title.lowercased()
@@ -453,7 +455,8 @@ public struct TechSpecs: Equatable, Sendable {
                         // another production's name is that production's, even when the sentence isn't.
                         // (Only where it can matter: gear named, or the sentence set aside as a whole.)
                         let clauses = wholeOther || triggers.contains(where: { lowered.contains($0) })
-                            ? ClauseProduction(sentence, main: main, title: title) { namesOther($0) } : nil
+                            ? ClauseProduction(sentence, main: main, title: title,
+                                               own: { part in namesTitle(part, title: title ?? "") || mentions(names + directorNames, in: part, generic: false) }) { namesOther($0) } : nil
                         let confined = wholeOther && !contextOther && (clauses.map { $0.confined && !$0.other.isEmpty } ?? false)
                         let otherFilm = (wholeOther && !confined) || contextOther || clauses?.subjectIsOther == true
                         let clauseMain = clauses.map { $0.other.isEmpty ? main : $0.map.blanking($0.other, in: main) } ?? main
@@ -2065,7 +2068,7 @@ public struct TechSpecs: Equatable, Sendable {
         for match in possessiveTitle.matches(in: sentence, range: range) {
             guard let found = Range(match.range(at: 1), in: sentence), let named = Range(match.range(at: 2), in: sentence) else { continue }
             let surname = sentence[found].lowercased()
-            if companies.contains(surname) || corporateNouns.contains(surname) { continue }
+            if companies.contains(surname) { continue }
             if !own.isEmpty, own.hasPrefix(sentence[named].lowercased()) { continue }
             // A maker's product, not a film (1.10.10): the possessive's owner is a firm ("Red Digital Cinema
             // Camera Company's RED MX"), or what it owns is gear named by the same rules that find gear and
@@ -2075,6 +2078,8 @@ public struct TechSpecs: Equatable, Sendable {
             let gearFirst = rules.compactMap { rule in
                 rule.found(in: possessed).first { possessed.distance(from: possessed.startIndex, to: $0.at.lowerBound) == 0 }?.at
             }.max { possessed.distance(from: $0.lowerBound, to: $0.upperBound) < possessed.distance(from: $1.lowerBound, to: $1.upperBound) }
+            // (A firm's possessive only for gear: "The Weinstein Company's Glass Rivers" is a film.)
+            if gearFirst != nil, corporateNouns.contains(surname) { continue }
             if let gearFirst {
                 let rest = String(possessed[gearFirst.upperBound...])
                 if rest.range(of: #"^(?:\s+(?:digital|film|motion picture|cinema|large[- ]format))?(?:\s+(?:cameras?|lens(?:es)?|format|process|system|stock|sensor|ratio|primes?))?\s*(?:[,.;:)]|$|\s+(?:and|with|for|on|in|to|was|were|is|which|that|chosen|used)\b)"#,

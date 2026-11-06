@@ -803,6 +803,8 @@ public enum ClaimFrame {
             // that may be any release stays undecided.
             let stage = FormatStage.isRatio(name) ? FormatStage.of(folded, at: gear, name: name, context: context) : nil
             if stage == .homeMedia || stage == .restoration || stage == .streaming { return .delivery }
+            // A ratio the frame is protected for (TV) isn't the film's frame: undecided (1.10.10).
+            if FormatStage.isRatio(name), has(FormatStage.protectedCue, near) { return .presentation }
             // (A relative clause after the gear about its own history isn't its release: "Cooke Panchro
             // lenses that had been restored by a lens house", 1.10.10.)
             let ownScope = clause + " " + (after.range(of: #"\b(?:that|which|who)\b"#, options: [.regularExpression, .caseInsensitive])

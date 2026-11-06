@@ -221,7 +221,8 @@ public enum SourceReconciliation {
                 settled.reason = old.reason
             }
             if settled.status == .carried || settled.status == .pending {
-                if settled.misses > CraftIndex.maxRetries {
+                let allowance = settled.reason?.hasPrefix("its article on") == true ? 2 * CraftIndex.maxRetries : CraftIndex.maxRetries
+                if settled.misses > allowance {
                     settled.status = .retired
                     settled.reason = outcome.reason?.hasPrefix("not in what was read") == true
                         ? "no longer in \(old.source) (\(CraftIndex.maxRetries) readings)"
@@ -286,8 +287,9 @@ public enum SourceReconciliation {
             // Its own article wasn't read this time (another article of the site was): not a reading of
             // it at all (1.10.10). Carried, and tried again on the retry schedule.
             if let article = old.article, !input.articles.contains(article) {
-                // (Not a try used: a reading that never read it can't have settled it.)
-                return (.carried, "its article on \(old.site) wasn't read this time", false)
+                // A try used, against a longer allowance (twice `maxRetries`, see `reconcile`): an article
+                // dropped from search or re-filed under a new slug isn't kept for ever.
+                return (.carried, "its article on \(old.site) wasn't read this time", true)
             }
             // Sources are labelled by site, so another article of the same site may have been read
             // in its place: not shown, and retired only when `CraftIndex.maxRetries` readings in a row
