@@ -16,9 +16,9 @@ jobs:
         run: |
           set +e
           swift build --build-tests 2>&1 | grep -E "error:|warning:" | grep -v "Tests/" | sort -u | head -60
-          REEL_SEALED=1 swift test --skip-build --filter SealedHoldoutTests 2>&1 | tee test.log > /dev/null
+          REEL_SEALED=1 swift test --skip-build --filter "SealedHoldoutTests|ValidationCorpusTests" 2>&1 | tee test.log > /dev/null
           code=${PIPESTATUS[0]}
           grep -E "error:" test.log | head -80
           grep -E 'Executed [0-9]+ tests' test.log | tail -1
-          grep -E "^SEALED\| " test.log
+          grep -E "^(SEALED|BENCH)\| (validation[:, ]|films)" test.log
           exit $code

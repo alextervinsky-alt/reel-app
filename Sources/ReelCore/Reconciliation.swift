@@ -26,11 +26,6 @@ extension CraftIndex {
             /// Read again and ruled out (the passage is about another production, denies it, is a
             /// plan or a hypothetical…), or the passage is no longer there: support withdrawn.
             case retired
-            /// Recorded by a Reel before 1.10.9, which kept no passage for gear names (1.10.10): it
-            /// can't be looked up in its source, so it is never retired for not being found. Shown
-            /// apart, as previously recorded and awaiting verification; confirmed when a reading finds
-            /// it, retired only when a reading's own text denies it.
-            case legacy
         }
 
         public let name: String
@@ -49,12 +44,9 @@ extension CraftIndex {
         public var rules: Int
         /// Readings in a row it's been carried or pending without being settled.
         public var misses: Int = 0
-        /// The article it was read from, by its canonical address (1.10.10; nil for a finding read
-        /// before, or from Wikipedia): what tells two articles of one site apart.
-        public var article: String? = nil
 
         public init(name: String, kind: String, text: String?, source: String, status: Status, reason: String? = nil,
-                    since: Date, rules: Int, misses: Int = 0, article: String? = nil) {
+                    since: Date, rules: Int, misses: Int = 0) {
             self.name = name
             self.kind = kind
             self.text = text
@@ -64,21 +56,13 @@ extension CraftIndex {
             self.since = since
             self.rules = rules
             self.misses = misses
-            self.article = article
         }
 
         /// What makes two findings the same: the name (by its canonical form) and the source.
-        /// (And the article, 1.10.10: the same name read in two articles of one site is two findings.)
-        var key: String { kind + "|" + TitleMatch.key(name) + "|" + source + "|" + (article ?? "") }
-        /// The passage's fingerprint: its first 90 letters and digits, the article and the name.
-        public var fingerprint: String {
-            (article ?? source) + "|" + TitleMatch.key(name) + "|" + String(SourceReconciliation.squash(text ?? "").prefix(90))
-        }
+        var key: String { kind + "|" + TitleMatch.key(name) + "|" + source }
         var site: String { CraftIndex.site(of: source) }
         /// Shown as found: confirmed now, or carried while its source can't be read.
         public var supports: Bool { status == .confirmed || status == .carried }
-        /// Shown apart, as recorded but not verified by this reading (1.10.10): never invisible.
-        public var awaitingVerification: Bool { status == .pending || status == .legacy }
     }
 
     /// The findings behind a reading by 1.10.9 rules or later, and those it kept or retired; nil
@@ -117,8 +101,6 @@ public enum SourceReconciliation {
         public var read: [String: [String]]
         /// Pages fetched in full but set aside (another film's, a passing mention…), by site.
         public var fetched: [String: [[String]]]
-        /// The articles read or fetched in full, by canonical address (1.10.10).
-        public var articles: Set<String> = []
         /// Sites that didn't answer, and sites whose page came incomplete.
         public var unanswered: Set<String>
         public var incomplete: Set<String>
@@ -175,7 +157,7 @@ public enum SourceReconciliation {
         var seen = Set<String>()
         for spec in input.accepted {
             let claim = CraftIndex.Claim(name: spec.name, kind: spec.kind.rawValue, text: spec.evidence.map { String($0.prefix(400)) },
-                                         source: spec.source ?? "Wikipedia", status: .confirmed, since: now, rules: input.rules, article: spec.article)
+                                         source: spec.source ?? "Wikipedia", status: .confirmed, since: now, rules: input.rules)
             if seen.insert(claim.key).inserted { claims.append(claim) }
         }
         // A Shot on tag, once per source that says it: every accepted statement of capture that gives
@@ -185,7 +167,7 @@ public enum SourceReconciliation {
             for tag in CraftIndex.shotOn(spec).intersection(tagsFound).sorted(by: { $0.rawValue < $1.rawValue }) {
                 guard let text = spec.evidence else { continue }
                 let claim = CraftIndex.Claim(name: tag.rawValue, kind: "shotOn", text: String(text.prefix(400)), source: spec.source ?? "Wikipedia",
-                                             status: .confirmed, since: now, rules: input.rules, article: spec.article)
+                                             status: .confirmed, since: now, rules: input.rules)
                 if seen.insert(claim.key).inserted { claims.append(claim) }
             }
         }
@@ -197,8 +179,7 @@ public enum SourceReconciliation {
         guard let previous else { return claims }
         // 2. Each earlier finding, by its own source.
         for old in earlier(previous) where old.status != .retired {
-            let confirmedAgain = claims.firstIndex { $0.status == .confirmed && $0.kind == old.kind && sameName($0.name, old.name) && $0.source == old.source
-                && (old.article == nil || $0.article == nil || $0.article == old.article) }
+            let confirmedAgain = claims.firstIndex { $0.status == .confirmed && $0.kind == old.kind && sameName($0.name, old.name) && $0.source == old.source }
             if let index = confirmedAgain {
                 // Confirmed again: keep its history.
                 claims[index].since = min(claims[index].since, old.since)
@@ -211,9 +192,6 @@ public enum SourceReconciliation {
             settled.status = outcome.status
             settled.reason = outcome.reason
             settled.misses = old.misses + (outcome.counts ? 1 : 0)
-            // A finding with no passage stays as it was recorded until a reading confirms or denies it
-            // (1.10.10): not finding it again disproves nothing.
-            if outcome.status == .legacy { settled.misses = old.misses }
             // A finding not shown (pending) stays not shown while its source can't be read: an outage
             // never brings back what a full reading couldn't settle.
             if old.status == .pending, outcome.status == .carried {
@@ -254,15 +232,10 @@ public enum SourceReconciliation {
     /// waiting to be read for this film (a passage still on the page is never retired for want of a
     /// settled reading: it stays pending, not shown).
     static func outcome(of old: CraftIndex.Claim, input: Input) -> (status: CraftIndex.Claim.Status, reason: String?, counts: Bool) {
-        // A name kept from before 1.10.9 (no passage, no source): a confirmation settles it, and a
-        // denial in this reading's own text retires it; nothing else does (1.10.10).
+        // A name kept from before 1.10.9 (no passage, no source): only a confirmation settles it.
         guard let passage = old.text, !old.source.isEmpty else {
             let named = input.accepted.contains { sameName($0.name, old.name) }
-            if named { return (.confirmed, nil, false) }
-            if let denial = input.judged.first(where: { sameName($0.name, old.name) && $0.reason == .denied }) {
-                return (.retired, denial.reason.label + " (\(denial.source ?? "Wikipedia"))", false)
-            }
-            return (.legacy, "recorded by rules \(old.rules), before passages were kept; awaiting verification", false)
+            return named ? (.confirmed, nil, false) : (.pending, "found by rules \(old.rules); no passage was kept to read again", true)
         }
         // Worked out from Wikidata or TMDB, not read from a page: the new reading's word stands.
         if old.site == "Wikidata" || old.site == "TMDB" {
@@ -283,11 +256,6 @@ public enum SourceReconciliation {
             // Read in full and the passage isn't there: the page no longer says it (unless its page
             // came incomplete, which isn't a full reading).
             if input.incomplete.contains(old.site) { return (.carried, "\(old.site)'s page came incomplete", true) }
-            // Its own article wasn't read this time (another article of the site was): not a reading of
-            // it at all (1.10.10). Carried, and tried again on the retry schedule.
-            if let article = old.article, !input.articles.contains(article) {
-                return (.carried, "its article on \(old.site) wasn't read this time", true)
-            }
             // Sources are labelled by site, so another article of the same site may have been read
             // in its place: not shown, and retired only when `CraftIndex.maxRetries` readings in a row
             // don't find it (a reading that finds it again confirms it).
@@ -308,9 +276,6 @@ public enum SourceReconciliation {
             return (.confirmed, nil, false)
         }
         if let ruled = input.judged.first(where: { names($0.kind, $0.name) && samePassage($0.evidence, passage) }) {
-            // A reason that holds back (too uncertain, a presentation of unknown stage, not enough
-            // context) disproves nothing: kept, awaiting verification (1.10.10).
-            if ruled.reason.abstains { return (.pending, ruled.reason.label, false) }
             return (.retired, ruled.reason.label, false)
         }
         if let named = input.mentioned.first(where: { names($0.kind, $0.name) && samePassage($0.evidence ?? "", passage) }) {

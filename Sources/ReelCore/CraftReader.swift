@@ -79,12 +79,9 @@ public enum CraftReader {
             || $0.kind == .thin }.map(\.site))
         var shotOn: [ShotOn: CraftIndex.Evidence] = [:]
         for evidence in index.evidence { shotOn[evidence.shotOn] = evidence }
-        var input = SourceReconciliation.Input(accepted: specs.accepted, judged: specs.judged, mentioned: specs.mentioned, shotOn: shotOn, read: read,
-                                               fetched: fetched, unanswered: Set(index.unanswered + (articleFailed ? ["Wikipedia"] : [])),
-                                               incomplete: incomplete, rules: index.version)
-        input.articles = Set(texts.compactMap(\.article) + (reading?.skipped ?? []).filter { !$0.source.paragraphs.isEmpty && $0.limit == nil }
-            .map { CraftIndex.articleIdentity($0.source.url) })
-        return input
+        return SourceReconciliation.Input(accepted: specs.accepted, judged: specs.judged, mentioned: specs.mentioned, shotOn: shotOn, read: read,
+                                          fetched: fetched, unanswered: Set(index.unanswered + (articleFailed ? ["Wikipedia"] : [])),
+                                          incomplete: incomplete, rules: index.version)
     }
 
     /// The film's camera, lighting, colour and VFX people: credited on TMDB, and directors of

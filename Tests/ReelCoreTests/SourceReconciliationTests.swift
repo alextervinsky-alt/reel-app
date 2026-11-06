@@ -120,14 +120,14 @@ final class SourceReconciliationTests: XCTestCase {
     }
 
     /// A reading from before 1.10.9 stored no passages for its gear names: those can only be
-    /// confirmed again, never ruled out by a passage. 1.10.10: until then they're legacy (shown apart,
-    /// awaiting verification), and never retired for not being found (`KnowledgeIntegrityTests`).
+    /// confirmed again, never ruled out by a passage; until then they're pending, and retired after
+    /// `maxRetries` readings that don't confirm them.
     func testANameFromBeforeIsPendingUntilConfirmed() {
         var old = CraftIndex(readAt: then, shotOn: [], names: ["Technocrane", "Kino Flos"])
         old.version = 17
         let result = SourceReconciliation.reconcile(previous: old, with: input(accepted: [spec("Kino Flos", evidence: "Kino Flos lit the corridor.")],
                                                                                read: ["Lens Weekly": ["Kino Flos lit the corridor."]]), now: now)
-        XCTAssertEqual(outcome(result, "Technocrane")?.status, .legacy)
+        XCTAssertEqual(outcome(result, "Technocrane")?.status, .pending)
         XCTAssertEqual(outcome(result, "Kino Flos")?.status, .confirmed)
         XCTAssertEqual(result.filter { $0.name == "Kino Flos" }.count, 1, "confirmed once, not twice")
     }
@@ -171,9 +171,9 @@ final class SourceReconciliationTests: XCTestCase {
         try original.write(to: file)
         _ = try JSONDecoder().decode(LibraryFile.self, from: Data(contentsOf: file))
         XCTAssertEqual(try Data(contentsOf: file), original)
-        // Written by this Reel: version 6, which older Reels treat as newer and never write over.
+        // Written by this Reel: version 5, which a 1.10.8 (version 4) Reel treats as newer and never writes over.
         let written = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(LibraryFile(films: decoded.films))) as? [String: Any])
-        XCTAssertEqual(written["version"] as? Int, 6)
+        XCTAssertEqual(written["version"] as? Int, 5)
     }
 
     /// End to end through the reader: an earlier finding whose page is read again and now says it

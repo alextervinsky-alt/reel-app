@@ -35,7 +35,7 @@ extension AppModel {
             }
             // One that's there and couldn't be used isn't replaced (see `LibraryOpening`).
             guard libraryWritable else { return }
-            let snapshot = LibraryFile(films: films, writtenBy: Self.writtenBy, scans: libraryScans.isEmpty ? nil : libraryScans)
+            let snapshot = LibraryFile(films: films)
             writer.enqueue {
                 do { try JSONStore.save(snapshot, to: folder.library) } catch { report(error) }
             }
@@ -75,17 +75,4 @@ extension AppModel {
         lists.flush()
     }
 }
-
-extension AppModel {
-    /// This Reel, as Library.json records who wrote it: "1.10.10 (380)".
-    nonisolated static var writtenBy: String {
-        let info = Bundle.main.infoDictionary
-        let version = info?["CFBundleShortVersionString"] as? String ?? "development"
-        let build = info?["CFBundleVersion"] as? String
-        return build.map { "\(version) (\($0))" } ?? version
-    }
-}
-
-/// Just the version of a library file (to tell whether opening it upgraded it).
-struct LibraryVersionHeader: Decodable { let version: Int }
 #endif

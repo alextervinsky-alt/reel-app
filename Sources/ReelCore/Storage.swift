@@ -125,7 +125,7 @@ public enum LibraryOpening: Equatable, Sendable {
     public static func decide(_ data: Data) -> LibraryOpening {
         // Read once in the usual case; only a file that isn't this Reel's library is looked at again.
         if let file = try? JSONStore.decode(LibraryFile.self, from: data) {
-            return file.version > LibraryFile.currentVersion ? .newer(version: file.version, file) : .loaded(LibraryMigration.upgrade(file))
+            return file.version > LibraryFile.currentVersion ? .newer(version: file.version, file) : .loaded(file)
         }
         struct Header: Decodable { let version: Int? }
         if let version = (try? JSONStore.decode(Header.self, from: data))?.version, version > LibraryFile.currentVersion {

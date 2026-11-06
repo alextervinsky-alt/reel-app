@@ -248,7 +248,6 @@ extension AppModel {
         let stamp = announcing ? now : (drives[index].arrivalsSince ?? now)
         let before = films.filter { $0.driveID == id }
         setFilms(LibraryMerge.apply(scan: result.files, driveID: id, to: films, now: stamp, keepingUnseen: verdict != .apply))
-        libraryScans[id] = LibraryFile.Scan(at: now, complete: verdict == .apply, films: films.filter { $0.driveID == id }.count)
         // A file replaced in place by one of another size is still that film: its fix and notes follow.
         carryOver(LibraryMerge.resized(before: before, after: films.filter { $0.driveID == id }))
         // Files that just appeared may settle fixes and notes saved under a file name alone.

@@ -168,7 +168,7 @@ public struct ComparisonFrame: Sendable {
     public let main: String
 
     static let leading = try! NSRegularExpression(
-        pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+|very\s+much\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|he|she|they|we|i|it|was|did|had|has|before|previously|earlier)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|following\b)[^;]{0,160}?(?:,\s*|\s[–—]\s[^–—;]{2,160}?\s[–—]\s)"#,
+        pattern: #"^\W*(?:and\s+|but\s+)?(?:just\s+|much\s+|exactly\s+|very\s+much\s+)?(?:(?:as|like)\s+(?:with|on|in|for|during|he|she|they|we|i|it|was|did|had|has|before|previously|earlier)\b|unlike\b|compared\s+(?:to|with)\b|in contrast\s+(?:to|with)\b|similar\s+to\b|following\b)[^;]{0,160}?,\s*"#,
         options: [.caseInsensitive])
     static let leadingWithClause = try! NSRegularExpression(
         pattern: #"^\W*(?:unlike|like|as with|as on|compared (?:to|with))\s+[^,;]{1,80},\s*(?:which|who|where)\s+[^,;]{1,120},\s*"#,
@@ -345,15 +345,11 @@ public struct ComparisonFrame: Sendable {
 /// "He avoided Steadicam, instead deploying a crane" rejects Steadicam and keeps the crane.
 public enum ClaimReason: String, Codable, Sendable, CaseIterable {
     case otherProduction, denied, hypothetical, abandonedPlan, testOnly, otherPractice, simulated, environment, delivery,
-         productCapability, presentation, uncertain,
-         /// 1.10.10: a definition or general information about the gear ("ENR is a silver retention process
-         /// named for its inventor…"), and a statement that names it without saying it was used here (a crew
-         /// member's job title, "his dolly grip").
-         definition, insufficientContext
+         productCapability, presentation, uncertain
 
     /// Rejected outright, or left undecided (abstained): a presentation ratio or a statement too
     /// uncertain to settle is neither confirmed nor ruled out.
-    public var abstains: Bool { self == .presentation || self == .uncertain || self == .insufficientContext }
+    public var abstains: Bool { self == .presentation || self == .uncertain }
 
     public var label: String {
         switch self {
@@ -369,8 +365,6 @@ public enum ClaimReason: String, Codable, Sendable, CaseIterable {
         case .productCapability: "what a product can do, not what this film used"
         case .presentation: "how it was presented, not necessarily how it was shot"
         case .uncertain: "too uncertain to settle"
-        case .definition: "a definition or general information, not a statement of use"
-        case .insufficientContext: "named without saying it was used on this film"
         }
     }
 }
@@ -445,17 +439,6 @@ public enum ClaimFrame {
         return tail
     }
 
-    /// What follows the gear, as far as it still says something of the gear (1.10.10): a relative clause
-    /// with a subject of its own ("…5247 stock with which Soviet laboratories were not very familiar",
-    /// "…the stock that the lab had never seen") is about that subject, not the gear.
-    static func ownPredicate(_ after: String) -> String {
-        if let cut = after.range(of: #"\b(?:(?:with|of|for|to|in|on|by|about|from)\s+(?:which|whom)|whose)\b|\b(?:which|that|who|whom)\s+(?!(?:was|were|is|are|had|has|have|would|could|never|wasn|weren|isn|aren|did|didn)\b)(?:the\s+|a\s+|an\s+|his\s+|her\s+|their\s+|our\s+)?[a-z]+\s+(?:[a-z]+\s+)?(?:was|were|is|are|had|have|has|did|didn|would|could|knew|know|found|saw)\b"#,
-                                options: [.regularExpression, .caseInsensitive]) {
-            return String(after[..<cut.lowerBound])
-        }
-        return after
-    }
-
     static func has(_ regex: NSRegularExpression, _ text: String) -> Bool {
         regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
@@ -488,7 +471,7 @@ public enum ClaimFrame {
 
     /// A plan or intention, unless the sentence says it was carried out.
     static let plan = try! NSRegularExpression(
-        pattern: #"\b(?:had\s+)?(?:originally|initially|first|once)\s+(?:intended|planned|meant|hoped|wanted|set out|proposed|considered|thought)\b|\b(?:had\s+)?(?:intended|planned|meant|proposed|envisioned|envisaged)\s+(?:to|on)\s+(?:"# + planVerbs + #")\b|\b(?:the|our|my|his|her|their|an?)\s+(?:original\s+|initial\s+|early\s+|first\s+)?(?:plan|intention|proposal)\s+(?:was|had been|is)\s+(?:always\s+|originally\s+|initially\s+)?to\s+(?:"# + planVerbs + #")\b|\b(?:was|were)\s+(?:going|supposed|meant|slated)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\bat (?:first|one point)\b[^.;]{0,50}\b(?:wanted|planned|considered|thought|hoped)\b|\bwas to have\b|\b(?:was|were)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\b(?:had\s+)?planned\s+(?:a|an|the|on a|on an)\b|\b(?:priced|costed|budgeted for|got (?:a )?quotes? for)\b|\b(?:early|first|initial)\s+(?:draft|version|plan|idea)\b|\b(?:the\s+)?(?:financiers|producers|studio|network|distributor|executives|investors)\s+(?:wanted|asked for|pushed for|suggested|preferred|first suggested)\b"#,
+        pattern: #"\b(?:had\s+)?(?:originally|initially|first|once)\s+(?:intended|planned|meant|hoped|wanted|set out|proposed|considered|thought)\b|\b(?:had\s+)?(?:intended|planned|meant|proposed|envisioned|envisaged)\s+(?:to|on)\s+(?:"# + planVerbs + #")\b|\b(?:the|our|my|his|her|their|an?)\s+(?:original\s+|initial\s+|early\s+|first\s+)?(?:plan|intention|proposal)\s+(?:was|had been|is)\s+(?:always\s+|originally\s+|initially\s+)?to\s+(?:"# + planVerbs + #")\b|\b(?:was|were)\s+(?:going|supposed|meant|slated)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\bat (?:first|one point)\b[^.;]{0,50}\b(?:wanted|planned|considered|thought|hoped)\b|\bwas to have\b|\b(?:was|were)\s+to\s+(?:be\s+)?(?:"# + planVerbs + #")\b|\b(?:had\s+)?planned\s+(?:a|an|the|on a|on an)\b|\b(?:early|first|initial)\s+(?:draft|version|plan|idea)\b|\b(?:the\s+)?(?:financiers|producers|studio|network|distributor|executives|investors)\s+(?:wanted|asked for|pushed for|suggested|preferred|first suggested)\b"#,
         options: [.caseInsensitive])
     static let planVerbs = "shoot|shooting|shot|film|filming|filmed|use|using|used|capture|capturing|captured|photograph|photographing|photographed|go with|lens|lensed|light|lighting|lit|rent|rely on|employ|work with|frame|grade"
     static let planKept = try! NSRegularExpression(
@@ -578,109 +561,18 @@ public enum ClaimFrame {
         pattern: #"\b(?:some|several|unconfirmed|anecdotal|other)\s+(?:reports?|accounts?|sources?|stories|people)\s+(?:say|said|suggest|suggested|claim|claimed|have it)\b|\breportedly\b|\ballegedly\b|\brumou?r\w*|\b(?:is|was|were|are)\s+(?:said|rumou?red|reported|thought|believed|supposed)\s+to\b|\bthere\s+(?:may|might|could)\s+(?:be|have been)\b|\b(?:declined|refused)\s+to\s+confirm\b|\b(?:couldn['’]?t|could not|can['’]?t|cannot|nobody\s+(?:we\s+spoke\s+to\s+)?could)\s+confirm\b|\bunconfirmed\b|\bnot sure (?:if|whether)\b|\bi (?:think|believe) (?:there|we|they) (?:may|might)\b"#,
         options: [.caseInsensitive])
 
-    // MARK: 1.10.10
-
-    /// "named for its inventor", "invented by", "developed by…": the gear's history, not its use.
-    static let definitionAfter = try! NSRegularExpression(
-        pattern: #"^\W*(?:[\w-]+\s+){0,2}?(?:named (?:for|after)|invented by|patented by|pioneered by|coined by|so called because|refers to|means|is when|describes)\b"#,
-        options: [.caseInsensitive])
-    /// "<term> is a …", "<term> are …": the gear as what something is.
-    static let definitionBefore = try! NSRegularExpression(pattern: #"^\W*[\w\s'’-]{1,30}\s(?:is|are)\s+(?:a|an)\s+(?:[\w-]+\s+){0,2}$"#,
-                                                       options: [.caseInsensitive])
-    static let definitionNoun = try! NSRegularExpression(pattern: #"^\W*(?:[\w-]+\s+){0,1}?(?:process|technique|method|type|kind|term|system)\b(?!\s+(?:we|i|they|he|she)\b)"#,
-                                                     options: [.caseInsensitive])
-    static let definitionCopula = try! NSRegularExpression(
-        pattern: #"^\s*(?:is|are)\s+(?:a|an)\s+(?:[\w-]+\s+){0,3}?(?:process|technique|method|type|kind|term)\b"#, options: [.caseInsensitive])
-    static let crewRoleAfter = try! NSRegularExpression(pattern: #"^\s*(?:grips?|key grip|dolly grips?)\b"#, options: [.caseInsensitive])
-    /// "…list Lotte Brenner as Steadicam operator": a credit, which names a job, not how a shot was made.
-    static let creditedRole = try! NSRegularExpression(pattern: #"^\s*(?:operators?|ops?|technicians?|techs?|pilots?|grips?|assistants?)\b"#,
-                                                       options: [.caseInsensitive])
-    static let creditWording = try! NSRegularExpression(pattern: #"\b(?:credits?|credited|crew list|listed|lists|names? \w+ as)\b"#,
-                                                        options: [.caseInsensitive])
-    /// "Reports that … are unfounded": a denial of a report.
-    static let reportDenied = try! NSRegularExpression(
-        pattern: #"\b(?:reports?|claims?|rumou?rs?|stories|suggestions?)\s+that\b[^.;]*\b(?:are|is|were|was)\s+(?:(?:simply|entirely|completely)\s+)?(?:unfounded|untrue|false|wrong|incorrect|mistaken|inaccurate|baseless)\b"#,
-        options: [.caseInsensitive])
-    /// "It has been widely reported that…", "word in the lobby was that…": hearsay.
-    static let hearsay = try! NSRegularExpression(
-        pattern: #"\bit (?:has been|was|is|had been) (?:widely |often |sometimes )?(?:reported|rumou?red|said|claimed|suggested)\b|\bword (?:in|around|on) [^.,;]{1,25}\b(?:was|is) that\b"#,
-        options: [.caseInsensitive])
-    /// "Asked whether…, she could not remember": the speaker doesn't know.
-    static let unsure = try! NSRegularExpression(
-        pattern: #"\basked (?:whether|if)\b|\bcould(?:n['’]t| not) (?:remember|recall)\b|\b(?:isn['’]t|wasn['’]t|is not|was not|not) (?:sure|certain)\b|\bdoesn['’]t (?:remember|recall)\b"#,
-        options: [.caseInsensitive])
-    /// A later or other project: "is now prepping a feature that he hopes to shoot on…".
-    static let nextProject = try! NSRegularExpression(
-        pattern: #"\b(?:is|are|was)\s+(?:now\s+|currently\s+)?(?:prepping|preparing|developing|planning|writing|financing)\s+(?:a|an|his|her|their|the)\s+(?:new\s+|next\s+)?(?:feature|film|project|movie|series|short)\b|\b(?:his|her|their)\s+next\s+(?:feature|film|project|movie)\b"#,
-        options: [.caseInsensitive])
-    /// Something a kind of look is taken for: "often mistaken for bleach bypass", "critics called bleach bypass".
-    static let takenFor = try! NSRegularExpression(
-        pattern: #"\b(?:mistaken|taken|confused)\s+for\s+(?:a\s+|an\s+)?$|\b(?:critics|people|reviewers|audiences|viewers)\s+(?:called|call|assumed?|thought)\s+(?:was\s+|it\s+was\s+)?(?:a\s+|an\s+)?$"#,
-        options: [.caseInsensitive])
-    /// "carries a pair of … on every job".
-    static let everyJob = try! NSRegularExpression(pattern: #"^[^.;]{0,40}\b(?:on|for|in)\s+(?:every|each|all (?:his|her|their|my|our))\s+(?:jobs?|shoots?|films?|projects?|shows?|productions?)\b"#,
-                                                  options: [.caseInsensitive])
-    static let alwaysUses = try! NSRegularExpression(
-        pattern: #"\b(?:i|we|he|she|they)\s+always\s+(?:use|uses|shoot|shoots|carry|carries|put|puts|reach for|reaches for|have|has|keep|keeps)\b(?![^.;]*\b(?:this (?:film|one|time)|here (?:too|as well)|on this)\b)"#,
-        options: [.caseInsensitive])
-    static let genericBefore = try! NSRegularExpression(pattern: #"\b(?:a|an|any)\s+$"#, options: [.caseInsensitive])
-    static let genericCapabilityAfter = try! NSRegularExpression(
-        pattern: #"^\s*(?:doesn'?t|does not|can'?t|cannot|can|could|won'?t|will not|is (?:not |n't )?(?:able|good|great|better|worse|ideal|limited)|isn'?t (?:able|good|great|ideal))\b"#,
-        options: [.caseInsensitive])
-    /// "One of her decisions was to shoot…": decided.
-    static let decided = try! NSRegularExpression(pattern: #"\b(?:decisions?|choices?|solutions?)\s+(?:was|were|had been)\s+to\b"#,
-                                                  options: [.caseInsensitive])
-    /// "In my mind, I wanted…", "Ideally, …": an intention.
-    static let intention = try! NSRegularExpression(
-        pattern: #"\bin (?:my|his|her|our|their) (?:mind|head)\b[^.;]{0,30}\b(?:wanted|want|intended|imagined|pictured|saw)\b|\bideally\b"#,
-        options: [.caseInsensitive])
-    static let idea = try! NSRegularExpression(pattern: #"\b(?:began|started|start)\s+(?:thinking|to think)\b|\b(?:i|we|he|she|they)\s+(?:could|might)\s+convey\b"#,
-                                               options: [.caseInsensitive])
-    /// Someone's habit, in the present: "Scorsese usually complains about…".
-    static let habitual = try! NSRegularExpression(
-        pattern: #"\b(?:usually|typically|generally|normally|routinely|habitually|often|always)\s+(?:complains?|says|insists|hates|loves|dislikes|avoids|asks|likes|prefers|favou?rs|refuses|objects)\b"#,
-        options: [.caseInsensitive])
-    /// "When he shoots digital, he sets a LUT at the beginning of a show": what someone does on any job.
-    static let habitWhen = try! NSRegularExpression(pattern: #"\bwhen(?:ever)?\s+(?:he|she|they)\s+(?:shoots|works|lights|uses|does)\b"#,
-                                                    options: [.caseInsensitive])
-    static let genericJob = try! NSRegularExpression(pattern: #"\b(?:a|every|each|any)\s+(?:show|film|project|job|picture|production|movie)\b"#,
-                                                     options: [.caseInsensitive])
-    /// "The crane has become second-nature to the two of us".
-    static let secondNature = try! NSRegularExpression(
-        pattern: #"^\W*(?:[\w-]+\s+){0,2}?(?:has|have)\s+(?:long\s+)?become\s+(?:second[- ]nature|a habit|routine|standard|(?:our|his|her|their)\s+(?:go-to|default|habit|signature))\b"#,
-        options: [.caseInsensitive])
-    static let movementStyleAfter = try! NSRegularExpression(pattern: #"^[\s-]{0,2}(?:style|feel|approach|aesthetic)\b"#, options: [.caseInsensitive])
-    /// "…using the digital work to match a real photochemical process".
-    static let matchedDigitally = try! NSRegularExpression(
-        pattern: #"\b(?:digital(?:ly)?|digital work|in post|in the grade|grading|the grade|vfx|plug-?ins?)\b[^.;]{0,40}\b(?:match|matching|matched|replicate|reproduce|recreate)\s+(?:a |an |the )?(?:real |true |genuine |actual |traditional )?(?:[\w-]+\s+){0,1}$"#,
-        options: [.caseInsensitive])
-    static let lessCG = try! NSRegularExpression(
-        pattern: #"\b(?:minimi[sz]\w*|reduc\w*|avoid\w*|without|no|less|fewer|instead of|rather than)\s+(?:the\s+)?(?:amount of\s+|use of\s+|need for\s+)?(?:any\s+)?(?:cgi?|vfx|computer[- ]generated (?:imagery|effects)|digital effects)\b"#,
-        options: [.caseInsensitive])
-    /// "his research indicated that such settings have…": what real places are like.
-    static let researchFound = try! NSRegularExpression(
-        pattern: #"\b(?:research|references?|reference photos|photos|photographs|archives?)\s+(?:\w+\s+)?(?:indicated|showed|shows|suggested|revealed|found)\b"#,
-        options: [.caseInsensitive])
-    static let carriedByRig = try! NSRegularExpression(
-        pattern: #"\b(?:drones?|gimbals?|cranes?|rigs?|arms?|heads?|mounts?|helicopters?|copters?|cars?|vehicles?|bikes?|steadicams?|technocranes?|ronins?|movis?|cable ?cams?|spidercams?)\s+(?:[\w-]+\s+){0,3}?(?:carrying|carries|carried|holding|holds)\s+(?:an?\s+|the\s+|two\s+|its\s+)?(?:[\w-]+\s+){0,2}$"#,
-        options: [.caseInsensitive])
-    static let payloadAfter = try! NSRegularExpression(pattern: #"^\W*(?:[\w-]+\s+){0,2}?payloads?\b"#, options: [.caseInsensitive])
-
     /// The reason the gear at `range` isn't this film's, if the sentence's own words give one.
     /// `kind`: the gear's kind (a ratio's presentation matters, a light in a scene matters).
-    public static func reason(_ sentence: String, at range: Range<String.Index>, kind: TechSpecs.Kind, name: String,
-                              context: String = "") -> ClaimReason? {
+    public static func reason(_ sentence: String, at range: Range<String.Index>, kind: TechSpecs.Kind, name: String) -> ClaimReason? {
         let folded = sentence.replacingOccurrences(of: "’", with: "'")
         guard folded.count == sentence.count else { return nil }
         let gear = folded.index(folded.startIndex, offsetBy: sentence.distance(from: sentence.startIndex, to: range.lowerBound))
             ..< folded.index(folded.startIndex, offsetBy: sentence.distance(from: sentence.startIndex, to: range.upperBound))
         let clause = governing(folded, before: gear, acrossCommas: true)
         let near = governing(folded, before: gear, acrossCommas: false)
-        let after = ownPredicate(following(folded, after: gear))
+        let after = following(folded, after: gear)
         let lowered = name.lowercased()
-        // The gear's own name is a visual treatment ("Film emulation", "a show LUT", "Kodachrome look"):
-        // words of simulation describe what it is, not that it was faked (1.10.10).
-        let isLook = ["lut", "look", "emulation", "simulation", "style"].contains { lowered.contains($0) }
+        let isLook = lowered.contains("lut") || lowered.contains("look")
 
         // Necessity, not denial or a hypothetical: "we couldn't have done it without the Steadicam".
         let needed = has(necessity, clause)
@@ -732,39 +624,16 @@ public enum ClaimFrame {
         if has(deniedAfter, after) { return .denied }
         if has(consideredNot, String(folded[gear.upperBound...])) { return .denied }
 
-        // A definition or the history of the gear (1.10.10): "ENR is a silver retention process named for
-        // its inventor…".
-        let rest = String(folded[gear.upperBound...].prefix(100))
-        if has(definitionAfter, rest) || has(definitionCopula, rest) || (has(definitionBefore, near) && has(definitionNoun, rest)) { return .definition }
-        // A crew member's job ("his dolly grip Lowell Richardson"): every production has one; it says
-        // nothing of how this film was shot.
-        if kind == .support, has(crewRoleAfter, rest) { return .insufficientContext }
-        if has(creditedRole, rest), has(creditWording, clause + " " + rest) { return .insufficientContext }
-        // What a kind of gear can or can't do, said of any one of it ("a tilt, which a Steadicam doesn't do
-        // as well"): a product's capability, not this film's use.
-        if has(genericBefore, near), has(genericCapabilityAfter, rest) { return .productCapability }
-
         // A hypothetical: from its modal to the end of its part of the sentence, commas included.
         let part = governing(folded, before: gear, acrossCommas: true)
         let wholePart = String(folded[segmentStart(folded, before: gear)..<gear.upperBound])
         if !needed, has(hypothetical, wholePart) || has(hypothetical, part) { return .hypothetical }
 
         // A plan, unless it's said to have been carried out.
-        // ("One of her decisions was to shoot on film": a decision taken, not a plan, 1.10.10.)
-        let planned = decided.stringByReplacingMatches(in: wholePart, range: NSRange(wholePart.startIndex..., in: wholePart), withTemplate: "decided to")
-        if has(plan, planned) || has(intention, wholePart), !has(planKept, String(folded[gear.upperBound...])) { return .abandonedPlan }
-        // An idea being thought through, not something done ("I began thinking that I could convey the
-        // conflict… between artificial light and natural light").
-        if has(idea, wholePart) { return .insufficientContext }
+        if has(plan, wholePart), !has(planKept, String(folded[gear.upperBound...])) { return .abandonedPlan }
 
-        // A report denied ("Reports that … are unfounded").
-        if has(reportDenied, folded) { return .denied }
         // Reported, rumoured, unconfirmed: neither confirmed nor ruled out.
-        if has(rumour, wholePart) || has(rumour, String(folded[gear.upperBound...])) || has(hearsay, wholePart) { return .uncertain }
-        // The speaker doesn't know (1.10.10).
-        if has(unsure, folded) { return .uncertain }
-        // Another, later project of the same people.
-        if has(nextProject, wholePart) { return .otherProduction }
+        if has(rumour, wholePart) || has(rumour, String(folded[gear.upperBound...])) { return .uncertain }
 
         // Tried out only (unless the sentence says it was then chosen).
         // Not when the film itself comes between ("We shot tests on 35mm and the film on 65mm").
@@ -777,25 +646,15 @@ public enum ClaimFrame {
         }
 
         // Other people's practice, a mentor's lesson, a habit.
-        if has(practice, clause) || has(habitual, clause) { return .otherPractice }
-        if has(habitWhen, wholePart), has(genericJob, wholePart + " " + after) { return .otherPractice }
-        if has(secondNature, rest) { return .otherPractice }
-        if has(everyJob, rest) || has(alwaysUses, wholePart) { return .otherPractice }
+        if has(practice, clause) { return .otherPractice }
         if has(era, wholePart + " " + following(folded, after: gear)) { return .otherPractice }
 
         // A simulation or a look made, right by the gear.
-        // (A movement's "style" is the movement itself: "a more dynamic, handheld style".)
-        let styleOfMovement = kind == .support && has(movementStyleAfter, String(folded[gear.upperBound...].prefix(30)))
-        let nearOwn = lessCG.stringByReplacingMatches(in: near, range: NSRange(near.startIndex..., in: near), withTemplate: " ")
-        if !isLook, !styleOfMovement, has(simulatedBefore, String(nearOwn.suffix(60))) || has(simulatedAfter, String(folded[gear.upperBound...].prefix(60)))
-            || has(matchedDigitally, String(clause.suffix(90))) || has(takenFor, String(near.suffix(60))) {
+        if !isLook, has(simulatedBefore, String(near.suffix(60))) || has(simulatedAfter, String(folded[gear.upperBound...].prefix(60))) {
             return .simulated
         }
-        // ("minimizing the amount of CGI and using only natural lighting": less CG, not CG.)
-        let cgScope = lessCG.stringByReplacingMatches(in: near.isEmpty ? clause : near + " " + after,
-                                                      range: NSRange((near.isEmpty ? clause : near + " " + after).startIndex..., in: near.isEmpty ? clause : near + " " + after),
-                                                      withTemplate: " ")
-        if kind == .light || kind == .camera, has(computerGenerated, cgScope), !has(productionAgent, near) {
+        if kind == .light || kind == .camera, has(computerGenerated, near.isEmpty ? clause : near + " " + after),
+           !has(productionAgent, near) {
             return .simulated
         }
 
@@ -809,20 +668,12 @@ public enum ClaimFrame {
         }
         // An object in the scene or the location (lights and grip; a prop camera).
         if kind == .light || kind == .support, has(environmentSubject, clause), !has(productionAgent, clause) { return .environment }
-        if kind == .light, has(researchFound, wholePart) { return .environment }
-        // (A camera carried by a drone, a gimbal or a crane is the payload, equipment: 1.10.10.)
-        let payload = has(carriedByRig, near) || has(payloadAfter, rest)
-        if kind == .camera, !payload, has(prop, near) || has(prop, after), !has(productionAgent, near) { return .environment }
+        if kind == .camera, has(prop, near) || has(prop, after), !has(productionAgent, near) { return .environment }
 
         // Delivery or presentation of a format or ratio, with no word of shooting in its clause.
         if kind == .format || kind == .lens {
             let scope = clause + " " + after
-            let stage = FormatStage.of(folded, at: gear, name: name, context: context)
-            if stage == .homeMedia || stage == .restoration || stage == .streaming { return .delivery }
-            // A ratio framed, extracted, designed or projected for the film (1.10.10): the film's image,
-            // kept with its stage. A ratio said only of a presentation that may be any release stays
-            // undecided.
-            if !(stage?.isFilmImage ?? false), !has(captureVerb, scope) {
+            if !has(captureVerb, scope) {
                 if has(deliveryCue, scope) { return .delivery }
                 if has(presentationCue, scope) { return .presentation }
             }
@@ -833,9 +684,9 @@ public enum ClaimFrame {
         if let verb = capability.firstMatch(in: clause, range: NSRange(clause.startIndex..., in: clause)),
            let verbRange = Range(verb.range, in: clause) {
             let subject = String(clause[..<verbRange.lowerBound])
-            // …and the sentence doesn't go on to say the production used it ("…, and Doe used that", "…,
-            // and Pfister stresses that these gave him and Nolan flexibility").
-            let usedAfter = String(folded[gear.upperBound...]).range(of: #"\b(?:used|shot|recorded|chose|went with|relied on|picked)\b|\b(?:these|they|it|this|that|those)\s+(?:gave|allowed|let|helped|enabled|offered)\s+(?:him|her|them|us|me|the (?:production|crew|filmmakers))\b"#,
+            // …and the sentence doesn't go on to say the production used it ("…, and Doe used that").
+            let rest = String(folded[gear.upperBound...])
+            let usedAfter = rest.range(of: #"\b(?:used|shot|recorded|chose|went with|relied on|picked)\b"#,
                                        options: [.regularExpression, .caseInsensitive]) != nil
             if has(productSubject, subject), !has(personalAgent, clause), !has(supplier, subject), !usedAfter { return .productCapability }
         }

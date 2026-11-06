@@ -96,7 +96,6 @@ public enum CraftLog {
                 case .pending: status = "pending reassessment (kept, not shown as found)"
                 case .retired: status = "retired"
                 case .confirmed: status = "confirmed"
-                case .legacy: status = "previously recorded, awaiting verification (kept, shown apart)"
                 }
                 let from = claim.source.isEmpty ? "found by rules \(claim.rules), no passage kept" : "\(claim.source)"
                 lines.append("• \(what) — \(status): \(claim.reason ?? "") — \(from)" + (claim.text.map { ": “\($0.prefix(200))”" } ?? ""))
@@ -155,10 +154,6 @@ public enum CraftLog {
                 let open = entry.open.compactMap(ResearchQuestions.question).map(\.purpose)
                 return "\(entry.dimension.title) — \(entry.state.label)" + (open.isEmpty || entry.state == .notSearched ? "" : " (open: " + open.joined(separator: ", ") + ")")
             }.joined(separator: "; "))
-            // What visual effects' relevance rests on (1.10.10).
-            if let basis = research.first(where: { $0.dimension == .vfx })?.basis {
-                lines.append("• Visual effects: \(basis)")
-            }
         }
         let groups: [(String, [TechSpecs.Note])] = [
             ("In their own words", specs.approach), ("The visual idea", specs.intent), ("Light", specs.lighting),
