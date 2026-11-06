@@ -64,6 +64,8 @@ public struct TechSpecs: Equatable, Sendable {
         /// Its part of the sentence names the film ("…capturing Christopher Nolan's thriller,
         /// Oppenheimer, in IMAX…").
         public var namesFilm = false
+        /// For a ratio or a format: the stage of the image it's said of (1.10.10; nil when not said).
+        public var stage: FormatStage? = nil
         /// Its clause says it was the film's main coverage ("Sony Venice 2 bodies for traditional
         /// coverage", "most off-track scenes were shot… with", "captured mostly in", "the main
         /// cameras"): the stronger reason among sentences that say as much of the film. It says
@@ -495,7 +497,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     // What the statement asserts of the gear (1.10.9, `ClaimFrame`): avoided, a
                                     // hypothetical, a plan, a test, someone else's practice, a simulation, an
                                     // object in the scene, a release format, a product's capability.
-                                    if let reason = ClaimFrame.reason(main, at: at, kind: rule.kind, name: name) {
+                                    if let reason = ClaimFrame.reason(main, at: at, kind: rule.kind, name: name, context: section.title) {
                                         judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
                                                                 source: text.source, reason: reason))
                                         if reason.abstains {
@@ -531,7 +533,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     if rule.needsTitle, said.aboutThisFilm { said.captured = true }
                                     let share = saidOfShare(sentence, at: at)
                                     let part = share || saidOfPart(sentence, at: at)
-                                    found.append(Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
+                                    var spec = Spec(kind: rule.kind, name: name, isFixedName: rule.fixedName != nil,
                                                       evidence: String(original.prefix(400)), source: text.source,
                                                       partial: part, share: share, wholeFilm: !part && saidOfWholeFilm(sentence, at: at),
                                                       direct: saidDirectly(sentence, at: at, title: title), sheet: isSpecList(sentence),
@@ -544,7 +546,9 @@ public struct TechSpecs: Equatable, Sendable {
                                                         : establishes && said.captured && !tried && !speech && !testedOnly(sentence, at: at) ? .direct : .ambiguous,
                                                       productionScope: ProductionScope.said(in: original),
                                                       evidenceKind: SourceRegistry.evidence(source: text.source, text: original, isInterview: text.isInterview,
-                                                                                             speaker: CraftCrew.speaker(in: original, crew: crew))))
+                                                                                             speaker: CraftCrew.speaker(in: original, crew: crew)))
+                                    if rule.kind == .format { spec.stage = FormatStage.of(main, at: at, name: name, context: section.title) }
+                                    found.append(spec)
                                 }
                             }
                         }

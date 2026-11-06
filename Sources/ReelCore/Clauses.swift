@@ -254,3 +254,75 @@ public struct ClauseProduction: Sendable {
         other.contains { $0.lower <= offsets.lowerBound && offsets.lowerBound < $0.upper }
     }
 }
+
+// MARK: - The stage an image format is said of (1.10.10)
+
+/// Which stage of the image a ratio or a format is said of. A ratio can describe the camera's
+/// capture, the framing the film was composed for, an extraction from a larger frame, a sequence,
+/// the theatrical presentation, or a later home release, restoration or stream; only the last three
+/// say nothing of how the film was made. A ratio whose stage can't be told keeps no stage (nil): it
+/// is not given one by guessing.
+public enum FormatStage: String, Codable, Sendable, CaseIterable {
+    case capture, framing, extraction, sequence, theatrical, homeMedia, restoration, streaming
+
+    /// The film's own image: how it was shot, framed or shown when it came out.
+    public var isFilmImage: Bool { ![.homeMedia, .restoration, .streaming].contains(self) }
+
+    public var label: String {
+        switch self {
+        case .capture: "as shot"
+        case .framing: "framing"
+        case .extraction: "extraction"
+        case .sequence: "for some sequences"
+        case .theatrical: "theatrical"
+        case .homeMedia: "home release"
+        case .restoration: "restoration"
+        case .streaming: "streaming"
+        }
+    }
+
+    static let homeMediaCue = try! NSRegularExpression(
+        pattern: #"\b(?:home (?:media|video|entertainment|release)s?|blu-?rays?|dvds?|uhd|ultra hd|4k (?:disc|release|blu-?ray)|vhs|laserdiscs?|dolby digital|dts\b|5\.1\b|7\.1\b|subtitles?|audio tracks?|bonus features?|special features?|criterion|box set|disc|television (?:broadcast|airing|version)|tv (?:broadcast|airing|version))\b"#,
+        options: [.caseInsensitive])
+    static let restorationCue = try! NSRegularExpression(pattern: #"\b(?:restor\w*|remaster\w*|re-?release[sd]?|re-?issue[sd]?|rescan\w*|new scan|new transfer)\b"#,
+                                                          options: [.caseInsensitive])
+    static let streamingCue = try! NSRegularExpression(pattern: #"\b(?:streaming|streamers?|netflix version|vod|on demand|imax enhanced)\b"#,
+                                                        options: [.caseInsensitive])
+    static let extractionCue = try! NSRegularExpression(
+        pattern: #"\b(?:extract(?:ion|ions|ed|ing)?|cropp?(?:ed|ing)? (?:to|for|in)|crop (?:to|for)|protect(?:ed|ing)? for|center[- ]extract\w*|common top)\b"#,
+        options: [.caseInsensitive])
+    static let framingCue = try! NSRegularExpression(
+        pattern: #"\b(?:designed (?:to be|for|in)|composed (?:for|in)|framed (?:for|in|to)|framing (?:for|in|of)|to match the\b[^.;]{0,60}\bof the (?:rest of the )?(?:film|movie|picture)|(?:aspect )?ratio of the (?:rest of the )?(?:film|movie|picture)|(?:the )?(?:film|movie|picture)(?:'s)? (?:primary |main |native |original )?(?:aspect )?ratio (?:was|is)|primary (?:aspect )?ratio|native (?:aspect )?ratio)\b"#,
+        options: [.caseInsensitive])
+    static let sequenceCue = try! NSRegularExpression(
+        pattern: #"\b(?:for|in) (?:the |some |select |certain |several )?(?:sequences?|scenes?|shots?|segments?)\b|\b(?:select|certain|some) (?:sequences?|scenes?|shots?)\b"#,
+        options: [.caseInsensitive])
+    static let theatricalCue = try! NSRegularExpression(
+        pattern: #"\b(?:theatrical(?:ly)?|in (?:cinemas|theaters|theatres)|projected|projection)\b|^\W*(?:the (?:film|movie|picture)|it) (?:is|was) presented in\b"#,
+        options: [.caseInsensitive])
+    static let captureCue = try! NSRegularExpression(
+        pattern: #"\b(?:shot|shoot|shooting|filmed|filming|photographed|captured|capturing|lensed|recorded|acquired|originated|sensor|gate|negative)\b"#,
+        options: [.caseInsensitive])
+
+    /// The stage the ratio or format at `range` is said of, from its own clause (and the section it's in:
+    /// `context`, a heading such as "Home media"). nil when its words don't say.
+    public static func of(_ sentence: String, at range: Range<String.Index>, name: String, context: String = "") -> FormatStage? {
+        let isRatio = name.contains(":1") || name.range(of: #"^\d(?:\.\d+)?:\d"#, options: .regularExpression) != nil
+        let lead = ClaimFrame.governing(sentence, before: range, acrossCommas: true)
+        let after = ClaimFrame.following(sentence, after: range)
+        let scope = lead + " " + String(sentence[range]) + " " + after
+        let wide = String(sentence[ClaimFrame.segmentStart(sentence, before: range)...])
+        func has(_ regex: NSRegularExpression, _ text: String) -> Bool { ClaimFrame.has(regex, text) }
+        // A later release, by its own words or its section's.
+        if has(homeMediaCue, scope) || has(homeMediaCue, context) { return .homeMedia }
+        if has(streamingCue, scope) || has(streamingCue, context) { return .streaming }
+        if has(restorationCue, scope) || has(restorationCue, context) { return .restoration }
+        guard isRatio else { return has(captureCue, scope) ? .capture : nil }
+        if has(extractionCue, scope) { return .extraction }
+        if has(sequenceCue, lead) || has(sequenceCue, after) { return .sequence }
+        if has(framingCue, wide) { return .framing }
+        if has(captureCue, scope) { return .capture }
+        if has(theatricalCue, scope) || has(theatricalCue, wide) { return .theatrical }
+        return nil
+    }
+}
