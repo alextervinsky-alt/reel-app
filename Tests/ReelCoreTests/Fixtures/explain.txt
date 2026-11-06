@@ -1,28 +1,54 @@
-The Quiet Harbour|Though the original plan had been to shoot on 16mm film, the feature was ultimately captured digitally, with the filmmakers employing an Arri Alexa Mini and XT from a rental house in Paris.
-The Quiet Harbour|Doe had originally planned to shoot on Super 16, and the production went with the Alexa 35.
-The Quiet Harbour|His intention was to immerse the audience so he shot it with IMAX cameras.
-The Quiet Harbour|The Quiet Harbour is one of the few films that were shot entirely on 65mm film stock.
-The Quiet Harbour|It was among the first feature films that were shot on the Sony Venice 2.
-The Quiet Harbour|Such close focus lenses are not readily available off-the-shelf, and Doe turned to Panavision to deliver a range of optics – including Hasselblad and Panavision System 65 lenses – that would be used on the IMAX MKIV, IMAX MSM 9802 and Panavision Panaflex System 65 Studio cameras during production.
-The Quiet Harbour|"It's an intimate drama," says cinematographer Jane Doe, as she reveals details about capturing Carl Example's thriller, The Quiet Harbour, in IMAX (15-perf) format using KODAK 65mm large-format film, including, for the very first time, sections on 65mm B&W shot in IMAX.
-The Quiet Harbour|In 2007 Doe and Example collaborated on Glass Rivers. It was shot using Sony HDW-F900 CineAlta cameras.
-Challengers|He avoided Steadicam for the tennis action, instead deploying a Scorpio 45 crane with a Libra head.
-Uncut Gems|Darius Khondji: Without me, the film might have easily been shot in Super 35, or Super 16.
-F1|As with Top Gun: Maverick, Miranda and Kosinski were involved in all stages of the process through to post-production, spending four weeks grading with Company 3’s founder and CEO Stefan Sonnenfeld.
+Challengers|As on Call Me by Your Name and Suspiria – two previous collaborations with Guadagnino – Mukdeeprom opted for 35mm Kodak Vision3 5219 500T filmstock, capturing in 3-perf for the entire production.
+Bugonia|Colourist Greg Fisher at Company 3, who has also worked on Lanthimos' last few films, once again helped shape the final look in the grade.
+The Revenant|Lensed by double Oscar-winning cinematographer Emmanuel "Chivo" Lubezki AMC ASC, with whom Iñárritu also collaborated on Birdman Or (The Unexpected Virtue Of Ignorance), the $135m, 20th Century Fox production was shot using natural light and the Alexa 65.
+Heat|The streets of L.A. at night, shot without any artificial lighting, had a glow which recalled scenes from Stanley Kubrick's Barry Lyndon, which was shot in candlelight with a lens T-stop of 0.7.
+Megalopolis|The primary aspect ratio was 2:1, a tribute to Vittorio Storaro's Univisium, with select scenes changing to a 1.43:1 aspect ratio.
+The Girl with the Dragon Tattoo|The film was wholly shot using Red Digital Cinema Camera Company's RED MX digital camera, chosen to help evoke Larsson's tone.
+Dune|For sequences designed to be 2.39:1 in any presentation (including Imax), he chose Panavision Ultra Vista 1.65x anamorphic lenses.
+Isle of Dogs|After rigorously testing several DSLRs, Oliver settled on the Canon 1DX, shooting full-frame 5K CanonRAW, but with a widescreen 2.39:1 extraction.
+Mandy|A wide Primo spherical prime, most often a 10mm, was used for lending an expansive feel to more intimate locales, and those shots were cropped to match the 2.39:1 anamorphic aspect ratio of the rest of the movie.
+Roma|The movie is presented in the 2.39:1 aspect ratio, and Cuarón usually framed to allow for an extra 4 percent of space to be able to further stabilize the image.
 Apocalypse Now|Despite filming Apocalypse Now in 2.35:1, the film's cinematographer Vittorio Storaro periodically approved home media releases in his preferred aspect ratio, the 2.00:1 Univisium.
-Apocalypse Now|They intended to shoot the film both in the rice fields between Stockton and Sacramento, California, and on-location in South Vietnam, on a $2 million budget, cinéma vérité style, using 16 mm cameras, and real soldiers, while the war was still going on.
-Challengers|Just as he had on Call Me by Your Name and Suspiria, Mukdeeprom shot Challengers using just one filmstock, namely KODAK VISION3 500T Color Negative Film 5219.
-The Banshees of Inisherin|Natural light was also a valuable creative tool, as it was when Davis lensed McDonagh’s Three Billboards Outside Ebbing, Missouri.
-Barbie|Prieto’s frequent collaborator, Company 3 colourist Yvan Lucas, joined him in the LUT experimentation, continuing the journey they began on The Irishman (2019) developing grading software PPL with Philippe Panzini from Codex.
-The Batman|The production used the StageCraft virtual production technology that Fraser helped develop for Industrial Light & Magic (ILM) on the Disney+ Star Wars series The Mandalorian (2019–2023), particularly for consistent golden hour lighting inspired by the lighting from In the Mood for Love (2000).
-F1|For nighttime events, the tracks are commonly bathed in LED floodlights from tall towers, and the cars have rear lights and LED panels.
+No Country for Old Men|It was presented in its theatrical 2.35:1 anamorphic widescreen aspect ratio and in Dolby Digital 5.1 (English, Spanish).
+Eyes Wide Shut|This marked the first home video release that presents the film in anamorphic 1.78:1 (16:9) format.
+Barbie|Colour exploration led the filmmakers to create six show LUTs including three main LUTs – Real World (a neutral film emulation look); Techno Barbie (inspired by the three-strip Technicolor process).
+Black Phone 2|In contrast, the dream sequences and select action beats embraced a more dynamic, handheld style, particularly with the Super-8 format.
+Children of Men|Visual references: Considered a carefully designed Kubrickian approach, but opted for the more immersive handheld style instead.
+Gladiator|We used 5Ks and 10Ks through some heavily diffused Chimeras, and we put Cosmetic Hi-Light and straw [gels] in front of them to give the scenes a candlelit look.
+There Will Be Blood|In some of the China balls, we used three halogen bulbs on a slight flicker to create a bit of movement that would emulate the look of candlelight.
+Shutter Island|The film needed two looks: a Kodachrome look and an emulation of the ENR silver-retention process.
+Challengers|It was a faux-double split-diopter composite shot of all three players.
+The Place Beyond the Pines|One of her decisions was to shoot on film, with the cinematographer primarily operating an Arricam LT and working with 3-perf Fuji Vivid 500T and 250 stocks.
+Apocalypse Now|They intended to shoot the film in the Mekong Delta in a cinéma vérité style, using 16 mm cameras, and real soldiers, while the war was still going on.
+Children of Men|"In my mind, I wanted to do a combination of handheld and Steadicam, because I think if you shoot everything handheld [the technique] loses its power."
+Once Upon a Time... in Hollywood|Whether we shoot with a crane or dolly or whatever is less of a concern than achieving what he has on his list.
+Uncut Gems|Darius Khondji: Without me, the film might have easily been shot in Super 35, or Super 16.
+Society of the Snow|"We tried using LED lights instead of flame to be changed in post," adds Luque, "but they didn't work, so we used real flames."
+Drive|Consistent with Refn's usual visual style, wide-angle lenses were used extensively by cinematographer Sigel, who avoided hand-held camera work.
+Ex Machina|Fifteen thousand tungsten pea bulb lights were installed into the sets to avoid the fluorescent light often used in science-fiction films.
+Roma|There are no handheld or Steadicam shots, as those, the director says, "would change the language we were after."
+Challengers|"It was better because we could do a tilt, which a Steadicam doesn't do as well," he observes.
+Stalker|The film had been shot on new Kodak 5247 stock with which Soviet laboratories were not very familiar.
+Once Upon a Time... in Hollywood|There were also two sequences, at Sharon Tate and Roman Polanski's home, that we shot on Kodak Ektachrome, one in 16mm and the other on Super8mm.
+The Dark Knight|Much of The Dark Knight was filmed using Panavision's Panaflex Millennium XL and Platinum cameras but Nolan wanted to film about 40 minutes with IMAX cameras.
 Nomadland|And beyond all these nice things that we learn from Terry, like shooting at magic hour, or with wide angle lenses, the most important thing is what cinema really means to a filmmaker.
 The Holdovers|And all the DPs of the period that I really admired would push the film stock or they would do handheld or whatever.
+There Will Be Blood|When he shoots digital, he sets a LUT at the beginning of a show and then strives to capture the final image as much as possible on the day.
+Once Upon a Time... in Hollywood|The crane has become second-nature to the two of us, and to the entire crew.
+The Irishman|Scorsese usually complains about Steadicam not being really steady, like a dolly shot, so he's not a fan.
+Challengers|"I always use Kodak Vision3 5219 500T, for everything," he says.
+Backrooms|It made him even more appreciative of crew collaborations, such as with his dolly grip Lowell Richardson.
+Shutter Island|People commented on the movie's 'vintage' look, but that was, in great part, the result of primarily using the digital work to match a real photochemical process.
+The Plague|ENR is a silver retention process named for its inventor, Ernesto Novelli Rimo, a former control department operator at Technicolor Rome and used extensively by Vittorio Storaro ASC AIC.
+Children of Men|The scene takes place in a manger, and his research indicated that such settings have "two types of lighting: fluorescents or big tungsten lights."
+Apocalypse Now|When I was planning the visual strategy for the film, I began thinking that I could convey the conflict of cultures by creating a visual conflict between artificial light and natural light.
+Once Upon a Time... in Hollywood|When I was in France working on Delicatessen with Darius Khondji, I was very into desaturation with a bleach-bypass process.
+F1|For nighttime events, the tracks are commonly bathed in LED floodlights from tall towers, and the cars have rear lights and LED panels.
+Saltburn|While shooting establishing shots using the Freefly Alta X drone carrying an ARRI 235 payload on the DJI Ronin gimbal he discovered the lines that supported Fennell's vision.
 Dallas Buyers Club|Like the RED, the Alexa offers a broad spectrum of colors and shadows in even the darkest natural lighting conditions.
-No Country for Old Men|It was presented in its theatrical 2.35:1 anamorphic widescreen aspect ratio and in Dolby Digital 5.1 (English, Spanish).
-Challengers|Guadagnino unleashes one impossible shot after another in this finale: first-person-perspective shots of the ball speeding from racquet to racquet, a faux-double split-diopter composite shot of all three players, a moment where the players appear.
-Shutter Island|The film needed two looks: a Kodachrome look and an emulation of the ENR silver-retention process.
-The Black Phone|Above all of the practicals, also hidden in the rafters, we had little tungsten Fresnels that were probably 300 watts with some opal on them to extend the light from the practicals.
-The Quiet Harbour|Despite filming The Quiet Harbour in 2.35:1, Doe approved home media releases in his preferred aspect ratio, the 2.00:1 Univisium.
-The Quiet Harbour|We shot on the Sony Venice 2; an Alexa would have looked colder.
-The Quiet Harbour|Doe had planned to shoot on Super 16, and that's what she did.
+The Dark Knight Rises|It can be used on a Steadicam and Ultimate Arm, and Pfister stresses that these gave him and Nolan flexibility in camera movement.
+Gravity|The film was shot entirely in the wilderness during a cold season, minimizing the amount of CGI and using only natural lighting.
+F1|As with Top Gun: Maverick, Miranda and Kosinski were involved in all stages of the process through to post-production, spending four weeks grading with Company 3's founder and CEO Stefan Sonnenfeld.
+Challengers|Just as he had on Call Me by Your Name and Suspiria, Mukdeeprom shot Challengers using just one filmstock, namely KODAK VISION3 500T Color Negative Film 5219.
+The Banshees of Inisherin|Natural light was also a valuable creative tool, as it was when Davis lensed McDonagh's Three Billboards Outside Ebbing, Missouri.
+Ex Machina|The color grade happened over three weeks at Company 3 in London, with chief creative officer and Senior Colorist (and ASC associate member) Tom Poole.
