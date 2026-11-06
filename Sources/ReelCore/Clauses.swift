@@ -258,8 +258,9 @@ public struct ClauseProduction: Sendable {
                         // Hanging on what an opening comparison compares with ("Unlike Glass Rivers, which
                         // was shot on 35mm, …", "Unlike her previous film, Paper Moon, which…").
                         || comparisons.contains { comparison in
-                            comparison.upper <= clause.lower
-                                && map.text(ClauseMap.Clause(lower: comparison.upper, upper: clause.lower, role: .main, antecedent: nil))
+                            comparison.upper <= clause.lower + 1
+                                && (comparison.upper >= clause.lower ? "" : map.text(ClauseMap.Clause(lower: comparison.upper, upper: clause.lower,
+                                                                                                       role: .main, antecedent: nil)))
                                     .split(whereSeparator: { $0.isWhitespace }).count <= 4
                         })
                     || (clause.role == .relative && namesOtherWork(text))
