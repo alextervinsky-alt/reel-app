@@ -927,7 +927,12 @@ public enum ResearchCoverage {
                 state = .readNoFindings
             } else if unavailable {
                 // A source of the first pass didn't answer (1.10.10): what it holds is unknown, so no
-                // search's empty result says there's nothing. Source outcomes come before coverage.
+                // search's empty result says there's nothing. Source outcomes come before coverage; a
+                // search made within the year keeps its quiet (it isn't repeated).
+                if let carried = run?.quiet.first(where: { $0.dimension == dimension }), keys.isEmpty {
+                    return entry(ResearchEntry(dimension: dimension, state: .unavailable, queries: carried.queries, discovery: carried.discovery,
+                                               searchedAt: carried.searchedAt, open: open))
+                }
                 state = .unavailable
             } else if any({ if case .pageLanguage = $0 { true } else { false } }) {
                 state = .unsupportedLanguage
@@ -938,8 +943,6 @@ public enum ResearchCoverage {
             } else if let carried = run?.quiet.first(where: { $0.dimension == dimension }) {
                 // Searched within the year and nothing found: still so (not "not searched").
                 return carried
-            } else if unavailable {
-                state = .unavailable
             } else if languageLimited {
                 state = .unsupportedLanguage
             } else if extractionLimited {

@@ -318,19 +318,12 @@ public struct TechSpecs: Equatable, Sendable {
             var paragraphIndex = -1
             for section in text.sections {
                 answeringAboutAnother = 0
-                // A section headed by another production ("On Glass Rivers", "Glass Rivers (2019)", a title
-                // the page names as a production) is about that production throughout (1.10.10), unless a
-                // statement in it names this film as its subject.
+                // A section headed by another production that the page names as one (its credit lists,
+                // "Glass Rivers (2019)", "On Glass Rivers, …"; 1.10.10) is about that production throughout,
+                // unless a statement in it names this film as its subject. A heading alone ("On Collaboration",
+                // "Making Of") never is.
                 if !section.title.isEmpty, !namesTitle(section.title, title: title ?? ""),
-                   pageOthers.contains(where: { namesTitle(section.title, title: $0) })
-                    || section.title.range(of: #"^\s*(?:On|For|About|Inside|Making|Shooting|Lighting)\s+(?:The\s+|A\s+|An\s+)?[A-Z0-9][\w'’.…:-]*(?:\s+(?:[A-Z0-9][\w'’.…:-]*|of|the|and|a|an|in|on|to|for|…|\.\.\.)){0,8}\s*$"#,
-                                           options: .regularExpression) != nil && !TitleMatch.names(section.title, title: title ?? "")
-                        && TechSpecs.read([section.title + " was used."]).specs.isEmpty
-                        // (Not the shoot's own vocabulary: "On Location", "On Set", "Lighting the Night".)
-                        && !["location", "set", "stage", "photography", "production", "camera", "lens", "light", "colou", "color", "grade",
-                             "grading", "night", "day", "film", "look", "prep", "post", "sound", "scene", "sequence", "shoot", "movement",
-                             "format", "story", "vfx", "effects", "craft", "approach", "visual", "tests", "testing"]
-                            .contains(where: { section.title.lowercased().contains($0) }) {
+                   (pageOthers + otherTitles).contains(where: { namesTitle(section.title, title: $0) || TitleMatch.names(section.title, title: $0) }) {
                     answeringAboutAnother = section.paragraphs.count + 1
                 }
                 let heading = section.title.lowercased()
@@ -2074,13 +2067,19 @@ public struct TechSpecs: Equatable, Sendable {
             let surname = sentence[found].lowercased()
             if companies.contains(surname) || corporateNouns.contains(surname) { continue }
             if !own.isEmpty, own.hasPrefix(sentence[named].lowercased()) { continue }
-            // A maker's or a person's product, not a film (1.10.10): what follows the possessive is gear
-            // or a format ("Red Digital Cinema Camera Company's RED MX digital camera", "Storaro's
-            // Univisium format"), by the same rules that find gear.
+            // A maker's product, not a film (1.10.10): the possessive's owner is a firm ("Red Digital Cinema
+            // Camera Company's RED MX"), or what it owns is gear named by the same rules that find gear and
+            // followed by nothing that could be a title ("Storaro's Univisium format"; not "Nolan's IMAX epic
+            // Oppenheimer", "Nolan's Oppenheimer camera package").
             let possessed = String(sentence[named.lowerBound...].prefix(48))
-            if rules.contains(where: { rule in rule.found(in: possessed).contains { possessed.distance(from: possessed.startIndex, to: $0.at.lowerBound) == 0 } })
-                || possessed.range(of: #"^[\w-]+(?:\s+[\w-]+)?\s+(?:camera|cameras|lens|lenses|format|process|system|stock|sensor|ratio)\b"#,
-                                   options: [.regularExpression, .caseInsensitive]) != nil { continue }
+            let gearFirst = rules.compactMap { rule in
+                rule.found(in: possessed).first { possessed.distance(from: possessed.startIndex, to: $0.at.lowerBound) == 0 }?.at
+            }.max { possessed.distance(from: $0.lowerBound, to: $0.upperBound) < possessed.distance(from: $1.lowerBound, to: $1.upperBound) }
+            if let gearFirst {
+                let rest = String(possessed[gearFirst.upperBound...])
+                if rest.range(of: #"^(?:\s+(?:digital|film|motion picture|cinema|large[- ]format))?(?:\s+(?:cameras?|lens(?:es)?|format|process|system|stock|sensor|ratio|primes?))?\s*(?:[,.;:)]|$|\s+(?:and|with|for|on|in|to|was|were|is|which|that|chosen|used)\b)"#,
+                              options: [.regularExpression, .caseInsensitive]) != nil { continue }
+            }
             let known = people.contains { person in
                 person.lowercased().split(whereSeparator: { $0 == " " || $0 == "-" }).contains { $0 == surname }
             }

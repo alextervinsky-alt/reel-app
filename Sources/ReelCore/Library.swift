@@ -605,7 +605,11 @@ public enum LibraryMigration {
         if file.version <= 5 {
             for i in upgraded.films.indices {
                 guard var craft = upgraded.films[i].craft, var claims = craft.claims else { continue }
-                for j in claims.indices where claims[j].status == .pending && (claims[j].text == nil || claims[j].source.isEmpty) {
+                // Pending with no passage, and (restored) those 1.10.9 retired only for not being confirmed in
+                // its readings: nothing disproved them.
+                for j in claims.indices where (claims[j].text == nil || claims[j].source.isEmpty)
+                    && (claims[j].status == .pending
+                        || claims[j].status == .retired && (claims[j].reason ?? "").contains("no passage was kept")) {
                     claims[j].status = .legacy
                     claims[j].reason = "recorded by rules \(claims[j].rules), before passages were kept; awaiting verification"
                     claims[j].misses = 0

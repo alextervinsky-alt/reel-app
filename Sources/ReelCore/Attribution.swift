@@ -309,7 +309,17 @@ public struct PageContext: Equatable, Sendable {
             .firstMatch(in: pageTitle, range: NSRange(pageTitle.startIndex..., in: pageTitle)),
             let range = Range(match.range(at: 1), in: pageTitle) else { return nil }
         let named = String(pageTitle[range])
-        guard !TechSpecs.namesTitle(named, title: title), !TechSpecs.namesTitle(title, title: named), !TitleMatch.names(named, title: title) else { return nil }
+        guard !TechSpecs.namesTitle(named, title: title), !TechSpecs.namesTitle(title, title: named), !TitleMatch.names(named, title: title),
+              // A headline that names this film too ("Why 'Barbie' and 'Oppenheimer' differ") has no one subject.
+              !names(pageTitle, title: title) else { return nil }
+        // A title's shape: up to six words, each capitalised or a small word, and no verb (a quoted remark,
+        // "'IMAX Was the Only Choice'", isn't a production).
+        let words = named.split(separator: " ")
+        guard (1...6).contains(words.count),
+              words.allSatisfy({ $0.first?.isUppercase == true || $0.first?.isNumber == true
+                  || ["of", "the", "a", "an", "and", "in", "on", "to", "for", "at", "by", "&"].contains($0.lowercased()) }),
+              named.range(of: #"\b(?:is|are|was|were|has|have|had|did|does|do|will|can|could|would|should)\b"#,
+                          options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
         return named
     }
 
