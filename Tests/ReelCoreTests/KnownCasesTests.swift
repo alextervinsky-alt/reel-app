@@ -248,7 +248,9 @@ final class KnownCasesTests: XCTestCase {
     }
 
     func testRealTitlesInAHeadlineAreProductions() {
-        XCTAssertEqual(PageContext.headlineProduction("‘There Will Be Blood’: lighting the oil fields", title: film), "There Will Be Blood")
+        // (A title with a verb counts when the page or collection knows it as a production: review round 3.)
+        XCTAssertEqual(PageContext.headlineProduction("‘There Will Be Blood’: lighting the oil fields", title: film, known: ["There Will Be Blood"]),
+                       "There Will Be Blood")
         XCTAssertEqual(PageContext.headlineProduction("‘Gone with the Wind’ at 85", title: film), "Gone with the Wind")
         XCTAssertNil(PageContext.headlineProduction("Doe: ‘We Had One Shot at It’", title: film))
     }
