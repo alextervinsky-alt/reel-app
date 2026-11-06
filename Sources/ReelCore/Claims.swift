@@ -803,9 +803,13 @@ public enum ClaimFrame {
             // that may be any release stays undecided.
             let stage = FormatStage.isRatio(name) ? FormatStage.of(folded, at: gear, name: name, context: context) : nil
             if stage == .homeMedia || stage == .restoration || stage == .streaming { return .delivery }
+            // (A relative clause after the gear about its own history isn't its release: "Cooke Panchro
+            // lenses that had been restored by a lens house", 1.10.10.)
+            let ownScope = clause + " " + (after.range(of: #"\b(?:that|which|who)\b"#, options: [.regularExpression, .caseInsensitive])
+                .map { String(after[..<$0.lowerBound]) } ?? after)
             if !(stage.map(\.isMadeImage) ?? false), !has(captureVerb, scope) {
-                if has(deliveryCue, scope) { return .delivery }
-                if has(presentationCue, scope) { return .presentation }
+                if has(deliveryCue, ownScope) { return .delivery }
+                if has(presentationCue, ownScope) { return .presentation }
             }
         }
 
