@@ -75,7 +75,6 @@ extension AppModel {
         lists.flush()
     }
 }
-#endif
 
 extension AppModel {
     /// This Reel, as Library.json records who wrote it: "1.10.10 (380)".
@@ -89,3 +88,4 @@ extension AppModel {
 
 /// Just the version of a library file (to tell whether opening it upgraded it).
 struct LibraryVersionHeader: Decodable { let version: Int }
+#endif
