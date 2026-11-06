@@ -286,7 +286,8 @@ public enum SourceReconciliation {
             // Its own article wasn't read this time (another article of the site was): not a reading of
             // it at all (1.10.10). Carried, and tried again on the retry schedule.
             if let article = old.article, !input.articles.contains(article) {
-                return (.carried, "its article on \(old.site) wasn't read this time", true)
+                // (Not a try used: a reading that never read it can't have settled it.)
+                return (.carried, "its article on \(old.site) wasn't read this time", false)
             }
             // Sources are labelled by site, so another article of the same site may have been read
             // in its place: not shown, and retired only when `CraftIndex.maxRetries` readings in a row

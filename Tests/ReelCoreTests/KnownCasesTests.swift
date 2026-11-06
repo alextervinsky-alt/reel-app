@@ -151,13 +151,17 @@ final class KnownCasesTests: XCTestCase {
     // MARK: Sections and pages (brief §8.1)
 
     func testASectionHeadedByAnotherProductionIsThatProductions() {
-        let text = TechSpecs.Text(source: "Lens Weekly", sections: [
+        var text = TechSpecs.Text(source: "Lens Weekly", sections: [
             FilmArticle.Section(id: 0, title: "On The Quiet Harbour", paragraphs: ["Doe shot the harbour scenes on the Alexa 35."]),
             FilmArticle.Section(id: 1, title: "On Glass Rivers… and After", paragraphs: ["Doe and the lab at FotoKem built a photochemical finish for the river scenes."]),
+            // A heading that names no production the page knows is no other production's.
+            FilmArticle.Section(id: 2, title: "On Collaboration", paragraphs: ["Doe chose Cooke S4 lenses for the harbour scenes."]),
         ], isInterview: true)
+        text.otherProductions = ["Glass Rivers"]
         let specs = TechSpecs.read(texts: [text], cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022, title: film)
         XCTAssertTrue(specs.accepted.contains { $0.name.contains("Alexa 35") })
         XCTAssertFalse(specs.accepted.contains { $0.name.contains("FotoKem") }, "\(specs.accepted.map(\.name))")
+        XCTAssertTrue(specs.accepted.contains { $0.name.contains("Cooke") }, "\(specs.accepted.map(\.name))")
     }
 
     func testAPageHeadlinedByAnotherProductionHasNoPageWideSubject() {
@@ -174,4 +178,47 @@ final class KnownCasesTests: XCTestCase {
         let bounded = PageContext.anchors(paragraphs, title: film, otherTitles: ["Glass Rivers"], people: ["Jane Doe"], acrossParagraphs: true, bounded: true)
         XCTAssertFalse(bounded.joined().contains(true), "\(bounded)")
     }
+
+    // MARK: Independent review, round 1 (each a finding's own input)
+
+    func testAnAppositiveNamingTheSubjectAsAnotherProductionSetsItAside() {
+        rejects("Glass Rivers, her previous feature, was shot on 16mm.", "16 mm", .otherProduction)
+        rejects("Glass Rivers (her 2019 debut) was shot on 16mm.", "16 mm", .otherProduction)
+    }
+
+    func testAPossessiveTitleIsStillAnotherFilm() {
+        rejects("Christopher Nolan's Oppenheimer camera package included the IMAX MSM 9802.", "IMAX", .otherProduction)
+        rejects("Christopher Nolan's IMAX epic Oppenheimer was shot on 65mm.", "65 mm", .otherProduction)
+    }
+
+    func testCaptureWordsWinOverALaterRelease() {
+        accepts("The film was shot on 35mm film which Criterion later restored in 4K.", ["35 mm"])
+        accepts("They used Cooke Panchro lenses that had been restored by a lens house.", ["Cooke"])
+    }
+
+    func testASimulatedHandheldFeelIsStillSimulated() {
+        rejects("A simulated handheld feel was added in post with shake plug-ins.", "Handheld", .simulated)
+    }
+
+    func testNoNewReasonRetiresARealStatement() {
+        accepts("We shot on 65mm, which means the grain is finer.", ["65 mm"])
+        accepts("Bleach bypass is a technique we used on the whole film.", ["Bleach bypass"])
+        accepts("While he was preparing the film, Doe tested the Alexa 65 and chose it.", ["Alexa 65"])
+        accepts("Ideally suited to low light, the Venice was our A-camera.", ["Venice"])
+        accepts("We priced three Alexa 65 packages and rented two.", ["Alexa 65"])
+        accepts("We kept the Technocrane rig for every shoot day.", ["Technocrane"])
+        accepts("Reports that it went digital are untrue: every frame was shot on Kodak 35mm.", ["35 mm"])
+    }
+
+    func testARelativeClauseCarriesThroughItsList() {
+        rejects("The look recalled Ann Vale's Glass Rivers, which was shot on 16mm, Super 8 and Hi8, and nothing like it was tried here.",
+                "Super 8", .otherProduction)
+    }
+
+    func testRatiosInOneSentenceKeepTheirOwnStages() {
+        let specs = read("We shot on 35mm, composed for 2.39:1 and protected for 1.78:1.")
+        XCTAssertEqual(specs.accepted.first { $0.name == "2.39:1" }?.stage, .framing)
+        XCTAssertNotEqual(specs.accepted.first { $0.name == "1.78:1" }?.stage, .framing)
+    }
 }
+

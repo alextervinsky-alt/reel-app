@@ -122,10 +122,23 @@ public struct ClauseMap: Sendable {
                     i = inside.upperBound
                     continue
                 }
+                if chars[i] == ",", continuesList(after: i) { i += 1; continue }
                 if chars[i] == "," || chars[i] == ";" || ((chars[i] == "–" || chars[i] == "—") && i > start) { return i }
                 i += 1
             }
             return count
+        }
+        // A comma inside a list the clause is still giving ("…which was shot on 16mm, Super 8 and Hi8,
+        // and…"): a few words, no verb of their own, not a new clause.
+        func continuesList(after comma: Int) -> Bool {
+            var j = comma + 1
+            while j < count, chars[j] != ",", chars[j] != ";", chars[j] != ".", chars[j] != "–", chars[j] != "—" { j += 1 }
+            let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
+            let words = segment.split(separator: " ")
+            guard !words.isEmpty, words.count <= 5 else { return false }
+            if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|a|an|the|his|her|their|its|our|my)\b"#,
+                             options: [.regularExpression, .caseInsensitive]) != nil { return false }
+            return segment.range(of: ClauseProduction.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
         }
         func antecedent(before start: Int) -> Range<Int> {
             // Up to eight words back, not past a clause already found or a break.
@@ -231,6 +244,9 @@ public struct ClauseProduction: Sendable {
     static let personWork = try! NSRegularExpression(
         pattern: #"^\W*(?:who|whom|whose)\b[^,;]{0,40}?\b(?:shot|lensed|photographed|lit|filmed|directed|made|graded|cut)\s+((?:[A-Z][\w'’-]*)(?:\s+(?:[A-Z][\w'’-]*|of|the|and|a|in|on|to)){0,6})"#)
 
+    /// A verb of the sentence's own statement (enough to tell whether a clause comes before it).
+    static let finiteVerb = #"\b(?:is|are|was|were|has|have|had|did|does|do|shot|used|chose|opted|lit|filmed|photographed|captured|lensed|graded|helped|became|went|made|took|gave|got|said|says|\w{3,}ed)\b"#
+
     public init(_ sentence: String, main: String? = nil, title: String? = nil, signal: (String) -> Bool) {
         let map = ClauseMap(sentence)
         let mainChars = Array(main ?? sentence)
@@ -275,7 +291,19 @@ public struct ClauseProduction: Sendable {
             }
         }
         self.other = other
-        confined = !independentSignal && independentText.filter(\.isLetter).count >= 12
+        // A clause naming another production that comes before the sentence's verb, in brackets, between
+        // commas or dashes, or as "which…", is about the sentence's subject: the subject is that production
+        // ("Glass Rivers, her previous feature, was shot on 16mm", "Glass Rivers (her 2019 debut) was…").
+        // (Not "who/whom": a person, "Colourist Ann Bloom, who also worked on <Other>, graded…".)
+        let chars = Array(sentence)
+        let subjectIsOther = other.contains { clause in
+            guard clause.role == .appositive || clause.role == .parenthetical
+                    || (clause.role == .relative && map.text(clause).range(of: #"^\W*(?:(?:with|for|on|in|of|by|from|to|through)\s+)?(?:who|whom|whose)\b"#,
+                                                                            options: [.regularExpression, .caseInsensitive]) == nil) else { return false }
+            let before = String(chars[0..<min(clause.lower, chars.count)])
+            return before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
+        }
+        confined = !independentSignal && !subjectIsOther && independentText.filter(\.isLetter).count >= 12
     }
 
     /// Whether the words at these offsets are in a clause about another production.
@@ -296,6 +324,13 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
 
     /// The film's own image: how it was shot, framed or shown when it came out.
     public var isFilmImage: Bool { ![.homeMedia, .restoration, .streaming].contains(self) }
+    /// The image as made: captured, framed, extracted, or given for some sequences. (Theatrical is what was
+    /// shown, which may be a crop of it.)
+    public var isMadeImage: Bool { [.capture, .framing, .extraction, .sequence].contains(self) }
+
+    public static func isRatio(_ name: String) -> Bool {
+        name.contains(":1") || name.range(of: #"^\d(?:\.\d+)?:\d"#, options: .regularExpression) != nil
+    }
 
     public var label: String {
         switch self {
@@ -318,7 +353,7 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
     static let streamingCue = try! NSRegularExpression(pattern: #"\b(?:streaming|streamers?|netflix version|vod|on demand|imax enhanced)\b"#,
                                                         options: [.caseInsensitive])
     static let extractionCue = try! NSRegularExpression(
-        pattern: #"\b(?:extract(?:ion|ions|ed|ing)?|cropp?(?:ed|ing)? (?:to|for|in)|crop (?:to|for)|protect(?:ed|ing)? for|center[- ]extract\w*|common top)\b"#,
+        pattern: #"\b(?:extract(?:ion|ions|ed|ing)?|cropp?(?:ed|ing)? (?:to|for|in)|crop (?:to|for)|center[- ]extract\w*|common top)\b"#,
         options: [.caseInsensitive])
     static let framingCue = try! NSRegularExpression(
         pattern: #"\b(?:designed (?:to be|for|in)|composed (?:for|in)|framed (?:for|in|to)|framing (?:for|in|of)|to match the\b[^.;]{0,60}\bof the (?:rest of the )?(?:film|movie|picture)|(?:aspect )?ratio of the (?:rest of the )?(?:film|movie|picture)|(?:the )?(?:film|movie|picture)(?:'s)? (?:primary |main |native |original )?(?:aspect )?ratio (?:was|is)|primary (?:aspect )?ratio|native (?:aspect )?ratio)\b"#,
@@ -337,11 +372,20 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
     /// The stage the ratio or format at `range` is said of, from its own clause (and the section it's in:
     /// `context`, a heading such as "Home media"). nil when its words don't say.
     public static func of(_ sentence: String, at range: Range<String.Index>, name: String, context: String = "") -> FormatStage? {
-        let isRatio = name.contains(":1") || name.range(of: #"^\d(?:\.\d+)?:\d"#, options: .regularExpression) != nil
-        let lead = ClaimFrame.governing(sentence, before: range, acrossCommas: true)
-        let after = ClaimFrame.following(sentence, after: range)
+        let isRatio = Self.isRatio(name)
+        var lead = ClaimFrame.governing(sentence, before: range, acrossCommas: true)
+        // Its own words only: not those of a ratio before it ("composed for 2.39:1 and protected for 1.78:1").
+        if let previous = lead.range(of: #"\d(?:\.\d+)?\s?[:∶]\s?\d+(?:\.\d+)?"#, options: [.regularExpression, .backwards]) {
+            lead = String(lead[previous.upperBound...])
+        }
+        let after = ClaimFrame.ownPredicate(ClaimFrame.following(sentence, after: range))
         let scope = lead + " " + String(sentence[range]) + " " + after
         func has(_ regex: NSRegularExpression, _ text: String) -> Bool { ClaimFrame.has(regex, text) }
+        // Shot in so many words, in its own clause before it: capture, whatever a later clause says of a
+        // release ("shot on 35mm film which Criterion later restored").
+        if has(captureCue, lead), !has(homeMediaCue, lead), !has(streamingCue, lead), !has(restorationCue, lead) {
+            return isRatio ? (has(extractionCue, scope) ? .extraction : .capture) : .capture
+        }
         // A later release, by its own words or its section's.
         if has(homeMediaCue, scope) || has(homeMediaCue, context) { return .homeMedia }
         if has(streamingCue, scope) || has(streamingCue, context) { return .streaming }

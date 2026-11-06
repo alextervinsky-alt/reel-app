@@ -343,13 +343,11 @@ public struct CraftIndex: Codable, Equatable, Sendable {
         source.components(separatedBy: ": ").first ?? source
     }
 
-    /// An article's canonical identity (1.10.10): its host without "www." and its path without a
-    /// trailing slash, lowercased; the query, the fragment and the scheme don't make another article.
+    /// An article's canonical identity (1.10.10): the one Reel reads pages by (`CameraSources.identity`:
+    /// host without "www.", no trailing "/", no tracking tags, an archived copy as its article, a site's
+    /// known aliases as one), so an article is one article whichever of its addresses was read.
     public static func articleIdentity(_ url: URL) -> String {
-        let host = (url.host ?? "").lowercased().replacingOccurrences(of: #"^www\."#, with: "", options: .regularExpression)
-        var path = url.path.lowercased()
-        while path.hasSuffix("/") { path.removeLast() }
-        return host + path
+        CameraSources.identity(url)
     }
 
     /// A tag the new reading no longer has, and why it wasn't kept.

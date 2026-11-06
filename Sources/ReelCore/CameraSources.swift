@@ -93,11 +93,11 @@ public struct CameraReading: Equatable, Sendable {
             var text = TechSpecs.Text(source: $0.site, paragraphs: safe($0.paragraphs), isList: CameraSources.isListPage(title: $0.title, url: $0.url))
             text.aboutFilm = $0.context?.aboutFilm ?? true
             text.article = CraftIndex.articleIdentity($0.url)
+            text.otherProductions = $0.context?.productions ?? []
             if let headline = $0.context?.headline {
                 text.boundedSubject = true
-                text.otherProductions.append(headline)
+                if !text.otherProductions.contains(headline) { text.otherProductions.append(headline) }
             }
-            text.otherProductions = $0.context?.productions ?? []
             text.inheritsSubject = $0.context.map { $0.kind == .otherProduction || $0.kind == .targetFilm } ?? true
             return text
         }

@@ -76,8 +76,8 @@ final class KnowledgeIntegrityTests: XCTestCase {
     func testAnotherArticleOfTheSameSiteIsNotAReadingOfThisOne() {
         let passage = "We lit the courtroom with SkyPanels through the high windows."
         let article = CraftIndex.articleIdentity(URL(string: "https://www.lensweekly.example/quiet-harbour/")!)
-        XCTAssertEqual(article, "lensweekly.example/quiet-harbour")
-        XCTAssertEqual(CraftIndex.articleIdentity(URL(string: "http://lensweekly.example/Quiet-Harbour?amp=1#top")!), article)
+        XCTAssertEqual(article, CameraSources.identity(URL(string: "https://www.lensweekly.example/quiet-harbour/")!))
+        XCTAssertEqual(CraftIndex.articleIdentity(URL(string: "http://lensweekly.example/quiet-harbour")!), article)
         let old = CraftIndex.Claim(name: "SkyPanels", kind: "light", text: passage, source: "Lens Weekly", status: .confirmed, since: then, rules: 18,
                                    article: article)
         // This reading read a different Lens Weekly article: the finding's own article wasn't read.
@@ -85,7 +85,7 @@ final class KnowledgeIntegrityTests: XCTestCase {
             previous: previous([old]),
             with: input(read: ["Lens Weekly": ["An interview about another film entirely."]], articles: ["lensweekly.example/other-film"]), now: now)
         XCTAssertEqual(claims.first?.status, .carried)
-        XCTAssertEqual(claims.first?.misses, 1, "a try used: retired only after the retry policy runs out")
+        XCTAssertEqual(claims.first?.misses, 0, "no try used: a reading that didn't read its article can't settle it")
         // Its own article read in full, and the passage gone: pending, then retired after `maxRetries`.
         var index = previous([old])
         var last: CraftIndex.Claim?
@@ -136,6 +136,11 @@ final class KnowledgeIntegrityTests: XCTestCase {
         XCTAssertEqual(again.films, file.films)
         XCTAssertEqual(again.writtenBy, "1.10.10 (999)")
         XCTAssertEqual(again.scans?["d1"]?.complete, true)
+        // One 1.10.9 retired only because it couldn't be confirmed without a passage is restored, as legacy.
+        var retired = String(decoding: libraryJSON(version: 5, status: "retired", text: nil), as: UTF8.self)
+        retired = retired.replacingOccurrences(of: "\"misses\":2", with: "\"misses\":5,\"reason\":\"found by rules 17; no passage was kept to read again; not settled in 4 readings\"")
+        guard case .loaded(let restored) = LibraryOpening.decide(Data(retired.utf8)) else { return XCTFail() }
+        XCTAssertEqual(restored.films.first?.craft?.claims?.first?.status, .legacy)
         // A pending finding with its passage is left pending.
         guard case .loaded(let kept) = LibraryOpening.decide(libraryJSON(version: 5, status: "pending", text: "We had a Technocrane.")) else { return XCTFail() }
         XCTAssertEqual(kept.films.first?.craft?.claims?.first?.status, .pending)

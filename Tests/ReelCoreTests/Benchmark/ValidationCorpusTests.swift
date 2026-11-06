@@ -1,16 +1,19 @@
 import XCTest
 @testable import ReelCore
 
-/// The benchmark tiers (1.10.10):
+/// The benchmark tiers (1.10.10), as they turned out:
 /// - development: the known cases and every earlier corpus (`ReviewRegressionTests`, `ClaimInterpretationTests`,
-///   `KnownCasesTests`, the 1.10.9 claim holdout, the research benchmark), which the implementation was tuned on;
-/// - validation: `Fixtures/validation-corpus.json`, 20 invented films and 230 labelled statements by a separate
-///   author who saw neither Reel's code nor its corpora, read while developing but never tuned to case by case;
+///   `KnownCasesTests`, the 1.10.9 claim holdout, the research benchmark) — and `Fixtures/validation-corpus.json`
+///   (20 invented films, 230 labelled statements by a separate author who saw neither Reel's code nor its corpora).
+///   The corpus was meant as the validation tier, but its errors were read while rules were written, and the
+///   first independent review found rules fitted to its sentences (removed in review round 1): its numbers are
+///   development numbers, not validation;
 /// - final: a sealed holdout by a third author (`SealedHoldoutTests`), which the implementer never saw, scored
-///   once on the frozen release candidate.
+///   once on the frozen release candidate: the only unbiased measure of this release.
 ///
-/// Pre-registered gates, set before the validation and final tiers were scored: precision ≥ 0.95, recall ≥
-/// 0.75, no statement about another production accepted (cross-film), no accepted claim without its passage.
+/// Pre-registered gates, set before any of these was scored: precision ≥ 0.95, recall ≥ 0.75, no statement
+/// about another production accepted (cross-film), no accepted claim without its passage. They're reported,
+/// not asserted: the release record states whether they were met (they weren't, for 1.10.10).
 /// Budget and duplicate-read gates are checked by the research benchmark (`ResearchBenchmarkTests`).
 enum Gates {
     static let precision = 0.95
@@ -36,7 +39,7 @@ final class ValidationCorpusTests: XCTestCase {
         XCTAssertEqual(file.films.count, 20)
         XCTAssertEqual(file.claims.count, 230)
         let score = await ClaimHoldoutTests.score(file)
-        say("validation: \(score)")
+        say("development (separate author): \(score)")
         say("validation " + score.stages)
         say("validation by type: " + score.byType.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value.right)/\($0.value.total)" }.joined(separator: ", "))
         for error in score.errors { say("validation " + error) }
