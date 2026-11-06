@@ -402,18 +402,36 @@ public struct TechSpecs: Equatable, Sendable {
                         let namesAsSubject = namesTitle(sentence, title: title) && !namesOnlyAsReference(sentence, title: title)
                         // Answering about another production, a sentence is this film's only when it says how
                         // this film was shot ("We shot Ex Machina on the F65"), not when it just names it.
-                        let otherFilm = aboutOtherFilm(main, year: year, people: names + directorNames, title: title) || continued
+                        // Whether a piece of the sentence names another production as such (applied to the
+                        // whole statement, and to each of its clauses, 1.10.10).
+                        func namesOther(_ part: String) -> Bool {
+                            aboutOtherFilm(part, year: year, people: names + directorNames, title: title)
+                                || (!namesTitle(part, title: title) && pageOthers.contains { namesTitle(part, title: $0) })
+                                || (!namesTitle(part, title: title) && (matches(namedAsAnotherProduction, part) || describesAnotherFilm(part, title: title ?? "")))
+                        }
+                        let turnsHere = sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here)\b|\bthis time\b|\bon this (?:one|film)\b"#,
+                                                       options: [.regularExpression, .caseInsensitive]) != nil
+                        let wholeOther = aboutOtherFilm(main, year: year, people: names + directorNames, title: title)
                             || (!namesTitle(sentence, title: title) && pageOthers.contains { namesTitle(main, title: $0) }
                                 // "On Glass Rivers, I shot film, but this time we chose…": it turns to this film.
                                 // (Not "…, but the lenses were Cooke S4", nor "but we switched…": the turn must name this film.)
-                                && sentence.range(of: #"\b(?:but|however|whereas|while)\b[^.;]*\b(?:this (?:time|film|one)|here)\b|\bthis time\b|\bon this (?:one|film)\b"#,
-                                                  options: [.regularExpression, .caseInsensitive]) == nil)
+                                && !turnsHere)
                             // "In 2007 Doe and Example collaborated on Glass Rivers.", "Glass Rivers (2007) was…",
                             // "her previous feature…": another production named as such, not this film (1.10.9).
                             || (!namesTitle(sentence, title: title) && (matches(namedAsAnotherProduction, main) || describesAnotherFilm(main, title: title ?? ""))
                                 && main.range(of: #"\bthis (?:time|film|one|movie|picture)\b|\bhere\b"#, options: [.regularExpression, .caseInsensitive]) == nil)
-                            || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
+                        let contextOther = continued || (answeringAboutAnother > 0 && !(namesAsSubject && saysHowShot(sentence, title: title)))
                             || (namesTitle(sentence, title: title) && !namesAsSubject)
+                        // Per clause (1.10.10): another production named only in a relative clause, an
+                        // appositive, brackets, dashes or an opening comparison is that clause's; the
+                        // sentence's own statement is still read for this film. And a relative clause about
+                        // another production's name is that production's, even when the sentence isn't.
+                        // (Only where it can matter: gear named, or the sentence set aside as a whole.)
+                        let clauses = wholeOther || triggers.contains(where: { lowered.contains($0) })
+                            ? ClauseProduction(sentence, main: main) { namesOther($0) } : nil
+                        let confined = wholeOther && !contextOther && (clauses.map { $0.confined && !$0.other.isEmpty } ?? false)
+                        let otherFilm = (wholeOther && !confined) || contextOther
+                        let clauseMain = clauses.map { $0.other.isEmpty ? main : $0.map.blanking($0.other, in: main) } ?? main
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."
                         previousOtherFilm = continued || (otherFilm && !namesTitle(sentence, title: title)
@@ -441,16 +459,19 @@ public struct TechSpecs: Equatable, Sendable {
                                 if rule.needsShooting, !aboutShooting || (aboutRelease && !strongShooting(lowered)) { continue }
                                 for (name, place) in rule.found(in: sentence) {
                                     let original = sentence
-                                    // Inside a part comparing the film with another production: that one's.
-                                    if frame.contains(place) {
+                                    // Inside a part comparing the film with another production, or a clause about
+                                    // another production (1.10.10): that one's.
+                                    let offset = original.distance(from: original.startIndex, to: place.lowerBound)
+                                    if frame.contains(place) || clauses?.isOther(offset..<(offset + original.distance(from: place.lowerBound, to: place.upperBound))) == true {
                                         judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
                                                                 source: text.source, reason: .otherProduction))
                                         continue
                                     }
                                     // The same place in the sentence's own statement (comparisons blanked).
-                                    let at = main.index(main.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.lowerBound))
-                                        ..< main.index(main.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.upperBound))
-                                    let sentence = main
+                                    let at = clauseMain.index(clauseMain.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.lowerBound))
+                                        ..< clauseMain.index(clauseMain.startIndex, offsetBy: original.distance(from: original.startIndex, to: place.upperBound))
+                                    let sentence = clauseMain
+                                    let main = clauseMain
                                     // "shot digitally rather than on film", "Grand Prix is the touchstone — [that
                                     // film was] shot… in Super Panavision 70", "on Top Gun: Maverick, we opened
                                     // up to 1.43:1": not this film's (see `Attribution`).
@@ -1993,8 +2014,15 @@ public struct TechSpecs: Equatable, Sendable {
         for match in possessiveTitle.matches(in: sentence, range: range) {
             guard let found = Range(match.range(at: 1), in: sentence), let named = Range(match.range(at: 2), in: sentence) else { continue }
             let surname = sentence[found].lowercased()
-            if companies.contains(surname) { continue }
+            if companies.contains(surname) || corporateNouns.contains(surname) { continue }
             if !own.isEmpty, own.hasPrefix(sentence[named].lowercased()) { continue }
+            // A maker's or a person's product, not a film (1.10.10): what follows the possessive is gear
+            // or a format ("Red Digital Cinema Camera Company's RED MX digital camera", "Storaro's
+            // Univisium format"), by the same rules that find gear.
+            let possessed = String(sentence[named.lowerBound...].prefix(48))
+            if rules.contains(where: { rule in rule.found(in: possessed).contains { possessed.distance(from: possessed.startIndex, to: $0.at.lowerBound) == 0 } })
+                || possessed.range(of: #"^[\w-]+(?:\s+[\w-]+)?\s+(?:camera|cameras|lens|lenses|format|process|system|stock|sensor|ratio)\b"#,
+                                   options: [.regularExpression, .caseInsensitive]) != nil { continue }
             let known = people.contains { person in
                 person.lowercased().split(whereSeparator: { $0 == " " || $0 == "-" }).contains { $0 == surname }
             }
@@ -2009,6 +2037,9 @@ public struct TechSpecs: Equatable, Sendable {
     static let companies: Set<String> = ["kodak", "panavision", "zeiss", "cooke", "sony", "canon", "fujifilm", "fuji", "technicolor",
                                          "angenieux", "angénieux", "leica", "arri", "netflix", "warner", "universal", "paramount",
                                          "disney", "pictures", "studios", "films", "entertainment", "imax", "dolby", "blackmagic"]
+    /// The owner of a possessive that is a firm, not a person ("…Camera Company's RED MX").
+    static let corporateNouns: Set<String> = ["company", "corporation", "corp", "inc", "labs", "laboratories", "laboratory", "systems",
+                                              "technologies", "industries", "group", "rentals", "house", "works"]
     /// A first and last name, possessive, then a capitalised word: "Christopher Nolan's Oppenheimer".
     static let possessiveTitle = try! NSRegularExpression(pattern: #"\b[A-Z][a-z]+(?: [A-Z][a-z]+)? ([A-Z][a-z\-]+)['’]s ([A-Z][\w\-]+)"#)
     /// "…was not used", "…so Nolan could test whether…" (a test, not the film).
