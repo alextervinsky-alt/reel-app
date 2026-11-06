@@ -257,5 +257,44 @@ final class KnownCasesTests: XCTestCase {
         let specs = read("It was shot on 35mm and released in cinemas at 1.85:1.")
         XCTAssertNotEqual(specs.accepted.first { $0.name == "1.85:1" }?.stage, .capture)
     }
+
+    // MARK: Independent review, round 3
+
+    func testAnAsideNamingTheFilmsPeopleStillRenamesTheSubject() {
+        rejects("Glass Rivers, her previous feature with Doe, was shot on 16mm.", "16 mm", .otherProduction)
+    }
+
+    func testASectionHeadedByACollectionTitle() {
+        let text = TechSpecs.Text(source: "Lens Weekly", sections: [
+            FilmArticle.Section(id: 0, title: "Glass Rivers", paragraphs: ["We shot it on 16mm with the Aaton."]),
+            FilmArticle.Section(id: 1, title: "Beating the Heat", paragraphs: ["Doe chose Cooke S4 lenses."]),
+        ], isInterview: true)
+        let specs = TechSpecs.read(texts: [text], cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022,
+                                   title: film, otherTitles: ["Glass Rivers", "Heat"])
+        XCTAssertFalse(specs.accepted.contains { $0.name.contains("16") }, "\(specs.accepted.map(\.name))")
+        XCTAssertTrue(specs.accepted.contains { $0.name.contains("Cooke") }, "\(specs.accepted.map(\.name))")
+    }
+
+    func testAQuotedRemarkIsNotAProduction() {
+        XCTAssertNil(PageContext.headlineProduction("Doe: ‘IMAX Was the Only Choice’", title: film))
+        XCTAssertNil(PageContext.headlineProduction("‘Every Frame Had to Feel Earned’", title: film))
+        XCTAssertEqual(PageContext.headlineProduction("‘It Follows’ at ten", title: film, known: ["It Follows"]), "It Follows")
+    }
+
+    func testAFirmsFilmIsStillAFilm() {
+        rejects("The Weinstein Company's Glass Rivers was shot on 16mm.", "16 mm", .otherProduction)
+    }
+
+    func testAReleaseBeforeTheCaptureWordsDoesNotTakeIt() {
+        let specs = read("The cut Doe's distributor released was shot in 1.66:1.")
+        XCTAssertNotEqual(specs.accepted.first { $0.name == "1.66:1" }?.stage, .theatrical)
+    }
+
+    func testAListItemStartingWithThatStaysInTheList() {
+        let sentence = "The look recalled Glass Rivers, which used Cooke lenses, the Aaton and that Kodak stock, and nothing else."
+        let map = ClauseMap(sentence)
+        let relative = map.clauses.first { $0.role == .relative }.map(map.text) ?? ""
+        XCTAssertTrue(relative.contains("Kodak"), relative)
+    }
 }
 

@@ -325,7 +325,13 @@ public struct TechSpecs: Equatable, Sendable {
                 if !section.title.isEmpty, !namesTitle(section.title, title: title ?? ""),
                    // (The page's own productions only: a collection's title as a bare word — "It", "Saw" — is
                    // too often an ordinary word in a heading.)
-                   pageOthers.filter({ $0.count >= 4 }).contains(where: { namesTitle(section.title, title: $0) || TitleMatch.names(section.title, title: $0) }) {
+                   pageOthers.filter({ $0.count >= 4 }).contains(where: { namesTitle(section.title, title: $0) || TitleMatch.names(section.title, title: $0) })
+                    // A collection title that can't be an ordinary word (two words or more, or six letters or
+                    // more), as the whole heading ("Glass Rivers", "On Glass Rivers").
+                    || otherTitles.filter({ $0.split(separator: " ").count >= 2 || $0.filter(\.isLetter).count >= 6 }).contains(where: { other in
+                        TitleMatch.key(section.title.replacingOccurrences(of: #"^\s*(?:On|For|About)\s+"#, with: "", options: .regularExpression))
+                            == TitleMatch.key(other)
+                    }) {
                     answeringAboutAnother = section.paragraphs.count + 1
                 }
                 let heading = section.title.lowercased()
