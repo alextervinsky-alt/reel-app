@@ -374,7 +374,7 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         pattern: #"\b(?:theatrical(?:ly)? (?:release|run|projection|prints?|exhibition)|released theatrically|in (?:cinemas|theaters|theatres)|projected|projection)\b"#,
         options: [.caseInsensitive])
     /// A release after the capture words, in the same lead ("shot on 35mm and released in cinemas at 1.85:1").
-    static let releasedCue = try! NSRegularExpression(pattern: #"\b(?:released|distributed|exhibited|presented|shown|screened|projected)\b"#,
+    static let releasedCue = try! NSRegularExpression(pattern: #"\b(?:released|distributed|exhibited|screened|projected)\b"#,
                                                       options: [.caseInsensitive])
     /// TV or other protection: not the film's frame.
     public static let protectedCue = try! NSRegularExpression(pattern: #"\bprotect(?:ed|ing|ion)?\s+(?:for|to)\s+$"#, options: [.caseInsensitive])
