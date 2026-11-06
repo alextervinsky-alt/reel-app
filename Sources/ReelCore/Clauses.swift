@@ -341,7 +341,6 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         let lead = ClaimFrame.governing(sentence, before: range, acrossCommas: true)
         let after = ClaimFrame.following(sentence, after: range)
         let scope = lead + " " + String(sentence[range]) + " " + after
-        let wide = String(sentence[ClaimFrame.segmentStart(sentence, before: range)...])
         func has(_ regex: NSRegularExpression, _ text: String) -> Bool { ClaimFrame.has(regex, text) }
         // A later release, by its own words or its section's.
         if has(homeMediaCue, scope) || has(homeMediaCue, context) { return .homeMedia }
@@ -350,9 +349,10 @@ public enum FormatStage: String, Codable, Sendable, CaseIterable {
         guard isRatio else { return has(captureCue, scope) ? .capture : nil }
         if has(extractionCue, scope) { return .extraction }
         if has(sequenceCue, lead) || has(sequenceCue, after) { return .sequence }
-        if has(framingCue, wide) { return .framing }
+        // (Its own clause: "presented at 2.39:1 in cinemas, but we composed for 2.00:1" frames the 2.00:1.)
+        if has(framingCue, scope) { return .framing }
         if has(captureCue, scope) { return .capture }
-        if has(theatricalCue, scope) || has(theatricalCue, wide) { return .theatrical }
+        if has(theatricalCue, scope) { return .theatrical }
         return nil
     }
 }
