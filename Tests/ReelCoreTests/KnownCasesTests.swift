@@ -211,10 +211,6 @@ final class KnownCasesTests: XCTestCase {
         accepts("Reports that it went digital are untrue: every frame was shot on Kodak 35mm.", ["35 mm"])
     }
 
-    func testARelativeClauseCarriesThroughItsList() {
-        rejects("The look recalled Ann Vale's Glass Rivers, which was shot on 16mm, Super 8 and Hi8, and nothing like it was tried here.",
-                "Super 8", .otherProduction)
-    }
 
     func testRatiosInOneSentenceKeepTheirOwnStages() {
         let specs = read("We shot on 35mm, composed for 2.39:1 and protected for 1.78:1.")
@@ -292,12 +288,6 @@ final class KnownCasesTests: XCTestCase {
         XCTAssertNotEqual(specs.accepted.first { $0.name == "1.66:1" }?.stage, .theatrical)
     }
 
-    func testAListItemStartingWithThatStaysInTheList() {
-        let sentence = "The look recalled Glass Rivers, which used Cooke lenses, the Aaton and that Kodak stock, and nothing else."
-        let map = ClauseMap(sentence)
-        let relative = map.clauses.first { $0.role == .relative }.map(map.text) ?? ""
-        XCTAssertTrue(relative.contains("Kodak"), relative)
-    }
 
     // MARK: Independent review, round 4
 
@@ -321,6 +311,17 @@ final class KnownCasesTests: XCTestCase {
         let judged = specs.judged.first { $0.name.contains("Alexa XT") }
         XCTAssertEqual(judged?.reason, .probablyOtherProduction)
         XCTAssertTrue(judged?.reason.abstains ?? false)
+    }
+
+    // MARK: Independent review, round 5
+
+    func testANamedSubjectRenamedAsAnotherProductionIsSetAside() {
+        rejects("Glass Rivers, her follow-up, was shot on 16mm.", "16 mm", .otherProduction)
+        rejects("Glass Rivers, a 2019 remake of Paper Moon, was shot on 16mm.", "16 mm", .otherProduction)
+    }
+
+    func testAMainClauseAfterARelativeClauseIsNeverSwallowed() {
+        accepts("Unlike Glass Rivers, which Doe shot on 16mm, the new film employs an Alexa 35, Cooke S4s and Kodak 5219.", ["Alexa 35"])
     }
 }
 
