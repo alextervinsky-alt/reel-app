@@ -536,7 +536,8 @@ public struct TechSpecs: Equatable, Sendable {
                                     let offset = original.distance(from: original.startIndex, to: place.lowerBound)
                                     let span = offset..<(offset + original.distance(from: place.lowerBound, to: place.upperBound))
                                     if frame.contains(place) || clauses?.isOther(span) == true {
-                                        let inferred = !frame.contains(place) && !wholeOther && clauses?.isInferredOther(span) == true
+                                        let inferred = !frame.contains(place) && (clauses?.isTail(span) == true
+                                            || (!wholeOther && clauses?.isInferredOther(span) == true))
                                         judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
                                                                 source: text.source, reason: inferred ? .probablyOtherProduction : .otherProduction))
                                         continue

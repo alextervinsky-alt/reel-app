@@ -230,6 +230,13 @@ public struct ClauseProduction: Sendable {
     /// The dependent clauses that are another production's only by what they hang on (an antecedent, an
     /// opening comparison, a person's other work) and not by their own words.
     public let inferredOther: [ClauseMap.Clause]
+    /// List items after a relative clause about another production that may still be its list: always held
+    /// back (never accepted, never ruling anything out), whatever else the sentence says.
+    public let tails: [ClauseMap.Clause]
+
+    public func isTail(_ offsets: Range<Int>) -> Bool {
+        tails.contains { $0.lower <= offsets.lowerBound && offsets.lowerBound < $0.upper }
+    }
 
     /// `signal`: whether a piece of text is about another production (the sentence-level test, applied
     /// to a clause).
@@ -295,22 +302,36 @@ public struct ClauseProduction: Sendable {
         // with no verb of their own, may still be its list ("…whose work on <Other> used 16mm, Super 8 and
         // Hi8, shot on…"): held back, never read for this film and never ruling anything out.
         let all = Array(sentence)
-        for clause in other where clause.role == .relative && clause.upper < all.count && all[clause.upper] == "," {
-            var j = clause.upper + 1
+        var tails: [ClauseMap.Clause] = []
+        func listItem(from start: Int) -> (text: String, end: Int) {
+            var j = start
             while j < all.count, all[j] != ",", all[j] != ";", all[j] != "–", all[j] != "—",
                   !(all[j] == "." && (j + 1 == all.count || all[j + 1].isWhitespace)) { j += 1 }
-            let fragment = String(all[(clause.upper + 1)..<j])
-            // (A list: items joined by "and"/"or", not starting like a subject — "the new film employs…" is the
-            // sentence's own statement.)
-            guard fragment.contains(where: \.isLetter), fragment.split(separator: " ").count <= 8,
-                  fragment.range(of: #"\b(?:and|or)\b"#, options: [.regularExpression, .caseInsensitive]) != nil,
-                  fragment.range(of: #"^\s*(?:the|a|an|this|these|that|his|her|their|its|our|my|we|i|he|she|they|it)\b"#,
-                                 options: [.regularExpression, .caseInsensitive]) == nil,
-                  fragment.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil else { continue }
-            let tail = ClauseMap.Clause(lower: clause.upper, upper: j, role: .relative, antecedent: nil)
-            other.append(tail)
-            inferredOther.append(tail)
+            return (String(all[start..<j]), j)
         }
+        func isItem(_ fragment: String) -> Bool {
+            fragment.contains(where: \.isLetter) && fragment.split(separator: " ").count <= 8
+                && fragment.range(of: #"^\s*(?:the|a|an|this|these|that|his|her|their|its|our|my|we|i|he|she|they|it)\b"#,
+                                  options: [.regularExpression, .caseInsensitive]) == nil
+                && fragment.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
+        }
+        for clause in other where clause.role == .relative && clause.upper < all.count && all[clause.upper] == "," {
+            // A run of list items ("16mm, Super 8, and Hi8", "16mm, Super 8, Hi8 and VHS"): short, verbless,
+            // not starting like a subject, the last one given with "and"/"or".
+            var end = clause.upper
+            var closed = false
+            while end < all.count, all[end] == ",", !closed {
+                let item = listItem(from: end + 1)
+                guard isItem(item.text) else { break }
+                end = item.end
+                if item.text.range(of: #"\b(?:and|or)\b"#, options: [.regularExpression, .caseInsensitive]) != nil { closed = true }
+            }
+            guard closed else { continue }
+            tails.append(ClauseMap.Clause(lower: clause.upper, upper: end, role: .relative, antecedent: nil))
+        }
+        other += tails
+        inferredOther += tails
+        self.tails = tails
         self.other = other
         self.inferredOther = inferredOther
         // An appositive or brackets naming another production before the sentence's verb rename the
