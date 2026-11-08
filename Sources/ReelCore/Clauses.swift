@@ -122,29 +122,14 @@ public struct ClauseMap: Sendable {
                     i = inside.upperBound
                     continue
                 }
-                if chars[i] == ",", continuesList(after: i) { i += 1; continue }
+                // (A relative clause ends at its first comma, as in 1.10.9. Carrying it through a list was
+                // tried in review rounds 1–4 and dropped: no rule on a list's words told a list apart from the
+                // sentence's own next clause reliably. Gear in a list after the comma is read with the main
+                // clause, where the sentence's own words decide its production.)
                 if chars[i] == "," || chars[i] == ";" || ((chars[i] == "–" || chars[i] == "—") && i > start) { return i }
                 i += 1
             }
             return count
-        }
-        // A comma inside a list the clause is still giving ("…which was shot on 16mm, Super 8 and Hi8,
-        // and…"): a few words, no verb of their own, not a new clause.
-        func continuesList(after comma: Int) -> Bool {
-            var j = comma + 1
-            // (A full stop ends it; a decimal point, "1.43:1", doesn't.)
-            while j < count, chars[j] != ",", chars[j] != ";", chars[j] != "–", chars[j] != "—",
-                  !(chars[j] == "." && (j + 1 == count || chars[j + 1].isWhitespace)) { j += 1 }
-            let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
-            let words = segment.split(separator: " ")
-            guard !words.isEmpty, words.count <= 7 else { return false }
-            // The list's last item is given with "and"/"or"; words running to the end of the sentence
-            // without one are the sentence's own statement ("Unlike <Other>, which Doe shot on 16mm, the new
-            // film uses an Alexa 35").
-            if j >= count - 1 || chars[j] == ".", segment.range(of: #"^(?:and|or)\s"#, options: [.regularExpression, .caseInsensitive]) == nil { return false }
-            if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|his|her|their|its|our|my|here|there)\b|^(?:and\s+|or\s+)?(?:this|these|that)\s+(?:one|ones|film|movie|picture|time|production|feature)\b"#,
-                             options: [.regularExpression, .caseInsensitive]) != nil { return false }
-            return segment.range(of: ClauseProduction.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
         }
         func antecedent(before start: Int) -> Range<Int> {
             // Up to eight words back, not past a clause already found or a break.
@@ -319,8 +304,6 @@ public struct ClauseProduction: Sendable {
             guard clause.role == .appositive || clause.role == .parenthetical, clause.lower >= comparisonEnd else { return false }
             // (An appositive only when it says what the subject is — "her previous feature", "his debut" —
             // not what it's like: ", a sequel to / a tribute to / an homage to <Other>,".)
-            if clause.role == .appositive, map.text(clause).range(of: #"\b(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|sequel|follow-up|prequel|remake|technique|trick|habit|idea)\b"#,
-                                                                   options: [.regularExpression, .caseInsensitive]) != nil { return false }
             let before = String(chars[comparisonEnd..<min(clause.lower, chars.count)])
             return before.contains(where: \.isLetter)
                 && before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil

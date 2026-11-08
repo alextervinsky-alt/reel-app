@@ -330,10 +330,21 @@ public struct TechSpecs: Equatable, Sendable {
                    // too often an ordinary word in a heading.)
                    // A production the page or the collection knows, as the whole heading ("Glass Rivers", "On
                    // Glass Rivers", "Glass Rivers (2019)"), and not a word that can be an ordinary one.
-                   (pageOthers + otherTitles).filter({ $0.split(separator: " ").count >= 2 || $0.filter(\.isLetter).count >= 6 }).contains(where: { other in
+                   (pageOthers.filter({ $0.split(separator: " ").count >= 2 || $0.filter(\.isLetter).count >= 6 }).contains(where: { other in
                        TitleMatch.key(section.title.replacingOccurrences(of: #"^\s*(?:On|For|About)\s+|\s*\((?:19|20)\d{2}\)\s*$"#, with: "",
                                                                         options: .regularExpression)) == TitleMatch.key(other)
-                   }) {
+                   })
+                   // A collection title only as "On <Title>" or "<Title> (2019)": a one-word title alone
+                   // ("Interiors", "Daylight") can be an ordinary heading.
+                   || otherTitles.filter({ $0.split(separator: " ").count >= 2 || $0.filter(\.isLetter).count >= 6 }).contains(where: { other in
+                       let key = TitleMatch.key(other)
+                       if section.title.range(of: #"^\s*(?:On|For|About)\s+"#, options: .regularExpression) != nil
+                           || section.title.range(of: #"\((?:19|20)\d{2}\)\s*$"#, options: .regularExpression) != nil {
+                           return TitleMatch.key(section.title.replacingOccurrences(of: #"^\s*(?:On|For|About)\s+|\s*\((?:19|20)\d{2}\)\s*$"#,
+                                                                                    with: "", options: .regularExpression)) == key
+                       }
+                       return other.split(separator: " ").count >= 2 && TitleMatch.key(section.title) == key
+                   })) {
                     sectionOther = true
                 }
                 let heading = section.title.lowercased()
@@ -470,7 +481,8 @@ public struct TechSpecs: Equatable, Sendable {
                         // the statement's own words or the conversation names another production.)
                         let inSectionOther = sectionOther && !(namesAsSubject && saysHowShot(sentence, title: title))
                         let otherFilm = (wholeOther && !confined) || contextOther || clauses?.subjectIsOther == true || inSectionOther
-                        let inferredOnly = otherFilm && !(wholeOther && !confined) && !contextOther
+                        // (Never when the statement's own words name another production anywhere: `wholeOther`.)
+                        let inferredOnly = otherFilm && !wholeOther && !contextOther
                         let clauseMain = clauses.map { $0.other.isEmpty ? main : $0.map.blanking($0.other, in: main) } ?? main
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."
@@ -524,7 +536,7 @@ public struct TechSpecs: Equatable, Sendable {
                                     let offset = original.distance(from: original.startIndex, to: place.lowerBound)
                                     let span = offset..<(offset + original.distance(from: place.lowerBound, to: place.upperBound))
                                     if frame.contains(place) || clauses?.isOther(span) == true {
-                                        let inferred = !frame.contains(place) && clauses?.isInferredOther(span) == true
+                                        let inferred = !frame.contains(place) && !wholeOther && clauses?.isInferredOther(span) == true
                                         judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
                                                                 source: text.source, reason: inferred ? .probablyOtherProduction : .otherProduction))
                                         continue
