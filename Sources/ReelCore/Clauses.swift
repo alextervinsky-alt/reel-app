@@ -132,7 +132,9 @@ public struct ClauseMap: Sendable {
         // and…"): a few words, no verb of their own, not a new clause.
         func continuesList(after comma: Int) -> Bool {
             var j = comma + 1
-            while j < count, chars[j] != ",", chars[j] != ";", chars[j] != ".", chars[j] != "–", chars[j] != "—" { j += 1 }
+            // (A full stop ends it; a decimal point, "1.43:1", doesn't.)
+            while j < count, chars[j] != ",", chars[j] != ";", chars[j] != "–", chars[j] != "—",
+                  !(chars[j] == "." && (j + 1 == count || chars[j + 1].isWhitespace)) { j += 1 }
             let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
             let words = segment.split(separator: " ")
             guard !words.isEmpty, words.count <= 7 else { return false }
