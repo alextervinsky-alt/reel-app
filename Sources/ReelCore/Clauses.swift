@@ -300,7 +300,12 @@ public struct ClauseProduction: Sendable {
             while j < all.count, all[j] != ",", all[j] != ";", all[j] != "–", all[j] != "—",
                   !(all[j] == "." && (j + 1 == all.count || all[j + 1].isWhitespace)) { j += 1 }
             let fragment = String(all[(clause.upper + 1)..<j])
+            // (A list: items joined by "and"/"or", not starting like a subject — "the new film employs…" is the
+            // sentence's own statement.)
             guard fragment.contains(where: \.isLetter), fragment.split(separator: " ").count <= 8,
+                  fragment.range(of: #"\b(?:and|or)\b"#, options: [.regularExpression, .caseInsensitive]) != nil,
+                  fragment.range(of: #"^\s*(?:the|a|an|this|these|that|his|her|their|its|our|my|we|i|he|she|they|it)\b"#,
+                                 options: [.regularExpression, .caseInsensitive]) == nil,
                   fragment.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil else { continue }
             let tail = ClauseMap.Clause(lower: clause.upper, upper: j, role: .relative, antecedent: nil)
             other.append(tail)
