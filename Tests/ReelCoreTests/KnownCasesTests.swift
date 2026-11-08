@@ -327,5 +327,16 @@ final class KnownCasesTests: XCTestCase {
                        "\(specs.judged)")
         accepts("Unlike Glass Rivers, which Doe shot on 16mm, the new film uses an Alexa 35, Cooke S4s and Kodak 5219.", ["Alexa 35"])
     }
+
+    // MARK: Independent review, round 6
+
+    func testAHomageAppositiveDoesNotRenameTheSubject() {
+        accepts("The opening sequence, a homage to Ann Vale's Glass Rivers, was filmed on Super 8.", ["Super 8"])
+    }
+
+    func testAListAfterAnotherProductionsRelativeClauseIsHeldBack() {
+        let specs = read("Jane Doe, whose work on Ann Vale's Glass Rivers used 16mm, Super 8 and Hi8, shot on an Alexa 35.")
+        XCTAssertFalse(specs.accepted.contains { $0.name.contains("Super 8") || $0.name.contains("Hi8") }, "\(specs.accepted.map(\.name))")
+    }
 }
 
