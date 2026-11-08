@@ -138,6 +138,10 @@ public struct ClauseMap: Sendable {
             let segment = String(chars[(comma + 1)..<j]).trimmingCharacters(in: .whitespaces)
             let words = segment.split(separator: " ")
             guard !words.isEmpty, words.count <= 7 else { return false }
+            // The list's last item is given with "and"/"or"; words running to the end of the sentence
+            // without one are the sentence's own statement ("Unlike <Other>, which Doe shot on 16mm, the new
+            // film uses an Alexa 35").
+            if j >= count - 1 || chars[j] == ".", segment.range(of: #"^(?:and|or)\s"#, options: [.regularExpression, .caseInsensitive]) == nil { return false }
             if segment.range(of: #"^(?:and\s+|or\s+)?(?:which|who|whom|whose|but|while|whereas|though|although|so|because|as|when|where|then|his|her|their|its|our|my|here|there)\b|^(?:and\s+|or\s+)?(?:this|these|that)\s+(?:one|ones|film|movie|picture|time|production|feature)\b"#,
                              options: [.regularExpression, .caseInsensitive]) != nil { return false }
             return segment.range(of: ClauseProduction.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
@@ -238,6 +242,9 @@ public struct ClauseProduction: Sendable {
     /// A clause naming another production says what the sentence's subject is ("Glass Rivers, her previous
     /// feature, was shot on 16mm"): the whole statement is that production's.
     public let subjectIsOther: Bool
+    /// The dependent clauses that are another production's only by what they hang on (an antecedent, an
+    /// opening comparison, a person's other work) and not by their own words.
+    public let inferredOther: [ClauseMap.Clause]
 
     /// `signal`: whether a piece of text is about another production (the sentence-level test, applied
     /// to a clause).
@@ -250,7 +257,7 @@ public struct ClauseProduction: Sendable {
         pattern: #"^\W*(?:who|whom|whose)\b[^,;]{0,40}?\b(?:shot|lensed|photographed|lit|filmed|directed|made|graded|cut)\s+((?:[A-Z][\w'’-]*)(?:\s+(?:[A-Z][\w'’-]*|of|the|and|a|in|on|to)){0,6})"#)
 
     /// A verb of the sentence's own statement (enough to tell whether a clause comes before it).
-    static let finiteVerb = #"\b(?:is|are|was|were|has|have|had|did|does|do|shot|used|chose|opted|lit|filmed|photographed|captured|lensed|graded|helped|became|went|made|took|gave|got|said|says|\w{3,}ed)\b"#
+    static let finiteVerb = #"\b(?:is|are|was|were|has|have|had|did|does|do|shot|shoots|used|uses|chose|chooses|opted|lit|lights|filmed|films|photographed|captured|captures|lensed|graded|grades|helped|became|becomes|went|goes|made|makes|took|takes|gave|gives|got|gets|said|says|brought|brings|kept|keeps|built|builds|bought|ran|runs|found|finds|put|puts|set|sets|began|begins|needed|needs|wants|works|feels|looks|seems|stays|remains|\w{3,}ed)\b"#
 
     /// `own`: whether a piece of text names this film or one of its people (then the subject is this film's,
     /// whatever an aside says: "Jane Doe (Glass Rivers, 2015) shot The Quiet Harbour on 35mm").
@@ -272,6 +279,7 @@ public struct ClauseProduction: Sendable {
         }
         self.map = map
         var other: [ClauseMap.Clause] = []
+        var inferredOther: [ClauseMap.Clause] = []
         var independentSignal = false
         var independentText = ""
         for clause in map.clauses {
@@ -291,7 +299,7 @@ public struct ClauseProduction: Sendable {
                     // A relative clause naming this film's people as its subject is about them, not
                     // the production before it ("…Lubezki, with whom Iñárritu also collaborated on…"):
                     // that one is caught by its own words.
-                if signal(text) || antecedentOther { other.append(clause) }
+                if signal(text) { other.append(clause) } else if antecedentOther { other.append(clause); inferredOther.append(clause) }
             } else {
                 let own = mainChars.count == map.sentence.count ? String(mainChars[clause.lower..<min(clause.upper, mainChars.count)]) : text
                 independentText += " " + own
@@ -299,6 +307,7 @@ public struct ClauseProduction: Sendable {
             }
         }
         self.other = other
+        self.inferredOther = inferredOther
         // An appositive or brackets naming another production before the sentence's verb rename the
         // sentence's subject: the subject is that production ("Glass Rivers, her previous feature, was shot
         // on 16mm", "Glass Rivers (her 2019 debut) was…"). Not a relative clause ("The Alexa, which Doe
@@ -308,10 +317,17 @@ public struct ClauseProduction: Sendable {
         let comparisonEnd = comparisons.map(\.upper).max() ?? 0
         subjectIsOther = other.contains { clause in
             guard clause.role == .appositive || clause.role == .parenthetical, clause.lower >= comparisonEnd else { return false }
+            // (An appositive only when it says what the subject is — "her previous feature", "his debut" —
+            // not what it's like: ", a sequel to / a tribute to / an homage to <Other>,".)
+            if clause.role == .appositive, map.text(clause).range(of: #"\b(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|sequel|follow-up|prequel|remake|technique|trick|habit|idea)\b"#,
+                                                                   options: [.regularExpression, .caseInsensitive]) != nil { return false }
             let before = String(chars[comparisonEnd..<min(clause.lower, chars.count)])
             return before.contains(where: \.isLetter)
                 && before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
                 && !own(before)
+                // ("The film, …", "It (…)", "This one, …": the film being read.)
+                && before.range(of: #"^\W*(?:the (?:film|movie|picture|production|feature|shoot)|it|this(?: one| film| movie)?)\W*$"#,
+                                 options: [.regularExpression, .caseInsensitive]) == nil
         }
         confined = !independentSignal && !subjectIsOther && independentText.filter(\.isLetter).count >= 12
     }
@@ -319,6 +335,12 @@ public struct ClauseProduction: Sendable {
     /// Whether the words at these offsets are in a clause about another production.
     public func isOther(_ offsets: Range<Int>) -> Bool {
         other.contains { $0.lower <= offsets.lowerBound && offsets.lowerBound < $0.upper }
+    }
+
+    /// Whether the clause at these offsets is another production's only by inference (what it hangs on),
+    /// not by its own words: set aside, but held back (`ClaimReason.probablyOtherProduction`).
+    public func isInferredOther(_ offsets: Range<Int>) -> Bool {
+        inferredOther.contains { $0.lower <= offsets.lowerBound && offsets.lowerBound < $0.upper }
     }
 }
 

@@ -41,7 +41,7 @@ final class KnownCasesTests: XCTestCase {
 
     func testARelativeClauseAboutAnotherProductionsNameIsThatProductions() {
         rejects("The night streets had a glow which recalled scenes from Stanley Vane's Glass Rivers, which was shot in candlelight with a fast lens.",
-                "Candlelight", .otherProduction)
+                "Candlelight", .probablyOtherProduction)
     }
 
     func testAnAppositiveOrADashedAsideNamingAnotherProduction() {
@@ -213,7 +213,7 @@ final class KnownCasesTests: XCTestCase {
 
     func testARelativeClauseCarriesThroughItsList() {
         rejects("The look recalled Ann Vale's Glass Rivers, which was shot on 16mm, Super 8 and Hi8, and nothing like it was tried here.",
-                "Super 8", .otherProduction)
+                "Super 8", .probablyOtherProduction)
     }
 
     func testRatiosInOneSentenceKeepTheirOwnStages() {
@@ -297,6 +297,31 @@ final class KnownCasesTests: XCTestCase {
         let map = ClauseMap(sentence)
         let relative = map.clauses.first { $0.role == .relative }.map(map.text) ?? ""
         XCTAssertTrue(relative.contains("Kodak"), relative)
+    }
+
+    // MARK: Independent review, round 4
+
+    func testAStatementAfterAnotherProductionsRelativeClauseIsTheFilms() {
+        accepts("Unlike Glass Rivers, which Doe shot on 16mm, the new film uses an Alexa 35.", ["Alexa 35"])
+        accepts("Unlike Glass Rivers, which Doe shot on 16mm, the team brought in two Alexa 35s.", ["Alexa 35"])
+    }
+
+    func testADescriptiveAppositiveDoesNotRenameTheSubject() {
+        accepts("The film, a sequel to Doe's Glass Rivers, was shot on 16mm.", ["16 mm"])
+    }
+
+    func testASetAsideByContextIsHeldBackNotRetired() {
+        // A heading naming a sibling title sets the section's statements aside, but holds them back: an
+        // earlier finding from them is never retired by it.
+        let text = TechSpecs.Text(source: "Lens Weekly", sections: [
+            FilmArticle.Section(id: 0, title: "On Glass Rivers", paragraphs: ["We shot on the Alexa XT with Master Primes."]),
+        ], isInterview: true)
+        let specs = TechSpecs.read(texts: [text], cinematographers: ["Jane Doe"], directors: ["Carl Example"], year: 2022,
+                                   title: "Glass Rivers 2049", otherTitles: ["Glass Rivers"])
+        XCTAssertFalse(specs.accepted.contains { $0.name.contains("Alexa XT") })
+        let judged = specs.judged.first { $0.name.contains("Alexa XT") }
+        XCTAssertEqual(judged?.reason, .probablyOtherProduction)
+        XCTAssertTrue(judged?.reason.abstains ?? false)
     }
 }
 
