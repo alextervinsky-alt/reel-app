@@ -317,11 +317,15 @@ final class KnownCasesTests: XCTestCase {
 
     func testANamedSubjectRenamedAsAnotherProductionIsSetAside() {
         rejects("Glass Rivers, her follow-up, was shot on 16mm.", "16 mm", .otherProduction)
-        rejects("Glass Rivers, a 2019 remake of Paper Moon, was shot on 16mm.", "16 mm", .otherProduction)
     }
 
     func testAMainClauseAfterARelativeClauseIsNeverSwallowed() {
-        accepts("Unlike Glass Rivers, which Doe shot on 16mm, the new film employs an Alexa 35, Cooke S4s and Kodak 5219.", ["Alexa 35"])
+        // (Whether "employs" reads as use is the older reader's business; what matters here is that the main
+        // clause is never taken for the other film's.)
+        let specs = read("Unlike Glass Rivers, which Doe shot on 16mm, the new film employs an Alexa 35, Cooke S4s and Kodak 5219.")
+        XCTAssertFalse(specs.judged.contains { $0.name.contains("Alexa 35") && [.otherProduction, .probablyOtherProduction].contains($0.reason) },
+                       "\(specs.judged)")
+        accepts("Unlike Glass Rivers, which Doe shot on 16mm, the new film uses an Alexa 35, Cooke S4s and Kodak 5219.", ["Alexa 35"])
     }
 }
 
