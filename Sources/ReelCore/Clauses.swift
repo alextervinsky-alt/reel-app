@@ -291,6 +291,21 @@ public struct ClauseProduction: Sendable {
                 if signal(own) { independentSignal = true }
             }
         }
+        // Words right after a relative clause about another production, up to the next comma or full stop,
+        // with no verb of their own, may still be its list ("…whose work on <Other> used 16mm, Super 8 and
+        // Hi8, shot on…"): held back, never read for this film and never ruling anything out.
+        let all = Array(sentence)
+        for clause in other where clause.role == .relative && clause.upper < all.count && all[clause.upper] == "," {
+            var j = clause.upper + 1
+            while j < all.count, all[j] != ",", all[j] != ";", all[j] != "–", all[j] != "—",
+                  !(all[j] == "." && (j + 1 == all.count || all[j + 1].isWhitespace)) { j += 1 }
+            let fragment = String(all[(clause.upper + 1)..<j])
+            guard fragment.contains(where: \.isLetter), fragment.split(separator: " ").count <= 8,
+                  fragment.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil else { continue }
+            let tail = ClauseMap.Clause(lower: clause.upper, upper: j, role: .relative, antecedent: nil)
+            other.append(tail)
+            inferredOther.append(tail)
+        }
         self.other = other
         self.inferredOther = inferredOther
         // An appositive or brackets naming another production before the sentence's verb rename the
@@ -305,6 +320,17 @@ public struct ClauseProduction: Sendable {
             // (An appositive only when it says what the subject is — "her previous feature", "his debut" —
             // not what it's like: ", a sequel to / a tribute to / an homage to <Other>,".)
             let before = String(chars[comparisonEnd..<min(clause.lower, chars.count)])
+            let aside = map.text(clause)
+            if clause.role == .appositive {
+                // What it's like, not what it is: ", a homage / tribute / nod to <Other>,", ", a trick Doe first
+                // used on <Other>," (1.10.9 read past these too).
+                if aside.range(of: #"\b(?:tribute|homage|nod|reference|callback|throwback|salute|allusion|riff|send-up|technique|trick|habit|idea)\b"#,
+                               options: [.regularExpression, .caseInsensitive]) != nil { return false }
+                // A sequel, follow-up, prequel or remake renames the subject only when the subject is itself
+                // another production ("Paper Moon, a remake of Glass Rivers, …").
+                if aside.range(of: #"\b(?:sequel|follow-up|prequel|remake)\b"#, options: [.regularExpression, .caseInsensitive]) != nil,
+                   !signal(before) { return false }
+            }
             return before.contains(where: \.isLetter)
                 && before.range(of: Self.finiteVerb, options: [.regularExpression, .caseInsensitive]) == nil
                 && !own(before)
