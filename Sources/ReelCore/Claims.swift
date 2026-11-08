@@ -349,12 +349,18 @@ public enum ClaimReason: String, Codable, Sendable, CaseIterable {
          /// 1.10.10: a definition or general information about the gear ("ENR is a silver retention process
          /// named for its inventor…"), and a statement that names it without saying it was used here (a crew
          /// member's job title, "his dolly grip").
-         definition, insufficientContext
+         definition, insufficientContext,
+         /// 1.10.10: another production's by inference only — its section's heading, what its clause hangs
+         /// on, an aside renaming the subject — not by the statement's own words. Set aside and held back:
+         /// it never retires an earlier finding.
+         probablyOtherProduction
 
     /// Rejected outright, or left undecided (abstained): a presentation ratio or a statement too
     /// uncertain to settle is neither confirmed nor ruled out.
     /// (A definition says nothing either way about this film: it never retires a finding, 1.10.10.)
-    public var abstains: Bool { self == .presentation || self == .uncertain || self == .insufficientContext || self == .definition }
+    public var abstains: Bool {
+        self == .presentation || self == .uncertain || self == .insufficientContext || self == .definition || self == .probablyOtherProduction
+    }
 
     public var label: String {
         switch self {
@@ -372,6 +378,7 @@ public enum ClaimReason: String, Codable, Sendable, CaseIterable {
         case .uncertain: "too uncertain to settle"
         case .definition: "a definition or general information, not a statement of use"
         case .insufficientContext: "named without saying it was used on this film"
+        case .probablyOtherProduction: "probably about another production (from its context)"
         }
     }
 }

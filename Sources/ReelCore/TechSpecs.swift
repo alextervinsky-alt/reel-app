@@ -310,6 +310,8 @@ public struct TechSpecs: Equatable, Sendable {
             // about Glass Rivers?") are about that production: the next few paragraphs, until a question
             // names this film or the section ends (a wrong guess costs a few answers, not the interview).
             var answeringAboutAnother = 0
+            // In a section headed by another production (1.10.10): set aside, held back.
+            var sectionOther = false
             // What on a page not about the film is anchored to it, paragraph by paragraph (1.10.8).
             let pageAnchors = text.aboutFilm || roundup ? nil
                 : PageContext.anchors(text.sections.flatMap(\.paragraphs), title: title ?? "", otherTitles: otherTitles,
@@ -318,6 +320,7 @@ public struct TechSpecs: Equatable, Sendable {
             var paragraphIndex = -1
             for section in text.sections {
                 answeringAboutAnother = 0
+                sectionOther = false
                 // A section headed by another production that the page names as one (its credit lists,
                 // "Glass Rivers (2019)", "On Glass Rivers, …"; 1.10.10) is about that production throughout,
                 // unless a statement in it names this film as its subject. A heading alone ("On Collaboration",
@@ -325,14 +328,13 @@ public struct TechSpecs: Equatable, Sendable {
                 if !section.title.isEmpty, !namesTitle(section.title, title: title ?? ""),
                    // (The page's own productions only: a collection's title as a bare word — "It", "Saw" — is
                    // too often an ordinary word in a heading.)
-                   pageOthers.filter({ $0.count >= 4 }).contains(where: { namesTitle(section.title, title: $0) || TitleMatch.names(section.title, title: $0) })
-                    // A collection title that can't be an ordinary word (two words or more, or six letters or
-                    // more), as the whole heading ("Glass Rivers", "On Glass Rivers").
-                    || otherTitles.filter({ $0.split(separator: " ").count >= 2 || $0.filter(\.isLetter).count >= 6 }).contains(where: { other in
-                        TitleMatch.key(section.title.replacingOccurrences(of: #"^\s*(?:On|For|About)\s+"#, with: "", options: .regularExpression))
-                            == TitleMatch.key(other)
-                    }) {
-                    answeringAboutAnother = section.paragraphs.count + 1
+                   // A production the page or the collection knows, as the whole heading ("Glass Rivers", "On
+                   // Glass Rivers", "Glass Rivers (2019)"), and not a word that can be an ordinary one.
+                   (pageOthers + otherTitles).filter({ $0.split(separator: " ").count >= 2 || $0.filter(\.isLetter).count >= 6 }).contains(where: { other in
+                       TitleMatch.key(section.title.replacingOccurrences(of: #"^\s*(?:On|For|About)\s+|\s*\((?:19|20)\d{2}\)\s*$"#, with: "",
+                                                                        options: .regularExpression)) == TitleMatch.key(other)
+                   }) {
+                    sectionOther = true
                 }
                 let heading = section.title.lowercased()
                 // Never the story, its themes or analysis, even once watched.
@@ -464,7 +466,11 @@ public struct TechSpecs: Equatable, Sendable {
                             ? ClauseProduction(sentence, main: main, title: title,
                                                own: { part in namesTitle(part, title: title ?? "") || mentions(names + directorNames, in: part, generic: false) }) { namesOther($0) } : nil
                         let confined = wholeOther && !contextOther && (clauses.map { $0.confined && !$0.other.isEmpty } ?? false)
-                        let otherFilm = (wholeOther && !confined) || contextOther || clauses?.subjectIsOther == true
+                        // (Set aside by inference only — its section, an aside renaming the subject — when nothing in
+                        // the statement's own words or the conversation names another production.)
+                        let inSectionOther = sectionOther && !(namesAsSubject && saysHowShot(sentence, title: title))
+                        let otherFilm = (wholeOther && !confined) || contextOther || clauses?.subjectIsOther == true || inSectionOther
+                        let inferredOnly = otherFilm && !(wholeOther && !confined) && !contextOther
                         let clauseMain = clauses.map { $0.other.isEmpty ? main : $0.map.blanking($0.other, in: main) } ?? main
                         // Only a sentence that names another production is followed by "It…" about it: not
                         // "The Quiet Harbour is set in 1968 Lisbon."
@@ -482,7 +488,7 @@ public struct TechSpecs: Equatable, Sendable {
                             for rule in rules {
                                 for (name, _) in rule.found(in: sentence) {
                                     judged.append(Judgement(kind: rule.kind, name: name, evidence: String(sentence.prefix(400)),
-                                                            source: text.source, reason: .otherProduction))
+                                                            source: text.source, reason: inferredOnly ? .probablyOtherProduction : .otherProduction))
                                 }
                             }
                         }
@@ -516,9 +522,11 @@ public struct TechSpecs: Equatable, Sendable {
                                     // Inside a part comparing the film with another production, or a clause about
                                     // another production (1.10.10): that one's.
                                     let offset = original.distance(from: original.startIndex, to: place.lowerBound)
-                                    if frame.contains(place) || clauses?.isOther(offset..<(offset + original.distance(from: place.lowerBound, to: place.upperBound))) == true {
+                                    let span = offset..<(offset + original.distance(from: place.lowerBound, to: place.upperBound))
+                                    if frame.contains(place) || clauses?.isOther(span) == true {
+                                        let inferred = !frame.contains(place) && clauses?.isInferredOther(span) == true
                                         judged.append(Judgement(kind: rule.kind, name: name, evidence: String(original.prefix(400)),
-                                                                source: text.source, reason: .otherProduction))
+                                                                source: text.source, reason: inferred ? .probablyOtherProduction : .otherProduction))
                                         continue
                                     }
                                     // The same place in the sentence's own statement (comparisons blanked).
