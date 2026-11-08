@@ -338,5 +338,22 @@ final class KnownCasesTests: XCTestCase {
         let specs = read("Jane Doe, whose work on Ann Vale's Glass Rivers used 16mm, Super 8 and Hi8, shot on an Alexa 35.")
         XCTAssertFalse(specs.accepted.contains { $0.name.contains("Super 8") || $0.name.contains("Hi8") }, "\(specs.accepted.map(\.name))")
     }
+
+    // MARK: Independent review, round 7
+
+    func testLongerListsAfterAnotherProductionsRelativeClauseAreHeldBack() {
+        for sentence in ["Jane Doe, whose work on Ann Vale's Glass Rivers used 16mm, Super 8, and Hi8, shot on an Alexa 35.",
+                         "Jane Doe, whose work on Ann Vale's Glass Rivers used 16mm, Super 8, Hi8 and VHS, shot on an Alexa 35."] {
+            let specs = read(sentence)
+            XCTAssertFalse(specs.accepted.contains { $0.name.contains("Super 8") || $0.name.contains("Hi8") }, sentence)
+        }
+    }
+
+    func testAHeldBackTailNeverRetires() {
+        let specs = read("We used the Alexa Mini, which Doe also used on Glass Rivers (2019), and Cooke S4s.")
+        if let cooke = specs.judged.first(where: { $0.name.contains("Cooke") }) {
+            XCTAssertTrue(cooke.reason.abstains, "\(cooke.reason)")
+        }
+    }
 }
 
