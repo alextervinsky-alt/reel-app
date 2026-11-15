@@ -142,6 +142,7 @@ struct TonightView: View {
                             }
                         }
                         .padding(.bottom, 6)
+                        .hoverRegion()
                     }
                     .tracksScrolling()
                     .scrollClipDisabled()
@@ -150,6 +151,7 @@ struct TonightView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
             .onGeometryChange(for: CGFloat.self) { $0.size.width - 64 } action: { width = $0 }
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)

@@ -53,6 +53,7 @@ struct PersonPage: View {
             .padding(.horizontal, 40)
             .padding(.vertical, 28)
             .frame(maxWidth: 1180, alignment: .leading)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -172,6 +173,7 @@ struct PersonPage: View {
                                 }
                             }
                         }
+                        .hoverRegion()
                     }
                     .tracksScrolling()
                 }

@@ -49,6 +49,7 @@ struct ForYouView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
             .frame(maxWidth: 1120, alignment: .leading)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -80,6 +81,7 @@ struct ForYouView: View {
                             }
                         }
                     }
+                    .hoverRegion()
                 }
                 .tracksScrolling()
             }

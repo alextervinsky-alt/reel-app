@@ -103,6 +103,7 @@ struct LibraryGridView: View {
                     .padding(.bottom, 40)
                 }
             }
+            .hoverRegion()
         }
         .onScrollPhaseChange { _, phase in scroll.phaseChanged(scrolling: phase.isScrolling, model: model) }
         .environment(scroll)

@@ -94,6 +94,7 @@ struct ListPage: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
             .frame(maxWidth: 1080, alignment: .leading)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -495,6 +496,7 @@ struct FranchisePage: View {
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)

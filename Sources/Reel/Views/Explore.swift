@@ -66,6 +66,7 @@ struct ExploreView: View {
             .padding(.horizontal, 32)
             .padding(.top, 18)
             .padding(.bottom, 40)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -433,6 +434,7 @@ struct DiscoverListPage: View {
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -693,6 +695,7 @@ struct WishlistView: View {
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -910,6 +913,7 @@ struct SimilarRow: View {
                     }
                 }
                 .padding(.vertical, 6)
+                .hoverRegion()
             }
             .tracksScrolling()
         }

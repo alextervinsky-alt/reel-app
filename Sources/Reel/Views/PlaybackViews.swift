@@ -727,6 +727,7 @@ struct MoreLikeThisPage: View {
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)

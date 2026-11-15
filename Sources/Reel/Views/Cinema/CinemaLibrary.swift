@@ -69,6 +69,7 @@ struct CinemaLibrary: View {
                         content(films) { id in
                             withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(id, anchor: .center) }
                         }
+                        .hoverRegion()
                     }
                     .tracksScrolling()
                     .scrollIndicators(.hidden)

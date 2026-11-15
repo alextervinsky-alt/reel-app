@@ -36,6 +36,7 @@ struct ListsView: View {
             .padding(.horizontal, 32)
             .padding(.top, 18)
             .padding(.bottom, 48)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -94,6 +95,7 @@ struct ListsView: View {
                         }
                     }
                     .padding(.vertical, 6)
+                    .hoverRegion()
                 }
                 .tracksScrolling()
             }
@@ -261,6 +263,7 @@ struct StartHereSection: View {
                     }
                 }
                 .padding(.vertical, 6)
+                .hoverRegion()
             }
             .tracksScrolling()
         }

@@ -48,6 +48,7 @@ struct RecommendedView: View {
             .padding(.horizontal, 32)
             .padding(.vertical, 22)
             .frame(maxWidth: 1120, alignment: .leading)
+            .hoverRegion()
         }
         .tracksScrolling()
         .background(Theme.background)
@@ -93,6 +94,7 @@ struct MoodChips: View {
                     .buttonStyle(.plain)
                 }
             }
+            .hoverRegion()
         }
         .tracksScrolling()
         .scrollClipDisabled()

@@ -23,6 +23,9 @@ enum ScrollTiming {
         var draw: [Double] = []
         var late: [Double] = []
 
+        /// Steps over a frame's time: 16.7 ms at 60 Hz, 8.3 ms at 120 Hz.
+        func over(_ budget: Double) -> Int { steps.filter { $0 > budget }.count }
+
         static func median(_ values: [Double]) -> Double {
             values.isEmpty ? 0 : values.sorted()[values.count / 2]
         }
@@ -31,9 +34,9 @@ enum ScrollTiming {
             guard !steps.isEmpty else { return "nothing to scroll" }
             let sorted = steps.sorted()
             func at(_ share: Double) -> Double { sorted[min(sorted.count - 1, Int(Double(sorted.count - 1) * share))] }
-            let slow = steps.filter { $0 > 16.7 }.count
-            return String(format: "median %.1f ms (layout %.1f, drawing %.1f, other %.1f), 95%% %.1f, worst %.1f, %d of %d over 16 ms",
-                          at(0.5), Self.median(layout), Self.median(draw), Self.median(late), at(0.95), sorted.last ?? 0, slow, steps.count)
+            return String(format: "median %.1f ms (layout %.1f, drawing %.1f, other %.1f), 95%% %.1f, worst %.1f, %d of %d over 16 ms, %d over 8 ms",
+                          at(0.5), Self.median(layout), Self.median(draw), Self.median(late), at(0.95), sorted.last ?? 0, over(16.7),
+                          steps.count, over(8.3))
         }
     }
 
@@ -42,6 +45,9 @@ enum ScrollTiming {
     static let step: CGFloat = 28
     /// The time between steps, as between two frames.
     static let frame = Duration.milliseconds(8)
+
+    /// Every page timed this run, both passes (for the CI gates, see `SpeedGates`).
+    static var results: [(name: String, first: Pass, second: Pass)] = []
 
     /// Times each page and returns a line for each.
     static func run(_ pages: [Page], model: AppModel, log: (String) -> Void) async -> [String] {
@@ -77,6 +83,7 @@ enum ScrollTiming {
             let line = "\(page.name) (\(Int(height)) pt): first \(first.summary) | again \(second.summary)"
             log("scroll " + line)
             lines.append(line)
+            results.append((page.name, first, second))
             window.close()
         }
         return lines

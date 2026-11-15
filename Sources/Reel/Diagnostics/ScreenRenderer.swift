@@ -246,7 +246,10 @@ enum ScreenRenderer {
         await acclaimedScreens(model, output: output)
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
         speedCheck(model.films)
+        await SpeedGates.filmPages(model)
         await scrollCheck(model, first: first, output: output)
+        SpeedGates.library(model, copies: { copies(of: $0, count: $1, drives: $2) })
+        SpeedGates.report(log: log)
         finish()
     }
 
@@ -309,6 +312,7 @@ enum ScreenRenderer {
         }
         pages.append(ScrollTiming.Page(name: "Explore", view: AnyView(NavigationStack { ExploreView(path: .constant(NavigationPath())) })))
         pages.append(ScrollTiming.Page(name: "Lists", view: AnyView(NavigationStack { ListsView() })))
+        pages.append(ScrollTiming.Page(name: "Cinema mode Home", view: AnyView(CinemaView(searchText: .constant(""), query: ""))))
         var lines = await ScrollTiming.run(pages, model: model, log: log)
         // All Films as it opens, in the whole window, with 500 films on the drive.
         if let drive = model.drives.first {
@@ -321,7 +325,7 @@ enum ScreenRenderer {
 
     /// The sample, copied under other TMDB ids up to `count` films, on the given drives (every tenth
     /// copy missing from the second, as a Backup with gaps).
-    private static func copies(of sample: [FilmEntry], count: Int, drives: [String]) -> [FilmEntry] {
+    static func copies(of sample: [FilmEntry], count: Int, drives: [String]) -> [FilmEntry] {
         var films: [FilmEntry] = []
         for index in 0..<count {
             var source = sample[index % sample.count]

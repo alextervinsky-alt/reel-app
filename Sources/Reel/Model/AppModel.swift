@@ -292,6 +292,10 @@ final class AppModel {
     @ObservationIgnored var saveTasks: [SaveTarget: Task<Void, Never>] = [:]
     @ObservationIgnored var lastSafetyCopyDay = ""
     @ObservationIgnored var lastSettingsCopyDay = ""
+    /// Each open film page's film, observed on its own (see `filmEntry`).
+    @ObservationIgnored var filmBoxes: [String: FilmBox] = [:]
+    /// The last shelves worked out (see `shelfItems`).
+    @ObservationIgnored var shelfCache: [(key: ShelfKey, items: [LibraryItem])] = []
     @ObservationIgnored var observers: [NSObjectProtocol] = []
     @ObservationIgnored let writer = FileWriter()
     /// False when a file exists but couldn't be opened: Reel then never writes over it.
@@ -475,6 +479,7 @@ final class AppModel {
             if loaded[i].matchState == .failed || unknown { loaded[i].matchState = .pending }
         }
         films = loaded
+        updateFilmBoxes()
         itemCache = Dictionary(prebuilt.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         upgradeFileIdentities()
 
@@ -693,6 +698,7 @@ final class AppModel {
     func setFilms(_ newFilms: [FilmEntry], urgent: Bool = false) {
         guard newFilms != films else { return }
         films = newFilms
+        updateFilmBoxes()
         if urgent { rebuild() } else { scheduleRebuild() }
         scheduleSave(.library)
         rememberMatches()
@@ -945,7 +951,42 @@ final class AppModel {
 
     /// The films of one sidebar shelf, searched (mood and length are filtered by the grid, which
     /// also counts them). With a search, best matches come first.
+    /// What a shelf shows: worked out once for each change, not on every redraw (1.11, spec §9.1).
+    /// The key reads exactly what the list is made from (so the views showing it are still told
+    /// when it changes), and each film by its id and stamp.
     func shelfItems(_ shelf: Shelf, matching query: String, sortedBy sort: LibrarySort) -> [LibraryItem] {
+        var films = Hasher()
+        for item in items {
+            films.combine(item.id)
+            films.combine(item.stamp)
+        }
+        var marks: [Set<String>] = []
+        switch shelf {
+        case .newArrivals: marks = [Set(arrivals.keys), personal.watchedKeys]
+        case .unwatched, .watched: marks = [personal.watchedKeys]
+        case .watchlist: marks = [personal.watchlistKeys]
+        case .favorites: marks = [personal.favoriteKeys]
+        case .notOnBackup: marks = [Set(backupGaps.keys)]
+        default: break
+        }
+        let key = ShelfKey(shelf: shelf, query: query, sort: sort, seed: sort == .random ? shuffleSeed : "", films: films.finalize(), marks: marks)
+        if let hit = shelfCache.first(where: { $0.key == key }) { return hit.items }
+        let result = computeShelfItems(shelf, matching: query, sortedBy: sort)
+        shelfCache.insert((key, result), at: 0)
+        if shelfCache.count > 6 { shelfCache.removeLast() }
+        return result
+    }
+
+    struct ShelfKey: Equatable {
+        let shelf: Shelf
+        let query: String
+        let sort: LibrarySort
+        let seed: String
+        let films: Int
+        let marks: [Set<String>]
+    }
+
+    private func computeShelfItems(_ shelf: Shelf, matching query: String, sortedBy sort: LibrarySort) -> [LibraryItem] {
         var list: [LibraryItem]
         var order = sort
         switch shelf {

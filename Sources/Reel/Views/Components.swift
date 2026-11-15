@@ -469,7 +469,8 @@ struct PosterRow: View {
                 }
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 16) {
+                // Made as they scroll into view, not all at once when the page opens (1.11).
+                LazyHStack(alignment: .top, spacing: 16) {
                     ForEach(items) { item in
                         NavigationLink(value: FilmRoute(id: item.main.id)) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -493,6 +494,7 @@ struct PosterRow: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .hoverRegion()
             }
             .tracksScrolling()
         }

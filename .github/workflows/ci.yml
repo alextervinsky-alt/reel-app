@@ -94,8 +94,9 @@ jobs:
           fi
           exit $fail
 
-  mac-compile:
-    # 1.11 work in progress: the app must compile on every push (no signing, no app, no screens).
+  mac-measure:
+    # 1.11 work in progress: the app must build, and the smoothness gates are measured (spec §9.3):
+    # no signing, no app to download, no screens published.
     runs-on: macos-15
     if: github.ref != 'refs/heads/main' && github.event_name == 'push' && !contains(github.event.head_commit.message, '[build]')
     steps:
@@ -104,14 +105,32 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build
-          key: macos15-debug-${{ hashFiles('Package.swift') }}-${{ github.sha }}
-          restore-keys: macos15-debug-${{ hashFiles('Package.swift') }}-
-      - name: Build the app (debug)
+          key: macos15-release-${{ hashFiles('Package.swift') }}-${{ github.sha }}
+          restore-keys: macos15-release-${{ hashFiles('Package.swift') }}-
+      - name: Build the app (release)
         run: |
-          swift build > build.log 2>&1; code=$?
+          start=$(date +%s)
+          swift build -c release --arch arm64 > build.log 2>&1; code=$?
           grep -E "error:" build.log | sort -u | head -40 | while read -r l; do echo "::error::$l"; done
-          tail -3 build.log
+          echo "::notice::Release build took $(( $(date +%s) - start )) s, $(grep -c 'warning:' build.log) warnings"
           exit $code
+      - name: Measure the gates with the sample library
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          mkdir -p screens app/Reel.app/Contents/MacOS
+          cp "$(swift build -c release --arch arm64 --show-bin-path)/Reel" app/Reel.app/Contents/MacOS/Reel
+          printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.howbizzar.reel.gates</string><key>CFBundleExecutable</key><string>Reel</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.11-gates</string></dict></plist>' > app/Reel.app/Contents/Info.plist
+          codesign --force --deep -s - app/Reel.app >/dev/null 2>&1 || true
+          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 1500; exec @ARGV' "$PWD/app/Reel.app/Contents/MacOS/Reel" || true
+          # GitHub keeps only ten notices a step: the gates come in a few joined lines.
+          grep -E "GATE " screens/progress.txt | sed -E 's/^.*(GATE .*)$/\1/' > gates.txt || true
+          grep "GATE FAIL" gates.txt | paste -sd '~' - | sed 's/~/ ¦ /g' | while read -r l; do [ -n "$l" ] && echo "::warning::$l"; done
+          grep -v "GATE FAIL" gates.txt | split -l 5 - gate-part-
+          for f in gate-part-*; do [ -f "$f" ] && echo "::notice::$(paste -sd '~' "$f" | sed 's/~/ ¦ /g')"; done
+          grep -E "scroll .*pt\): first" screens/progress.txt | sed -E 's/^.*scroll /scroll /' | split -l 3 - scroll-part- || true
+          for f in scroll-part-*; do [ -f "$f" ] && echo "::notice::$(paste -sd '~' "$f" | sed 's/~/ ¦ /g')"; done
+          grep -cE "GATE " screens/progress.txt >/dev/null || echo "::warning::No gates were measured: $(tail -3 screens/progress.txt 2>/dev/null)"
 
   mac-build:
     runs-on: macos-15

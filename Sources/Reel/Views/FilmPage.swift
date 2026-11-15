@@ -19,7 +19,9 @@ struct FilmPage: View {
     @State private var preview: PreviewFilm?
 
     var body: some View {
-        if let film = model.film(id: filmID) {
+        let _ = ViewCounts.filmPage += 1
+        // Its own film only: another film's info changing doesn't redraw an open page (1.11).
+        if let film = model.filmEntry(filmID) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     FilmHero(film: film, onFix: { fixing = true }, onFile: { showingFile = true })
@@ -45,6 +47,7 @@ struct FilmPage: View {
                     .padding(.horizontal, 40)
                     .frame(maxWidth: 1180, alignment: .leading)
                 }
+                .hoverRegion()
             }
             .tracksScrolling()
             .background(Theme.background)
@@ -331,6 +334,8 @@ struct OverviewTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
     let onPreview: (PreviewFilm) -> Void
+    /// The story and the fact sheet side by side (the usual window) or stacked (a narrow one).
+    @State private var sideBySide = true
 
     var body: some View {
         let details = film.tmdb
@@ -341,16 +346,22 @@ struct OverviewTab: View {
         let moods = model.itemMoods(forKey: film.personalKey)
 
         VStack(alignment: .leading, spacing: 36) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 48) {
-                    story(details, moods: moods).frame(width: 540, alignment: .leading)
-                    FilmFactSheet(film: film).frame(width: 340, alignment: .leading)
-                }
-                VStack(alignment: .leading, spacing: 28) {
-                    story(details, moods: moods)
-                    FilmFactSheet(film: film).frame(maxWidth: 560, alignment: .leading)
+            // Side by side when there's room, from the width (laid out once, not tried twice).
+            Group {
+                if sideBySide {
+                    HStack(alignment: .top, spacing: 48) {
+                        story(details, moods: moods).frame(width: 540, alignment: .leading)
+                        FilmFactSheet(film: film).frame(width: 340, alignment: .leading)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 28) {
+                        story(details, moods: moods)
+                        FilmFactSheet(film: film).frame(maxWidth: 560, alignment: .leading)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: Bool.self) { $0.size.width >= 540 + 48 + 340 } action: { sideBySide = $0 }
             if let details, !details.topCast.isEmpty { cast(details) }
             if let pair = model.pairing(for: film) {
                 PairItWith(film: film, partner: pair.item, reason: pair.reason)
@@ -426,6 +437,7 @@ struct OverviewTab: View {
                         }
                     }
                 }
+                .hoverRegion()
             }
             .tracksScrolling()
         }
@@ -795,6 +807,7 @@ struct ReceptionTab: View {
                     tile(Format.rating(vote), source: "TMDB", detail: film.tmdb?.voteCount.map { "\(Format.votes($0)) votes" })
                 }
             }
+            .hoverRegion()
         }
         .tracksScrolling()
     }
