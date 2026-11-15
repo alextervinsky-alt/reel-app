@@ -456,6 +456,10 @@ struct LookupJob: Sendable {
     let year: Int?
     /// A match the user fixed earlier; skips the search.
     let correctedID: Int?
+    /// The film this file was matched to before (Your Notes `matches`); skips the search too.
+    let rememberedID: Int?
+    /// That match was one to check.
+    let rememberedCheck: Bool
     /// A fix saved under the name alone, which now names files of different sizes: the match
     /// found is marked to check instead of trusted.
     let fixIsAmbiguous: Bool
@@ -464,6 +468,7 @@ struct LookupJob: Sendable {
 enum LookupOutcome: Sendable {
     case matched(MatchResult, FilmInfo?)
     case corrected(FilmInfo)
+    case remembered(FilmInfo, check: Bool)
     case failed(String)
     case offline
     case unauthorized

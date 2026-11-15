@@ -9,6 +9,8 @@ struct RootView: View {
     /// isn't re-filtered on every keystroke.
     @State private var searchText = ""
     @State private var query = ""
+    /// "Not Now" on the Safety Copy question: asked again next launch.
+    @State private var restoreDeclined = false
     @State private var sort: LibrarySort = .random
     @State private var moods: Set<Mood> = []
     @State private var length: LengthBand = .any
@@ -147,6 +149,18 @@ struct RootView: View {
                 if let notice = model.notice {
                     NoticeBar(text: notice) { model.notice = nil }
                 }
+            }
+            // Your Notes was damaged: the newest Safety Copy is on show, read-only, until you restore it (1.11).
+            .alert(
+                model.restorableNotes.map { "Restore Your Notes from \($0.day)?" } ?? "",
+                isPresented: Binding(get: { model.restorableNotes != nil && !restoreDeclined }, set: { if !$0 { restoreDeclined = true } }),
+                presenting: model.restorableNotes
+            ) { _ in
+                Button("Restore This Copy") { model.restoreNotes() }
+                Button("Not Now", role: .cancel) { restoreDeclined = true }
+            } message: { copy in
+                Text("“Your Notes.json” couldn't be read and was set aside. Reel is showing the Safety Copy from \(copy.day) and won't save "
+                     + "anything until you restore it. Changes since that day aren't in it.")
             }
             // A scan that would remove many films asks first (a drive half-read looks like this too).
             .confirmationDialog(

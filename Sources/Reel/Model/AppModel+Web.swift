@@ -51,12 +51,20 @@ extension AppModel {
                 list[i].checkedStillsVersion = FilmEntry.currentStillsCheck
             }
         }
+        // Checked by this Reel: any removal from now on is kept in Your Notes, so there's nothing
+        // from before 1.11 to carry over for it.
+        if !stillsRecovered.contains(id) {
+            stillsRecovered.insert(id)
+            scheduleSave(.notes)
+        }
     }
 
-    /// "Not a frame from the film": removed from the film's stills for good.
+    /// "Not a frame from the film": removed from the film's stills for good. Kept in Your Notes
+    /// (1.11), so a new version of the check never brings it back.
     func hideStill(_ path: String, forTMDB id: Int) {
-        guard let current = films.first(where: { $0.tmdb?.id == id })?.checkedStills else { return }
-        setCheckedStills(current.filter { $0 != path }, forTMDB: id)
+        guard !(removedStills[id]?.contains(path) ?? false) else { return }
+        removedStills[id, default: []].insert(path)
+        scheduleSave(.notes)
     }
 
     // MARK: - Explore

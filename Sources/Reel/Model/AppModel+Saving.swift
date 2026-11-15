@@ -41,9 +41,10 @@ extension AppModel {
             }
         case .notes:
             guard notesWritable else { return }
-            let snapshot = PersonalFile(records: personal.records, corrections: corrections, wishlist: wishlist,
+            let snapshot = PersonalFile(records: personal.records, corrections: corrections, matches: matches, wishlist: wishlist,
                                         wishlistArrivals: wishlistArrivals, groupingFixes: groupingFixes, pictures: pictures,
-                                        removedShotOn: removedShotOn)
+                                        removedShotOn: removedShotOn, removedStills: removedStills, removedFacts: removedFacts,
+                                        stillsRecovered: stillsRecovered, passthrough: notesPassthrough)
             let today = SafetyCopies.day(Date())
             let firstSaveToday = today != lastSafetyCopyDay
             lastSafetyCopyDay = today
@@ -60,7 +61,12 @@ extension AppModel {
                                         tonightEvening: tonightEvening, notTonight: notTonight,
                                         yearCountsElsewhere: yearCountsElsewhere, lastExplorePicks: explorePicksShown,
                                         switchedToIINA: switchedToIINA, notForMe: notForMe.sorted())
+            let today = SafetyCopies.day(Date())
+            let firstSaveToday = today != lastSettingsCopyDay
+            lastSettingsCopyDay = today
             writer.enqueue {
+                // Settings keeps Not for Me and your drives: a daily copy too, before the day's first change (1.11).
+                if firstSaveToday { SafetyCopies.make(of: folder.settings, into: folder.safetyCopies) }
                 do { try JSONStore.save(snapshot, to: folder.settings, permissions: 0o600) } catch { report(error) }
             }
         }

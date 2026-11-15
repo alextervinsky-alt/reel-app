@@ -50,12 +50,16 @@ extension AppModel {
                 let lookedUp = beginWork("Finding film info", done: done, total: done + unique.count)
                 let sizes = FileIdentity.sizesByName(films)
                 let fixes = corrections
+                let known = matches
                 let jobs = unique.prefix(6).map { film -> LookupJob in
-                    let fix = FileIdentity.fix(for: film, corrections: fixes, sizes: sizes)
+                    let fix = FileIdentity.fix(for: film, corrections: fixes, matches: known, sizes: sizes)
                     var corrected: Int?
+                    var remembered: (id: Int, check: Bool)?
                     if case .film(let id) = fix { corrected = id }
+                    if case .remembered(let id, let check) = fix { remembered = (id, check) }
                     return LookupJob(id: film.id, fileKey: film.fileKey, titles: film.lookupTitles, year: film.lookupYear,
-                                     correctedID: corrected, fixIsAmbiguous: fix == .ambiguous)
+                                     correctedID: corrected, rememberedID: remembered?.id, rememberedCheck: remembered?.check ?? false,
+                                     fixIsAmbiguous: fix == .ambiguous)
                 }
                 let ratingsClient = omdb
                 let outcomes = await withTaskGroup(of: (LookupJob, LookupOutcome).self, returning: [(LookupJob, LookupOutcome)].self) { group in
@@ -96,6 +100,15 @@ extension AppModel {
                             }
                             // Alternatives are only kept while the user may still need them.
                             list[i].candidates = confidence == .auto ? [] : result.candidates
+                        case .remembered(let info, let check):
+                            // Matched before (Your Notes): the same film again, never searched for anew.
+                            info.store(in: &list[i])
+                            if info.ratingsRefused { omdb = nil }
+                            list[i].matchState = check ? .review : .auto
+                            list[i].matchScore = 1
+                            list[i].candidates = []
+                            list[i].lastError = nil
+                            list[i].lastLookup = now
                         case .corrected(let info):
                             info.store(in: &list[i])
                             if info.ratingsRefused { omdb = nil }
@@ -243,6 +256,10 @@ extension AppModel {
             if let id = job.correctedID {
                 return .corrected(try await fetchInfo(id: id, client: client, omdb: omdb, ratingsWanted: ratingsWanted,
                                                       withFindings: false))
+            }
+            if let id = job.rememberedID {
+                return .remembered(try await fetchInfo(id: id, client: client, omdb: omdb, ratingsWanted: ratingsWanted,
+                                                       withFindings: false), check: job.rememberedCheck)
             }
             let result = try await FilmMatcher(database: client).match(titles: job.titles, year: job.year)
             var info: FilmInfo?

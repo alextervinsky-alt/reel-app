@@ -46,7 +46,7 @@ struct CinematographyTab: View {
             }
             // The pictures first: what the words below are about. Hidden once checked and none
             // turned out to be frames from the film.
-            if !(film.tmdb?.stillPaths.isEmpty ?? true), film.checkedStills?.isEmpty != true {
+            if !(film.tmdb?.stillPaths.isEmpty ?? true), film.checkedStills.map({ model.visibleStills(film, checked: $0).isEmpty }) != true {
                 VStack(alignment: .leading, spacing: 14) {
                     Theme.sectionTitle("Frames from the Film")
                     FilmStills(film: film, open: openStill)

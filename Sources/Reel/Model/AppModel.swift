@@ -195,6 +195,12 @@ final class AppModel {
 
     @ObservationIgnored var token = ""
     @ObservationIgnored var corrections: [String: Int] = [:]
+    /// Every copy's film as matched (Your Notes, 1.11): a rebuilt library never matches them again.
+    @ObservationIgnored var matches: [String: RememberedMatch] = [:]
+    /// Films whose frame removals from before 1.11 were looked for (Your Notes).
+    @ObservationIgnored var stillsRecovered: Set<Int> = []
+    /// What Your Notes holds that this Reel doesn't know, written back as it was.
+    @ObservationIgnored var notesPassthrough = PersonalFile.Passthrough()
     @ObservationIgnored var featuredKey: String?
     @ObservationIgnored var lastFeatured = ""
     /// Recommended picks per chip for this session.
@@ -266,6 +272,12 @@ final class AppModel {
     var pictures: [String: DynamicRange] = [:]
     /// Shot on tags you said are wrong, by TMDB id (Your Notes).
     var removedShotOn: [Int: Set<ShotOn>] = [:]
+    /// "Not a frame from the film", by TMDB id (Your Notes, 1.11).
+    var removedStills: [Int: Set<String>] = [:]
+    /// Cinematography facts you said are wrong, by TMDB id (Your Notes, 1.11).
+    var removedFacts: [Int: Set<String>] = [:]
+    /// Your Notes was damaged and this Safety Copy is shown read-only until you restore it.
+    var restorableNotes: SafetyCopy?
     /// Films that have a folder to themselves, by film id: the folder's name, read (see
     /// `FilePicture.ownFolders`); `parsedFolders` keeps every folder name read so far.
     @ObservationIgnored var ownFolders: [String: ParsedFilename] = [:]
@@ -294,6 +306,7 @@ final class AppModel {
     @ObservationIgnored var finishedClear: Task<Void, Never>?
     @ObservationIgnored var saveTasks: [SaveTarget: Task<Void, Never>] = [:]
     @ObservationIgnored var lastSafetyCopyDay = ""
+    @ObservationIgnored var lastSettingsCopyDay = ""
     @ObservationIgnored var observers: [NSObjectProtocol] = []
     @ObservationIgnored let writer = FileWriter()
     /// False when a file exists but couldn't be opened: Reel then never writes over it.
@@ -367,7 +380,7 @@ final class AppModel {
         switchToIINAOnce()
         askForOMDbKey()
 
-        let notes = readProtected(PersonalFile.self, from: folder.notes, label: "Your Notes")
+        let notes = openNotes()
         notesWritable = notes.writable
         if let value = notes.value {
             personal.load(value.records)
@@ -379,6 +392,61 @@ final class AppModel {
             groupingFixes = value.groupingFixes
             pictures = value.pictures
             removedShotOn = value.removedShotOn
+            matches = value.matches
+            removedStills = value.removedStills
+            removedFacts = value.removedFacts
+            stillsRecovered = value.stillsRecovered
+            notesPassthrough = value.passthrough
+        }
+    }
+
+    /// Your Notes, by `NotesOpening`'s rules. A damaged file is set aside (never deleted); the
+    /// newest readable Safety Copy is then shown read-only, and nothing is written until you
+    /// restore it (`restoreNotes`). With no copy to offer, Reel starts a new file as before.
+    private func openNotes() -> (value: PersonalFile?, writable: Bool) {
+        let url = folder.notes
+        let opening = NotesOpening.open(url)
+        switch opening {
+        case .missing, .loaded:
+            return (opening.file, true)
+        case .unopenable:
+            notice = "“\(url.lastPathComponent)” couldn't be opened, so Reel won't change it this time. Quit and reopen Reel to try again."
+            return (nil, false)
+        case .newer:
+            notice = "“\(url.lastPathComponent)” was saved by a newer Reel, so this one shows it but won't change it. Use the newest Reel to make changes."
+            return (opening.file, false)
+        case .damaged:
+            let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
+                .replacingOccurrences(of: ":", with: "")
+            let aside = folder.root.appendingPathComponent("Your Notes (unreadable \(stamp)).json")
+            do {
+                try FileManager.default.moveItem(at: url, to: aside)
+            } catch {
+                notice = "“\(url.lastPathComponent)” couldn't be read, so Reel won't change it this time."
+                return (nil, false)
+            }
+            guard let copy = SafetyCopies.newestReadableNotes(in: folder.safetyCopies) else {
+                notice = "“\(url.lastPathComponent)” couldn't be read, so it was set aside as “\(aside.lastPathComponent)”. There was no Safety Copy to offer."
+                return (nil, true)
+            }
+            restorableNotes = copy
+            notice = "“\(url.lastPathComponent)” couldn't be read, so it was set aside as “\(aside.lastPathComponent)”. You're seeing the Safety Copy from \(copy.day); nothing is saved until you restore it."
+            return (copy.file, false)
+        }
+    }
+
+    /// Makes the Safety Copy on show your Your Notes again (after a damaged file was set aside).
+    func restoreNotes() {
+        guard let copy = restorableNotes else { return }
+        do {
+            let data = try Data(contentsOf: copy.url)
+            try data.write(to: folder.notes, options: .atomic)
+            restorableNotes = nil
+            notesWritable = true
+            notice = "Your Notes was restored from the Safety Copy of \(copy.day)."
+            rememberMatches()
+        } catch {
+            notice = "The Safety Copy couldn't be restored: \(error.localizedDescription)"
         }
     }
 
@@ -437,6 +505,10 @@ final class AppModel {
 
         // Drives are found and scanned only from here on, so no scan works on an empty library.
         isLoaded = true
+        // Before anything else can change the library: every copy's film becomes yours to keep
+        // (Your Notes), and the frames you removed before 1.11 are carried over (1.11).
+        rememberMatches()
+        Task(priority: .utility) { await recoverStillRemovals() }
         watchEvenings()
         applyMounts(found)
         rebuild()
@@ -643,6 +715,7 @@ final class AppModel {
         films = newFilms
         if urgent { rebuild() } else { scheduleRebuild() }
         scheduleSave(.library)
+        rememberMatches()
     }
 
     func mutateFilms(urgent: Bool = false, _ change: (inout [FilmEntry]) -> Void) {

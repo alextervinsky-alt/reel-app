@@ -40,7 +40,7 @@ struct ExtrasTab: View {
             let catalog = ExtrasCatalog(copy.extras)
             let online = model.fileURL(copy) != nil
             let titles = [film.displayTitle, film.parsed.title, film.tmdb?.originalTitle].compactMap { $0 }
-            let art = film.checkedStills ?? film.tmdb?.stillPaths ?? []
+            let art = film.checkedStills.map { model.visibleStills(film, checked: $0) } ?? film.tmdb?.stillPaths ?? []
             let people = creditPeople
             let previewable = online ? (catalog.subtitles + catalog.otherFiles)
                 .filter { Self.quickLooks($0) }

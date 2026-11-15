@@ -874,7 +874,7 @@ struct FilmStills: View {
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 14)]
 
     var body: some View {
-        let stills = film.checkedStills ?? passed
+        let stills = model.visibleStills(film, checked: film.checkedStills ?? passed)
         VStack(alignment: .leading, spacing: 14) {
             if checking {
                 HStack(spacing: 8) {

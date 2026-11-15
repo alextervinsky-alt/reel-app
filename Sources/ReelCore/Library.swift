@@ -484,13 +484,26 @@ public enum FileIdentity {
         /// Saved under its name alone, which now names files of different sizes: not applied to
         /// any of them (each is matched and marked to check instead).
         case ambiguous
+        /// Not fixed by you, but matched before (`MatchMemory`): the same film again, without a
+        /// search, still marked to check if it was.
+        case remembered(Int, check: Bool)
     }
 
-    /// - Parameter sizes: the sizes of the library's files by name (`sizesByName`), worked out once.
-    public static func fix(for file: FilmEntry, corrections: [String: Int], sizes: [String: Set<Int64>]) -> Fix {
+    /// - Parameters:
+    ///   - sizes: the sizes of the library's files by name (`sizesByName`), worked out once.
+    ///   - matches: the films copies were matched to before (Your Notes); your fixes win over them.
+    public static func fix(for file: FilmEntry, corrections: [String: Int], matches: [String: RememberedMatch] = [:],
+                           sizes: [String: Set<Int64>]) -> Fix {
         if let id = corrections[file.fileKey] { return .film(id) }
-        guard let id = corrections[file.fileName] else { return .none }
-        return (sizes[file.fileName]?.count ?? 0) <= 1 ? .film(id) : .ambiguous
+        if let id = corrections[file.fileName] {
+            if (sizes[file.fileName]?.count ?? 0) <= 1 { return .film(id) }
+            // A name shared by files of different sizes: a match remembered for this very file
+            // still tells which film it is.
+            if let known = matches[file.fileKey] { return .remembered(known.tmdb, check: true) }
+            return .ambiguous
+        }
+        if let known = matches[file.fileKey] { return .remembered(known.tmdb, check: known.check == true) }
+        return .none
     }
 
     /// Each file name in the library with the sizes it has.
@@ -844,11 +857,18 @@ public struct PersonalRecord: Codable, Equatable, Sendable {
 }
 
 public struct PersonalFile: Codable, Equatable, Sendable {
+    /// 5 (1.11): matches, frame removals and fact removals are kept here, keys this Reel doesn't
+    /// know are written back untouched, and a file from a newer Reel isn't written (`NotesOpening`).
+    public static let currentVersion = 5
+
     public var version: Int
     public var records: [String: PersonalRecord]
     /// Matches the user picked or confirmed: file name → TMDB id. They always win over automatic
     /// matching and survive a lost or rebuilt Library.json.
     public var corrections: [String: Int]
+    /// Every copy's film as Reel matched it (file key → film), so a rebuilt Library.json never
+    /// matches a known file again. `corrections` win over it (1.11).
+    public var matches: [String: RememberedMatch]
     /// Films you don't own yet but want to see.
     public var wishlist: [WishlistFilm]
     /// Wishlist films that turned up in the library (shown with a tag on New Arrivals).
@@ -859,22 +879,50 @@ public struct PersonalFile: Codable, Equatable, Sendable {
     public var pictures: [String: DynamicRange]
     /// Shot on tags you said are wrong, by TMDB id: never shown or searched for that film.
     public var removedShotOn: [Int: Set<ShotOn>]
+    /// "Not a frame from the film", by TMDB id: image paths never shown for that film (1.11).
+    public var removedStills: [Int: Set<String>]
+    /// Cinematography facts you said are wrong, by TMDB id: rows never shown for that film (1.11).
+    public var removedFacts: [Int: Set<String>]
+    /// Films whose frame removals from before 1.11 were looked for (`StillRemovals.recover`), so
+    /// it's done once.
+    public var stillsRecovered: Set<Int>
+    /// What this Reel doesn't know and writes back as it was: keys a newer Reel added, and Shot on
+    /// values it doesn't know (by TMDB id).
+    public var passthrough: Passthrough
 
-    enum CodingKeys: String, CodingKey {
-        case version, records, corrections, wishlist, wishlistArrivals, groupingFixes, pictures, removedShotOn
+    public struct Passthrough: Equatable, Sendable {
+        public var keys: [String: RawJSON]
+        public var shotOn: [Int: [String]]
+
+        public init(keys: [String: RawJSON] = [:], shotOn: [Int: [String]] = [:]) {
+            self.keys = keys
+            self.shotOn = shotOn
+        }
     }
 
-    public init(records: [String: PersonalRecord] = [:], corrections: [String: Int] = [:], wishlist: [WishlistFilm] = [],
-                wishlistArrivals: [WishlistArrival] = [], groupingFixes: GroupingFixes = GroupingFixes(),
-                pictures: [String: DynamicRange] = [:], removedShotOn: [Int: Set<ShotOn>] = [:]) {
-        self.version = 4
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case version, records, corrections, matches, wishlist, wishlistArrivals, groupingFixes, pictures, removedShotOn
+        case removedStills, removedFacts, stillsRecovered
+    }
+
+    public init(records: [String: PersonalRecord] = [:], corrections: [String: Int] = [:], matches: [String: RememberedMatch] = [:],
+                wishlist: [WishlistFilm] = [], wishlistArrivals: [WishlistArrival] = [], groupingFixes: GroupingFixes = GroupingFixes(),
+                pictures: [String: DynamicRange] = [:], removedShotOn: [Int: Set<ShotOn>] = [:],
+                removedStills: [Int: Set<String>] = [:], removedFacts: [Int: Set<String>] = [:], stillsRecovered: Set<Int> = [],
+                passthrough: Passthrough = Passthrough()) {
+        self.version = Self.currentVersion
         self.pictures = pictures
         self.removedShotOn = removedShotOn
         self.records = records
         self.corrections = corrections
+        self.matches = matches
         self.wishlist = wishlist
         self.wishlistArrivals = wishlistArrivals
         self.groupingFixes = groupingFixes
+        self.removedStills = removedStills
+        self.removedFacts = removedFacts
+        self.stillsRecovered = stillsRecovered
+        self.passthrough = passthrough
     }
 
     public init(from decoder: Decoder) throws {
@@ -882,34 +930,70 @@ public struct PersonalFile: Codable, Equatable, Sendable {
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         records = try c.decodeIfPresent([String: PersonalRecord].self, forKey: .records) ?? [:]
         corrections = try c.decodeIfPresent([String: Int].self, forKey: .corrections) ?? [:]
+        matches = (try? c.decodeIfPresent([String: RememberedMatch].self, forKey: .matches)) ?? [:]
         wishlist = try c.decodeIfPresent([WishlistFilm].self, forKey: .wishlist) ?? []
         wishlistArrivals = try c.decodeIfPresent([WishlistArrival].self, forKey: .wishlistArrivals) ?? []
         groupingFixes = try c.decodeIfPresent(GroupingFixes.self, forKey: .groupingFixes) ?? GroupingFixes()
         // A value a newer Reel wrote that this one doesn't know is skipped, not a reason to fail.
         let saved = (try? c.decodeIfPresent([String: String].self, forKey: .pictures)) ?? [:]
         pictures = saved.compactMapValues { DynamicRange(rawValue: $0) }
+        var unknownShotOn: [Int: [String]] = [:]
         let removed = (try? c.decodeIfPresent([String: [String]].self, forKey: .removedShotOn)) ?? [:]
         var byFilm: [Int: Set<ShotOn>] = [:]
         for (key, kinds) in removed {
             guard let id = Int(key) else { continue }
             let known = Set(kinds.compactMap { ShotOn(rawValue: $0) })
             if !known.isEmpty { byFilm[id] = known }
+            let other = kinds.filter { ShotOn(rawValue: $0) == nil }
+            if !other.isEmpty { unknownShotOn[id] = other.sorted() }
         }
         removedShotOn = byFilm
+        removedStills = Self.idSets(try? c.decodeIfPresent([String: [String]].self, forKey: .removedStills))
+        removedFacts = Self.idSets(try? c.decodeIfPresent([String: [String]].self, forKey: .removedFacts))
+        stillsRecovered = Set((try? c.decodeIfPresent([Int].self, forKey: .stillsRecovered)) ?? [])
+
+        // Every other key is kept as it was.
+        let known = Set(CodingKeys.allCases.map(\.rawValue))
+        let all = try decoder.container(keyedBy: AnyCodingKey.self)
+        var keys: [String: RawJSON] = [:]
+        for key in all.allKeys where !known.contains(key.stringValue) {
+            if let value = try? all.decode(RawJSON.self, forKey: key) { keys[key.stringValue] = value }
+        }
+        passthrough = Passthrough(keys: keys, shotOn: unknownShotOn)
+    }
+
+    private static func idSets(_ saved: [String: [String]]??) -> [Int: Set<String>] {
+        var result: [Int: Set<String>] = [:]
+        for (key, values) in (saved ?? nil) ?? [:] {
+            if let id = Int(key), !values.isEmpty { result[id] = Set(values) }
+        }
+        return result
+    }
+
+    private static func savedSets(_ sets: [Int: Set<String>]) -> [String: [String]] {
+        Dictionary(uniqueKeysWithValues: sets.filter { !$0.value.isEmpty }.map { (String($0.key), $0.value.sorted()) })
     }
 
     public func encode(to encoder: Encoder) throws {
+        // Keys this Reel doesn't know first, so a known key is never overwritten by one.
+        var all = encoder.container(keyedBy: AnyCodingKey.self)
+        for (key, value) in passthrough.keys { try all.encode(value, forKey: AnyCodingKey(key)) }
+
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(version, forKey: .version)
         try c.encode(records, forKey: .records)
         try c.encode(corrections, forKey: .corrections)
+        if !matches.isEmpty { try c.encode(matches, forKey: .matches) }
         try c.encode(wishlist, forKey: .wishlist)
         try c.encode(wishlistArrivals, forKey: .wishlistArrivals)
         try c.encode(groupingFixes, forKey: .groupingFixes)
         if !pictures.isEmpty { try c.encode(pictures.mapValues(\.rawValue), forKey: .pictures) }
-        if !removedShotOn.isEmpty {
-            let saved = Dictionary(uniqueKeysWithValues: removedShotOn.map { (String($0.key), $0.value.map(\.rawValue).sorted()) })
-            try c.encode(saved, forKey: .removedShotOn)
-        }
+        var shotOn: [String: [String]] = [:]
+        for (id, kinds) in removedShotOn { shotOn[String(id), default: []] += kinds.map(\.rawValue) }
+        for (id, kinds) in passthrough.shotOn { shotOn[String(id), default: []] += kinds }
+        if !shotOn.isEmpty { try c.encode(shotOn.mapValues { Array(Set($0)).sorted() }, forKey: .removedShotOn) }
+        if !removedStills.isEmpty { try c.encode(Self.savedSets(removedStills), forKey: .removedStills) }
+        if !removedFacts.isEmpty { try c.encode(Self.savedSets(removedFacts), forKey: .removedFacts) }
+        if !stillsRecovered.isEmpty { try c.encode(stillsRecovered.sorted(), forKey: .stillsRecovered) }
     }
 }

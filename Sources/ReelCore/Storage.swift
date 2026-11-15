@@ -7,7 +7,7 @@ import Foundation
 ///       Your Notes.json        watched, favorites, watchlist, ratings, notes, match fixes (irreplaceable)
 ///       Settings.json          TMDB token and your drives (readable only by your user)
 ///       Library.json           film info for your files (a cache: rebuilt by a rescan if deleted)
-///       Safety Copies/         one copy of Your Notes per day, last 30 days
+///       Safety Copies/         one copy of Your Notes and of Settings per day, last 30 days
 ///       Image Cache.nosync/    posters and photos: size-limited, unused ones removed,
 ///                              never synced to iCloud or backed up by Time Machine
 ///       List Data.nosync/      IMDb ratings, award lists and sets (downloaded again if deleted)
@@ -58,7 +58,8 @@ public struct ReelFolder: Sendable {
                           matches you fixed by hand. This is the file to keep.
     Settings.json         Your TMDB token and your film drives.
     Library.json          Film info for your files. If deleted, Reel rebuilds it.
-    Safety Copies         A copy of Your Notes from each of the last 30 days.
+    Safety Copies         A copy of Your Notes and of Settings from each of the last
+                          30 days.
     Image Cache.nosync    Posters and photos. Safe to delete any time. Limited to 400 MB,
                           cleaned up automatically, not synced to iCloud and not backed
                           up by Time Machine.
@@ -293,6 +294,10 @@ public enum SafetyCopies {
         let target = folder.appendingPathComponent("\(stem) \(formatter.string(from: now)).json")
         if !fm.fileExists(atPath: target.path) {
             try? fm.copyItem(at: file, to: target)
+            // As private as the file itself (Settings is readable only by you).
+            if let permissions = (try? fm.attributesOfItem(atPath: file.path))?[.posixPermissions] {
+                try? fm.setAttributes([.posixPermissions: permissions], ofItemAtPath: target.path)
+            }
         }
 
         let cutoff = now.addingTimeInterval(-Double(keepDays) * 86_400)

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, release-1.11]
   workflow_dispatch:
 
 permissions:
@@ -28,11 +28,14 @@ jobs:
             echo "::notice::$(grep -E 'Executed [0-9]+ tests' test.log | tail -1)"
           fi
           # The research benchmark's measurements (synthetic films; see ResearchBenchmarkTests).
+          grep -E "^DRYRUN\| " test.log | sed -E 's/^DRYRUN\| //' | while read -r l; do echo "::notice::DRYRUN ${l}"; done
           grep -E "^BENCH\| " test.log | sed -E 's/^BENCH\| //' | head -8 | while read -r l; do echo "::notice::BENCH ${l}"; done
           exit $code
 
   live-match:
     runs-on: ubuntu-24.04
+    # Live sites and OMDb's daily quota (shared with the app): main and [build] commits only.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]')
     container: swift:6.0-noble
     env:
       TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
@@ -126,6 +129,19 @@ jobs:
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
           fi
           exit $fail
+
+  mac-compile:
+    # 1.11 work in progress: the app must compile on every push (no signing, no app, no screens).
+    runs-on: macos-15
+    if: github.ref != 'refs/heads/main' && github.event_name == 'push' && !contains(github.event.head_commit.message, '[build]')
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the app (debug)
+        run: |
+          swift build > build.log 2>&1; code=$?
+          grep -E "error:" build.log | sort -u | head -40 | while read -r l; do echo "::error::$l"; done
+          tail -3 build.log
+          exit $code
 
   mac-build:
     runs-on: macos-15
