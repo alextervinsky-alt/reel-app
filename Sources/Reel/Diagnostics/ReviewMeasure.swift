@@ -26,6 +26,23 @@ enum ReviewMeasure {
 
     static func run(_ model: AppModel, sample: [FilmEntry],
                     copies: ([FilmEntry], Int, [String]) -> [FilmEntry]) async {
+        // The Cinematography tab: its live reading (network), then the claim engine it runs on the main thread.
+        for film in sample.prefix(3) {
+            guard let details = film.tmdb else { continue }
+            var start = ContinuousClock.now
+            await model.loadCameraReading(for: film)
+            log("Cinematography tab of \(film.displayTitle): live reading on opening (network, incl. what it runs on the main thread) \(ms(since: start)) ms")
+            let article = model.articles[details.id]
+            let reading = model.cameraReadings[details.id]
+            start = ContinuousClock.now
+            let texts = CraftReader.texts(article: article, reading: reading, hiding: false)
+            let specs = TechSpecs.read(texts: texts, cinematographers: [], directors: details.directors, year: details.year, title: details.title)
+            log("…TechSpecs.read as the tab's body runs it, on the main thread: \(ms(since: start)) ms over \(texts.count) texts, \(specs.specs.count) specs")
+            start = ContinuousClock.now
+            let read = CraftReader.reading(of: details, articleTitle: film.funFacts?.articleTitle, article: article, reading: reading,
+                                           colour: film.funFacts?.quick?.colour)
+            log("…CraftReader.reading as craftRead runs it, on the main thread: \(ms(since: start)) ms (\(read.index.names.count) names)")
+        }
         // Every copy gets a reading and facts from the films that have them, so each copy is about
         // as large as in a real library.
         let rich = model.films.filter { $0.craft != nil }
