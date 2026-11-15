@@ -1,0 +1,17 @@
+name: review-coverage (throwaway)
+on:
+  push:
+    branches: [review-1.11]
+    paths: [scripts/review/**, .github/workflows/coverage.yml]
+permissions:
+  contents: write
+jobs:
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 scripts/review/award_coverage.py scripts/review/award_terms.txt review-award-coverage.json
+      - run: |
+          git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
+          mkdir -p review-results && mv review-award-coverage.json review-results/
+          git add review-results && git commit -m "review-1.11: award coverage results (measurement only) [skip ci]" && git push
