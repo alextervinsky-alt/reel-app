@@ -82,7 +82,7 @@ struct FilmPage: View {
             switch tab {
             case .overview: true
             case .reviews, .behindTheFilm, .cinematography: film.tmdb != nil
-            case .extras: model.extrasSource(for: film) != nil
+            case .extras: model.hasExtras(film)
             }
         }
     }

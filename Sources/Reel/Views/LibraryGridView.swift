@@ -21,6 +21,8 @@ struct LibraryGridView: View {
     @Binding var asList: Bool
     @Binding var path: NavigationPath
     @State private var scroll = ScrollState()
+    /// The grid's one pointer tracker and right-click menu (1.11).
+    @State private var pointer = GridPointer()
     @State private var readAhead = PosterReadAhead()
     /// The film being made an extra of another one (right-click › This Is an Extra Of…).
     @State private var regrouping: LibraryItem?
@@ -93,11 +95,15 @@ struct LibraryGridView: View {
                 } else if shelf == .watched && query.isEmpty {
                     watchedByMonth(shown)
                 } else {
+                    let _ = (pointer.items = shown)
                     LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 30) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
-                            card(item).onAppear { readAhead.warm(at: index, in: shown) }
+                            card(item)
+                                .gridCell(index, in: pointer)
+                                .onAppear { readAhead.warm(at: index, in: shown) }
                         }
                     }
+                    .gridPointer(pointer) { item in posterMenu(item) }
                     .padding(.horizontal, 32)
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -133,6 +139,34 @@ struct LibraryGridView: View {
         }
         // The poster under the pointer is gone once the list replaces the grid.
         .onChange(of: asList) { scroll.pointed = nil }
+    }
+
+    /// A poster's right-click menu (one for the whole grid, see `GridPointer`): the same as the
+    /// card's own menu elsewhere.
+    private func posterMenu(_ item: LibraryItem) -> NSMenu? {
+        let film = item.main
+        let record = model.record(forKey: item.id)
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(MenuAction.item("Play", enabled: item.isOnline) { model.play(film) })
+        menu.addItem(MenuAction.item(record.watched ? "Mark as Unwatched" : "Mark as Watched") { model.toggle(\.watched, for: film) })
+        let players = NSMenu()
+        for player in PlayerChoice.installed {
+            players.addItem(MenuAction.item(player.title) { model.play(film, with: player) })
+        }
+        let playWith = NSMenuItem(title: "Play With", action: nil, keyEquivalent: "")
+        playWith.submenu = players
+        playWith.isEnabled = item.isOnline
+        menu.addItem(playWith)
+        menu.addItem(MenuAction.item(model.isTonight(item.id) ? "Remove from Tonight" : "Add to Tonight") { model.toggleTonight(item.id) })
+        menu.addItem(MenuAction.item("Show in Finder", enabled: item.isOnline) { model.showInFinder(film) })
+        menu.addItem(MenuAction.item("Quick Look") { previewing = item })
+        menu.addItem(.separator())
+        menu.addItem(MenuAction.item("This Is an Extra Of…") { regrouping = item })
+        if model.isRegrouped(film.relativePath) {
+            menu.addItem(MenuAction.item("Undo Regrouping") { model.resetGrouping(film.relativePath) })
+        }
+        return menu
     }
 
     private func card(_ item: LibraryItem) -> some View {
@@ -858,9 +892,33 @@ struct PosterHoverRatings: View {
     }
 }
 
+/// A card outside the library grid tracks the pointer and has a menu of its own.
+private struct OwnPointer<Menu: View>: ViewModifier {
+    let on: Bool
+    @Binding var hovering: Bool
+    let item: LibraryItem
+    let scroll: ScrollState
+    @ViewBuilder let menu: () -> Menu
+
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .scrollAwareHover($hovering) { [scroll, item] inside in
+                    // The poster under the pointer, for Space.
+                    if inside { scroll.pointed = item } else if scroll.pointed?.id == item.id { scroll.pointed = nil }
+                }
+                .contextMenu { menu() }
+        } else {
+            content
+        }
+    }
+}
+
 struct PosterCard: View, Equatable {
     @Environment(AppModel.self) private var model
     @Environment(ScrollState.self) private var scroll
+    /// In the library grid: its one pointer tracker lifts the card (see `GridPointer`).
+    @Environment(\.gridPointer) private var grid
     let item: LibraryItem
     var note: CardNote? = nil
     /// Arrived in the last two weeks and not watched: a NEW tag on the poster.
@@ -874,7 +932,7 @@ struct PosterCard: View, Equatable {
     /// This film's notes only: a change to another film never redraws this card.
     private var record: PersonalRecord { model.record(forKey: item.id) }
     /// Lifted under the pointer, never while scrolling. The shadow is only drawn when lifted.
-    private var lifted: Bool { hovering }
+    private var lifted: Bool { grid.map { $0.box(item.id).lifted } ?? hovering }
 
     /// Cards only redraw when what they show changes (their own state still updates them).
     nonisolated static func == (lhs: PosterCard, rhs: PosterCard) -> Bool {
@@ -905,11 +963,7 @@ struct PosterCard: View, Equatable {
             }
         }
         .contentShape(Rectangle())
-        .scrollAwareHover($hovering) { [scroll, item] inside in
-            // The poster under the pointer, for Space.
-            if inside { scroll.pointed = item } else if scroll.pointed?.id == item.id { scroll.pointed = nil }
-        }
-        .contextMenu { menu }
+        .modifier(OwnPointer(on: grid == nil, hovering: $hovering, item: item, scroll: scroll) { menu })
     }
 
     /// Built from this card's own data only (its film and its notes), so it costs nothing extra

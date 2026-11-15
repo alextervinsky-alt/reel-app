@@ -122,7 +122,7 @@ jobs:
           cp "$(swift build -c release --arch arm64 --show-bin-path)/Reel" app/Reel.app/Contents/MacOS/Reel
           printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.howbizzar.reel.gates</string><key>CFBundleExecutable</key><string>Reel</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.11-gates</string></dict></plist>' > app/Reel.app/Contents/Info.plist
           codesign --force --deep -s - app/Reel.app >/dev/null 2>&1 || true
-          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 1500; exec @ARGV' "$PWD/app/Reel.app/Contents/MacOS/Reel" || true
+          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 1500; exec @ARGV' "$PWD/app/Reel.app/Contents/MacOS/Reel" > app.log 2>&1 || true
           # GitHub keeps only ten notices a step: the gates come in a few joined lines.
           grep -E "GATE " screens/progress.txt | sed -E 's/^.*(GATE .*)$/\1/' > gates.txt || true
           grep "GATE FAIL" gates.txt | paste -sd '~' - | sed 's/~/ ¦ /g' | while read -r l; do [ -n "$l" ] && echo "::warning::$l"; done

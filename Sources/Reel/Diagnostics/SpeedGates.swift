@@ -75,6 +75,13 @@ enum SpeedGates {
         gate("Library.json at 300 films (\(films.count) copies, \(data.count / 1024) KB) opens",
              String(format: "%.0f ms, target < 500 ms (%d read)", decode, opening.films.count), pass: decode < 500)
         start = ContinuousClock.now
+        _ = try? JSONSerialization.jsonObject(with: data)
+        let json = ms(ContinuousClock.now - start)
+        start = ContinuousClock.now
+        for film in films { _ = FilenameParser.parse(film.fileName) }
+        let names = ms(ContinuousClock.now - start)
+        gate("…of which", String(format: "reading the JSON alone %.0f ms; reading %d file names %.0f ms", json, films.count, names), pass: nil)
+        start = ContinuousClock.now
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("gates-library-\(ProcessInfo.processInfo.processIdentifier).json")
         try? JSONStore.save(LibraryFile(films: films), to: url)
         let save = ms(ContinuousClock.now - start)

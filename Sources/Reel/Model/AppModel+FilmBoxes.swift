@@ -20,6 +20,13 @@ extension AppModel {
         return box.film
     }
 
+    /// Whether any copy of the film has extras, without reading the whole library (so a page
+    /// asking isn't redrawn when another film changes; its own film changing redraws it).
+    func hasExtras(_ film: FilmEntry) -> Bool {
+        if !film.extras.isEmpty { return true }
+        return itemCache[film.personalKey]?.copies.contains { !$0.extras.isEmpty } ?? false
+    }
+
     /// Tells each open page's film what changed, and only those whose film did change.
     func updateFilmBoxes() {
         guard !filmBoxes.isEmpty else { return }
