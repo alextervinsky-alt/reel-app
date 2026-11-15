@@ -87,7 +87,16 @@ public enum FilenameParser {
 
     // MARK: - Public entry point
 
+    /// Read once per name: the library has a copy of most films on two drives, and a name is
+    /// read whenever its entry is opened (1.11).
     public static func parse(_ path: String) -> ParsedFilename {
+        if let known = ParseCache.shared.get(path) { return known }
+        let parsed = parseName(path)
+        ParseCache.shared.set(path, parsed)
+        return parsed
+    }
+
+    private static func parseName(_ path: String) -> ParsedFilename {
         let name = lastComponent(path)
 
         var incomplete = false
@@ -162,8 +171,7 @@ public enum FilenameParser {
             break
         }
         // "4K Remaster", "Remastered 4K", "RM4K": about the master, not this file.
-        let fourKMaster = base.lowercased().range(of: #"4k[ ._-]?(?:remaster|restor)|(?:remaster(?:ed)?|restored|restoration)[ ._-]?(?:in[ ._-])?4k|(?<![a-z0-9])rm4k"#,
-                                                  options: .regularExpression) != nil
+        let fourKMaster = base.lowercased().patternRange(#"4k[ ._-]?(?:remaster|restor)|(?:remaster(?:ed)?|restored|restoration)[ ._-]?(?:in[ ._-])?4k|(?<![a-z0-9])rm4k"#) != nil
         if resolution == nil, has(["uhd"]) || (has(["4k"]) && !fourKMaster) { resolution = "2160p" }
 
         // Source
@@ -204,7 +212,7 @@ public enum FilenameParser {
         // Video codec
         var codec: String? = nil
         let lowerName = base.lowercased()
-        func named(_ pattern: String) -> Bool { lowerName.range(of: pattern, options: .regularExpression) != nil }
+        func named(_ pattern: String) -> Bool { lowerName.patternRange(pattern) != nil }
         if has(["hevc", "x265", "h265"]) || named(#"(?<![a-z0-9])h\.265(?![0-9])"#) {
             codec = "HEVC"
         } else if has(["x264", "h264", "avc"]) || named(#"(?<![a-z0-9])h\.264(?![0-9])"#) {

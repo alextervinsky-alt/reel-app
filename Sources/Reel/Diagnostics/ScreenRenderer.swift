@@ -319,6 +319,12 @@ enum ScreenRenderer {
             model.setFilms(copies(of: model.films, count: 500, drives: [drive.id]), urgent: true)
             for path in model.films.compactMap({ $0.tmdb?.posterPath }) { _ = await ImageStore.shared.image(path, .poster) }
             lines += await ScrollTiming.run([ScrollTiming.Page(name: "All Films, 500 films", view: AnyView(RootView()))], model: model, log: log)
+            // What each part of a poster card costs (diagnostics, not gates).
+            for (variant, name) in [(1, "without the lift"), (2, "titles and poster only"), (3, "poster only")] {
+                GridExperiment.variant = variant
+                lines += await ScrollTiming.run([ScrollTiming.Page(name: "Card test: \(name)", view: AnyView(RootView()))], model: model, log: log)
+            }
+            GridExperiment.variant = 0
         }
         try? (lines.joined(separator: "\n") + "\n").write(to: output.appendingPathComponent("scroll.txt"), atomically: true, encoding: .utf8)
     }

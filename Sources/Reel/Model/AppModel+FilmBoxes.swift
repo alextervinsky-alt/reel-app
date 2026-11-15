@@ -15,7 +15,9 @@ extension AppModel {
     /// The copy with this id, observed on its own (see `FilmBox`).
     func filmEntry(_ id: String) -> FilmEntry? {
         if let box = filmBoxes[id] { return box.film }
-        let box = FilmBox(films.first { $0.id == id })
+        // Found without reading `films` (observed), so the page depends on its box alone.
+        let known = itemCache.values.lazy.flatMap(\.copies).first { $0.id == id }
+        let box = FilmBox(known ?? films.first { $0.id == id })
         filmBoxes[id] = box
         return box.film
     }

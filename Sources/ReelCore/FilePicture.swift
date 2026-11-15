@@ -22,7 +22,7 @@ public struct PictureWords: Equatable, Sendable {
 
     public static func read(_ name: String) -> PictureWords {
         let lower = name.lowercased()
-        func has(_ pattern: String) -> Bool { lower.range(of: pattern, options: .regularExpression) != nil }
+        func has(_ pattern: String) -> Bool { lower.patternRange(pattern) != nil }
         var words = PictureWords()
         words.toneMapped = has(#"tone[ ._-]?map|(?<![a-z0-9])hdr[ ._-]?(?:to|2)[ ._-]?sdr(?![a-z])"#)
         words.dolbyVision = has(#"(?<![a-z0-9])(?:dovi|dolby[ ._-]?vision|dv(?=hdr|[^a-z0-9]|$))"#)
@@ -35,8 +35,7 @@ public struct PictureWords: Equatable, Sendable {
         words.hlg = has(#"(?<![a-z0-9])hlg(?![a-z0-9])"#)
         words.sdr = has(#"(?<![a-z0-9])sdr(?![a-z0-9])"#)
         if words.dolbyVision {
-            if let found = lower.range(of: #"(?<![a-z0-9])(?:dv|dovi)[ ._-]?p([578])(?![0-9])|(?<![a-z0-9])profile[ ._-]?([578])(?![0-9])|(?<![a-z0-9])p([578])(?:\.\d)?(?![a-z0-9])"#,
-                                       options: .regularExpression) {
+            if let found = lower.patternRange(#"(?<![a-z0-9])(?:dv|dovi)[ ._-]?p([578])(?![0-9])|(?<![a-z0-9])profile[ ._-]?([578])(?![0-9])|(?<![a-z0-9])p([578])(?:\.\d)?(?![a-z0-9])"#) {
                 words.dolbyVisionProfile = lower[found].last { $0.isNumber && "578".contains($0) }.flatMap { Int(String($0)) }
             } else if has(#"(?<![a-z0-9])(?:fel|mel)(?![a-z0-9])"#) {
                 words.dolbyVisionProfile = 7
@@ -293,9 +292,8 @@ extension FilePicture {
     /// says about the picture is then said of every film in it.
     public static func isCollection(_ folderName: String) -> Bool {
         let lower = folderName.lowercased()
-        if lower.range(of: #"\b(?:collection|trilogy|duology|quadrilogy|pentalogy|hexalogy|anthology|saga|box ?set|boxset|complete series)\b"#,
-                       options: .regularExpression) != nil { return true }
-        return lower.range(of: #"\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b"#, options: .regularExpression) != nil
+        if lower.patternRange(#"\b(?:collection|trilogy|duology|quadrilogy|pentalogy|hexalogy|anthology|saga|box ?set|boxset|complete series)\b"#) != nil { return true }
+        return lower.patternRange(#"\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b"#) != nil
     }
 
     /// The folder that speaks for each film, by film id: its folder's name, when no other film on

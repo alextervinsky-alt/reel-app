@@ -95,7 +95,7 @@ enum SpeedGates {
 
     /// The scroll gates from the pages timed, then every line.
     static func report(log: (String) -> Void) {
-        for result in ScrollTiming.results where !result.name.hasPrefix("Plain") {
+        for result in ScrollTiming.results where !result.name.hasPrefix("Plain") && !result.name.hasPrefix("Card test") {
             for (label, pass) in [("first", result.first), ("again", result.second)] where !pass.steps.isEmpty {
                 let limit = max(1, pass.steps.count / 100)
                 gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms, target ≤ \(limit)",

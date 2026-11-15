@@ -892,6 +892,12 @@ struct PosterHoverRatings: View {
     }
 }
 
+/// Which version of the poster card CI times (0: the real one).
+@MainActor
+enum GridExperiment {
+    static var variant = 0
+}
+
 /// A card outside the library grid tracks the pointer and has a menu of its own.
 private struct OwnPointer<Menu: View>: ViewModifier {
     let on: Bool
@@ -940,6 +946,30 @@ struct PosterCard: View, Equatable {
     }
 
     var body: some View {
+        switch GridExperiment.variant {
+        case 1: plainCard.contentShape(Rectangle()).modifier(OwnPointer(on: grid == nil, hovering: $hovering, item: item, scroll: scroll) { menu })
+        case 2: plainCard
+        case 3: poster
+        default: card
+        }
+    }
+
+    /// Diagnostics (CI): the card without what lifts it, for timing what each part costs.
+    private var plainCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            poster
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.main.displayTitle)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .lineLimit(1)
+                caption
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 9) {
             poster
                 .background {
