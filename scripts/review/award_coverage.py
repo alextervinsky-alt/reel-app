@@ -1,3 +1,4 @@
+import traceback
 # review-1.11 (throwaway): how well Wikidata covers candidate award lists. Public data only.
 import json, sys, time, urllib.parse, urllib.request
 UA = {"User-Agent": "Reel-review-1.11/0.1 (coverage check; github.com/alextervinsky-alt/reel-app)"}
@@ -23,12 +24,17 @@ def counts(q):
     u = "https://query.wikidata.org/sparql?" + urllib.parse.urlencode({"query": Q % {"q": q}, "format": "json"})
     b = get(u)["results"]["bindings"][0]
     return {k: int(v["value"]) for k, v in b.items()}
-terms = [l.strip() for l in open(sys.argv[1]) if l.strip() and not l.startswith("#")]
 out = []
+terms = [l.strip() for l in open(sys.argv[1]) if l.strip() and not l.startswith("#")]
 for term in terms:
-    for qid, label, desc in search(term)[:3]:
+    try: hits = search(term)[:3]
+    except Exception as e:
+        out.append({"term": term, "error": "search: " + repr(e)[:200]}); continue
+    if not hits: out.append({"term": term, "error": "no search hit"})
+    for qid, label, desc in hits:
         try: c = counts(qid)
-        except Exception as e: c = {"error": str(e)[:120]}
+        except Exception as e: c = {"error": repr(e)[:200]}
         row = {"term": term, "qid": qid, "label": label, "desc": desc, **c}
         out.append(row); print("REVIEW|" + json.dumps(row), flush=True); time.sleep(1)
 json.dump(out, open(sys.argv[2], "w"), indent=1)
+

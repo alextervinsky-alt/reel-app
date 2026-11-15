@@ -10,8 +10,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - run: python3 scripts/review/award_coverage.py scripts/review/award_terms.txt review-award-coverage.json
-      - run: |
+      - continue-on-error: true
+        run: python3 scripts/review/award_coverage.py scripts/review/award_terms.txt review-award-coverage.json
+      - if: always()
+        run: |
           git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
-          mkdir -p review-results && mv review-award-coverage.json review-results/
+          mkdir -p review-results && mv review-award-coverage.json review-results/ || echo '[{"error":"script produced nothing"}]' > review-results/review-award-coverage.json
           git add review-results && git commit -m "review-1.11: award coverage results (measurement only) [skip ci]" && git push
