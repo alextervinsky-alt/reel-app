@@ -1,0 +1,328 @@
+[
+ {
+  "term": "Academy Award for Best Picture",
+  "qid": "Q102427",
+  "label": "Academy Award for Best Picture",
+  "desc": "annual award from the Academy of Motion Picture Arts and Sciences",
+  "won": 228,
+  "wonTmdb": 98,
+  "nom": 1240,
+  "first": 1927,
+  "last": 2025,
+  "years": 97
+ },
+ {
+  "term": "Academy Award for Best Picture",
+  "qid": "Q14943591",
+  "label": "Academy Award for Best Picture (1980s)",
+  "desc": "",
+  "won": 0,
+  "wonTmdb": 0,
+  "nom": 0,
+  "years": 0
+ },
+ {
+  "term": "Academy Award for Best Picture",
+  "qid": "Q14943588",
+  "label": "Academy Award for Best Picture (1950s)",
+  "desc": "",
+  "won": 0,
+  "wonTmdb": 0,
+  "nom": 0,
+  "years": 0
+ },
+ {
+  "term": "Academy Award for Best Cinematography",
+  "qid": "Q131520",
+  "label": "Academy Award for Best Cinematography",
+  "desc": "American film award",
+  "won": 133,
+  "wonTmdb": 71,
+  "nom": 528,
+  "first": 1927,
+  "last": 2025,
+  "years": 71
+ },
+ {
+  "term": "Academy Award for Best Cinematography",
+  "qid": "Q21995139",
+  "label": "Academy Award for Best Cinematography, Black-and-White",
+  "desc": "",
+  "won": 51,
+  "wonTmdb": 27,
+  "nom": 238,
+  "first": 1939,
+  "last": 1966,
+  "years": 26
+ },
+ {
+  "term": "Academy Award for Best Cinematography",
+  "qid": "Q21995136",
+  "label": "Academy Award for Best Cinematography, Color",
+  "desc": "",
+  "won": 55,
+  "wonTmdb": 27,
+  "nom": 210,
+  "first": 1939,
+  "last": 1967,
+  "years": 29
+ },
+ {
+  "term": "BAFTA Award for Best Film",
+  "qid": "Q139184",
+  "label": "BAFTA Award for Best Film",
+  "desc": "award",
+  "won": 87,
+  "wonTmdb": 54,
+  "nom": 131,
+  "first": 1946,
+  "last": 2023,
+  "years": 59
+ },
+ {
+  "term": "BAFTA Award for Best Film",
+  "qid": "Q2925687",
+  "label": "BAFTA Award for Best Film Not in the English Language",
+  "desc": "presented annually at the British Academy Film Awards",
+  "won": 41,
+  "wonTmdb": 25,
+  "nom": 78,
+  "first": 1979,
+  "last": 2024,
+  "years": 32
+ },
+ {
+  "term": "BAFTA Award for Best Film",
+  "qid": "Q787098",
+  "label": "BAFTA Award for Best Original Music",
+  "desc": "British film industry award",
+  "won": 42,
+  "wonTmdb": 20,
+  "nom": 50,
+  "first": 1968,
+  "last": 2025,
+  "years": 29
+ },
+ {
+  "term": "American Society of Cinematographers Award for Outstanding Achievement in Cinematography",
+  "qid": "Q4745055",
+  "label": "American Society of Cinematographers Award for Outstanding Achievement in Cinematography in Theatrical Releases",
+  "desc": "Film award",
+  "won": 6,
+  "wonTmdb": 4,
+  "nom": 17,
+  "first": 1994,
+  "last": 2023,
+  "years": 5
+ },
+ {
+  "term": "American Society of Cinematographers Award for Outstanding Achievement in Cinematography",
+  "qid": "Q23017350",
+  "label": "American Society of Cinematographers Award for Motion Picture, Miniseries, or Pilot Made for Television",
+  "desc": "annual award",
+  "won": 0,
+  "wonTmdb": 0,
+  "nom": 0,
+  "years": 0
+ },
+ {
+  "term": "American Society of Cinematographers Award for Outstanding Achievement in Cinematography",
+  "qid": "Q107804569",
+  "label": "American Society of Cinematographers Award for Outstanding Achievement in Cinematography in an Episode of a One-Hour Television Series \u2013 Non-Commercial",
+  "desc": "annual award",
+  "won": 2,
+  "wonTmdb": 0,
+  "nom": 0,
+  "first": 2022,
+  "last": 2022,
+  "years": 1
+ },
+ {
+  "term": "BAFTA Award for Best Cinematography",
+  "qid": "Q778870",
+  "label": "BAFTA Award for Best Cinematography",
+  "desc": "list of winners and nominees for the BAFTA Award for Best Cinematography",
+  "won": 108,
+  "wonTmdb": 63,
+  "nom": 10,
+  "first": 1963,
+  "last": 2025,
+  "years": 59
+ },
+ {
+  "term": "British Society of Cinematographers Best Cinematography Award",
+  "error": "no search hit"
+ },
+ {
+  "term": "Camerimage Golden Frog",
+  "error": "no search hit"
+ },
+ {
+  "term": "European Film Award for Best Cinematographer",
+  "qid": "Q1377733",
+  "label": "European Film Award for Best Cinematographer",
+  "desc": "annual award given for cinematic achievements in cinematography",
+  "won": 72,
+  "wonTmdb": 37,
+  "nom": 165,
+  "first": 1989,
+  "last": 2024,
+  "years": 31
+ },
+ {
+  "term": "Independent Spirit Award for Best Cinematography",
+  "qid": "Q1170493",
+  "label": "Independent Spirit Award for Best Cinematography",
+  "desc": "American film award",
+  "won": 10,
+  "wonTmdb": 7,
+  "nom": 13,
+  "first": 1985,
+  "last": 2014,
+  "years": 12
+ },
+ {
+  "term": "Grand Prix Cannes Film Festival",
+  "error": "no search hit"
+ },
+ {
+  "term": "Jury Prize Cannes Film Festival",
+  "error": "no search hit"
+ },
+ {
+  "term": "Grand Jury Prize Venice Film Festival",
+  "error": "no search hit"
+ },
+ {
+  "term": "Silver Bear Grand Jury Prize",
+  "qid": "Q664212",
+  "label": "Silver Bear Grand Jury Prize",
+  "desc": "Silver Bear award given by the jury at the Berlin International Film Festival",
+  "won": 84,
+  "wonTmdb": 69,
+  "nom": 4,
+  "first": 1950,
+  "last": 2026,
+  "years": 57
+ },
+ {
+  "term": "Sundance Grand Jury Prize Dramatic",
+  "error": "no search hit"
+ },
+ {
+  "term": "TIFF People's Choice Award",
+  "error": "no search hit"
+ },
+ {
+  "term": "Tallinn Black Nights Film Festival Grand Prix",
+  "error": "no search hit"
+ },
+ {
+  "term": "Golden Globe Award for Best Motion Picture \u2013 Drama",
+  "qid": "Q1011509",
+  "label": "Golden Globe Award for Best Motion Picture \u2013 Drama",
+  "desc": "film award category of the American film and television award (1943\u2013)",
+  "won": 34,
+  "wonTmdb": 30,
+  "nom": 67,
+  "first": 1955,
+  "last": 2026,
+  "years": 37
+ },
+ {
+  "term": "Golden Globe Award for Best Motion Picture \u2013 Musical or Comedy",
+  "qid": "Q670282",
+  "label": "Golden Globe Award for Best Motion Picture \u2013 Musical or Comedy",
+  "desc": "film award category of the American film and television award (1951\u2013)",
+  "won": 34,
+  "wonTmdb": 23,
+  "nom": 55,
+  "first": 1954,
+  "last": 2025,
+  "years": 29
+ },
+ {
+  "term": "Independent Spirit Award for Best Film",
+  "qid": "Q2544844",
+  "label": "Independent Spirit Award for Best Film",
+  "desc": "Annual award",
+  "won": 10,
+  "wonTmdb": 3,
+  "nom": 4,
+  "first": 2014,
+  "last": 2025,
+  "years": 5
+ },
+ {
+  "term": "Goya Award for Best Film",
+  "qid": "Q1467554",
+  "label": "Goya Award for Best Film",
+  "desc": "annual Spanish film award category",
+  "won": 26,
+  "wonTmdb": 16,
+  "nom": 21,
+  "first": 1995,
+  "last": 2026,
+  "years": 23
+ },
+ {
+  "term": "Academy Award for Best Documentary Feature Film",
+  "qid": "Q111332",
+  "label": "Academy Award for Best Documentary Feature Film",
+  "desc": "award for documentary movie",
+  "won": 195,
+  "wonTmdb": 88,
+  "nom": 744,
+  "first": 1942,
+  "last": 2026,
+  "years": 81
+ },
+ {
+  "term": "Academy Award for Best International Feature Film",
+  "qid": "Q105304",
+  "label": "Academy Award for Best International Feature Film",
+  "desc": "American film award",
+  "won": 74,
+  "wonTmdb": 71,
+  "nom": 361,
+  "first": 1949,
+  "last": 2026,
+  "years": 68
+ },
+ {
+  "term": "New York Film Critics Circle Award for Best Film",
+  "qid": "Q1983066",
+  "label": "New York Film Critics Circle Award for Best Film",
+  "desc": "award",
+  "won": 15,
+  "wonTmdb": 9,
+  "nom": 0,
+  "first": 1970,
+  "last": 2018,
+  "years": 13
+ },
+ {
+  "term": "Los Angeles Film Critics Association Award for Best Film",
+  "qid": "Q952914",
+  "label": "Los Angeles Film Critics Association Award for Best Film",
+  "desc": "Wikimedia list article",
+  "won": 8,
+  "wonTmdb": 8,
+  "nom": 0,
+  "first": 1978,
+  "last": 2018,
+  "years": 10
+ },
+ {
+  "term": "National Society of Film Critics Award for Best Film",
+  "qid": "Q1720784",
+  "label": "National Society of Film Critics Award for Best Film",
+  "desc": "annual film award",
+  "won": 5,
+  "wonTmdb": 5,
+  "nom": 14,
+  "first": 1970,
+  "last": 1994,
+  "years": 7
+ }
+]
