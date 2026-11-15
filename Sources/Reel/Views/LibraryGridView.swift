@@ -883,6 +883,35 @@ struct PosterCard: View, Equatable {
 
     var body: some View {
         let _ = ReviewCount.bumpCard()
+        // Code review 1.11 (scratch branch): which part of a card costs while scrolling.
+        switch ReviewCount.cardVariant {
+        case 1: reviewCore(image: true)
+        case 2: reviewCore(image: true).contextMenu { menu }
+        case 3: reviewCore(image: true).contentShape(Rectangle()).scrollAwareHover($hovering) { _ in }
+        case 4: reviewCore(image: false).contentShape(Rectangle()).scrollAwareHover($hovering) { _ in }.contextMenu { menu }
+        case 5: reviewPosterOnly
+        default: fullCard
+        }
+    }
+
+    /// The card without hover tracking or a menu (code review 1.11 only).
+    private func reviewCore(image: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if image { poster } else { RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.3)).aspectRatio(2 / 3, contentMode: .fit) }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.main.displayTitle).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+                caption.font(.system(size: 12)).lineLimit(1)
+            }
+        }
+    }
+
+    /// Only the poster image, as the card draws it (code review 1.11 only).
+    private var reviewPosterOnly: some View {
+        Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var fullCard: some View {
         VStack(alignment: .leading, spacing: 9) {
             poster
                 .background {

@@ -9,6 +9,8 @@ import ReelCore
 enum ReviewCount {
     static var grid = 0
     static var card = 0
+    /// Which parts of a card are drawn (0: the card as shipped; see `PosterCard.body`).
+    static var cardVariant = 0
     static func bumpGrid() { grid += 1 }
     static func bumpCard() { card += 1 }
 }
@@ -139,6 +141,22 @@ enum ReviewMeasure {
             log("film page \(film.displayTitle): after its loads, layout and drawing again \(ms(since: start)) ms")
             window.close()
         }
+        // What a film page works out when it opens (each film once, then again from the caches).
+        for film in [model.items.dropFirst(3).first?.main, model.items.dropFirst(11).first?.main].compactMap({ $0 }) {
+            for round in ["first", "again"] {
+                start = ContinuousClock.now
+                let collection = model.collectionItems(for: film)
+                let collectionMs = ms(since: start)
+                start = ContinuousClock.now
+                let related = model.relatedFilms(to: film, excluding: Set(collection.map { $0.id }), limit: 10)
+                let relatedMs = ms(since: start)
+                start = ContinuousClock.now
+                let pair = model.pairing(for: film)
+                let pairMs = ms(since: start)
+                log("film page parts for \(film.displayTitle), \(round): collection \(collectionMs) ms, From the Same People + More Like This \(relatedMs) ms "
+                    + "(\(related.people.count) + \(related.similar.count)), Pair It With \(pairMs) ms (\(pair == nil ? "none" : "found"))")
+            }
+        }
         log("timings the app records itself: " + model.timings.map { "\($0.key) \($0.value)" }.sorted().joined(separator: "; "))
     }
 
@@ -165,7 +183,7 @@ enum ReviewMeasure {
         .background(Theme.background))
         let perRow = 7
         let rows = stride(from: 0, to: items.count, by: perRow).map { Array(items[$0..<min($0 + perRow, items.count)]) }
-        let stacked = AnyView(ScrollView {
+        let _ = AnyView(ScrollView {
             LazyVStack(alignment: .leading, spacing: 30) {
                 ForEach(rows.indices, id: \.self) { row in
                     HStack(alignment: .top, spacing: 22) {
@@ -178,7 +196,7 @@ enum ReviewMeasure {
         }
         .environment(ScrollState())
         .background(Theme.background))
-        let equatable = AnyView(ScrollView {
+        let _ = AnyView(ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: width, maximum: width), spacing: 22, alignment: .top)], alignment: .leading, spacing: 30) {
                 ForEach(items) { item in PosterCard(item: item).equatable().frame(width: width, height: height) }
             }
@@ -186,11 +204,16 @@ enum ReviewMeasure {
         }
         .environment(ScrollState())
         .background(Theme.background))
+        // Which part of a card costs: the same grid, each card drawn with some of its parts.
+        for (variant, name) in [(1, "image and titles only"), (2, "image, titles and the context menu"), (3, "image, titles and hover tracking"),
+                                (4, "titles, menu and hover, no image"), (5, "the poster image only"), (0, "the card as shipped")] {
+            ReviewCount.cardVariant = variant
+            _ = await ScrollTiming.run([ScrollTiming.Page(name: "Card parts: \(name)", view: asNow)], model: model, log: { ScreenRenderer.log($0) })
+        }
+        ReviewCount.cardVariant = 0
         _ = await ScrollTiming.run([
             ScrollTiming.Page(name: "Experiment: \(items.count) cards in the grid as now", view: asNow),
             ScrollTiming.Page(name: "Experiment: the same cards at a fixed size", view: fixed),
-            ScrollTiming.Page(name: "Experiment: fixed-size cards in rows of a LazyVStack", view: stacked),
-            ScrollTiming.Page(name: "Experiment: fixed size and .equatable()", view: equatable),
         ], model: model, log: { ScreenRenderer.log($0) })
     }
 }

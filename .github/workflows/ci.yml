@@ -56,10 +56,10 @@ jobs:
           cp "$(swift build -c release --arch arm64 --show-bin-path)/Reel" app/Reel.app/Contents/MacOS/Reel
           printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.howbizzar.reel.review</string><key>CFBundleExecutable</key><string>Reel</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>review</string></dict></plist>' > app/Reel.app/Contents/Info.plist
           codesign --force --deep -s - app/Reel.app >/dev/null 2>&1 || true
-          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 900; exec @ARGV' "$PWD/app/Reel.app/Contents/MacOS/Reel" &
+          REEL_RENDER_SCREENS="$PWD/screens" perl -e 'alarm 1500; exec @ARGV' "$PWD/app/Reel.app/Contents/MacOS/Reel" &
           pid=$!
           (
-            for page in "All Films, 500 films" "Experiment: 500 cards in the grid as now" "Experiment: fixed-size cards in rows of a LazyVStack"; do
+            for page in "All Films, 500 films" "Experiment: 500 cards in the grid as now" "Card parts: the card as shipped"; do
               until grep -q "scroll begins: ${page}" screens/progress.txt 2>/dev/null; do kill -0 $pid 2>/dev/null || exit 0; sleep 0.3; done
               sudo sample $pid 6 -mayDie -file "screens/sample-$(echo "$page" | tr -c 'A-Za-z0-9' '-').txt" >/dev/null 2>&1 || true
             done
