@@ -69,6 +69,14 @@ enum ScreenRenderer {
         await readCraft(of: Array(model.films.prefix(4)), into: model)
         await model.loadArticle(for: first)
         log("article read")
+        // Code review 1.11 (scratch branch only): measurements, then the scroll timings, then stop.
+        if ProcessInfo.processInfo.environment["REEL_REVIEW"] == "1" {
+            await ReviewMeasure.run(model, sample: films, copies: { copies(of: $0, count: $1, drives: $2) })
+            await scrollCheck(model, first: first, output: output)
+            await ReviewMeasure.layoutExperiments(model)
+            finish()
+            return
+        }
 
         try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let tonight = model.tonightItems.first?.main ?? first

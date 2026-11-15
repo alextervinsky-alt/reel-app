@@ -71,9 +71,14 @@ enum ScrollTiming {
             // CI samples the main thread while each page scrolls (see the workflow): it starts on this line.
             log("scroll begins: \(page.name)")
             try? await Task.sleep(for: .milliseconds(600))
+            let counts0 = (ReviewCount.grid, ReviewCount.card)
             let first = await pass(scroll, host: host)
+            let counts1 = (ReviewCount.grid, ReviewCount.card)
             try? await Task.sleep(for: .seconds(1))
             let second = await pass(scroll, host: host)
+            let counts2 = (ReviewCount.grid, ReviewCount.card)
+            log("REVIEW bodies while scrolling \(page.name): first pass \(counts1.0 - counts0.0) grid, \(counts1.1 - counts0.1) cards; "
+                + "again \(counts2.0 - counts1.0) grid, \(counts2.1 - counts1.1) cards")
             let line = "\(page.name) (\(Int(height)) pt): first \(first.summary) | again \(second.summary)"
             log("scroll " + line)
             lines.append(line)

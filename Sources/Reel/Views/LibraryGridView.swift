@@ -38,6 +38,7 @@ struct LibraryGridView: View {
     }
 
     var body: some View {
+        let _ = ReviewCount.bumpGrid()
         // Shelf + search, then language, what it was shot on, length and moods. Each filter's
         // counts reflect the others.
         let all = model.shelfItems(shelf, matching: query, sortedBy: sort)
@@ -881,6 +882,7 @@ struct PosterCard: View, Equatable {
     }
 
     var body: some View {
+        let _ = ReviewCount.bumpCard()
         VStack(alignment: .leading, spacing: 9) {
             poster
                 .background {
