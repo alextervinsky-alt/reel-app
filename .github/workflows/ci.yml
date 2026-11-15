@@ -17,19 +17,24 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v5
+      - name: Build cache
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: linux-swift6.0-${{ hashFiles('Package.swift') }}-${{ github.sha }}
+          restore-keys: linux-swift6.0-${{ hashFiles('Package.swift') }}-
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests --skip LiveCraftSourcesTests --skip LiveShotOnTests 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveAcclaimTests 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
           else
             echo "::notice::$(grep -E 'Executed [0-9]+ tests' test.log | tail -1)"
           fi
-          # The research benchmark's measurements (synthetic films; see ResearchBenchmarkTests).
-          grep -E "^DRYRUN\| " test.log | sed -E 's/^DRYRUN\| //' | while read -r l; do echo "::notice::DRYRUN ${l}"; done
-          grep -E "^BENCH\| " test.log | sed -E 's/^BENCH\| //' | head -8 | while read -r l; do echo "::notice::BENCH ${l}"; done
+          # Measurements on synthetic libraries (UserDataTests, LibraryFormatTests).
+          grep -E "^(DRYRUN|GATE)\| " test.log | sed -E 's/\| / /' | while read -r l; do echo "::notice::${l}"; done
           exit $code
 
   live-match:
@@ -54,18 +59,6 @@ jobs:
             grep -E "error:|failed" live.log | head -25 | while read -r l; do echo "::error::${l}"; done
           fi
           exit $code
-      - name: Find interviews for well-known films (American and British Cinematographer)
-        # Run even when an earlier live step failed (an OMDb key over its daily limit).
-        if: ${{ !cancelled() }}
-        run: |
-          set +e
-          swift test --filter LiveCraftSourcesTests 2>&1 | tee craft.log
-          code=${PIPESTATUS[0]}
-          grep -E "Craft sources: [0-9]+ of" craft.log | while read -r l; do echo "::notice::${l}"; done
-          if [ $code -ne 0 ]; then
-            grep -E "error:|failed" craft.log | head -10 | while read -r l; do echo "::error::${l}"; done
-          fi
-          exit $code
       - name: The most acclaimed of last year, worked out live (a report)
         # Run even when an earlier live step failed (an OMDb key over its daily limit).
         if: ${{ !cancelled() }}
@@ -76,35 +69,6 @@ jobs:
           OMDB_ACCLAIM_LOOKUPS=${{ contains(github.event.head_commit.message, '[build]') && '50' || '0' }} \
             swift test --skip-build --filter LiveAcclaimTests > acclaim.log 2>&1
           grep -E "^::notice::Most acclaimed" acclaim.log || echo "::notice::Most acclaimed: not worked out ($(grep -cE 'error|failed' acclaim.log) errors)"
-          exit 0
-
-      - name: Shot on for well-known films on record (wrong tags are warnings, missing ones notices)
-        # Run even when an earlier live step failed (an OMDb key over its daily limit).
-        if: ${{ !cancelled() }}
-        run: |
-          set +e
-          swift build --build-tests 2>&1 | tail -3
-          # One film per run: a crash in Linux's networking costs that film only.
-          crashed=0
-          for i in $(seq 0 33); do
-            SHOTON_FILM=$i swift test --skip-build --filter LiveShotOnTests > one.log 2>&1 || crashed=$((crashed+1))
-            grep -E "^(Shot on|::warning::Shot on)" one.log | tee -a shoton.log
-          done
-          # Each film's line, summed up (also when the run stopped part way): one notice each.
-          read=$(grep -E "^Shot on: " shoton.log | grep -vE "not found on TMDB|nothing could be reached" | sed -E 's/^Shot on: //; s/ \| known.*//' | paste -sd '~' - | sed 's/~/ · /g')
-          echo "::notice::Shot on read: ${read}"
-          wrong=$(grep -E "^Shot on: " shoton.log | sed -nE 's/^Shot on: ([^|]+) \|.*\| wrong ([^|]+) \|.*/\1\2/p' | paste -sd ',' -)
-          missing=$(grep -E "^Shot on: " shoton.log | sed -nE 's/^Shot on: ([^|]+) \|.*\| missing (.+)$/\1\2/p' | paste -sd ',' -)
-          films=$(grep -cE "^Shot on: .*\| known" shoton.log)
-          known=$(grep -oE "\| known [0-9]+" shoton.log | awk '{s+=$3} END {print s+0}')
-          echo "::notice::Shot on check: ${films} of 34 films read (${crashed} runs stopped), ${known} known tags. Wrong: ${wrong:-none}. Missing: ${missing:-none}"
-          uncounted=$(grep -E "^Shot on not counted: " shoton.log | sed -E 's/^Shot on not counted: //' | head -30 | paste -sd '~' - | sed 's/~/ ¦ /g')
-          echo "::notice::Shot on not counted (named, not said to be shot that way): ${uncounted:-none}"
-          why=$(grep -E "^Shot on why: " shoton.log | sed -E 's/^Shot on why: //' | paste -sd '~' - | sed 's/~/ ¦ /g')
-          echo "::notice::Shot on why (the 1.9.4 audit's films): ${why:-none}"
-          cams=$(grep -E "^Shot on cameras: " shoton.log | sed -E 's/^Shot on cameras: //' | paste -sd '~' - | sed 's/~/ ¦ /g')
-          echo "::notice::Shot on cameras (the audit's films): ${cams:-none}"
-          # Reports only: the unit tests are what pass or fail a build.
           exit 0
 
   secrets-check:
@@ -136,6 +100,12 @@ jobs:
     if: github.ref != 'refs/heads/main' && github.event_name == 'push' && !contains(github.event.head_commit.message, '[build]')
     steps:
       - uses: actions/checkout@v5
+      - name: Build cache
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: macos15-debug-${{ hashFiles('Package.swift') }}-${{ github.sha }}
+          restore-keys: macos15-debug-${{ hashFiles('Package.swift') }}-
       - name: Build the app (debug)
         run: |
           swift build > build.log 2>&1; code=$?

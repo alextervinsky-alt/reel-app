@@ -246,18 +246,18 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     public static let currentStillsCheck = 2
     /// Bonus videos, subtitles, notes and artwork found with the film (from the last scan).
     public var extras: [FilmExtra]
-    /// The gear and techniques read about the film, for searching by craft (see `CraftIndex`).
-    public var craft: CraftIndex?
-    /// The last try at reading it that came to nothing, while it's waiting to be tried again (see
-    /// `CraftQueue`).
-    public var craftAttempt: CraftAttempt?
+    /// How it was shot: the facts sheet (1.11, see `CraftFacts`). Derived; rebuilt when its sources change.
+    public var craftFacts: CraftFacts?
+    /// In a format-7 file, the film whose shared info this copy takes (`LibraryFile.filmInfo`);
+    /// nil once filled in, and always nil in memory.
+    var sharedFilm: Int?
     /// Read from the file name once, not stored on disk (so parser improvements apply automatically).
     public let parsed: ParsedFilename
 
     enum CodingKeys: String, CodingKey {
         case driveID, relativePath, fileName, size, modified, addedAt, matchState, matchScore, tmdb, candidates, lastError
         case ratings, reception, infoVersion, lastLookup, ratingsDue, ratingsTriedAt, funFacts, checkedStills, extras
-        case infoUpdatedAt, checkedStillsVersion, craft, craftAttempt
+        case infoUpdatedAt, checkedStillsVersion, craftFacts, film
     }
 
     /// Bump when Reel starts storing more film info, so existing entries get refreshed.
@@ -298,8 +298,8 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         self.infoUpdatedAt = nil
         self.checkedStillsVersion = nil
         self.extras = extras
-        self.craft = nil
-        self.craftAttempt = nil
+        self.craftFacts = nil
+        self.sharedFilm = nil
         self.parsed = FilenameParser.parse(fileName)
     }
 
@@ -327,8 +327,9 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         extras = try c.decodeIfPresent([FilmExtra].self, forKey: .extras) ?? []
         infoUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .infoUpdatedAt)
         checkedStillsVersion = try c.decodeIfPresent(Int.self, forKey: .checkedStillsVersion)
-        craft = try? c.decodeIfPresent(CraftIndex.self, forKey: .craft)
-        craftAttempt = try? c.decodeIfPresent(CraftAttempt.self, forKey: .craftAttempt)
+        // A sheet this Reel can't read is rebuilt, not a reason to fail.
+        craftFacts = try? c.decodeIfPresent(CraftFacts.self, forKey: .craftFacts)
+        sharedFilm = try c.decodeIfPresent(Int.self, forKey: .film)
         if checkedStillsVersion != FilmEntry.currentStillsCheck { checkedStills = nil }
         if infoUpdatedAt == nil, let id = tmdb?.id {
             // Saved before Reel kept this date: spread the first refresh over the coming month
@@ -337,6 +338,70 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         }
         id = FilmEntry.makeID(driveID: driveID, relativePath: relativePath)
         parsed = FilenameParser.parse(fileName)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encode(to: encoder, sharing: false)
+    }
+
+    /// `sharing`: in a format-7 file the film's info is stored once (`LibraryFile.filmInfo`) and
+    /// each copy only says which film it is.
+    func encode(to encoder: Encoder, sharing: Bool) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(driveID, forKey: .driveID)
+        try c.encode(relativePath, forKey: .relativePath)
+        try c.encode(fileName, forKey: .fileName)
+        try c.encode(size, forKey: .size)
+        try c.encodeIfPresent(modified, forKey: .modified)
+        try c.encode(addedAt, forKey: .addedAt)
+        try c.encode(matchState, forKey: .matchState)
+        try c.encodeIfPresent(matchScore, forKey: .matchScore)
+        if !candidates.isEmpty { try c.encode(candidates, forKey: .candidates) }
+        try c.encodeIfPresent(lastError, forKey: .lastError)
+        try c.encodeIfPresent(lastLookup, forKey: .lastLookup)
+        if !extras.isEmpty { try c.encode(extras, forKey: .extras) }
+        if sharing, let id = tmdb?.id {
+            try c.encode(id, forKey: .film)
+            return
+        }
+        try c.encodeIfPresent(tmdb, forKey: .tmdb)
+        try c.encodeIfPresent(ratings, forKey: .ratings)
+        try c.encodeIfPresent(reception, forKey: .reception)
+        try c.encode(infoVersion, forKey: .infoVersion)
+        if ratingsDue { try c.encode(ratingsDue, forKey: .ratingsDue) }
+        try c.encodeIfPresent(ratingsTriedAt, forKey: .ratingsTriedAt)
+        try c.encodeIfPresent(funFacts, forKey: .funFacts)
+        try c.encodeIfPresent(checkedStills, forKey: .checkedStills)
+        try c.encodeIfPresent(infoUpdatedAt, forKey: .infoUpdatedAt)
+        try c.encodeIfPresent(checkedStillsVersion, forKey: .checkedStillsVersion)
+        try c.encodeIfPresent(craftFacts, forKey: .craftFacts)
+    }
+
+    /// The film's info, the same for every copy of it (stored once in a format-7 file).
+    public var filmInfo: FilmInfoRecord {
+        FilmInfoRecord(tmdb: tmdb, ratings: ratings, reception: reception, infoVersion: infoVersion, ratingsDue: ratingsDue,
+                       ratingsTriedAt: ratingsTriedAt, funFacts: funFacts, checkedStills: checkedStills,
+                       checkedStillsVersion: checkedStillsVersion, infoUpdatedAt: infoUpdatedAt, craftFacts: craftFacts)
+    }
+
+    /// Takes the film's shared info (opening a format-7 file), by the same rules as reading it
+    /// from the copy itself.
+    mutating func take(_ info: FilmInfoRecord) {
+        tmdb = info.tmdb
+        ratings = info.ratings
+        reception = info.reception
+        infoVersion = info.infoVersion ?? 1
+        ratingsDue = info.ratingsDue ?? false
+        ratingsTriedAt = info.ratingsTriedAt
+        funFacts = info.funFacts
+        checkedStillsVersion = info.checkedStillsVersion
+        checkedStills = info.checkedStillsVersion == FilmEntry.currentStillsCheck ? info.checkedStills : nil
+        infoUpdatedAt = info.infoUpdatedAt
+        craftFacts = info.craftFacts
+        if infoUpdatedAt == nil, let id = tmdb?.id {
+            infoUpdatedAt = Date().addingTimeInterval(-Double(id % 30) * 86_400)
+        }
+        sharedFilm = nil
     }
 
     public static func makeID(driveID: String, relativePath: String) -> String {
@@ -370,8 +435,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     public mutating func applyDetails(_ details: TMDBMovieDetails, reception: ReceptionSummary?) {
         if tmdb?.id != details.id {
             funFacts = nil
-            craft = nil
-            craftAttempt = nil
+            craftFacts = nil
         }
         if tmdb?.stillPaths != details.stillPaths { checkedStills = nil }
         tmdb = details
@@ -558,29 +622,74 @@ public enum FileIdentity {
 
 }
 
+/// A film's info as stored once for all its copies (Library.json format 7).
+public struct FilmInfoRecord: Codable, Equatable, Sendable {
+    public var tmdb: TMDBMovieDetails?
+    public var ratings: ExternalRatings?
+    public var reception: ReceptionSummary?
+    public var infoVersion: Int?
+    public var ratingsDue: Bool?
+    public var ratingsTriedAt: Date?
+    public var funFacts: FunFacts?
+    public var checkedStills: [String]?
+    public var checkedStillsVersion: Int?
+    public var infoUpdatedAt: Date?
+    public var craftFacts: CraftFacts?
+
+    enum CodingKeys: String, CodingKey {
+        case tmdb, ratings, reception, infoVersion, ratingsDue, ratingsTriedAt, funFacts, checkedStills, checkedStillsVersion
+        case infoUpdatedAt, craftFacts
+    }
+
+    public init(tmdb: TMDBMovieDetails?, ratings: ExternalRatings?, reception: ReceptionSummary?, infoVersion: Int?, ratingsDue: Bool?,
+                ratingsTriedAt: Date?, funFacts: FunFacts?, checkedStills: [String]?, checkedStillsVersion: Int?, infoUpdatedAt: Date?,
+                craftFacts: CraftFacts?) {
+        self.tmdb = tmdb
+        self.ratings = ratings
+        self.reception = reception
+        self.infoVersion = infoVersion
+        self.ratingsDue = ratingsDue == true ? true : nil
+        self.ratingsTriedAt = ratingsTriedAt
+        self.funFacts = funFacts
+        self.checkedStills = checkedStills
+        self.checkedStillsVersion = checkedStillsVersion
+        self.infoUpdatedAt = infoUpdatedAt
+        self.craftFacts = craftFacts
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tmdb = try c.decodeIfPresent(TMDBMovieDetails.self, forKey: .tmdb)
+        ratings = try c.decodeIfPresent(ExternalRatings.self, forKey: .ratings)
+        reception = try c.decodeIfPresent(ReceptionSummary.self, forKey: .reception)
+        infoVersion = try c.decodeIfPresent(Int.self, forKey: .infoVersion)
+        ratingsDue = try c.decodeIfPresent(Bool.self, forKey: .ratingsDue)
+        ratingsTriedAt = try c.decodeIfPresent(Date.self, forKey: .ratingsTriedAt)
+        funFacts = try c.decodeIfPresent(FunFacts.self, forKey: .funFacts)
+        checkedStills = try c.decodeIfPresent([String].self, forKey: .checkedStills)
+        checkedStillsVersion = try c.decodeIfPresent(Int.self, forKey: .checkedStillsVersion)
+        infoUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .infoUpdatedAt)
+        craftFacts = try? c.decodeIfPresent(CraftFacts.self, forKey: .craftFacts)
+    }
+}
+
 public struct LibraryFile: Codable, Equatable, Sendable {
     public var version: Int
     public var films: [FilmEntry]
     /// Only present in files written by Reel 0.3. Drives now live in Settings.json.
     public var drives: [Drive]?
+    /// The version as read from disk (before `LibraryMigration`), so opening can tell an upgrade
+    /// without reading the file again. Not stored.
+    public var readVersion: Int
 
     /// The format this Reel writes. A file with a higher version is a newer Reel's: never written
     /// over (see `LibraryOpening`).
-    /// 4 (1.10.7): readings keep where their research stands (`CraftIndex.research`) and a page in
-    /// another language as such (`SourceLimit.Kind.language`). A version 3 file reads as it is (the
-    /// research is nil until the film is read again); Reel 1.10.6 and older won't write over a 4.
-    /// 5 (1.10.9): readings keep every finding with its passage, and earlier findings carried,
-    /// pending reassessment or retired (`CraftIndex.claims`). A version 4 file reads as it is (no
-    /// migration step: claims are nil until the film is read again, and the reading before's tags
-    /// and names are reconciled then, `SourceReconciliation.earlier`); Reel 1.10.8 and older won't
-    /// write over a 5, so a pending finding can't be dropped by an older Reel.
-    /// 6 (1.10.10): a finding recorded before passages were kept is `legacy` (shown apart, awaiting
-    /// verification, never retired for not being found), and findings keep their article. A version 5
-    /// file is upgraded on opening (`LibraryMigration.upgrade`): its pending findings with no passage
-    /// become legacy; nothing else changes, and nothing is dropped. The upgraded file is written only
-    /// by the next ordinary save, atomically, so an interrupted upgrade leaves the version 5 file as it
-    /// was and is simply done again. Reel 1.10.9 and older won't write over a 6.
-    public static let currentVersion = 6
+    /// 4 (1.10.7) to 6 (1.10.10): the Shot on readings' research and findings.
+    /// 7 (1.11): each film's info is stored once (`filmInfo`, by TMDB id) and its copies refer to
+    /// it; the readings (`craft`, `craftAttempt`) are gone, replaced by the facts sheet
+    /// (`craftFacts`). An older file reads as it is: its readings are skipped and every copy keeps
+    /// its own info. Reel 1.10.10 and older won't write over a 7.
+    public static let currentVersion = 7
 
     /// The Reel that last wrote the file ("1.10.10 (380)"; 1.10.10 on): what wrote a library is read from
     /// the library itself, not guessed from what it holds.
@@ -600,37 +709,77 @@ public struct LibraryFile: Codable, Equatable, Sendable {
         }
     }
 
+    enum CodingKeys: String, CodingKey {
+        case version, films, drives, writtenBy, scans, filmInfo
+    }
+
     public init(films: [FilmEntry] = [], writtenBy: String? = nil, scans: [String: Scan]? = nil) {
         self.version = LibraryFile.currentVersion
+        self.readVersion = LibraryFile.currentVersion
         self.films = films
         self.drives = nil
         self.writtenBy = writtenBy
         self.scans = scans
     }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        readVersion = version
+        drives = try c.decodeIfPresent([Drive].self, forKey: .drives)
+        writtenBy = try c.decodeIfPresent(String.self, forKey: .writtenBy)
+        scans = try c.decodeIfPresent([String: Scan].self, forKey: .scans)
+        var films = try c.decode([FilmEntry].self, forKey: .films)
+        let shared = try c.decodeIfPresent([String: FilmInfoRecord].self, forKey: .filmInfo) ?? [:]
+        for i in films.indices {
+            guard let id = films[i].sharedFilm else { continue }
+            if let info = shared[String(id)] {
+                films[i].take(info)
+            } else {
+                // Its film's info is missing: the copy is looked up again (its film is remembered
+                // in Your Notes).
+                films[i].sharedFilm = nil
+                films[i].matchState = .pending
+            }
+        }
+        self.films = films
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(version, forKey: .version)
+        try c.encodeIfPresent(drives, forKey: .drives)
+        try c.encodeIfPresent(writtenBy, forKey: .writtenBy)
+        try c.encodeIfPresent(scans, forKey: .scans)
+        // Each film once: the copy with the newest info speaks for it.
+        var info: [Int: FilmEntry] = [:]
+        for film in films {
+            guard let id = film.tmdb?.id else { continue }
+            if let kept = info[id], (kept.infoUpdatedAt ?? .distantPast) >= (film.infoUpdatedAt ?? .distantPast) { continue }
+            info[id] = film
+        }
+        try c.encode(Dictionary(uniqueKeysWithValues: info.map { (String($0.key), $0.value.filmInfo) }), forKey: .filmInfo)
+        try c.encode(films.map(SharedCopy.init), forKey: .films)
+    }
+
+    /// One copy as format 7 writes it.
+    private struct SharedCopy: Encodable {
+        let film: FilmEntry
+        func encode(to encoder: Encoder) throws { try film.encode(to: encoder, sharing: true) }
+    }
+
+    public static func == (a: LibraryFile, b: LibraryFile) -> Bool {
+        a.version == b.version && a.films == b.films && a.drives == b.drives && a.writtenBy == b.writtenBy && a.scans == b.scans
+    }
 }
 
-/// Upgrading an older library on opening (1.10.10). Pure and repeatable: upgrading an upgraded file
-/// changes nothing.
+/// Upgrading an older library on opening. Pure and repeatable: upgrading an upgraded file changes
+/// nothing. Up to 6 the readings were migrated here; 1.11 (7) drops them, so an older file only
+/// takes the new version (the next ordinary save writes it in the new format, atomically).
 public enum LibraryMigration {
     public static func upgrade(_ file: LibraryFile) -> LibraryFile {
         guard file.version < LibraryFile.currentVersion else { return file }
         var upgraded = file
-        if file.version <= 5 {
-            for i in upgraded.films.indices {
-                guard var craft = upgraded.films[i].craft, var claims = craft.claims else { continue }
-                // Pending with no passage, and (restored) those 1.10.9 retired only for not being confirmed in
-                // its readings: nothing disproved them.
-                for j in claims.indices where (claims[j].text == nil || claims[j].source.isEmpty)
-                    && (claims[j].status == .pending
-                        || claims[j].status == .retired && (claims[j].reason ?? "").contains("no passage was kept")) {
-                    claims[j].status = .legacy
-                    claims[j].reason = "recorded by rules \(claims[j].rules), before passages were kept; awaiting verification"
-                    claims[j].misses = 0
-                }
-                craft.claims = claims
-                upgraded.films[i].craft = craft
-            }
-        }
         upgraded.version = LibraryFile.currentVersion
         return upgraded
     }

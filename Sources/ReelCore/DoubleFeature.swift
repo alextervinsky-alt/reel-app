@@ -10,7 +10,7 @@ public enum DoubleFeature {
         public let id: String
         public let features: LikenessFeatures
         public let collectionID: Int?
-        /// What it was shot on and the gear and techniques read about it (see `CraftIndex`).
+        /// What it was shot on and the gear and techniques read about it (see `CraftFacts`).
         public let shotOn: Set<ShotOn>
         public let craftNames: [String]
         public let watched: Bool

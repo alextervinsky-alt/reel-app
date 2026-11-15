@@ -311,46 +311,6 @@ extension AppModel {
         }
     }
 
-    /// The interviews and craft articles about how the film was shot, and the cinematographer's
-    /// own article, for the Cinematography tab: once per session. Nothing found at all (offline) is tried
-    /// again next time the tab opens.
-    func loadCameraReading(for film: FilmEntry) async {
-        guard let details = film.tmdb, cameraReadings[details.id] == nil, !cameraReadingsLoading.contains(details.id) else { return }
-        cameraReadingsLoading.insert(details.id)
-        defer { cameraReadingsLoading.remove(details.id) }
-        if film.funFacts == nil { await loadFunFacts(for: film) }
-        await loadCollection(of: details)
-        let current = self.film(id: film.id) ?? film
-        let reading = await CameraSourcesClient().read(articleTitle: current.funFacts?.articleTitle, filmTitle: details.title,
-                                                       cinematographers: details.cinematographers,
-                                                       directors: details.directors, year: details.year,
-                                                       otherTitles: otherTitles(of: details))
-        guard !reading.sources.isEmpty || !reading.more.isEmpty || reading.cinematographer != nil else { return }
-        cameraReadings[details.id] = reading
-    }
-
-    /// The tab's reading, with what it's missing looked for (discovery 6): once its article and
-    /// first pass are in, the same bounded searches as the background reading, judged on the
-    /// film's crew and its earlier research (a search that found nothing isn't repeated within the year).
-    func researchCameraReading(for film: FilmEntry) async {
-        guard let details = film.tmdb, let base = cameraReadings[details.id], base.research == nil,
-              !cameraReadingsLoading.contains(details.id) else { return }
-        cameraReadingsLoading.insert(details.id)
-        defer { cameraReadingsLoading.remove(details.id) }
-        let current = self.film(id: film.id) ?? film
-        let article = articles[details.id]
-        let stored = CraftQueue.representatives(of: films.filter { $0.tmdb?.id == details.id }).first ?? current
-        // Researched by the background reading in the last day (by these rules): not again for opening the tab.
-        if let craft = stored.craft, craft.research != nil, craft.discovery == CraftIndex.currentDiscovery,
-           Date().timeIntervalSince(craft.readAt) < 86_400 { return }
-        let reading = await CameraSourcesClient().researched(base, article: article, filmTitle: details.title,
-                                                             cinematographers: details.cinematographers, directors: details.directors,
-                                                             year: details.year, otherTitles: otherTitles(of: details),
-                                                             crew: CraftReader.crew(of: details, article: article, reading: base),
-                                                             previous: stored.craft)
-        cameraReadings[details.id] = reading
-    }
-
     /// Searches for the film's reviews and essays on sites that have no free data to read in Reel.
     func readMoreLinks(for film: FilmEntry) -> [(title: String, url: URL)] {
         let words = [film.displayTitle, film.displayYear.map(String.init) ?? ""].joined(separator: " ")

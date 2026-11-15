@@ -225,7 +225,7 @@ struct PersonPage: View {
     }
 }
 /// A cinematographer's page: the films they're known for, and their recurring gear and looks
-/// across the films of theirs in your library (as read about them, see `CraftIndex`).
+/// across the films of theirs in your library (from their facts sheets, see `CraftFacts`).
 private struct CinematographerProfile: View {
     @Environment(AppModel.self) private var model
     let name: String
@@ -235,7 +235,7 @@ private struct CinematographerProfile: View {
     var body: some View {
         let knownFor = shot.sorted { $0.voteCount > $1.voteCount }.prefix(6)
         let mine = model.items.filter { $0.main.tmdb?.cinematographers.contains(name) == true }
-        let read = mine.compactMap { $0.main.craft }
+        let read = mine.compactMap { $0.main.craftFacts }
         let habits = CraftHabits.recurring(read)
         VStack(alignment: .leading, spacing: 18) {
             if !knownFor.isEmpty {

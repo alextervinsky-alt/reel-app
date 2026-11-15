@@ -4,45 +4,26 @@ import ReelCore
 
 // MARK: - Cinematography
 
-/// How the film was shot, curated like a good cinematography piece: who shot it and how they
-/// came to, frames, the look in brief and its specification sheet, then What to Look For (the five
-/// most telling notes: the visual idea, their own words, what it drew on, a scene, a challenge,
-/// the frame, the light, the colour) with the rest by topic a click away. Every note opens to the
-/// paragraph it comes from and what the gear it names is; every value on the specification sheet
-/// opens to what it is and what it does to the picture (`CraftGlossary`). Then their other films
-/// in the library, the crew and the interviews to read in full. From the film's Wikipedia article, the interviews and
-/// craft articles it cites, American Cinematographer, the cinematographer's own article and
-/// Wikidata's awards (see `CameraReading`, `TechSpecs`). What gives the story away stays out until
-/// the film is watched.
+/// How the film was shot (1.11, spec §7): who shot it, frames from the film, the facts sheet (each
+/// value from a structured source or one plain sentence, with where it's from), the camera,
+/// lighting and colour crew, and where to read more. Everything shown is stored with the film:
+/// opening the tab fetches nothing but the film's facts and article, as Behind the Film does.
 struct CinematographyTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
     let openStill: ([String], Int) -> Void
-    /// Everything read once for what it's made from (not on each redraw).
-    @State private var read = ReadSpecs()
-    /// Everything else read, opened.
-    @State private var showAll = false
-    /// The notes opened to read more.
-    @State private var opened: Set<String> = []
 
     var body: some View {
         let id = film.tmdb?.id ?? 0
         let article = model.articles[id]
-        let reading = model.cameraReadings[id]
-        let crew = CameraCrew.groups(film.tmdb, named: reading?.research?.contributors ?? [])
+        let crew = CameraCrew.groups(film.tmdb)
         let lead = crew.first { $0.isLead }?.names ?? []
-        let hiding = model.hidesSpoilers(for: film)
-        let people = reading?.research?.contributors ?? film.tmdb.map(CraftCrew.credited) ?? []
-        let specs = read.specs(article: article, reading: reading, hiding: hiding, cinematographers: lead,
-                               directors: film.tmdb?.directors ?? [], year: film.tmdb?.year, title: film.tmdb?.title, crew: people)
-        let bold = specs.specs.filter { !$0.isFixedName }.map(\.name)
-        let sheet = SpecSheet(specs: specs, quick: film.funFacts?.quick)
-        let loading = model.cameraReadingsLoading.contains(id) || model.articlesLoading.contains(id)
+        let removed = model.removedFacts[id] ?? []
+        let facts = (film.craftFacts?.facts ?? []).filter { !removed.contains($0.row.rawValue) }
 
         VStack(alignment: .leading, spacing: 34) {
             if !lead.isEmpty {
-                shotBy(lead, about: reading?.cinematographer, with: specs.collaboration,
-                       honours: film.funFacts?.quick?.cinematographyHonours ?? [])
+                shotBy(lead, honours: film.funFacts?.quick?.cinematographyHonours ?? [])
             }
             // The pictures first: what the words below are about. Hidden once checked and none
             // turned out to be frames from the film.
@@ -52,69 +33,26 @@ struct CinematographyTab: View {
                     FilmStills(film: film, open: openStill)
                 }
             }
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Theme.sectionTitle("The Look")
-                    if let brief = specs.brief(by: lead, ratio: sheet.wikidataRatio, blackAndWhite: sheet.blackAndWhite) {
-                        Text(brief)
-                            .font(.system(size: 18, weight: .medium))
-                            .lineSpacing(5)
-                            .foregroundStyle(Color.white.opacity(0.92))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
-                    }
-                }
-                if loading {
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
-                        Text("Reading interviews and articles about how it was shot…").foregroundStyle(.secondary)
-                    }
-                    .font(.system(size: 13))
-                }
-                if sheet.rows.isEmpty {
-                    if !loading { nothingFound(article: article, id: id) }
-                } else {
-                    specTable(sheet.rows)
-                }
-            }
-            let notes = read.notes
-            if !notes.top.isEmpty { whatToLookFor(notes.top, bold: bold) }
-            if !notes.rest.isEmpty { moreNotes(notes.rest, total: notes.restCount, bold: bold) }
+            if !facts.isEmpty { factSheet(facts) }
             let others = model.filmsShot(by: lead, besides: film)
             if !others.isEmpty {
                 PosterRow(title: lead.count == 1 ? "Also Shot by \(lead[0])" : "Also Shot by Them", items: others)
             }
             let team = crew.filter { !$0.isLead }
             if !team.isEmpty { crewGrid(team) }
-            reads(reading)
-            researchStands(film.craft?.research)
-            awaitingVerification(film.craft?.claimsKnown ?? [])
             links(article: article)
         }
         .frame(maxWidth: 820, alignment: .leading)
-        // The facts first (they say which article it is), then the article: shared with Behind
-        // the Film. The interviews and the cinematographer's article alongside.
         .task(id: id) {
             await model.loadFunFacts(for: film)
-            async let article: Void = model.loadArticle(for: film)
-            async let more: Void = model.loadCameraReading(for: film)
-            _ = await (article, more)
-            // What it's missing, looked for (the same bounded searches as the background reading).
-            await model.researchCameraReading(for: film)
-            // What the tab read is the film's Shot on and search summary too.
-            // The model's copy: its Wikipedia facts (the colour) arrived just now.
-            if let id = film.tmdb?.id {
-                model.craftRead(for: model.film(id: film.id) ?? film, article: model.articles[id], reading: model.cameraReadings[id])
-            }
+            await model.loadArticle(for: film)
         }
     }
 
     // MARK: Parts
 
-    /// Who shot it (their page a click away), who they are, how they came to work with the
-    /// director, and the awards the cinematography won or was up for.
-    private func shotBy(_ names: [String], about: CameraReading.Cinematographer?, with director: [TechSpecs.Note],
-                        honours: [Honour]) -> some View {
+    /// Who shot it (their page a click away), and the awards the cinematography won or was up for.
+    private func shotBy(_ names: [String], honours: [Honour]) -> some View {
         let person = film.tmdb?.people(forJobs: ["Director of Photography"]).first
         return VStack(alignment: .leading, spacing: 8) {
             Label("Cinematography", systemImage: "camera")
@@ -137,32 +75,6 @@ struct CinematographyTab: View {
             Text(names.count == 1 ? "Director of photography" : "Directors of photography")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-            if let about {
-                Text(about.lead)
-                    .font(.system(size: 13.5))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-                TextLink("More about \(about.name) on Wikipedia", destination: about.url)
-                    .font(.system(size: 12.5, weight: .medium))
-            }
-            if !director.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("WITH THE DIRECTOR")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(.tertiary)
-                    ForEach(director.prefix(2)) { note in
-                        Text(note.text)
-                            .font(.system(size: 13.5))
-                            .lineSpacing(3)
-                            .foregroundStyle(Theme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(.top, 10)
-            }
             if !honours.isEmpty {
                 FlowLayout(spacing: 8) {
                     ForEach(honours.prefix(8)) { honour in
@@ -187,119 +99,54 @@ struct CinematographyTab: View {
         )
     }
 
-    /// The specification sheet: one row per kind, its names stacked.
-    private func specTable(_ rows: [SpecSheet.Row]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.title) { index, row in
-                if index > 0 { Divider().overlay(Theme.hairline) }
-                HStack(alignment: .firstTextBaseline, spacing: 18) {
-                    Label(row.title.uppercased(), systemImage: row.icon)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 190, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(row.values, id: \.self) { value in
-                            SpecValue(value: value)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.vertical, 12)
-            }
-        }
-        .padding(.horizontal, 18)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
-    }
-
-    @ViewBuilder
-    private func nothingFound(article: FilmArticle?, id: Int) -> some View {
-        Group {
-            if article == nil, film.funFacts == nil {
-                Text("This needs an internet connection the first time.").foregroundStyle(.secondary)
-            } else {
-                Text(film.tmdb?.genreNames.contains("Animation") == true
-                     ? "An animated film: what's written about it doesn't name cameras or lenses."
-                     : "None of what Reel reads (the film's Wikipedia article, American Cinematographer, British Cinematographer, Kodak, No Film School and the articles Wikipedia cites) says what it was shot on. IMDb's technical specifications, below, usually list it.")
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .font(.system(size: 13.5))
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
-    }
-
-    /// The five most telling notes, numbered; each opens to the paragraph it's from and what
-    /// the gear and techniques it names are.
-    private func whatToLookFor(_ top: [CraftNotes.Item], bold: [String]) -> some View {
+    /// The facts sheet: one row per value, with where it's from.
+    private func factSheet(_ facts: [CraftFacts.Fact]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Theme.sectionTitle("What to Look For")
-                Text("The choices that shape how it looks, the most telling first. Open one to read more.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
+            Theme.sectionTitle("The Facts")
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(top.enumerated()), id: \.element.id) { index, item in
+                ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
                     if index > 0 { Divider().overlay(Theme.hairline) }
-                    NoteRow(number: index + 1, topic: item.topic.title, note: item.note, names: bold,
-                            quoted: item.topic == .words, open: opened.contains(item.id)) { toggle(item.id) }
-                }
-            }
-            .padding(.horizontal, 20)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Theme.panel))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.hairline))
-        }
-    }
-
-    /// The rest of what was read, by topic, closed until asked for; each note opens the same way.
-    private func moreNotes(_ groups: [(topic: CraftNotes.Topic, notes: [TechSpecs.Note])], total: Int, bold: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) { showAll.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(showAll ? "Less on How It Was Shot" : "More on How It Was Shot")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("\(total)").font(.system(size: 13)).foregroundStyle(.secondary).monospacedDigit()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                        .rotationEffect(.degrees(showAll ? 180 : 0))
-                }
-                .foregroundStyle(Color.white.opacity(0.9))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if showAll {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(groups, id: \.topic) { group in
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(group.topic.title.uppercased())
-                                .font(.system(size: 10.5, weight: .semibold))
-                                .tracking(0.8)
-                                .foregroundStyle(.tertiary)
-                                .padding(.bottom, 4)
-                            ForEach(group.notes) { note in
-                                NoteRow(number: nil, topic: nil, note: note, names: bold, quoted: group.topic == .words,
-                                        open: opened.contains(note.id)) { toggle(note.id) }
+                    HStack(alignment: .firstTextBaseline, spacing: 18) {
+                        Text(Self.title(of: fact.row).uppercased())
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 150, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(fact.value + (fact.inPart ? " (in part)" : "")).font(.system(size: 14, weight: .medium))
+                            if let sentence = fact.sentence, !model.hidesSpoilers(for: film) || !Spoilers.tellsTheStory(sentence) {
+                                Text("“\(sentence)”").font(.system(size: 12.5)).foregroundStyle(Theme.secondaryText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if let link = fact.link {
+                                TextLink(fact.source, destination: link).font(.system(size: 11.5))
+                            } else {
+                                Text(fact.source).font(.system(size: 11.5)).foregroundStyle(.tertiary)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Not Right") { model.removeFact(fact.row, from: film) }
+                            .buttonStyle(.borderless)
+                            .font(.system(size: 11.5))
+                            .help("Hide this for good (kept in Your Notes)")
                     }
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
             }
+            .padding(.horizontal, 18)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hairline))
         }
     }
 
-    private func toggle(_ id: String) {
-        withAnimation(.easeOut(duration: 0.2)) {
-            if opened.contains(id) { opened.remove(id) } else { opened.insert(id) }
+    static func title(of row: CraftFacts.Row) -> String {
+        switch row {
+        case .aspectRatio: "Aspect ratio"
+        case .colour: "Colour"
+        case .format: "Shot on"
+        case .camera: "Camera"
+        case .lenses: "Lenses"
+        case .award: "Awards"
         }
     }
 
@@ -320,88 +167,6 @@ struct CinematographyTab: View {
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
-                }
-            }
-        }
-    }
-
-    /// The interviews and articles found, to read in full.
-    @ViewBuilder
-    private func reads(_ reading: CameraReading?) -> some View {
-        let all = (reading?.sources ?? []) + (reading?.more ?? [])
-        if !all.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                Theme.sectionTitle("Read the Interviews")
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(all.prefix(8).enumerated()), id: \.element.id) { index, source in
-                        if index > 0 { Divider().overlay(Theme.hairline) }
-                        // A page that couldn't be read over HTTPS opens as it was cited.
-                        Link(destination: source.paragraphs.isEmpty ? source.cited ?? source.url : source.url) {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(source.title)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.92))
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
-                                    Text(source.site)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 10)
-                                Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold)).foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 18)
-                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.panel))
-            }
-        }
-    }
-
-    /// Where Reel's research stands, as kept with the film's reading: one short line per state, so
-    /// "not searched yet" and "a source didn't answer" aren't mistaken for "there's nothing" (1.10.7).
-    @ViewBuilder
-    private func researchStands(_ research: [ResearchEntry]?) -> some View {
-        let lines = ResearchEntry.State.shown.compactMap { state -> String? in
-            let dimensions = (research ?? []).filter { $0.state == state && $0.dimension != .contributors }.map(\.dimension.title)
-            guard !dimensions.isEmpty else { return nil }
-            return state.label.prefix(1).uppercased() + state.label.dropFirst() + ": " + dimensions.joined(separator: ", ").lowercased()
-        }
-        if !lines.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Where Reel's Research Stands").font(.system(size: 15, weight: .semibold))
-                ForEach(lines, id: \.self) { line in
-                    Text(line).font(.system(size: 12.5)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    /// What an earlier reading recorded and this one hasn't verified (1.10.10): never shown as found,
-    /// never hidden either. A finding from before passages were kept, and one whose passage is still
-    /// there but couldn't be settled, each with why.
-    @ViewBuilder
-    private func awaitingVerification(_ claims: [CraftIndex.Claim]) -> some View {
-        let waiting = claims.filter(\.awaitingVerification)
-        if !waiting.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Previously Recorded — Awaiting Verification").font(.system(size: 15, weight: .semibold))
-                Text("Found by an earlier reading and not confirmed by the latest. Not counted as how the film was shot until a reading settles it.")
-                    .font(.system(size: 12)).foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(Array(waiting.enumerated()), id: \.offset) { _, claim in
-                    let name = claim.kind == "shotOn" ? (ShotOn(rawValue: claim.name)?.title ?? claim.name) : claim.name
-                    let source = claim.source.isEmpty ? "" : " · " + claim.source
-                    Text(name + source + (claim.reason.map { " — " + $0 } ?? ""))
-                        .font(.system(size: 12.5)).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .help(claim.text ?? "No passage was kept for this finding.")
                 }
             }
         }
@@ -435,446 +200,6 @@ struct CinematographyTab: View {
         }
     }
 
-    // MARK: Helpers
-
-    /// The sentence with every name of gear found in it in bold.
-    static func emphasised(_ sentence: String, names: [String]) -> AttributedString {
-        var text = AttributedString(sentence)
-        for name in names {
-            // Whole words: "Red" (the cameras) not in "inspired".
-            let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: name) + #"\b"#
-            var start = sentence.startIndex
-            while let found = sentence.range(of: pattern, options: [.regularExpression, .caseInsensitive], range: start..<sentence.endIndex) {
-                if let range = Range(found, in: text) { text[range].inlinePresentationIntent = .stronglyEmphasized }
-                start = found.upperBound
-            }
-        }
-        return text
-    }
-}
-
-/// One note: what it says, and, opened, the paragraph it comes from (the note in white within it)
-/// and what the gear and techniques it names are.
-private struct NoteRow: View {
-    let number: Int?
-    let topic: String?
-    let note: TechSpecs.Note
-    /// The gear found in what was read (in bold).
-    let names: [String]
-    let quoted: Bool
-    let open: Bool
-    let toggle: () -> Void
-    /// A name in the sentence that was clicked: what it is shows under it.
-    @State private var looking: Term?
-
-    /// "American Cinematographer · a crew member's own words · Steadicam operator Larry McConkey ·
-    /// second unit": where it was read and, when it's known, what kind of statement it is, whose
-    /// words, and which part of the production (1.10.7). The film's own article says nothing.
-    static func provenance(_ note: TechSpecs.Note) -> String {
-        var parts: [String] = []
-        if let source = note.source, !source.hasPrefix("Wikipedia") { parts.append(source) }
-        if let evidence = note.evidence, evidence != .secondaryReporting, evidence != .technicalTrade || parts.isEmpty {
-            parts.append(evidence.label)
-        }
-        if let speaker = note.speaker { parts.append(speaker.role.title.lowercased() + " " + speaker.name) }
-        if let scope = note.scope, scope != .wholeFilm { parts.append(scope.label) }
-        return parts.joined(separator: " · ")
-    }
-
-    var body: some View {
-        // What it names, each explained once (Cooke S4/i and Cooke Panchro share an explanation).
-        var explained = Set<String>()
-        let terms = note.names.compactMap { name -> Term? in
-            guard let text = CraftGlossary.explain(name), explained.insert(text).inserted else { return nil }
-            return Term(name: name, explanation: text)
-        }
-        let more = note.context != nil || !terms.isEmpty
-        let sentence = Self.linked(note.text, names: names, gear: note.names)
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
-                if let number {
-                    Text("\(number)")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.brand)
-                        .frame(width: 22, alignment: .leading)
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    if let topic {
-                        Text(topic.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(Theme.brand.opacity(0.85))
-                    }
-                    // Names in it are links: clicked, what they are shows below.
-                    Text(sentence.text)
-                        .font(quoted ? .system(size: number == nil ? 15 : 17, design: .serif).italic()
-                                     : .system(size: number == nil ? 14.5 : 16, weight: number == nil ? .regular : .medium))
-                        .lineSpacing(4)
-                        .foregroundStyle(Color.white.opacity(number == nil ? 0.86 : 0.94))
-                        .tint(Theme.brand)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.leading)
-                        .environment(\.openURL, OpenURLAction { url in
-                            guard let index = Int(url.host ?? ""), sentence.terms.indices.contains(index) else { return .discarded }
-                            let term = sentence.terms[index]
-                            withAnimation(.easeOut(duration: 0.18)) { looking = looking == term ? nil : term }
-                            return .handled
-                        })
-                    if let looking { lookUp(looking) }
-                    HStack(spacing: 14) {
-                        // Where it was read, what kind of statement it is, whose words and which part
-                        // of the production (1.10.7).
-                        let about = Self.provenance(note)
-                        if !about.isEmpty {
-                            Text("— " + about).font(.system(size: 12)).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        // Only a note with more to read has the button (a disabled one would look dimmed).
-                        if more {
-                            Button(action: toggle) {
-                                HStack(spacing: 4) {
-                                    Text(open ? "Less" : "Read more")
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .rotationEffect(.degrees(open ? 180 : 0))
-                                }
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.brand)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                Spacer(minLength: 8)
-            }
-            if open, more {
-                VStack(alignment: .leading, spacing: 14) {
-                    if let context = note.context {
-                        Self.inContext(note.text, context)
-                            .font(.system(size: 15, design: .serif))
-                            .lineSpacing(5)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
-                        Text("From \(note.source ?? "the film's Wikipedia article")")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.tertiary)
-                    }
-                    ForEach(terms) { term in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(term.name).font(.system(size: 12.5, weight: .semibold))
-                            Text(term.explanation)
-                                .font(.system(size: 13))
-                                .lineSpacing(3)
-                                .foregroundStyle(Theme.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .padding(.leading, number == nil ? 0 : 38)
-                .padding(.bottom, 4)
-                .transition(.opacity)
-            }
-        }
-        .padding(.vertical, number == nil ? 10 : 16)
-    }
-
-    /// What a clicked name is, in a quiet box under the sentence.
-    private func lookUp(_ term: Term) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(term.name.prefix(1).uppercased() + term.name.dropFirst()).font(.system(size: 12.5, weight: .semibold))
-                Text(term.explanation)
-                    .font(.system(size: 13))
-                    .lineSpacing(3)
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) { looking = nil }
-            } label: {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Close")
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.hairline))
-        .transition(.opacity)
-    }
-
-    /// The sentence with the gear in bold, and every name Reel can explain (the gear, and ways
-    /// of shooting such as "long take" or "magic hour") a link to its explanation.
-    static func linked(_ sentence: String, names: [String], gear: [String]) -> (text: AttributedString, terms: [Term]) {
-        var text = CinematographyTab.emphasised(sentence, names: names)
-        var found: [(range: Range<String.Index>, term: Term)] = []
-        for name in gear {
-            guard let explanation = CraftGlossary.explain(name) else { continue }
-            // As written: a name Reel chose ("Film", "Digital") isn't looked for in the sentence
-            // (its "film" is usually the movie); ways of shooting are found by the glossary below.
-            let pattern = #"\b"# + NSRegularExpression.escapedPattern(for: name) + #"\b"#
-            if let range = sentence.range(of: pattern, options: .regularExpression),
-               !found.contains(where: { $0.range.overlaps(range) }) {
-                found.append((range, Term(name: String(sentence[range]), explanation: explanation)))
-            }
-        }
-        for term in CraftGlossary.terms(in: sentence) where !found.contains(where: { $0.range.overlaps(term.range) }) {
-            found.append((term.range, Term(name: term.name, explanation: term.explanation)))
-        }
-        var terms: [Term] = []
-        for (range, term) in found.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
-            guard let span = Range(range, in: text) else { continue }
-            text[span].link = URL(string: "reel-term://\(terms.count)")
-            terms.append(term)
-        }
-        return (text, terms)
-    }
-
-    /// A name the note mentions, and what it is.
-    struct Term: Identifiable, Equatable {
-        let name: String
-        let explanation: String
-        var id: String { name }
-    }
-
-    /// The paragraph, quiet, with the note itself in full white.
-    static func inContext(_ note: String, _ paragraph: String) -> Text {
-        // The note as it stands, or (two sentences read together, spaced differently) from its
-        // first sentence to the end of its last.
-        let sentences = note.components(separatedBy: ". ")
-        let whole = paragraph.range(of: note)
-        let from = paragraph.range(of: sentences.first ?? note)
-        let to = sentences.last.flatMap { paragraph.range(of: $0) }
-        guard let range = whole ?? from.map({ start in start.lowerBound..<max(start.upperBound, to?.upperBound ?? start.upperBound) }) else {
-            return Text(paragraph).foregroundStyle(Theme.secondaryText)
-        }
-        return Text(paragraph[..<range.lowerBound]).foregroundStyle(Theme.secondaryText)
-            + Text(paragraph[range]).foregroundStyle(Color.white.opacity(0.95))
-            + Text(paragraph[range.upperBound...]).foregroundStyle(Theme.secondaryText)
-    }
-}
-
-/// A value on the specification sheet: clicked, what it is and what it does to the picture
-/// (when Reel knows; see `CraftGlossary`).
-private struct SpecValue: View {
-    let value: String
-    @State private var open = false
-    @State private var hovering = false
-
-    var body: some View {
-        if let explanation = CraftGlossary.explain(value) {
-            VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    withAnimation(.easeOut(duration: 0.18)) { open.toggle() }
-                } label: {
-                    HStack(spacing: 6) {
-                        name
-                        Image(systemName: open ? "info.circle.fill" : "info.circle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(open || hovering ? Theme.brand : Color.secondary)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .scrollAwareHover($hovering)
-                .help("What is it?")
-                if open {
-                    Text(explanation)
-                        .font(.system(size: 13))
-                        .lineSpacing(3)
-                        .foregroundStyle(Theme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .transition(.opacity)
-                }
-            }
-        } else {
-            // Nothing to explain: plain text (a disabled button would look dimmed).
-            name.textSelection(.enabled)
-        }
-    }
-
-    private var name: some View {
-        Text(value)
-            .font(.system(size: 14.5, weight: .medium))
-            .fixedSize(horizontal: false, vertical: true)
-            .multilineTextAlignment(.leading)
-    }
-}
-
-/// What was read about the shooting, curated: the five most telling notes across the topics
-/// (at most two of a topic, each worth reading on its own), then the rest by topic. A note is
-/// worth as much as the gear and detail it names, its reason, its source (their own words count
-/// most) and how much it surprises (see `FunFactExtractor.score`).
-struct CraftNotes {
-    enum Topic: Hashable {
-        case idea, words, reference, scene, challenge, frame, light, colour, vfx, gear
-
-        var title: String {
-            switch self {
-            case .idea: "The Visual Idea"
-            case .words: "In Their Own Words"
-            case .reference: "What It Drew On"
-            case .scene: "A Scene"
-            case .challenge: "A Challenge"
-            case .frame: "Frame and Movement"
-            case .light: "Light"
-            case .colour: "Colour and Texture"
-            case .vfx: "Camera and Visual Effects"
-            case .gear: "The Gear"
-            }
-        }
-
-        /// The kinds of note that say most about why it looks as it does.
-        var bonus: Double {
-            switch self {
-            case .words, .idea, .reference: 2
-            case .scene, .challenge: 1.5
-            case .frame, .light, .colour, .vfx: 0.5
-            case .gear: 0
-            }
-        }
-    }
-
-    struct Item: Identifiable {
-        let topic: Topic
-        let note: TechSpecs.Note
-        var id: String { note.id }
-    }
-
-    let top: [Item]
-    let rest: [(topic: Topic, notes: [TechSpecs.Note])]
-    var restCount: Int { rest.reduce(0) { $0 + $1.notes.count } }
-
-    init(_ specs: TechSpecs) {
-        let all: [(Topic, [TechSpecs.Note])] = [
-            (.idea, specs.intent), (.words, specs.approach), (.reference, specs.references), (.scene, specs.scenes),
-            (.challenge, specs.challenges), (.frame, specs.cameraLanguage), (.light, specs.lighting),
-            (.colour, specs.colour), (.vfx, specs.cameraVFX), (.gear, specs.sentences),
-        ]
-        // Each note's worth worked out once.
-        let items: [Item] = all.flatMap { entry in entry.1.map { Item(topic: entry.0, note: $0) } }
-        let worths: [(Item, Double)] = items.filter { $0.note.text.count <= 420 }.map { item in
-            let worth: Double = Double(item.note.weight) + item.topic.bonus + FunFactExtractor.score(item.note.text)
-            return (item, worth)
-        }
-        let ranked = worths.sorted { $0.1 > $1.1 }
-        var top: [Item] = []
-        for (item, worth) in ranked where top.count < 5 && worth >= 2 {
-            guard top.filter({ $0.topic == item.topic }).count < 2 else { continue }
-            top.append(item)
-        }
-        self.top = top
-        let shown = Set(top.map(\.id))
-        rest = all.compactMap { topic, notes in
-            let left = notes.filter { !shown.contains($0.id) }
-            return left.isEmpty ? nil : (topic, left)
-        }
-    }
-}
-
-/// The technical specifications as rows, in the order a camera report lists them; Wikidata's
-/// aspect ratio and colour when the texts don't say them (the texts' ratio wins: two different
-/// ones would only confuse).
-struct SpecSheet {
-    struct Row {
-        let title: String
-        let icon: String
-        let values: [String]
-    }
-
-    let rows: [Row]
-    /// Wikidata's ratio, used only when nothing read gives one.
-    let wikidataRatio: String?
-    let blackAndWhite: Bool
-
-    init(specs: TechSpecs, quick: QuickFacts?) {
-        let formats = specs.names(.format)
-        let ratios = formats.filter { $0.contains(":1") }
-        let speeds = formats.filter { $0.contains("fps") || $0.contains("frames") }
-        let media = formats.filter { !ratios.contains($0) && !speeds.contains($0) && $0 != "Black and white" }
-        let colourLabels = (quick?.colour ?? []).map { $0.lowercased() }
-        blackAndWhite = formats.contains("Black and white") || colourLabels.contains { $0.contains("black") }
-        wikidataRatio = ratios.isEmpty ? quick?.aspectRatios?.first : nil
-        var colour: [String] = []
-        if blackAndWhite { colour.append("Black and white") }
-        if colourLabels.contains(where: { $0 == "color" || $0 == "colour" }) { colour.append("Colour") }
-        rows = [
-            Row(title: "Camera", icon: "video", values: specs.names(.camera)),
-            Row(title: "Lenses", icon: "camera.aperture", values: specs.names(.lens)),
-            Row(title: "Film and Format", icon: "film", values: media),
-            // Each ratio with the stage it's said of, when its sentence says (1.10.10).
-            Row(title: "Aspect Ratio", icon: "rectangle.ratio.16.to.9",
-                values: ratios.isEmpty ? (quick?.aspectRatios ?? []) : ratios.map { ratio in specs.stage(of: ratio).map { "\(ratio) (\($0.label))" } ?? ratio }),
-            Row(title: "Frame Rate", icon: "speedometer", values: speeds),
-            Row(title: "Colour", icon: "paintpalette", values: colour),
-            Row(title: "Lighting", icon: "lightbulb", values: specs.names(.light)),
-            Row(title: "Grip and Movement", icon: "move.3d", values: specs.names(.support)),
-            Row(title: "Filters", icon: "camera.filters", values: specs.names(.filter)),
-            Row(title: "Lab and Finish", icon: "slider.horizontal.3", values: specs.names(.finish)),
-        ].filter { !$0.values.isEmpty }
-    }
-}
-
-/// What was read, read again only when the article, the interviews or what may be shown changes.
-@MainActor
-private final class ReadSpecs {
-    private var stamp = ""
-    private var specs = TechSpecs.read([])
-    /// What's shown of it, curated (read with `specs`).
-    private(set) var notes = CraftNotes(TechSpecs.read([]))
-
-    func specs(article: FilmArticle?, reading: CameraReading?, hiding: Bool, cinematographers: [String],
-               directors: [String], year: Int?, title: String?, crew: [CraftCrew.Contributor] = []) -> TechSpecs {
-        guard article != nil || reading != nil else {
-            // Nothing read yet (another film opened): nothing from the last one shows.
-            stamp = ""
-            notes = CraftNotes(TechSpecs.read([]))
-            return TechSpecs.read([])
-        }
-        let now = "\(article?.title ?? "")|\(article?.before.count ?? 0)|\(article?.after.count ?? 0)|"
-            + "\(reading?.sources.count ?? -1)|\(hiding)|\(cinematographers)|\(directors)|\(crew.map(\.name))"
-        if now != stamp {
-            stamp = now
-            // Read as the Shot on filter and search read it (the interviews first).
-            let texts = CraftReader.texts(article: article, reading: reading, hiding: hiding)
-            specs = TechSpecs.read(texts: texts, cinematographers: cinematographers, directors: directors, year: year, title: title,
-                                   crew: crew)
-            if hiding { specs = Self.withoutStory(specs) }
-            notes = CraftNotes(specs)
-        }
-        return specs
-    }
-
-    /// While spoiler-safe: nothing that tells of the story, or of how it ends ("the closing
-    /// sequence was lit…"), and no paragraph to read more that does.
-    private static func withoutStory(_ read: TechSpecs) -> TechSpecs {
-        func safe(_ text: String) -> Bool {
-            !Spoilers.tellsTheStory(text)
-        }
-        func keep(_ notes: [TechSpecs.Note]) -> [TechSpecs.Note] {
-            notes.filter { safe($0.text) }.map { note in
-                var kept = note
-                if let context = kept.context, !safe(context) { kept.context = nil }
-                return kept
-            }
-        }
-        var specs = read
-        specs.sentences = keep(specs.sentences)
-        specs.approach = keep(specs.approach)
-        specs.intent = keep(specs.intent)
-        specs.references = keep(specs.references)
-        specs.lighting = keep(specs.lighting)
-        specs.cameraLanguage = keep(specs.cameraLanguage)
-        specs.colour = keep(specs.colour)
-        specs.scenes = keep(specs.scenes)
-        specs.challenges = keep(specs.challenges)
-        specs.collaboration = keep(specs.collaboration)
-        specs.cameraVFX = keep(specs.cameraVFX)
-        return specs
-    }
-
 }
 
 /// The film's camera, lighting and colour people from TMDB, grouped by what they did.
@@ -904,20 +229,14 @@ enum CameraCrew {
         ("Visual Effects", ["Visual Effects Supervisor"]),
     ]
 
-    /// `named`: the crew found in what was read; those not credited ("Robert Richardson was
-    /// originally…") are listed apart, with the part of the production the sentence said.
-    static func groups(_ details: TMDBMovieDetails?, named: [CraftCrew.Contributor] = []) -> [Group] {
+    static func groups(_ details: TMDBMovieDetails?) -> [Group] {
         guard let details else { return [] }
         var listed = Set<String>()
-        var groups: [Group] = jobs.compactMap { entry in
+        let groups: [Group] = jobs.compactMap { entry in
             let names = details.people(forJobs: entry.jobs).map(\.name).filter { !listed.contains($0) }
             listed.formUnion(names)
             return names.isEmpty ? nil : Group(title: entry.title, names: Array(names.prefix(4)))
         }
-        let uncredited = named.filter { !$0.credited && !listed.contains($0.name) }.map { person in
-            person.name + (person.scope.map { " (" + $0.label + ")" } ?? "")
-        }
-        if !uncredited.isEmpty { groups.append(Group(title: "Also Named in What Was Read", names: Array(uncredited.prefix(4)))) }
         return groups
     }
 }

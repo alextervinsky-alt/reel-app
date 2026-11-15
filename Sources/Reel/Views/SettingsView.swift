@@ -10,6 +10,10 @@ struct SettingsView: View {
     @State private var cacheSize: Int64?
     @State private var omdbKey = ""
     @State private var timings: [Timing] = []
+    /// Timings and housekeeping (1.11: out of the way unless asked for).
+    @AppStorage("showDiagnostics") private var showDiagnostics = false
+    /// The size of the old reading logs, when they're still there.
+    @State private var oldReadings: Int64?
 
     var body: some View {
         Form {
@@ -167,43 +171,6 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section {
-                let coverage = model.craftCoverage()
-                LabeledContent("Live-action films with Shot on") {
-                    Text("\(coverage.tagged) of \(coverage.read)").monospacedDigit().foregroundStyle(.secondary)
-                }
-                LabeledContent("Read from one text alone (usually Wikipedia)") {
-                    Text(coverage.articleOnly.formatted()).monospacedDigit().foregroundStyle(.secondary)
-                }
-                if coverage.toRead > 0 {
-                    LabeledContent("Still to read by the current rules") {
-                        Text(coverage.toRead.formatted()).monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                if coverage.limited > 0 {
-                    LabeledContent("Read, with some pages not examined (gone, not open to Reel, too little text)") {
-                        Text(coverage.limited.formatted()).monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                if coverage.partial > 0 {
-                    LabeledContent("Read in part, to read again (a site didn't answer)") {
-                        Text(coverage.partial.formatted()).monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                // When Reel reads them again on its own (nothing to press).
-                if coverage.partial > 0, let next = CraftQueue.nextDue(model.films), next < Date().addingTimeInterval(45 * 86_400) {
-                    LabeledContent("Next reading planned (automatic)") {
-                        Text(next.formatted(.relative(presentation: .named))).foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("Shot On")
-            } footer: {
-                Text("A film gets Shot on only when something Reel reads says how it was shot: its Wikipedia article, American Cinematographer, British Cinematographer, Kodak, No Film School or an article Wikipedia cites. For many films none of them does. Reel asks each magazine one page at a time, and when a site doesn't answer or asks it to wait, it keeps what that site said before, marked as from the earlier reading, and reads those films again later: in hours at first, then every month while the site stays away. Each film's reading log in Documents › Reel › Shot On Readings ends with what Reel stored. Animated films aren't counted.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             if !model.removedShotOn.isEmpty {
                 Section {
                     ForEach(model.removedShotOn.sorted { $0.key < $1.key }, id: \.key) { id, kinds in
@@ -226,23 +193,15 @@ struct SettingsView: View {
                 }
             }
 
-            if !model.craftChanges.isEmpty {
-                Section {
-                    ForEach(model.craftChanges.prefix(40)) { change in
-                        LabeledContent(change.title) {
-                            Text(Self.shotOn(change.before) + "  →  " + Self.shotOn(change.after)).foregroundStyle(.secondary)
-                        }
-                    }
-                } header: {
-                    Text("Shot On, Read Again")
-                } footer: {
-                    Text("Films whose Shot on changed when Reel read about them again, since it opened. Point at Shot on on a film's page to see the sentence behind it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            Section {
+                Toggle("Show diagnostics", isOn: $showDiagnostics)
+            } footer: {
+                Text("Timings and housekeeping, for checking Reel. Nothing here changes your films or notes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            if !timings.isEmpty {
+            if showDiagnostics, !timings.isEmpty {
                 Section {
                     ForEach(timings) { timing in
                         LabeledContent(timing.id) {
@@ -257,6 +216,25 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if showDiagnostics, oldReadings != nil {
+                Section {
+                    LabeledContent("Shot On Readings (from Reel 1.10)") {
+                        HStack(spacing: 10) {
+                            Text(ByteCountFormatter.string(fromByteCount: oldReadings ?? 0, countStyle: .file)).foregroundStyle(.secondary)
+                            Button("Move to Trash") {
+                                model.trashOldReadings()
+                                oldReadings = nil
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Housekeeping")
+                } footer: {
+                    Text("The reading logs older versions of Reel wrote about each film's Shot on. Reel 1.11 doesn't use them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
         // A fixed height that fits a laptop screen; the form scrolls (it used to grow to fit everything).
@@ -264,17 +242,13 @@ struct SettingsView: View {
         .task {
             timings = model.timings.map { Timing(id: $0.key, time: $0.value) }.sorted { $0.id < $1.id }
             cacheSize = await model.imageCacheSize()
+            oldReadings = model.oldReadingsSize()
         }
     }
 
     private struct Timing: Identifiable {
         let id: String
         let time: Duration
-    }
-
-    /// "Film · Anamorphic", or "nothing".
-    private static func shotOn(_ kinds: [ShotOn]) -> String {
-        kinds.isEmpty ? "nothing" : kinds.map(\.title).joined(separator: " · ")
     }
 
     /// "0.42 s", "12 ms"

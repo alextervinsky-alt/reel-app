@@ -9,8 +9,11 @@ extension AppModel {
         // waiting takes its snapshot when it runs, so it isn't put off again (and again).
         if target == .library, saveTasks[target] != nil { return }
         saveTasks[target]?.cancel()
+        // While film info is being looked up the library changes all the time: written every 30 s
+        // and once at the end, not every 2 s (1.11; the run's end saves, see `lookUpPending`).
+        let delay: Duration = target == .library && lookupRunning ? .seconds(30) : target.delay
         saveTasks[target] = Task { [weak self] in
-            try? await Task.sleep(for: target.delay)
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled else { return }
             self?.save(target)
         }
@@ -92,6 +95,4 @@ extension AppModel {
     }
 }
 
-/// Just the version of a library file (to tell whether opening it upgraded it).
-struct LibraryVersionHeader: Decodable { let version: Int }
 #endif

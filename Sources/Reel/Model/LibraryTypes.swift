@@ -266,10 +266,10 @@ struct SearchIndex: Equatable {
         people = peopleNames + " , " + n(characters.joined(separator: " , "))
         tags = n(tagWords.joined(separator: " , "))
         plot = n([d?.tagline ?? "", d?.overview ?? ""].joined(separator: " "))
-        craft = film.craft.map { n($0.searchText(removing: removedShotOn)) } ?? ""
+        craft = film.craftFacts.map { n($0.searchText(removing: removedShotOn)) } ?? ""
         // Slips are forgiven against titles, real names and the words you'd filter by (genres,
         // moods, how it was shot), never characters or plots ("cartoon" isn't "Carson").
-        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title) + (film.craft?.shotOn ?? []).filter { !removedShotOn.contains($0) }.map(\.title)).joined(separator: " "))
+        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title) + (film.craftFacts?.shotOn ?? []).filter { !removedShotOn.contains($0) }.map(\.title)).joined(separator: " "))
         words = Array(Set((title + " " + peopleNames + " " + vocabulary).split(separator: " ").map { String($0) }.filter { $0.count >= 4 }))
     }
 
@@ -324,7 +324,7 @@ struct LibraryItem: Identifiable, Equatable {
     let moods: [Mood]
     let genres: Set<String>
     let keywords: Set<String>
-    /// Film, digital, anamorphic… (once read, see `CraftIndex`), for the Shot on filter.
+    /// Film, digital, anamorphic… (once read, see `CraftFacts`), for the Shot on filter.
     let shotOn: Set<ShotOn>
     /// What "More Like This" compares (people, themes, tone, audience).
     let likeness: LikenessFeatures
@@ -360,7 +360,7 @@ struct LibraryItem: Identifiable, Equatable {
         let d = main.tmdb
         self.genres = Set(d?.genreNames ?? [])
         self.keywords = Set(d?.keywordNames ?? [])
-        self.shotOn = Set(main.craft?.shotOn ?? []).union(LibraryItem.shotOnKnown(main)).subtracting(removedShotOn)
+        self.shotOn = Set(main.craftFacts?.shotOn ?? []).union(LibraryItem.shotOnKnown(main)).subtracting(removedShotOn)
         self.removedShotOn = removedShotOn
         self.likeness = LikenessFeatures(
             tmdbID: d?.id, directors: d?.directors ?? [], writers: d?.writers ?? [],
@@ -391,10 +391,8 @@ struct LibraryItem: Identifiable, Equatable {
 
     /// Black and white, as Wikidata or TMDB already say before the film's craft is read.
     static func shotOnKnown(_ film: FilmEntry) -> Set<ShotOn> {
-        guard film.craft == nil else { return [] }
-        let read = CraftIndex.make(from: TechSpecs.read([]), colour: film.funFacts?.quick?.colour,
-                                   keywords: film.tmdb?.keywordNames ?? [])
-        return Set(read.shotOn)
+        guard film.craftFacts == nil else { return [] }
+        return ShotOn.known(colour: film.funFacts?.quick?.colour)
     }
 
     static let shortGenreNames = [

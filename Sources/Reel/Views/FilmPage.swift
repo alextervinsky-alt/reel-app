@@ -519,22 +519,21 @@ struct FilmFactSheet: View {
         }
     }
 
-    /// Why each Shot on: the sentence and where it was read (not a sentence that tells the story).
+    /// Why each Shot on: where each fact is from (the facts sheet, see `CraftFacts`).
     private var shotOnWhy: String {
-        guard let craft = film.craft else { return "" }
+        guard let facts = film.craftFacts else { return "" }
         return model.shownShotOn(film).compactMap { kind -> String? in
-            guard let why = craft.evidence(for: kind) else { return nil }
-            let said = Spoilers.tellsTheStory(why.text) ? "" : ": “\(why.text)”"
-            // Kept from an earlier reading while it couldn't be read again: said so, with its date.
-            let since = craft.unanswered.contains(why.site) ? "\(why.site) didn't answer since" : "its page wasn't read again since"
-            let earlier = why.carriedFrom.map { " (from the reading of \($0.formatted(date: .abbreviated, time: .omitted)); \(since))" } ?? ""
-            return "\(craft.label(for: kind)), from \(why.source)\(earlier)\(said)"
+            guard let fact = facts.facts.first(where: { $0.row == .format && $0.value.localizedCaseInsensitiveContains(kind.title) }) else {
+                return nil
+            }
+            let said = fact.sentence.map { Spoilers.tellsTheStory($0) ? "" : ": “\($0)”" } ?? ""
+            return "\(facts.label(for: kind)), from \(fact.source)\(said)"
         }.joined(separator: "\n\n")
     }
 
     /// "Film · Anamorphic · 2.39:1", from what's read about it and Wikidata.
     private var shotOn: String? {
-        var parts = model.shownShotOn(film).map { film.craft?.label(for: $0) ?? $0.title }
+        var parts = model.shownShotOn(film).map { film.craftFacts?.label(for: $0) ?? $0.title }
         // Drawn, not shot: said, rather than left looking like nothing was found.
         if parts.isEmpty, film.tmdb?.genreNames.contains("Animation") == true { parts.append("Animated") }
         if let ratio = film.funFacts?.quick?.aspectRatios?.first { parts.append(ratio) }

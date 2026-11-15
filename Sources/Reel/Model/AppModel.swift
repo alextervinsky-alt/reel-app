@@ -131,11 +131,6 @@ final class AppModel {
     var articles: [Int: FilmArticle] = [:]
     var articlesLoading: Set<Int> = []
     var articlesMissing: Set<Int> = []
-    /// What the Cinematography tab read beyond the article (interviews, the cinematographer's article), per session.
-    var cameraReadings: [Int: CameraReading] = [:]
-    /// Films whose Shot on changed when read again, newest first (Settings › Performance).
-    var craftChanges: [CraftChange] = []
-    var cameraReadingsLoading: Set<Int> = []
 
     // MARK: Cinema mode and playing
 
@@ -244,22 +239,12 @@ final class AppModel {
     /// Previews being fetched: a second ask for the same film waits for the first.
     @ObservationIgnored var previewTasks: [Int: Task<(details: TMDBMovieDetails?, ratings: ExternalRatings?), Never>] = [:]
     @ObservationIgnored var lookupRunning = false
-    /// Films' gear and techniques are being read (see `readCraft`).
-    @ObservationIgnored var craftRunning = false
-    /// How many films are still to be read for searching by craft (0 when done).
+    /// How many films are still to be read for their facts sheet (0 when done; session 4).
     var craftPending = 0
-    /// The Shot on run under way, with the readings it hasn't written yet (written when Reel quits).
-    @ObservationIgnored var craftRun: CraftRun?
-    /// Wakes the Shot on queue when its next planned reading is due (see `scheduleCraftWake`).
-    @ObservationIgnored var craftWake: Task<Void, Never>?
     /// Starts background work again when the network comes back or the Mac wakes.
     @ObservationIgnored var resumeTrigger = ResumeTrigger()
     /// A resumed pass planned for later (see `ResumeTrigger`).
     @ObservationIgnored var resumePlanned: Task<Void, Never>?
-    /// A Shot on run was asked for while one was under way: it goes round once more.
-    @ObservationIgnored var craftRerunRequested = false
-    /// Runs in a row that stopped offline (how long until the next try; see `CraftRun.offlineRetryDelay`).
-    @ObservationIgnored var craftOfflineStops = 0
     @ObservationIgnored var pathMonitor: NWPathMonitor?
     /// Free bytes on each connected drive, for the sidebar.
     var freeSpace: [String: Int64] = [:]
@@ -469,8 +454,8 @@ final class AppModel {
                 film.tmdb.map { MoodClassifier.moods(genres: $0.genreNames, keywords: $0.keywordNames, runtime: $0.runtime) } ?? []
             }.items
             // Opened from an older format and upgraded (`LibraryMigration`): written back in this one.
-            let header = (try? Data(contentsOf: libraryURL)).flatMap { try? JSONStore.decode(LibraryVersionHeader.self, from: $0) }
-            let upgraded = opening.writable && opening.file != nil && (header?.version ?? LibraryFile.currentVersion) < LibraryFile.currentVersion
+            // The version as read comes with the file (1.11: the file isn't read a second time).
+            let upgraded = opening.writable && (opening.file?.readVersion ?? LibraryFile.currentVersion) < LibraryFile.currentVersion
             return (opening, legacy, found, prebuilt, upgraded)
         }.value
         let library = opening.file
@@ -559,14 +544,11 @@ final class AppModel {
         }
     }
 
-    /// Film info that's due (and Shot on after it), and Shot on readings that are due either way.
+    /// Film info that's due.
     private func startResumedPass() {
         // Before the library is open, launch does its own pass.
         guard isLoaded else { return }
-        Task {
-            await lookUpPending()
-            await readCraft()
-        }
+        Task { await lookUpPending() }
     }
 
     /// Loads a file the user can't easily recreate.
@@ -648,8 +630,6 @@ final class AppModel {
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                // Readings made and not written yet are kept, not read again next time.
-                self?.flushCraft()
                 self?.saveAllNow()
             }
         })

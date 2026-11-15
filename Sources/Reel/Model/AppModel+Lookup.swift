@@ -25,6 +25,8 @@ extension AppModel {
         defer {
             timings["Finding and updating film info"] = ContinuousClock.now - started
             lookupRunning = false
+            // What the run changed is written now, not when the 30-second wait ends (see `scheduleSave`).
+            if saveTasks[.library] != nil { save(.library) }
             endWork()
             if candidatesDirty { scheduleRebuild() }
         }
@@ -247,8 +249,6 @@ extension AppModel {
 
         if let stopMessage { notice = stopMessage }
         if work > 0 { ImageStore.shared.maintain(keeping: []) }
-        // Then, quietly, how each film was shot (for searching by craft).
-        if stopMessage == nil { Task { await readCraft() } }
     }
 
     nonisolated static func lookUp(_ job: LookupJob, client: TMDBClient, omdb: OMDbClient?, ratingsWanted: Bool) async -> LookupOutcome {
@@ -344,7 +344,7 @@ extension AppModel {
                 list[i].infoVersion = twin.infoVersion
                 list[i].infoUpdatedAt = twin.infoUpdatedAt
                 list[i].funFacts = twin.funFacts
-                list[i].craft = twin.craft
+                list[i].craftFacts = twin.craftFacts
                 list[i].candidates = twin.candidates
                 list[i].matchScore = twin.matchScore
                 list[i].matchState = twin.matchState

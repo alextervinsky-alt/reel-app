@@ -64,9 +64,8 @@ enum ScreenRenderer {
         await preloadImages(for: model.films)
         log("backdrops framed")
 
-        // How the first few films were shot (as the background reading does it), for the Shot on
-        // filters and a craft search; and the first film's article, for Did You Know on the TV.
-        await readCraft(of: Array(model.films.prefix(4)), into: model)
+        // The first film's article, for Did You Know on the TV.
+        for film in model.films.prefix(4) { await model.loadFunFacts(for: film) }
         await model.loadArticle(for: first)
         log("article read")
 
@@ -135,9 +134,6 @@ enum ScreenRenderer {
                     .frame(width: 900)
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("behind-the-film.png"))
-            // With the interviews it cites and the cinematographer's article.
-            await model.loadCameraReading(for: film)
-            log("interviews read")
             render(CinematographyTab(film: film) { _, _ in }
                     .padding(32)
                     .frame(width: 900)
@@ -340,43 +336,6 @@ enum ScreenRenderer {
         return films
     }
 
-    /// Reads how these films were shot, as `AppModel.readCraft` does in the background, and logs
-    /// what was found and what a craft search finds.
-    private static func readCraft(of sample: [FilmEntry], into model: AppModel) async {
-        // Their Wikipedia facts first: they say which article is the film's.
-        for film in sample { await model.loadFunFacts(for: film) }
-        let films = sample.map { model.film(id: $0.id) ?? $0 }
-        for film in films { if let details = film.tmdb { await model.loadCollection(of: details) } }
-        let read = await withTaskGroup(of: (Int, CraftIndex?).self) { group in
-            for film in films {
-                guard let details = film.tmdb else { continue }
-                let others = model.otherTitles(of: details)
-                group.addTask {
-                    (details.id, await CraftReader.read(details, articleTitle: film.funFacts?.articleTitle,
-                                                        colour: film.funFacts?.quick?.colour, otherTitles: others)?.index)
-                }
-            }
-            var found: [Int: CraftIndex] = [:]
-            for await (id, index) in group { found[id] = index }
-            return found
-        }
-        model.mutateFilms(urgent: true) { list in
-            for i in list.indices { if let id = list[i].tmdb?.id, let index = read[id] { list[i].craft = index } }
-        }
-        for film in films {
-            guard let index = film.tmdb.flatMap({ read[$0.id] }) else { continue }
-            log("craft of \(film.displayTitle): \(index.shotOn.map(\.title).joined(separator: ", ")); \(index.names.prefix(8).joined(separator: ", "))")
-            // The sentence behind each tag, so a build shows why (and a wrong one can be caught).
-            for kind in index.shotOn {
-                guard let why = index.evidence(for: kind) else { continue }
-                log("why \(film.displayTitle) is \(index.label(for: kind)): \(why.source): \(why.text.prefix(200))")
-            }
-        }
-        for query in ["anamorphic", "imax", "steadicam", "cartoon", "sci-fi"] {
-            let found = model.shelfItems(.all, matching: query, sortedBy: .title).prefix(4).map(\.main.displayTitle)
-            log("search “\(query)”: \(found.joined(separator: ", "))")
-        }
-    }
 
     /// How long the library's everyday work takes with 500 films (the sample, copied under other
     /// TMDB ids, on a main drive and a Backup): building the grid's items, sorting, searching,

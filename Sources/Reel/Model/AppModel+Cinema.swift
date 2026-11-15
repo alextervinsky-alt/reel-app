@@ -185,7 +185,7 @@ extension AppModel {
         }
         func pairable(_ item: LibraryItem) -> DoubleFeature.Film {
             DoubleFeature.Film(id: item.id, features: item.likeness, collectionID: item.main.tmdb?.collection?.id,
-                               shotOn: item.shotOn, craftNames: item.main.craft?.names ?? [], watched: personal.watchedKeys.contains(item.id))
+                               shotOn: item.shotOn, craftNames: item.main.craftFacts?.names ?? [], watched: personal.watchedKeys.contains(item.id))
         }
         guard let me = itemCache[key] else { return nil }
         let pick = DoubleFeature.pick(for: pairable(me), from: items.map(pairable), keywordCounts: keywordCounts,
