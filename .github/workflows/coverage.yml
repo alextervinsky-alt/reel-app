@@ -15,5 +15,5 @@ jobs:
       - if: always()
         run: |
           git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
-          mkdir -p review-results && mv review-award-coverage.json review-results/ || echo '[{"error":"script produced nothing"}]' > review-results/review-award-coverage.json
+          mkdir -p review-results && mv review-award-coverage.json review-results/round2.json || echo '[{"error":"script produced nothing"}]' > review-results/round2.json
           git add review-results && git commit -m "review-1.11: award coverage results (measurement only) [skip ci]" && git push

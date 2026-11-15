@@ -1,30 +1,17 @@
-# today's lists, for calibration
-Academy Award for Best Picture
-Academy Award for Best Cinematography
-BAFTA Award for Best Film
-# cinematography
-American Society of Cinematographers Award for Outstanding Achievement in Cinematography
-BAFTA Award for Best Cinematography
-British Society of Cinematographers Best Cinematography Award
-Camerimage Golden Frog
-European Film Award for Best Cinematographer
-Independent Spirit Award for Best Cinematography
-# festivals
-Grand Prix Cannes Film Festival
-Jury Prize Cannes Film Festival
-Grand Jury Prize Venice Film Festival
-Silver Bear Grand Jury Prize
-Sundance Grand Jury Prize Dramatic
-TIFF People's Choice Award
-Tallinn Black Nights Film Festival Grand Prix
-# awards
-Golden Globe Award for Best Motion Picture – Drama
-Golden Globe Award for Best Motion Picture – Musical or Comedy
-Independent Spirit Award for Best Film
-Goya Award for Best Film
-Academy Award for Best Documentary Feature Film
-Academy Award for Best International Feature Film
-# critics' groups
-New York Film Critics Circle Award for Best Film
-Los Angeles Film Critics Association Award for Best Film
-National Society of Film Critics Award for Best Film
+# round 2: festival and cinematography names as Wikidata spells them
+Golden Frog
+Camerimage
+British Society of Cinematographers
+Grand Prix (Cannes Film Festival)
+Jury Prize (Cannes Film Festival)
+Grand Jury Prize (Venice Film Festival)
+Silver Lion
+Sundance Grand Jury Prize
+People's Choice Award Toronto
+Grand Prix Black Nights
+Tallinn Black Nights Film Festival award
+Golden Shell
+Golden Leopard
+Palme d'Or
+Golden Lion
+Golden Bear
