@@ -1,0 +1,858 @@
+[
+  {
+    "article" : "Lost in Translation",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Most of the film was shot with an Aaton 35-III camera.",
+        "source" : "Wikipedia",
+        "value" : "Aaton 35-III"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Chicago Film Critics Association Award for Best Cinematography (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "National Society of Film Critics Award for Best Cinematography (nominated)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Chlotrudis Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Lost in Translation",
+    "year" : 2003
+  },
+  {
+    "article" : "The Royal Tenenbaums",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Royal Tenenbaums",
+    "year" : 2001
+  },
+  {
+    "article" : "Amélie",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "European Film Award for Best Cinematographer (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Amélie",
+    "year" : 2001
+  },
+  {
+    "article" : "City of God (2002 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "source" : "Wikipedia category",
+        "value" : "16 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "City of God",
+    "year" : 2002
+  },
+  {
+    "article" : "Pan's Labyrinth",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Pan's Labyrinth",
+    "year" : 2006
+  },
+  {
+    "article" : "The Assassination of Jesse James by the Coward Robert Ford",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Assassination of Jesse James by the Coward Robert Ford",
+    "year" : 2007
+  },
+  {
+    "article" : "Atonement (2007 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Atonement",
+    "year" : 2007
+  },
+  {
+    "article" : "The Dark Knight",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Dark Knight",
+    "year" : 2008
+  },
+  {
+    "article" : "Black Swan (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "source" : "Wikipedia category",
+        "value" : "16 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "Black Swan",
+    "year" : 2010
+  },
+  {
+    "article" : "True Grit (2010 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "True Grit",
+    "year" : 2010
+  },
+  {
+    "article" : "Melancholia (2011 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "European Film Award for Best Cinematographer (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Bodil Award for Best Cinematographer (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Robert Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Melancholia",
+    "year" : 2011
+  },
+  {
+    "article" : "Hugo (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Hugo",
+    "year" : 2011
+  },
+  {
+    "article" : "Life of Pi (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Life of Pi",
+    "year" : 2012
+  },
+  {
+    "article" : "12 Years a Slave (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Cinematographer Sean Bobbitt shot 12 Years a Slave on 35 mm film using both the Arricam LT camera with Cooke S4 anamorphic lenses and the Arricam ST. \"Particularly for a period piece, film gives the audience a definite sense of period and quality,\" said Bobbitt.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Cinematographer Sean Bobbitt shot 12 Years a Slave on 35 mm film using both the Arricam LT camera with Cooke S4 anamorphic lenses and the Arricam ST. \"Particularly for a period piece, film gives the audience a definite sense of period and quality,\" said Bobbitt.",
+        "source" : "Wikipedia",
+        "value" : "Arricam LT"
+      },
+      {
+        "inPart" : false,
+        "row" : "lenses",
+        "sentence" : "Cinematographer Sean Bobbitt shot 12 Years a Slave on 35 mm film using both the Arricam LT camera with Cooke S4 anamorphic lenses and the Arricam ST. \"Particularly for a period piece, film gives the audience a definite sense of period and quality,\" said Bobbitt.",
+        "source" : "Wikipedia",
+        "value" : "Cooke S4"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Independent Spirit Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "12 Years a Slave",
+    "year" : 2013
+  },
+  {
+    "article" : "Inside Llewyn Davis",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Inside Llewyn Davis",
+    "year" : 2013
+  },
+  {
+    "article" : "Whiplash (2014 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Whiplash",
+    "year" : 2014
+  },
+  {
+    "article" : "Carol (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "source" : "Wikipedia category",
+        "value" : "16 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "Carol",
+    "year" : 2015
+  },
+  {
+    "article" : "The Witch (2015 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Witch",
+    "year" : 2015
+  },
+  {
+    "article" : "Manchester by the Sea (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Manchester by the Sea",
+    "year" : 2016
+  },
+  {
+    "article" : "Call Me by Your Name (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Call Me by Your Name",
+    "year" : 2017
+  },
+  {
+    "article" : "The Shape of Water",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Shape of Water",
+    "year" : 2017
+  },
+  {
+    "article" : "If Beale Street Could Talk (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "If Beale Street Could Talk",
+    "year" : 2018
+  },
+  {
+    "article" : "The Father (2020 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Father",
+    "year" : 2020
+  },
+  {
+    "article" : "Minari",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Minari",
+    "year" : 2020
+  },
+  {
+    "article" : "Drive My Car (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Drive My Car",
+    "year" : 2021
+  },
+  {
+    "article" : "The Banshees of Inisherin",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Banshees of Inisherin",
+    "year" : 2022
+  },
+  {
+    "article" : "All Quiet on the Western Front (2022 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "All Quiet on the Western Front",
+    "year" : 2022
+  },
+  {
+    "article" : "Anatomy of a Fall",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Anatomy of a Fall",
+    "year" : 2023
+  },
+  {
+    "article" : "Perfect Days",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "4:3"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Perfect Days",
+    "year" : 2023
+  },
+  {
+    "article" : "Conclave (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Conclave",
+    "year" : 2024
+  }
+]
