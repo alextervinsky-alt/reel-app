@@ -339,7 +339,7 @@ struct IMDbSection: View {
                     ListCard(kind: .imdbAllTime, source: "IMDb · All time", symbol: "trophy")
                     ListCard(kind: .imdbYear(year), source: "IMDb · \(year)", symbol: "calendar")
                     ListCard(kind: .imdbDecade(decade), source: "IMDb · The \(decade)s", symbol: "clock")
-                    ListCard(kind: .acclaimedDecade(decade), source: "Critics · Audiences · The \(decade)s", symbol: "star.circle")
+                    ListCard(kind: .acclaimedDecade(decade), source: "Critics · Audiences · \(decade)s", symbol: "star.circle")
                     ListCard(kind: .imdbMostVoted, source: "IMDb · Most voted", symbol: "person.3")
                 }
                 genres

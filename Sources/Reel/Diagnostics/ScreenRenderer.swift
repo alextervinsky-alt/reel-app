@@ -290,6 +290,17 @@ enum ScreenRenderer {
                 .frame(width: 1240)
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("lists-rankings.png"))
+        // 1.11's structure (spec §5): the sidebar's ten rows, and Tonight's suggestions.
+        render(SidebarView(selection: .tonight) { _ in }
+                .frame(width: 240, height: 860)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("desk-sidebar.png"))
+        for item in model.recommended { if let path = item.main.tmdb?.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) } }
+        render(SuggestionsSection()
+                .padding(32)
+                .frame(width: 1200)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("tonight-suggestions.png"))
     }
 
     /// How smoothly the pages scroll (see `ScrollTiming`): a film page, a person's page, Explore,

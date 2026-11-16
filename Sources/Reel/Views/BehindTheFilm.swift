@@ -34,10 +34,7 @@ struct BehindTheFilmTab: View {
             // Shown while they're being checked, then only when four or more are frames from the
             // film; never an empty heading (1.11, spec F3).
             if !(film.tmdb?.stillPaths.isEmpty ?? true), film.checkedStills.map({ model.visibleStills(film, checked: $0).count >= 4 }) ?? true {
-                VStack(alignment: .leading, spacing: 14) {
-                    Theme.sectionTitle("Frames from the Film")
-                    FilmStills(film: film, open: openStill)
-                }
+                FilmStills(film: film, open: openStill, title: "Frames from the Film", minimum: 4)
             }
             if !content.toKnow.isEmpty { DidYouKnow(items: content.toKnow) }
             AtAGlance(film: film)

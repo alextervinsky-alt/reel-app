@@ -487,21 +487,32 @@ struct FilmStills: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
     let open: ([String], Int) -> Void
+    /// The section's heading, shown with it.
+    var title: String?
+    /// Fewer frames than this once checked: nothing is shown, heading included (1.11, D3).
+    var minimum = 1
     @State private var passed: [String] = []
     @State private var checking = false
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 14)]
 
     var body: some View {
         let stills = model.visibleStills(film, checked: film.checkedStills ?? passed)
+        let shown = checking || stills.count >= minimum
         VStack(alignment: .leading, spacing: 14) {
+            if shown, let title { Theme.sectionTitle(title) }
             if checking {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Picking out real frames from the film…").font(.callout).foregroundStyle(.secondary)
                 }
-            } else if stills.isEmpty {
-                Text("No frames from the film found yet.").foregroundStyle(.secondary)
             }
+            if shown { grid(stills) }
+        }
+        .task(id: film.tmdb?.id) { await check() }
+    }
+
+    private func grid(_ stills: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             LazyVGrid(columns: columns, spacing: 14) {
                 ForEach(Array(stills.enumerated()), id: \.element) { index, path in
                     StillTile(path: path) {
@@ -517,7 +528,6 @@ struct FilmStills: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .task(id: film.tmdb?.id) { await check() }
     }
 
     private func hide(_ path: String) {
