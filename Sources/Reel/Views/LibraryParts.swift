@@ -88,7 +88,6 @@ struct FilmList: View {
             column("Length", sortsBy: .runtime).frame(width: FilmListRow.length, alignment: .leading)
             if wide { column("Genre · Mood", sortsBy: nil).frame(width: FilmListRow.genre, alignment: .leading) }
             column("Ratings", sortsBy: .rating).frame(width: FilmListRow.ratings, alignment: .leading)
-            if wide { column("Shot on", sortsBy: nil).frame(width: FilmListRow.shot, alignment: .leading) }
             column("", sortsBy: nil).frame(width: FilmListRow.status, alignment: .leading)
         }
         .padding(.trailing, 14)
@@ -128,7 +127,6 @@ struct FilmListRow: View {
     static let length: CGFloat = 70
     static let genre: CGFloat = 170
     static let ratings: CGFloat = 160
-    static let shot: CGFloat = 170
     static let status: CGFloat = 92
 
     var body: some View {
@@ -156,12 +154,6 @@ struct FilmListRow: View {
                     .frame(width: Self.genre, alignment: .leading)
             }
             RatingsLine(film: film, size: 11.5).frame(width: Self.ratings, alignment: .leading)
-            if wide {
-                Text(item.shotOn.isEmpty ? "" : ShotOn.allCases.filter { item.shotOn.contains($0) }.map(\.title).joined(separator: " · "))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(width: Self.shot, alignment: .leading)
-            }
             status(record).frame(width: Self.status, alignment: .leading)
         }
         .font(.system(size: 12))

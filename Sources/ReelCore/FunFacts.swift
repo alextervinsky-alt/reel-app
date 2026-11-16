@@ -103,8 +103,6 @@ public struct ArticleFindings: Sendable {
     public var funFacts: FunFacts
     /// Sentences from the critical-response section, for the reception summary.
     public var criticSentences: [String]
-    /// How it was shot, from the same Wikidata statements and article (1.11, `CraftFactReader`).
-    public var craft: CraftFacts?
 }
 
 public enum FunFactExtractor {
@@ -323,11 +321,7 @@ public struct WikipediaClient: Sendable {
             needsFilmCheck = found.isBareTitle
         }
         var text: String?
-        var categories: [String] = []
-        if let article, let page = try await articlePage(title: article) {
-            text = page.text
-            categories = page.categories
-        }
+        if let article { text = try await extract(title: article) }
         // "Frankenstein" could be the novel: a bare title only counts if the article is about a film.
         if needsFilmCheck, let t = text, !t.prefix(400).lowercased().contains(" film") {
             text = nil
@@ -336,16 +330,14 @@ public struct WikipediaClient: Sendable {
         guard let text else {
             return ArticleFindings(
                 funFacts: FunFacts(facts: [], quick: quick, articleTitle: nil, fetchedAt: now),
-                criticSentences: [], craft: CraftFactReader.read(article: nil, title: title, articleTitle: nil, quick: quick, now: now))
+                criticSentences: [])
         }
         let facts = FunFacts(
             facts: FunFactExtractor.facts(fromExtract: text), quick: quick,
             consensus: FunFactExtractor.consensus(fromExtract: text),
             cinemaScore: FunFactExtractor.cinemaScore(fromExtract: text),
             articleTitle: article, fetchedAt: now)
-        return ArticleFindings(funFacts: facts, criticSentences: FunFactExtractor.criticSentences(fromExtract: text),
-                               craft: CraftFactReader.read(article: text, title: title, articleTitle: article, quick: quick,
-                                                           categories: categories, now: now))
+        return ArticleFindings(funFacts: facts, criticSentences: FunFactExtractor.criticSentences(fromExtract: text))
     }
 
     // MARK: Wikidata
@@ -505,10 +497,8 @@ public struct WikipediaClient: Sendable {
     struct Extracts: Decodable {
         struct Query: Decodable {
             struct Page: Decodable {
-                struct Category: Decodable { let title: String }
                 let title: String?
                 let extract: String?
-                let categories: [Category]?
             }
             let pages: [String: Page]?
         }
@@ -550,19 +540,11 @@ public struct WikipediaClient: Sendable {
     }
 
     func extract(title: String) async throws -> String? {
-        try await articlePage(title: title)?.text
-    }
-
-    /// The article's text and its categories (the visible ones: "Films shot in 16 mm film"), in one
-    /// request.
-    func articlePage(title: String) async throws -> (text: String, categories: [String])? {
         let result: Extracts = try await get("https://en.wikipedia.org/w/api.php", [
-            "action": "query", "prop": "extracts|categories", "explaintext": "1", "exsectionformat": "wiki",
-            "clshow": "!hidden", "cllimit": "max", "redirects": "1", "titles": title, "format": "json",
+            "action": "query", "prop": "extracts", "explaintext": "1", "exsectionformat": "wiki",
+            "redirects": "1", "titles": title, "format": "json",
         ])
-        guard let page = result.query?.pages?.values.first, let text = page.extract else { return nil }
-        let categories = (page.categories ?? []).map { $0.title.replacingOccurrences(of: "Category:", with: "") }
-        return (text, categories)
+        return result.query?.pages?.values.first?.extract
     }
 
     private func get<T: Decodable>(_ base: String, _ parameters: [String: String]) async throws -> T {

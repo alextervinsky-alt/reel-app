@@ -246,8 +246,6 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     public static let currentStillsCheck = 2
     /// Bonus videos, subtitles, notes and artwork found with the film (from the last scan).
     public var extras: [FilmExtra]
-    /// How it was shot: the facts sheet (1.11, see `CraftFacts`). Derived; rebuilt when its sources change.
-    public var craftFacts: CraftFacts?
     /// In a format-7 file, the film whose shared info this copy takes (`LibraryFile.filmInfo`);
     /// nil once filled in, and always nil in memory.
     var sharedFilm: Int?
@@ -257,7 +255,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case driveID, relativePath, fileName, size, modified, addedAt, matchState, matchScore, tmdb, candidates, lastError
         case ratings, reception, infoVersion, lastLookup, ratingsDue, ratingsTriedAt, funFacts, checkedStills, extras
-        case infoUpdatedAt, checkedStillsVersion, craftFacts, film
+        case infoUpdatedAt, checkedStillsVersion, film
     }
 
     /// Bump when Reel starts storing more film info, so existing entries get refreshed.
@@ -269,8 +267,7 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// 10: dislikes only when said in words (not a sentence's tone); Did You Know? not cut at
     ///     "No." or "St.", and no fact that starts with a "he" or "she" it can't say who is.
     /// 11 (1.10.7): the camera, lighting, colour and VFX crew are kept (`CraftCrew`).
-    /// 12 (1.11): the Cinematography facts sheet is read with the info (`CraftFactReader`).
-    public static let currentInfoVersion = 12
+    public static let currentInfoVersion = 11
 
     public init(
         driveID: String, relativePath: String, fileName: String, size: Int64, modified: Date?,
@@ -299,7 +296,6 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         self.infoUpdatedAt = nil
         self.checkedStillsVersion = nil
         self.extras = extras
-        self.craftFacts = nil
         self.sharedFilm = nil
         self.parsed = FilenameParser.parse(fileName)
     }
@@ -329,7 +325,6 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         infoUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .infoUpdatedAt)
         checkedStillsVersion = try c.decodeIfPresent(Int.self, forKey: .checkedStillsVersion)
         // A sheet this Reel can't read is rebuilt, not a reason to fail.
-        craftFacts = try? c.decodeIfPresent(CraftFacts.self, forKey: .craftFacts)
         sharedFilm = try c.decodeIfPresent(Int.self, forKey: .film)
         if checkedStillsVersion != FilmEntry.currentStillsCheck { checkedStills = nil }
         if infoUpdatedAt == nil, let id = tmdb?.id {
@@ -375,14 +370,13 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         try c.encodeIfPresent(checkedStills, forKey: .checkedStills)
         try c.encodeIfPresent(infoUpdatedAt, forKey: .infoUpdatedAt)
         try c.encodeIfPresent(checkedStillsVersion, forKey: .checkedStillsVersion)
-        try c.encodeIfPresent(craftFacts, forKey: .craftFacts)
     }
 
     /// The film's info, the same for every copy of it (stored once in a format-7 file).
     public var filmInfo: FilmInfoRecord {
         FilmInfoRecord(tmdb: tmdb, ratings: ratings, reception: reception, infoVersion: infoVersion, ratingsDue: ratingsDue,
                        ratingsTriedAt: ratingsTriedAt, funFacts: funFacts, checkedStills: checkedStills,
-                       checkedStillsVersion: checkedStillsVersion, infoUpdatedAt: infoUpdatedAt, craftFacts: craftFacts)
+                       checkedStillsVersion: checkedStillsVersion, infoUpdatedAt: infoUpdatedAt)
     }
 
     /// Takes the film's shared info (opening a format-7 file), by the same rules as reading it
@@ -398,7 +392,6 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         checkedStillsVersion = info.checkedStillsVersion
         checkedStills = info.checkedStillsVersion == FilmEntry.currentStillsCheck ? info.checkedStills : nil
         infoUpdatedAt = info.infoUpdatedAt
-        craftFacts = info.craftFacts
         if infoUpdatedAt == nil, let id = tmdb?.id {
             infoUpdatedAt = Date().addingTimeInterval(-Double(id % 30) * 86_400)
         }
@@ -436,7 +429,6 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     public mutating func applyDetails(_ details: TMDBMovieDetails, reception: ReceptionSummary?) {
         if tmdb?.id != details.id {
             funFacts = nil
-            craftFacts = nil
         }
         if tmdb?.stillPaths != details.stillPaths { checkedStills = nil }
         tmdb = details
@@ -635,16 +627,14 @@ public struct FilmInfoRecord: Codable, Equatable, Sendable {
     public var checkedStills: [String]?
     public var checkedStillsVersion: Int?
     public var infoUpdatedAt: Date?
-    public var craftFacts: CraftFacts?
 
     enum CodingKeys: String, CodingKey {
         case tmdb, ratings, reception, infoVersion, ratingsDue, ratingsTriedAt, funFacts, checkedStills, checkedStillsVersion
-        case infoUpdatedAt, craftFacts
+        case infoUpdatedAt
     }
 
     public init(tmdb: TMDBMovieDetails?, ratings: ExternalRatings?, reception: ReceptionSummary?, infoVersion: Int?, ratingsDue: Bool?,
-                ratingsTriedAt: Date?, funFacts: FunFacts?, checkedStills: [String]?, checkedStillsVersion: Int?, infoUpdatedAt: Date?,
-                craftFacts: CraftFacts?) {
+                ratingsTriedAt: Date?, funFacts: FunFacts?, checkedStills: [String]?, checkedStillsVersion: Int?, infoUpdatedAt: Date?) {
         self.tmdb = tmdb
         self.ratings = ratings
         self.reception = reception
@@ -655,7 +645,6 @@ public struct FilmInfoRecord: Codable, Equatable, Sendable {
         self.checkedStills = checkedStills
         self.checkedStillsVersion = checkedStillsVersion
         self.infoUpdatedAt = infoUpdatedAt
-        self.craftFacts = craftFacts
     }
 
     public init(from decoder: Decoder) throws {
@@ -670,7 +659,6 @@ public struct FilmInfoRecord: Codable, Equatable, Sendable {
         checkedStills = try c.decodeIfPresent([String].self, forKey: .checkedStills)
         checkedStillsVersion = try c.decodeIfPresent(Int.self, forKey: .checkedStillsVersion)
         infoUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .infoUpdatedAt)
-        craftFacts = try? c.decodeIfPresent(CraftFacts.self, forKey: .craftFacts)
     }
 }
 
@@ -687,9 +675,8 @@ public struct LibraryFile: Codable, Equatable, Sendable {
     /// over (see `LibraryOpening`).
     /// 4 (1.10.7) to 6 (1.10.10): the Shot on readings' research and findings.
     /// 7 (1.11): each film's info is stored once (`filmInfo`, by TMDB id) and its copies refer to
-    /// it; the readings (`craft`, `craftAttempt`) are gone, replaced by the facts sheet
-    /// (`craftFacts`). An older file reads as it is: its readings are skipped and every copy keeps
-    /// its own info. Reel 1.10.10 and older won't write over a 7.
+    /// it; the readings (`craft`, `craftAttempt`) are gone. An older file reads as it is: its
+    /// readings are skipped and every copy keeps its own info. Reel 1.10.10 and older won't write over a 7.
     public static let currentVersion = 7
 
     /// The Reel that last wrote the file ("1.10.10 (380)"; 1.10.10 on): what wrote a library is read from

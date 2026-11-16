@@ -82,7 +82,8 @@ final class LibraryFormatTests: XCTestCase {
         XCTAssertEqual(file.films.map(\.checkedStills), films.map(\.checkedStills))
         XCTAssertEqual(file.films.map(\.funFacts), films.map(\.funFacts))
         XCTAssertEqual(file.scans?["Main"]?.films, 3)
-        XCTAssertTrue(file.films.allSatisfy { $0.craftFacts == nil }, "the old readings are dropped")
+        let written = String(decoding: try JSONStore.encode(file), as: UTF8.self)
+        XCTAssertFalse(written.contains("\"craft"), "the old readings are dropped")
 
         // Written back as format 7 and read again: the same.
         let again = try JSONStore.decode(LibraryFile.self, from: JSONStore.encode(file))

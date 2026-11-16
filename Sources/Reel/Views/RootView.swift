@@ -15,7 +15,6 @@ struct RootView: View {
     @State private var moods: Set<Mood> = []
     @State private var length: LengthBand = .any
     @State private var language: String?
-    @State private var shotOn: ShotOn?
     /// Poster width in the grids, and posters or a list (for this session).
     @State private var posterSize = 168.0
     @State private var asList = false
@@ -114,7 +113,7 @@ struct RootView: View {
                             // The desk's field doesn't take ⌘F while Cinema mode is over it.
                             LibraryGridView(shelf: shelf, searchText: $searchText,
                                             focusSearch: model.cinemaMode ? .constant(false) : $focusSearch, query: query, sort: $sort,
-                                            moods: $moods, length: $length, language: $language, shotOn: $shotOn,
+                                            moods: $moods, length: $length, language: $language,
                                             posterSize: $posterSize, asList: $asList, path: $path)
                         }
                     }
@@ -204,7 +203,6 @@ struct RootView: View {
             moods = []
             length = .any
             language = nil
-            shotOn = nil
         }
         shelf = newShelf
     }

@@ -26,7 +26,7 @@ jobs:
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests --skip LiveAcclaimTests --skip LiveCraftFactsCheck 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveAcclaimTests 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
@@ -93,45 +93,6 @@ jobs:
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
           fi
           exit $fail
-
-  craft-check:
-    # The facts sheet read live for 30 well-known films, for the hand check (spec §7.8). The
-    # results go to the throwaway review-1.11 branch (public titles only).
-    runs-on: ubuntu-24.04
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[craft-check]')
-    permissions:
-      contents: write
-    container: swift:6.0-noble
-    steps:
-      - name: Git, so the results can be kept
-        run: apt-get update -qq && apt-get install -y -qq git curl >/dev/null
-      - uses: actions/checkout@v5
-      - name: Read the 30 films
-        env:
-          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
-          REEL_CRAFT_CHECK: /tmp/craft-check.json
-          REEL_CRAFT_SET: third
-        run: |
-          # Can the filmmakers' own words be found? The cinematographers' magazines' public search.
-          for url in "https://theasc.com/wp-json/wp/v2/posts?search=Anora&per_page=2&_fields=title,link" \
-                     "https://britishcinematographer.co.uk/wp-json/wp/v2/posts?search=Anora&per_page=2&_fields=title,link"; do
-            code=$(curl -s -o /tmp/probe.json -w "%{http_code}" -A "Reel/1.11 (personal film library)" "$url")
-            echo "::notice::probe $code $(head -c 300 /tmp/probe.json | tr -d '\n')"
-          done
-          swift test --filter LiveCraftFactsCheck > craft.log 2>&1 || true
-          grep -E "CRAFT\|" craft.log | while read -r l; do echo "::notice::$l"; done
-          grep -E "error:|failed" craft.log | head -5 | while read -r l; do echo "::warning::$l"; done
-          ls -la /tmp/craft-check.json || echo "::warning::no results file"
-      - name: Keep the results on review-1.11
-        shell: bash
-        run: |
-          git config --global --add safe.directory "$PWD"
-          git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
-          git fetch origin review-1.11 2>&1 | tail -2 || echo "::warning::fetch failed"
-          git checkout -q -B results FETCH_HEAD || echo "::warning::checkout failed"
-          mkdir -p review-results && cp /tmp/craft-check.json "review-results/craft-check-${GITHUB_SHA::7}.json"
-          git add review-results && git commit -qm "review-1.11: craft facts check results (public titles, measurement only) [skip ci]" || echo "::warning::commit failed"
-          git push origin HEAD:review-1.11 2>&1 | tail -3 | while read -r l; do echo "::notice::push: $l"; done
 
   mac-measure:
     # 1.11 work in progress: the app must build, and the smoothness gates are measured (spec §9.3):

@@ -226,8 +226,7 @@ struct PersonPage: View {
         .contentShape(Rectangle())
     }
 }
-/// A cinematographer's page: the films they're known for, and their recurring gear and looks
-/// across the films of theirs in your library (from their facts sheets, see `CraftFacts`).
+/// A cinematographer's page: the films they're known for.
 private struct CinematographerProfile: View {
     @Environment(AppModel.self) private var model
     let name: String
@@ -236,9 +235,6 @@ private struct CinematographerProfile: View {
 
     var body: some View {
         let knownFor = shot.sorted { $0.voteCount > $1.voteCount }.prefix(6)
-        let mine = model.items.filter { $0.main.tmdb?.cinematographers.contains(name) == true }
-        let read = mine.compactMap { $0.main.craftFacts }
-        let habits = CraftHabits.recurring(read)
         VStack(alignment: .leading, spacing: 18) {
             if !knownFor.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -247,40 +243,6 @@ private struct CinematographerProfile: View {
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            if !mine.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    label(read.count > 1 ? "THEIR LOOK, FILM AFTER FILM" : "THEIR LOOK")
-                    if habits.isEmpty {
-                        Text(read.count < mine.count ? "Reel is still reading about how their films in your library were shot."
-                                                     : "Nothing recurs yet in what's written about their films in your library.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        FlowLayout(spacing: 8) {
-                            ForEach(habits, id: \.name) { habit in
-                                HStack(spacing: 6) {
-                                    Text(habit.name).font(.system(size: 13, weight: .medium))
-                                    if read.count > 1 {
-                                        Text("\(habit.films) of \(read.count)")
-                                            .font(.system(size: 11.5))
-                                            .foregroundStyle(.secondary)
-                                            .monospacedDigit()
-                                    }
-                                }
-                                .padding(.horizontal, 12)
-                                .frame(height: 30)
-                                .background(Capsule().fill(Theme.panel))
-                                .overlay(Capsule().strokeBorder(Theme.hairline))
-                                .help(CraftGlossary.explain(habit.name) ?? habit.name)
-                            }
-                        }
-                        Text(read.count > 1 ? "What's named in the articles about \(read.count) of their films in your library."
-                                            : "What's named in the articles about their film in your library.")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
-                    }
                 }
             }
         }

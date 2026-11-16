@@ -134,11 +134,6 @@ enum ScreenRenderer {
                     .frame(width: 900)
                     .background(Theme.background),
                    model: model, scale: 2, to: output.appendingPathComponent("behind-the-film.png"))
-            render(CinematographyTab(film: film) { _, _ in }
-                    .padding(32)
-                    .frame(width: 900)
-                    .background(Theme.background),
-                   model: model, scale: 2, to: output.appendingPathComponent("cinematography.png"))
         }
         // For You (from the sample's watched films): its first six, with their frames and details loaded.
         await model.loadExplorePicks()

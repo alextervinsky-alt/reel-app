@@ -314,7 +314,7 @@ extension AppModel {
             }
         }
         return FilmInfo(details: full.trimmed(), ratings: ratings, reception: reception, funFacts: findings?.funFacts,
-                        craftFacts: findings?.craft, findingsFailed: findings == nil,
+                        findingsFailed: findings == nil,
                         ratingsFailed: failed, ratingsRefused: refused, ratingsSkipped: !ratingsWanted)
     }
 
@@ -344,7 +344,6 @@ extension AppModel {
                 list[i].infoVersion = twin.infoVersion
                 list[i].infoUpdatedAt = twin.infoUpdatedAt
                 list[i].funFacts = twin.funFacts
-                list[i].craftFacts = twin.craftFacts
                 list[i].candidates = twin.candidates
                 list[i].matchScore = twin.matchScore
                 list[i].matchState = twin.matchState
@@ -441,13 +440,11 @@ extension AppModel {
         guard let details = film.tmdb, !funFactsLoading.contains(details.id) else { return }
         if let existing = film.funFacts {
             let maxAge: TimeInterval = existing.isEmpty ? 7 * 86_400 : FilmEntry.infoMaxAge
-            // Facts from before Reel 1.7 lack the aspect ratio and colour the Cinematography tab
-            // shows, and before 1.8.1 what the filming places are (fetched again when the tab opens).
+            // Facts from before Reel 1.7 lack the aspect ratio At a Glance shows, and before 1.8.1
+            // what the filming places are (fetched again when the page opens).
             let lacksCamera = existing.quick != nil && existing.quick?.aspectRatios == nil
             let lacksPlaces = existing.quick?.filmedIn.isEmpty == false && existing.quick?.filmingPlaces == nil
-            // And before 1.8.2 the awards for the cinematography.
-            let lacksHonours = existing.quick != nil && existing.quick?.cinematographyHonours == nil
-            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces, !lacksHonours { return }
+            if existing.fetchedAt > Date().addingTimeInterval(-maxAge), !lacksCamera, !lacksPlaces { return }
         }
         funFactsLoading.insert(details.id)
         defer { funFactsLoading.remove(details.id) }
@@ -457,11 +454,9 @@ extension AppModel {
         var facts = findings.funFacts
         // Wikidata's part failing this time doesn't lose what it gave before.
         if facts.quick == nil { facts.quick = film.funFacts?.quick }
-        let craft = facts.quick == findings.funFacts.quick ? findings.craft : nil
         mutateFilms { list in
             for i in list.indices where list[i].tmdb?.id == details.id {
                 list[i].funFacts = facts
-                if let craft { list[i].craftFacts = craft }
             }
         }
     }

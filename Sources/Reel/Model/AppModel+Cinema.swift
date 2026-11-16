@@ -185,7 +185,7 @@ extension AppModel {
         }
         func pairable(_ item: LibraryItem) -> DoubleFeature.Film {
             DoubleFeature.Film(id: item.id, features: item.likeness, collectionID: item.main.tmdb?.collection?.id,
-                               shotOn: item.shotOn, craftNames: item.main.craftFacts?.names ?? [], watched: personal.watchedKeys.contains(item.id))
+                               shotOn: [], craftNames: [], watched: personal.watchedKeys.contains(item.id))
         }
         guard let me = itemCache[key] else { return nil }
         let pick = DoubleFeature.pick(for: pairable(me), from: items.map(pairable), keywordCounts: keywordCounts,
@@ -210,28 +210,12 @@ extension AppModel {
         }.prefix(12))
     }
 
-    /// The other films in the library shot by them, in the order they were made (the Cinematography
-    /// tab); worked out once until the library changes.
-    func filmsShot(by cinematographers: [String], besides film: FilmEntry) -> [LibraryItem] {
-        // Read here, so the page redraws when the library changes.
-        guard !items.isEmpty else { return [] }
-        let key = cinematographers.joined(separator: "|") + "|" + film.personalKey
-        if let cached = shotByCache[key] { return cached }
-        let wanted = Set(cinematographers)
-        let found = items
-            .filter { $0.id != film.personalKey && !wanted.isDisjoint(with: $0.main.tmdb?.cinematographers ?? []) }
-            .sorted { ($0.main.displayYear ?? 0) < ($1.main.displayYear ?? 0) }
-        shotByCache[key] = found
-        return found
-    }
-
-    /// The films for Cinema mode's All Films: search, sort, mood, length, language, what it was
-    /// shot on, and unwatched only.
+    /// The films for Cinema mode's All Films: search, sort, mood, length, language, and unwatched only.
     func cinemaLibrary(matching query: String, sort: LibrarySort, mood: Mood?, length: LengthBand, language: String?,
-                       shotOn: ShotOn?, unwatchedOnly: Bool) -> [LibraryItem] {
+                       unwatchedOnly: Bool) -> [LibraryItem] {
         shelfItems(unwatchedOnly ? .unwatched : .all, matching: query, sortedBy: sort).filter { item in
             (mood.map { item.moods.contains($0) } ?? true) && length.contains(item.runtime)
-                && (language.map { item.language == $0 } ?? true) && (shotOn.map { item.shotOn.contains($0) } ?? true)
+                && (language.map { item.language == $0 } ?? true)
         }
     }
 

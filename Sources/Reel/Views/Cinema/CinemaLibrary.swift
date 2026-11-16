@@ -21,7 +21,6 @@ struct CinemaLibrary: View {
     @State private var mood: Mood?
     @State private var length: LengthBand = .any
     @State private var language: String?
-    @State private var shotOn: ShotOn?
     @State private var unwatchedOnly = true
     @State private var panel: FilterPanel?
     /// The highlighted poster (pointer or keys).
@@ -32,7 +31,7 @@ struct CinemaLibrary: View {
     @State private var panelIndex = 0
 
     private enum FilterPanel: Identifiable {
-        case sort, mood, length, language, shotOn
+        case sort, mood, length, language
         var id: Self { self }
     }
 
@@ -59,7 +58,7 @@ struct CinemaLibrary: View {
         let searching = !query.isEmpty
         let films = model.cinemaLibrary(matching: query, sort: sort, mood: searching ? nil : mood,
                                         length: searching ? .any : length, language: searching ? nil : language,
-                                        shotOn: searching ? nil : shotOn, unwatchedOnly: !searching && unwatchedOnly)
+                                        unwatchedOnly: !searching && unwatchedOnly)
         Group {
             if isSnapshot {
                 content(films, scrollTo: { _ in }).snapshotPage()
@@ -178,10 +177,6 @@ struct CinemaLibrary: View {
             list.append(Filter(title: (language.map(FilmLanguage.name) ?? "Any Language") + "  ▾", symbol: "globe",
                                isOn: language != nil) { show(.language) })
         }
-        if !model.shotOnKinds.isEmpty || shotOn != nil {
-            list.append(Filter(title: (shotOn.map { "Shot on " + $0.title } ?? "Shot on Anything") + "  ▾", symbol: "camera.aperture",
-                               isOn: shotOn != nil) { show(.shotOn) })
-        }
         list.append(Filter(title: "Unwatched", symbol: unwatchedOnly ? "checkmark" : nil, isOn: unwatchedOnly) {
             unwatchedOnly.toggle()
         })
@@ -266,9 +261,6 @@ struct CinemaLibrary: View {
         case .language:
             return [Option(title: "Any Language", isOn: language == nil) { language = nil }]
                 + model.languages.map { code in Option(title: FilmLanguage.name(code), isOn: language == code) { language = code } }
-        case .shotOn:
-            return [Option(title: "Anything", symbol: "camera.aperture", isOn: shotOn == nil) { shotOn = nil }]
-                + model.shotOnKinds.map { kind in Option(title: kind.title, isOn: shotOn == kind) { shotOn = kind } }
         }
     }
 
@@ -320,7 +312,6 @@ struct CinemaLibrary: View {
         case .mood: "Mood"
         case .length: "Length"
         case .language: "Language"
-        case .shotOn: "Shot On"
         }
     }
 }

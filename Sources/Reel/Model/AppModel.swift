@@ -168,8 +168,6 @@ final class AppModel {
     @ObservationIgnored var keywordCounts: [String: Int] = [:]
     /// The original languages in the library, most films first (for the Language filters).
     var languages: [String] = []
-    /// What the library's films were shot on, as far as read (for the Shot on filters).
-    var shotOnKinds: [ShotOn] = []
     /// Films whose fun facts are being fetched right now (the tab shows a spinner).
     var funFactsLoading: Set<Int> = []
 
@@ -218,8 +216,6 @@ final class AppModel {
     @ObservationIgnored var relatedCache: [String: (stamp: String, films: RelatedFilms)] = [:]
     /// Each film's double feature (see `pairing`), until the library or what you've watched changes.
     @ObservationIgnored var pairCache: [String: (stamp: String, pick: DoubleFeature.Pick?)] = [:]
-    /// The other films in the library each cinematographer shot (see `filmsShot`), per library version.
-    @ObservationIgnored var shotByCache: [String: [LibraryItem]] = [:]
     /// Cinema mode's home rows, kept until something they show changes.
     @ObservationIgnored var cinemaRowsCache: (stamp: CinemaRowsStamp, rows: [CinemaRow])?
     /// Goes up each time the library's films are built again (a cache key).
@@ -255,11 +251,12 @@ final class AppModel {
     @ObservationIgnored var itemCache: [String: LibraryItem] = [:]
     /// What you set files' pictures to (HDR or SDR), by file key (Your Notes).
     var pictures: [String: DynamicRange] = [:]
-    /// Shot on tags you said are wrong, by TMDB id (Your Notes).
+    /// Shot on tags you said are wrong, by TMDB id (Your Notes; kept as they are since the
+    /// filter was cut from 1.11).
     var removedShotOn: [Int: Set<ShotOn>] = [:]
     /// "Not a frame from the film", by TMDB id (Your Notes, 1.11).
     var removedStills: [Int: Set<String>] = [:]
-    /// Cinematography facts you said are wrong, by TMDB id (Your Notes, 1.11).
+    /// Cinematography facts you said are wrong, by TMDB id (Your Notes; kept as they are).
     var removedFacts: [Int: Set<String>] = [:]
     /// Your Notes was damaged and this Safety Copy is shown read-only until you restore it.
     var restorableNotes: SafetyCopy?
@@ -735,7 +732,6 @@ final class AppModel {
     /// Returns how many items had to be built anew (0: nothing about any film changed).
     nonisolated static func makeItems(films: [FilmEntry], online: Set<String>, reuse: [String: LibraryItem] = [:],
                                       picture: ((FilmEntry) -> FilePicture)? = nil,
-                                      removedShotOn: (FilmEntry) -> Set<ShotOn> = { _ in [] },
                                       moods: (FilmEntry) -> [Mood]) -> (items: [LibraryItem], built: Int) {
         // Without the library's settings at hand (Reel opening), the file names alone.
         var parsed: [String: ParsedFilename] = [:]
@@ -755,14 +751,13 @@ final class AppModel {
             let main = onlineCopy ?? first
             // The main copy is one of the copies, so comparing the copies covers it.
             let picture = pictureOf(main)
-            let removed = removedShotOn(main)
             if let cached = reuse[key], cached.isOnline == (onlineCopy != nil), cached.main.id == main.id, cached.copies == copies,
-               cached.pictureWords == picture.searchWords, cached.removedShotOn == removed {
+               cached.pictureWords == picture.searchWords {
                 return cached
             }
             built += 1
             return LibraryItem(key: key, main: main, copies: copies, isOnline: onlineCopy != nil, moods: moods(main),
-                               picture: picture, removedShotOn: removed)
+                               picture: picture)
         }
         return (items, built)
     }
@@ -783,10 +778,9 @@ final class AppModel {
         let backups = Set(drives.filter { $0.isBackup }.map { $0.id })
         let ordered = films.filter { !backups.contains($0.driveID) } + films.filter { backups.contains($0.driveID) }
         ownFolders = FilePicture.ownFolders(films, parsed: &parsedFolders)
-        let folders = ownFolders, yours = pictures, removed = removedShotOn
+        let folders = ownFolders, yours = pictures
         let (fresh, newlyBuilt) = Self.makeItems(films: ordered, online: online, reuse: itemCache,
-                                                 picture: { FilePicture.of($0, ownFolders: folders, yours: yours) },
-                                                 removedShotOn: { $0.tmdb.flatMap { removed[$0.id] } ?? [] }) { moodList(for: $0) }
+                                                 picture: { FilePicture.of($0, ownFolders: folders, yours: yours) }) { moodList(for: $0) }
         if newlyBuilt > 0 || fresh.count != items.count || !zip(fresh, items).allSatisfy({ $0.id == $1.id }) {
             items = fresh
             itemCache = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -807,16 +801,12 @@ final class AppModel {
         // Films' info may have changed: fits to your ratings are worked out again.
         tasteMatches = [:]
         relatedCache = [:]
-        shotByCache = [:]
         libraryVersion += 1
         keywordCounts = Likeness.keywordCounts(items.map { $0.likeness })
         var languageCounts: [String: Int] = [:]
         for item in items { if let language = item.language { languageCounts[language, default: 0] += 1 } }
         let newLanguages = languageCounts.sorted { ($0.value, $1.key) > ($1.value, $0.key) }.map { $0.key }
         if newLanguages != languages { languages = newLanguages }
-        let shot = Set(items.flatMap { $0.shotOn })
-        let newShotOn = ShotOn.allCases.filter { shot.contains($0) }
-        if newShotOn != shotOnKinds { shotOnKinds = newShotOn }
         let newGenres = Set(items.flatMap { $0.genres }).sorted()
         if newGenres != genres { genres = newGenres }
         let newCheckCount = items.filter { $0.main.matchState.needsCheck }.count

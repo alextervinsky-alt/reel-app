@@ -33,9 +33,7 @@ struct FilmPage: View {
                             case .overview: OverviewTab(film: film) { preview = $0 }
                             case .reviews: ReceptionTab(film: film)
                             case .behindTheFilm:
-                                BehindTheFilmTab(film: film)
-                            case .cinematography:
-                                CinematographyTab(film: film) { paths, index in
+                                BehindTheFilmTab(film: film) { paths, index in
                                     still = StillSelection(paths: paths, index: index)
                                 }
                             case .extras: ExtrasTab(film: film)
@@ -81,7 +79,7 @@ struct FilmPage: View {
         FilmTab.allCases.filter { tab in
             switch tab {
             case .overview: true
-            case .reviews, .behindTheFilm, .cinematography: film.tmdb != nil
+            case .reviews, .behindTheFilm: film.tmdb != nil
             case .extras: model.hasExtras(film)
             }
         }
@@ -483,14 +481,7 @@ struct FilmFactSheet: View {
             people("Music", Array((d?.people(forJobs: TMDBMovieDetails.composerJobs) ?? []).prefix(2)))
             people("Editor", Array((d?.people(forJobs: ["Editor"]) ?? []).prefix(2)))
             people("Design", Array((d?.people(forJobs: ["Production Design"]) ?? []).prefix(2)))
-            if let shot = shotOn {
-                row("Shot on", Text(shot).help(shotOnWhy).contextMenu {
-                    // You know better: a tag that's wrong for this film goes (Settings puts it back).
-                    ForEach(model.shownShotOn(film), id: \.self) { kind in
-                        Button("Not Right: Remove “\(kind.title)”") { model.removeShotOn(kind, from: film) }
-                    }
-                })
-            }
+            if let ratio = film.funFacts?.quick?.aspectRatios?.first { row("Aspect ratio", Text(ratio)) }
             if let language = FilmLanguage.code(d?.originalLanguage) { row("Language", Text(FilmLanguage.name(language))) }
             if let file = fileLine(copies) { row("File", Text(file)) }
             if let subtitles = subtitlesLine { row("Subtitles", Text(subtitles)) }
@@ -529,28 +520,6 @@ struct FilmFactSheet: View {
         .overlay(alignment: .bottom) {
             if !last { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
         }
-    }
-
-    /// Why each Shot on: where each fact is from (the facts sheet, see `CraftFacts`).
-    private var shotOnWhy: String {
-        guard let facts = film.craftFacts else { return "" }
-        return model.shownShotOn(film).compactMap { kind -> String? in
-            let word = kind == .blackAndWhite ? "black" : kind.title
-            guard let fact = facts.facts.first(where: { $0.row == .format && $0.value.localizedCaseInsensitiveContains(word) }) else {
-                return nil
-            }
-            let said = fact.sentence.map { Spoilers.tellsTheStory($0) ? "" : ": “\($0)”" } ?? ""
-            return "\(facts.label(for: kind)), from \(fact.source)\(said)"
-        }.joined(separator: "\n\n")
-    }
-
-    /// "Film · Anamorphic · 2.39:1", from what's read about it and Wikidata.
-    private var shotOn: String? {
-        var parts = model.shownShotOn(film).map { film.craftFacts?.label(for: $0) ?? $0.title }
-        // Drawn, not shot: said, rather than left looking like nothing was found.
-        if parts.isEmpty, film.tmdb?.genreNames.contains("Animation") == true { parts.append("Animated") }
-        if let ratio = film.funFacts?.quick?.aspectRatios?.first { parts.append(ratio) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// "4K · Dolby Vision + HDR10 · 58 GB · MKV": the picture's format as Reel reads it (see

@@ -216,11 +216,9 @@ struct SearchIndex: Equatable {
     let people: String
     let tags: String
     let plot: String
-    /// The gear, techniques and formats read about it ("anamorphic", "16mm", "Steadicam").
-    let craft: String
     let words: [String]
 
-    init(film: FilmEntry, moods: [Mood], picture: FilePicture, removedShotOn: Set<ShotOn> = []) {
+    init(film: FilmEntry, moods: [Mood], picture: FilePicture) {
         let n = TitleSimilarity.normalize
         let d = film.tmdb
         let titles = [film.displayTitle, d?.originalTitle ?? "", film.parsed.title].map(n)
@@ -266,22 +264,16 @@ struct SearchIndex: Equatable {
         people = peopleNames + " , " + n(characters.joined(separator: " , "))
         tags = n(tagWords.joined(separator: " , "))
         plot = n([d?.tagline ?? "", d?.overview ?? ""].joined(separator: " "))
-        craft = film.craftFacts.map { n($0.searchText(removing: removedShotOn)) } ?? ""
         // Slips are forgiven against titles, real names and the words you'd filter by (genres,
-        // moods, how it was shot), never characters or plots ("cartoon" isn't "Carson").
-        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title) + (film.craftFacts?.shotOn ?? []).filter { !removedShotOn.contains($0) }.map(\.title)).joined(separator: " "))
+        // moods), never characters or plots ("cartoon" isn't "Carson").
+        let vocabulary = n(((d?.genreNames ?? []) + moods.map(\.title)).joined(separator: " "))
         words = Array(Set((title + " " + peopleNames + " " + vocabulary).split(separator: " ").map { String($0) }.filter { $0.count >= 4 }))
     }
 
-    /// 0 when a term doesn't match anywhere; higher for title > people > craft > tags > plot >
+    /// 0 when a term doesn't match anywhere; higher for title > people > tags > plot >
     /// near-miss. Each term is a word with its stand-ins (see `SearchQuery.terms`), the best of
     /// them counting. The typo-tolerant pass is only used when exact matching finds nothing.
     func relevance(_ terms: [[String]], allowTypos: Bool = false) -> Int {
-        // A craft phrase as a whole ("natural light"), not word by word.
-        let typed = terms.compactMap(\.first)
-        if typed.count > 1, !craft.isEmpty, (" " + craft + " ").contains(" " + typed.joined(separator: " ") + " ") {
-            return 50 * typed.count
-        }
         var total = 0
         for alternatives in terms {
             let best = alternatives.enumerated().map { index, term in
@@ -298,7 +290,6 @@ struct SearchIndex: Equatable {
     private func relevance(of term: String, allowTypos: Bool) -> Int {
         if title.contains(term) { return title.hasPrefix(term) || title.contains(" " + term) ? 120 : 100 }
         if people.contains(term) { return 60 }
-        if craft.contains(term) { return 45 }
         if tags.contains(term) { return 40 }
         if plot.contains(term) { return 15 }
         // Small slips in a title or a name: "blade runer", "villenueve".
@@ -324,8 +315,6 @@ struct LibraryItem: Identifiable, Equatable {
     let moods: [Mood]
     let genres: Set<String>
     let keywords: Set<String>
-    /// Film, digital, anamorphic… (once read, see `CraftFacts`), for the Shot on filter.
-    let shotOn: Set<ShotOn>
     /// What "More Like This" compares (people, themes, tone, audience).
     let likeness: LikenessFeatures
     /// The film's original language ("ko"), for language rows and filters.
@@ -340,11 +329,8 @@ struct LibraryItem: Identifiable, Equatable {
     let stamp: Int
     /// What search finds it by for its picture: an item is built again when your setting changes it.
     let pictureWords: [String]
-    /// Shot on tags you said are wrong for it.
-    let removedShotOn: Set<ShotOn>
 
-    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: FilePicture,
-         removedShotOn: Set<ShotOn> = []) {
+    init(key: String, main: FilmEntry, copies: [FilmEntry], isOnline: Bool, moods: [Mood], picture: FilePicture) {
         self.id = key
         self.main = main
         self.copies = copies
@@ -360,8 +346,6 @@ struct LibraryItem: Identifiable, Equatable {
         let d = main.tmdb
         self.genres = Set(d?.genreNames ?? [])
         self.keywords = Set(d?.keywordNames ?? [])
-        self.shotOn = Set(main.craftFacts?.shotOn ?? []).union(LibraryItem.shotOnKnown(main)).subtracting(removedShotOn)
-        self.removedShotOn = removedShotOn
         self.likeness = LikenessFeatures(
             tmdbID: d?.id, directors: d?.directors ?? [], writers: d?.writers ?? [],
             cinematographers: d?.cinematographers ?? [], cast: d.map { $0.topCast.prefix(5).map { $0.name } } ?? [],
@@ -373,7 +357,7 @@ struct LibraryItem: Identifiable, Equatable {
         self.runtime = d?.runtime
         self.score = main.score
         self.moods = moods
-        self.search = SearchIndex(film: main, moods: moods, picture: picture, removedShotOn: removedShotOn)
+        self.search = SearchIndex(film: main, moods: moods, picture: picture)
         self.pictureWords = picture.searchWords
         var hasher = Hasher()
         hasher.combine(main.id)
@@ -389,12 +373,6 @@ struct LibraryItem: Identifiable, Equatable {
         self.stamp = hasher.finalize()
     }
 
-    /// Black and white, as Wikidata or TMDB already say before the film's craft is read.
-    static func shotOnKnown(_ film: FilmEntry) -> Set<ShotOn> {
-        guard film.craftFacts == nil else { return [] }
-        return ShotOn.known(colour: film.funFacts?.quick?.colour)
-    }
-
     static let shortGenreNames = [
         "Science Fiction": "Sci-Fi", "Documentary": "Doc", "TV Movie": "TV Film", "Animation": "Animated",
     ]
@@ -406,8 +384,6 @@ struct FilmInfo: Sendable {
     let ratings: ExternalRatings?
     let reception: ReceptionSummary?
     let funFacts: FunFacts?
-    /// How it was shot (1.11), from the same Wikidata statements and article as the fun facts.
-    var craftFacts: CraftFacts?
     /// Wikipedia couldn't be reached: the film is refreshed again next launch for its fun facts
     /// and critics' lines.
     let findingsFailed: Bool
@@ -427,13 +403,12 @@ struct FilmInfo: Sendable {
             entry.apply(details, ratings: ratings, ratingsFailed: ratingsFailed, reception: reception)
         }
         if let funFacts { entry.funFacts = funFacts }
-        if let craftFacts { entry.craftFacts = craftFacts }
         if findingsFailed { entry.infoVersion = FilmEntry.currentInfoVersion - 1 }
     }
 }
 
 enum FilmTab: String, CaseIterable, Identifiable {
-    case overview, reviews, behindTheFilm, cinematography, extras
+    case overview, reviews, behindTheFilm, extras
 
     var id: String { rawValue }
 
@@ -442,7 +417,6 @@ enum FilmTab: String, CaseIterable, Identifiable {
         case .overview: "Overview"
         case .reviews: "Reviews"
         case .behindTheFilm: "Behind the Film"
-        case .cinematography: "Cinematography"
         case .extras: "Extras"
         }
     }

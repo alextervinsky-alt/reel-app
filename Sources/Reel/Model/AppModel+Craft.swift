@@ -2,9 +2,8 @@
 import Foundation
 import ReelCore
 
-/// How films were shot (1.11): the facts sheet is stored with each film (`CraftFacts`) and shown
-/// as stored; the Shot on you said is wrong is kept in Your Notes. Session 4 adds the background
-/// reading of the facts.
+/// Collections for a film's articles, and the reading logs Reel 1.10 left behind. (The
+/// Cinematography tab was cut from 1.11; what you said was wrong stays in Your Notes as it is.)
 extension AppModel {
     /// Fetches the film's collection from TMDB when it isn't kept yet (two weeks; see `ListsStore`).
     func loadCollection(of details: TMDBMovieDetails) async {
@@ -22,39 +21,6 @@ extension AppModel {
     func otherTitles(of details: TMDBMovieDetails) -> [String] {
         guard let collection = details.collection, let set = lists.sets[FilmSet.id(.franchise, collection.id)] else { return [] }
         return set.films.filter { $0.id != details.id }.map(\.title)
-    }
-
-    /// Shot on as shown for a film: what was read, less what you said is wrong.
-    func shownShotOn(_ film: FilmEntry) -> [ShotOn] {
-        let removed = film.tmdb.flatMap { removedShotOn[$0.id] } ?? []
-        // Before its facts are read, what Wikidata or TMDB already say (black and white).
-        let read = film.craftFacts?.shotOn ?? ShotOn.allCases.filter { LibraryItem.shotOnKnown(film).contains($0) }
-        return read.filter { !removed.contains($0) }
-    }
-
-    /// You said a Shot on tag is wrong for this film: it's no longer shown, filtered or searched
-    /// for it (kept in Your Notes; Settings lists it to put back).
-    func removeShotOn(_ kind: ShotOn, from film: FilmEntry) {
-        guard let id = film.tmdb?.id else { return }
-        removedShotOn[id, default: []].insert(kind)
-        scheduleSave(.notes)
-        scheduleRebuild()
-    }
-
-    func restoreShotOn(_ kind: ShotOn, for id: Int) {
-        removedShotOn[id]?.remove(kind)
-        if removedShotOn[id]?.isEmpty == true { removedShotOn[id] = nil }
-        scheduleSave(.notes)
-        scheduleRebuild()
-    }
-
-
-    /// You said a fact on the Cinematography tab is wrong: that row is never shown for the film
-    /// again (Your Notes, `removedFacts`).
-    func removeFact(_ row: CraftFacts.Row, from film: FilmEntry) {
-        guard let id = film.tmdb?.id else { return }
-        removedFacts[id, default: []].insert(row.rawValue)
-        scheduleSave(.notes)
     }
 
     /// The reading logs Reel 1.10 wrote (Shot On Readings.nosync): their size, or nil when gone.

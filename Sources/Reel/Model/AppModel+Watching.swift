@@ -333,30 +333,6 @@ extension AppModel {
         return links
     }
 
-    /// Where a film's full technical specifications and its cinematographer's interviews are
-    /// (the Cinematography tab): IMDb's, interviews, ShotOnWhat's and American Cinematographer's articles.
-    func cameraLinks(for film: FilmEntry) -> [(title: String, url: URL)] {
-        let words = [film.displayTitle, film.displayYear.map(String.init) ?? ""].joined(separator: " ")
-        func search(_ site: String) -> URL? {
-            var parts = URLComponents(string: "https://duckduckgo.com/")
-            parts?.queryItems = [URLQueryItem(name: "q", value: "site:\(site) \(words)")]
-            return parts?.url
-        }
-        var links: [(title: String, url: URL)] = []
-        if let imdb = film.tmdb?.imdbID, let url = URL(string: "https://www.imdb.com/title/\(imdb)/technical/") {
-            links.append(("IMDb Technical Specs", url))
-        }
-        // Interviews with the director of photography about the film's look.
-        if let dp = film.tmdb?.cinematographers.first {
-            var parts = URLComponents(string: "https://duckduckgo.com/")
-            parts?.queryItems = [URLQueryItem(name: "q", value: "\"\(dp)\" \(film.displayTitle) cinematography lighting interview")]
-            if let url = parts?.url { links.append(("Interviews with \(dp)", url)) }
-        }
-        if let url = search("shotonwhat.com") { links.append(("ShotOnWhat", url)) }
-        if let url = search("theasc.com") { links.append(("American Cinematographer", url)) }
-        return links
-    }
-
     // MARK: - Badges
 
     /// The lists the film is on (from the Lists hub's data), wins first. Worked out once per film
