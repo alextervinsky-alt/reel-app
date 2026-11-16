@@ -81,7 +81,7 @@ public enum ReceptionAnalyzer {
         Aspect(name: "Themes", words: ["themes", "theme", "message", "ideas", "subtext"]),
         Aspect(name: "Tension", words: ["tense", "tension", "suspense", "suspenseful", "thrilling", "gripping", "edge of"]),
         Aspect(name: "Originality", words: ["original", "originality", "unique", "fresh", "predictable", "derivative", "formulaic", "clichés", "cliches"]),
-        Aspect(name: "Emotion", words: ["emotional", "moving", "touching", "heartfelt", "heartbreaking", "tearjerker", "feelings"]),
+        Aspect(name: "Emotion", words: ["emotional", "touching", "heartfelt", "heartbreaking", "tearjerker", "feelings"]),
         Aspect(name: "Realism", words: ["realistic", "believable", "plausible", "implausible", "unbelievable", "authentic"]),
         Aspect(name: "Production design", words: ["production design", "sets", "costumes", "costume design", "set design"]),
     ]
@@ -258,7 +258,7 @@ public enum ReceptionAnalyzer {
         "well paced", "well-paced", "shines", "shine", "shone", "excels", "nailed", "thrilling", "suspenseful", "tense",
         "atmospheric", "haunting", "striking", "vivid", "rich", "sharp", "clever", "witty", "fun", "entertaining",
         "intense", "immersive", "majestic", "magnificent", "glorious", "sublime", "exquisite", "pitch-perfect",
-        "favorite", "favourite",
+        "favorite", "favourite", "endearing",
     ]
 
     /// Words that fault what they're near ("wooden acting", "the plot is a mess").
@@ -268,8 +268,42 @@ public enum ReceptionAnalyzer {
         "ridiculous", "laughable", "mediocre", "subpar", "sub-par", "unmemorable", "uninteresting", "paper-thin", "thin",
         "lifeless", "soulless", "hollow", "empty", "abrupt", "rushed", "dumb", "stupid", "silly", "overdone", "overwrought",
         "uninspired", "unfunny", "jarring", "clumsy", "lackluster", "lacklustre", "tiresome", "dragging", "dullness",
-        "problem", "problems", "issue", "issues", "worse", "awkward", "sloppy", "mess",
+        "problem", "problems", "issue", "issues", "worse", "awkward", "sloppy", "mess", "cringe-worthy",
     ]
+
+    /// Words that judge only what they stand right next to ("poor acting", not "a poor family").
+    static let tight: Set<String> = [
+        "poor", "rich", "sharp", "strong", "flat", "thin", "empty", "hollow", "solid", "fun", "silly", "dumb", "intense",
+        "tense", "effective", "issue", "issues", "problem", "problems", "love", "best", "favorite", "favourite", "epic",
+        "mess", "fine",
+    ]
+
+    /// Words that can go either way ("unbelievable visuals", "an unbelievable plot"): a part with
+    /// one says nothing for sure.
+    static let eitherWay: Set<String> = ["unbelievable", "insane", "crazy", "wild", "mixed", "polarising", "polarizing", "divisive"]
+
+    /// The phrases above by their first word, so a clause is read in one pass.
+    static func byFirstWord(_ phrases: [String]) -> [String: [[String]]] {
+        var index: [String: [[String]]] = [:]
+        for phrase in phrases {
+            let parts = phrase.split(separator: " ").map(String.init)
+            index[parts[0], default: []].append(parts)
+        }
+        for key in index.keys { index[key]?.sort { $0.count > $1.count } }
+        return index
+    }
+    static let praiseIndex = byFirstWord(praise)
+    static let faultIndex = byFirstWord(fault)
+    static let aspectIndex: [String: [(parts: [String], aspect: String)]] = {
+        var index: [String: [(parts: [String], aspect: String)]] = [:]
+        for aspect in aspects {
+            for word in aspect.words {
+                let parts = word.split(separator: " ").map(String.init)
+                index[parts[0], default: []].append((parts, aspect.name))
+            }
+        }
+        return index
+    }()
 
     /// "lacking in sexism", "no shortage of": a fault word that praises.
     static let notFaults = #"\b(?:lack(?:s|ing)?(?: in| of| any)? (?:sexism|clich[eé]s?|pretension|filler|fat|gore)|no problems?|no issues?|not a (?:single )?(?:dull|boring|wasted)|without (?:a|any) (?:dull|boring|wasted))\b"#
@@ -290,6 +324,9 @@ public enum ReceptionAnalyzer {
     static func judgements(in clause: String, startsSentence: Bool) -> [Judgement] {
         let lowerClause = clause.lowercased()
         if lowerClause.range(of: notFaults, options: .regularExpression) != nil { return [] }
+        // Wishes, conditions and what might be: nothing said about this film as it is.
+        if lowerClause.range(of: #"^(?:if|unless|when)\b|\b(?:would (?:have )?lov\w*|would have liked to see|i wish|i hope|hopefully|might)\b"#,
+                             options: .regularExpression) != nil { return [] }
         // The words, with whether each is written as a name.
         let tokens: [(word: String, name: Bool)] = clause
             .split(whereSeparator: { !$0.isLetter && $0 != "-" && $0 != "'" && $0 != "’" })
@@ -301,30 +338,35 @@ public enum ReceptionAnalyzer {
             }
         guard !tokens.isEmpty else { return [] }
         let words = tokens.map(\.word)
-        func matches(_ phrase: String, at i: Int) -> Int? {
-            let parts = phrase.split(separator: " ").map(String.init)
-            guard i + parts.count <= words.count else { return nil }
-            for (k, part) in parts.enumerated() where words[i + k] != part { return nil }
-            return parts.count
+        if words.contains(where: eitherWay.contains) { return [] }
+        func matches(_ parts: [String], at i: Int) -> Bool {
+            guard i + parts.count <= words.count else { return false }
+            for (k, part) in parts.enumerated() where words[i + k] != part { return false }
+            return true
         }
         // Aspect words, by position.
         var aspectAt: [(index: Int, aspect: String)] = []
         for i in words.indices {
             if tokens[i].name && !(i == 0 && startsSentence) { continue }
-            for aspect in aspects {
-                if aspect.words.contains(where: { matches($0, at: i) != nil }) {
-                    if aspect.name == "Music and sound", words[i] == "score", lowerClause.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\bscored?\s+(?:an?\s+)?\d"#, options: .regularExpression) != nil { continue }
-                    aspectAt.append((i, aspect.name))
-                }
+            // "to see her in action" isn't the action scenes.
+            if words[i] == "action", i > 0, words[i - 1] == "in" { continue }
+            for entry in aspectIndex[words[i]] ?? [] where matches(entry.parts, at: i) {
+                if entry.aspect == "Music and sound", words[i] == "score",
+                   lowerClause.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\bscored?\s+(?:an?\s+)?\d"#, options: .regularExpression) != nil { continue }
+                if !aspectAt.contains(where: { $0.index == i && $0.aspect == entry.aspect }) { aspectAt.append((i, entry.aspect)) }
             }
         }
-        guard !aspectAt.isEmpty || words.contains(where: { w in cueAspects.contains { $0.cue == w || $0.cue.hasPrefix(w + " ") } }) else { return [] }
-        let negators: Set<String> = ["not", "never", "hardly", "without", "nor", "no", "nothing", "none", "neither", "barely", "less"]
+        let aboutTheFilm = words.contains { ["film", "movie", "it", "it's", "this", "picture"].contains($0) }
+        guard !aspectAt.isEmpty || aboutTheFilm else { return [] }
+        let negators: Set<String> = ["not", "never", "hardly", "without", "nor", "no", "nothing", "none", "neither", "barely", "less", "despite", "spite"]
         func denied(_ i: Int) -> Bool {
             let before = words[max(0, i - 4)..<i]
             let phrase = " " + before.joined(separator: " ")
             if [" not only", " not just", " no less", " not merely"].contains(where: phrase.contains) { return false }
-            return before.contains { negators.contains($0) || $0.hasSuffix("n't") }
+            if before.contains(where: { negators.contains($0) || $0.hasSuffix("n't") }) { return true }
+            // "Not a single line of dialogue is wasted."
+            let earlier = " " + words[..<i].joined(separator: " ") + " "
+            return [" not a single ", " not one ", " nothing about ", " nothing in ", " never once "].contains(where: earlier.contains)
         }
         let softPraise: Set<String> = ["good", "great", "funny", "convincing", "engaging", "enough", "strong", "effective", "fun", "entertaining"]
         var found: [Judgement] = []
@@ -333,40 +375,42 @@ public enum ReceptionAnalyzer {
             var sign = 0
             var length = 1
             var verb = false
-            if let n = praise.lazy.compactMap({ matches($0, at: i) }).first {
-                sign = 1; length = n
-            } else if let n = fault.lazy.compactMap({ matches($0, at: i) }).first {
-                sign = -1; length = n
+            if let parts = praiseIndex[words[i]]?.first(where: { matches($0, at: i) }) {
+                sign = 1; length = parts.count
+            } else if let parts = faultIndex[words[i]]?.first(where: { matches($0, at: i) }) {
+                sign = -1; length = parts.count
             } else if words[i].range(of: praiseVerbs, options: .regularExpression) != nil {
                 sign = 1; verb = true
             } else if words[i].range(of: faultVerbs, options: .regularExpression) != nil {
                 sign = -1; verb = true
             }
             guard sign != 0 else { i += 1; continue }
-            // "a love story", "her best friend": not praise.
-            if i + 1 < words.count, ["love": ["story", "stories", "triangle", "interest", "affair", "scene", "scenes"],
-                                     "best": ["friend", "friends"]][words[i]]?.contains(words[i + 1]) == true {
-                i += 1; continue
+            let next = i + length < words.count ? words[i + length] : ""
+            // "a love story", "her best friend", "it's funny that…": not praise.
+            if ["love": ["story", "stories", "triangle", "interest", "affair", "scene", "scenes"],
+                "best": ["friend", "friends"], "funny": ["that", "how", "seeing", "watching", "to", "enough"]][words[i]]?.contains(next) == true {
+                i += length; continue
             }
             if denied(i) {
                 // "not good", "wasn't funny": a complaint; "not boring", "never disappoints": nothing.
                 if sign > 0, softPraise.contains(words[i]) { sign = -1 } else { i += length; continue }
             }
-            // The aspect it's about: another aspect word close by ("boring characters"), else its own
-            // ("it drags"), else the nearest within five words, else the one its complaint names.
-            let reach = verb ? 6 : 5
-            let others = aspectAt.filter { $0.index < i || $0.index >= i + length }
+            // The aspect it's about: an aspect word close by ("boring characters"), else within five
+            // words ("the score of this film is superb"), else its own ("it drags"), else the one
+            // its complaint names. A critic's "praised…" looks ahead only, at what was praised.
+            let reach = verb ? 6 : (tight.contains(words[i]) ? 2 : 5)
+            // "…received praise", "…drew criticism": the nouns look back too.
+            let looksBack = !verb || ["praise", "acclaim", "criticism", "criticisms", "complaints", "flaws", "flaw"].contains(words[i])
+            let others = aspectAt.filter { ($0.index < i && looksBack) || $0.index >= i + length }
                 .map { (distance: $0.index < i ? i - $0.index : $0.index - (i + length - 1), aspect: $0.aspect) }
                 .sorted { $0.distance < $1.distance }
             let own = aspectAt.first { $0.index == i }?.aspect
             var aspect: String?
-            if let near = others.first, near.distance <= 2 {
+            if let near = others.first, near.distance <= reach {
                 aspect = near.aspect
             } else if let own {
                 aspect = own
-            } else if let near = others.first, near.distance <= reach {
-                aspect = near.aspect
-            } else if sign < 0, let cue = cueAspects.first(where: { matches($0.cue, at: i) != nil }) {
+            } else if sign < 0, !verb, aboutTheFilm, let cue = cueAspects.first(where: { matches($0.cue.split(separator: " ").map(String.init), at: i) }) {
                 aspect = cue.aspect
             }
             if let aspect { found.append(Judgement(aspect: aspect, sign: sign)) }
