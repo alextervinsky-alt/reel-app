@@ -26,7 +26,7 @@ jobs:
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests --skip LiveAcclaimTests 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveAcclaimTests --skip LiveReviewsCheck 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
@@ -93,6 +93,38 @@ jobs:
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
           fi
           exit $fail
+
+  review-check:
+    # Public reviews read live for 30 well-known films on a Mac (Apple's sentiment model), for the
+    # hand-labelled Reviews gate (spec §6.4). The results go to the throwaway review-1.11 branch
+    # (public titles only). [review-check] reads set A, [review-check-b] the held-out set B.
+    runs-on: macos-15
+    if: github.event_name == 'push' && (contains(github.event.head_commit.message, '[review-check]') || contains(github.event.head_commit.message, '[review-check-b]'))
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read the 30 films
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          REEL_REVIEW_CHECK: /tmp/review-check.json
+          REEL_REVIEW_SET: ${{ contains(github.event.head_commit.message, '[review-check-b]') && 'held-out' || 'tuning' }}
+        run: |
+          swift test --filter LiveReviewsCheck > reviews.log 2>&1 || true
+          grep -E "REVIEWS\|" reviews.log | while read -r l; do echo "::notice::$l"; done
+          grep -E "error:|failed" reviews.log | head -5 | while read -r l; do echo "::warning::$l"; done
+          ls -la /tmp/review-check.json || echo "::warning::no results file"
+      - name: Keep the results on review-1.11
+        shell: bash
+        env:
+          SET: ${{ contains(github.event.head_commit.message, '[review-check-b]') && 'b' || 'a' }}
+        run: |
+          git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
+          git fetch origin review-1.11 2>&1 | tail -2 || echo "::warning::fetch failed"
+          git checkout -q -B results FETCH_HEAD || echo "::warning::checkout failed"
+          mkdir -p review-results && cp /tmp/review-check.json "review-results/reviews-${SET}-${GITHUB_SHA::7}.json"
+          git add review-results && git commit -qm "review-1.11: public reviews for the Reviews gate (public titles, measurement only) [skip ci]" || echo "::warning::commit failed"
+          git push origin HEAD:review-1.11 2>&1 | tail -3 | while read -r l; do echo "::notice::push: $l"; done
 
   mac-measure:
     # 1.11 work in progress: the app must build, and the smoothness gates are measured (spec §9.3):
