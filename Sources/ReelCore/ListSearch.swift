@@ -86,9 +86,12 @@ public enum ListSearch {
     /// by family ("festival", "cinematography", "documentary", "canon", "poll"). Every word must
     /// be found.
     public static func reelLists(for query: String) -> [FilmListKind] {
-        let words = query.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
-            .filter { $0.count >= 2 }
-            .map { $0.hasSuffix("s") && $0.count > 4 ? String($0.dropLast()) : $0 }
+        var words: [String] = []
+        for part in query.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }) where part.count >= 2 {
+            let word = String(part)
+            // "festivals" finds "festival".
+            words.append(word.hasSuffix("s") && word.count > 4 ? String(word.dropLast()) : word)
+        }
         guard !words.isEmpty else { return [] }
         var kinds: [(FilmListKind, String)] = [
             (.sightAndSound, "sight and sound critics poll canon greatest all time bfi"),
