@@ -103,6 +103,8 @@ jobs:
       contents: write
     container: swift:6.0-noble
     steps:
+      - name: Git, so the results can be kept
+        run: apt-get update -qq && apt-get install -y -qq git >/dev/null
       - uses: actions/checkout@v5
       - name: Read the 30 films
         env:
@@ -111,7 +113,6 @@ jobs:
         run: swift test --filter LiveCraftFactsCheck 2>&1 | grep -E "CRAFT\||error|failed|passed" | head -20
       - name: Keep the results on review-1.11
         run: |
-          apt-get update -qq && apt-get install -y -qq git >/dev/null
           git config --global --add safe.directory "$PWD"
           git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
           git fetch -q origin review-1.11 && git checkout -q -B results FETCH_HEAD
