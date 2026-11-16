@@ -73,8 +73,8 @@ extension AppModel {
         NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("library") == true } ?? NSApp.mainWindow
     }
 
-    /// The rows of Cinema mode's home, always in the same order, at most 15: Tonight,
-    /// Recommended, New Arrivals, Like the Films You Loved, Watchlist, up to 6 genres, up to 3
+    /// The rows of Cinema mode's Home, always in the same order, at most 15: Tonight,
+    /// Suggestions (as on the desk's Tonight), New Arrivals, Like the Films You Loved, Watchlist, up to 6 genres, up to 3
     /// languages, Under 100 Minutes, Acclaimed, Watch Again. The mood chip (shared with
     /// Recommended) narrows every row except Tonight. Rows sorted by rating look different each
     /// evening without losing their order (`EveningOrder`).
@@ -107,7 +107,7 @@ extension AppModel {
 
         let head = [
             row("tonight", "Tonight", tonightItems),
-            row("recommended", "Recommended for You", recommended),
+            row("recommended", "Suggestions", recommended),
             row("new", "New Arrivals", pool.filter { arrivals[$0.id] != nil }
                 .sorted { (arrivals[$0.id] ?? .distantPast) > (arrivals[$1.id] ?? .distantPast) }),
             row("loved", "Like the Films You Loved", pool

@@ -3,56 +3,48 @@ import AppKit
 import SwiftUI
 import ReelCore
 
-/// Five films from the library, picked fresh at every launch: a short, varied choice instead of
-/// a wall of posters, with what critics and audiences thought of each.
-struct RecommendedView: View {
+/// Tonight's suggestions (Recommended before 1.11): five films from the library, picked fresh
+/// at every launch, with a mood to narrow them and what critics and audiences thought of each.
+struct SuggestionsSection: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .bottom, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Recommended").font(.system(size: 30, weight: .bold))
-                        Text("Five films from your library, picked fresh each time Reel opens. Choose a mood, or just choose.")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if !model.recommended.isEmpty {
-                        Button {
-                            withAnimation(.easeOut(duration: 0.25)) { model.reshuffleRecommended() }
-                        } label: {
-                            Label("New Picks", systemImage: "shuffle")
-                        }
-                        .buttonStyle(SecondaryCapsuleStyle())
-                        .help(model.recommendedChoice == .any ? "Five other films" : "Five other \(model.recommendedChoice.title.lowercased()) films")
-                    }
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .bottom, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Suggestions").font(.system(size: 22, weight: .bold))
+                    Text("Five films from your library, picked fresh each time Reel opens. Choose a mood, or just choose.")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(.secondary)
                 }
-                if model.recommendedChoices.count > 1 {
-                    MoodChips(choices: model.recommendedChoices, selected: model.recommendedChoice) { choice in
-                        withAnimation(.easeOut(duration: 0.25)) { model.chooseRecommended(choice) }
+                Spacer()
+                if !model.recommended.isEmpty {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) { model.reshuffleRecommended() }
+                    } label: {
+                        Label("New Picks", systemImage: "shuffle")
                     }
-                }
-                if model.recommended.isEmpty {
-                    ContentUnavailableView("Nothing to recommend yet", systemImage: "wand.and.stars",
-                                           description: Text("Films you haven't watched show up here once Reel has found their info."))
-                        .frame(maxWidth: .infinity, minHeight: 320)
-                } else {
-                    ForEach(Array(model.recommended.enumerated()), id: \.element.id) { index, item in
-                        RecommendationCard(number: index + 1, item: item)
-                            .transition(.opacity)
-                    }
+                    .buttonStyle(SecondaryCapsuleStyle())
+                    .help(model.recommendedChoice == .any ? "Five other films" : "Five other \(model.recommendedChoice.title.lowercased()) films")
                 }
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 22)
-            .frame(maxWidth: 1120, alignment: .leading)
-            .hoverRegion()
+            if model.recommendedChoices.count > 1 {
+                MoodChips(choices: model.recommendedChoices, selected: model.recommendedChoice) { choice in
+                    withAnimation(.easeOut(duration: 0.25)) { model.chooseRecommended(choice) }
+                }
+            }
+            if model.recommended.isEmpty {
+                ContentUnavailableView("Nothing to suggest yet", systemImage: "wand.and.stars",
+                                       description: Text("Films you haven't watched show up here once Reel has found their info."))
+                    .frame(maxWidth: .infinity, minHeight: 240)
+            } else {
+                ForEach(Array(model.recommended.enumerated()), id: \.element.id) { index, item in
+                    RecommendationCard(number: index + 1, item: item)
+                        .transition(.opacity)
+                }
+            }
         }
-        .tracksScrolling()
-        .background(Theme.background)
-        .navigationTitle("Recommended")
+        .frame(maxWidth: 1120, alignment: .leading)
         // Play is right here: VLC gets a head start.
         .onAppear { model.warmPlayer() }
     }

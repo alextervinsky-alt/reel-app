@@ -86,8 +86,9 @@ struct PlayWithMenu: View {
 
 // MARK: - Tonight
 
-/// Tonight's shortlist, side by side: how long, when it would end, what kind of film, what
-/// critics thought, subtitles and quality. Clears itself at 6 in the morning.
+/// Tonight: the shortlist side by side (how long, when it would end, what kind of film, what
+/// critics thought, subtitles and quality; it clears itself at 6 in the morning), Decide for Us,
+/// then the five suggestions from the library (Recommended before 1.11, spec §5.2).
 struct TonightView: View {
     @Environment(AppModel.self) private var model
     @State private var chosen: String?
@@ -100,7 +101,7 @@ struct TonightView: View {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Tonight").font(.system(size: 30, weight: .bold))
-                        Text("Your shortlist for this evening, side by side. It starts empty again tomorrow.")
+                        Text("Your shortlist for this evening, side by side, and five suggestions. The shortlist starts empty again tomorrow.")
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
@@ -122,12 +123,11 @@ struct TonightView: View {
                     }
                 }
                 if items.isEmpty {
-                    ContentUnavailableView {
-                        Label("Nothing on tonight's shortlist", systemImage: "moon.stars")
-                    } description: {
-                        Text("Add films with the moon button on a film's page, on Recommended, or by right-clicking a poster.")
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 360)
+                    Label("Nothing on tonight's shortlist yet. Add films with the moon button below, on a film's page, or by right-clicking a poster.",
+                          systemImage: "moon.stars")
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 6)
                 } else {
                     let picked = TonightPick.current(chosen, in: items)
                     let slots = TonightSlots(items, model: model)
@@ -147,6 +147,8 @@ struct TonightView: View {
                     .tracksScrolling()
                     .scrollClipDisabled()
                 }
+                SuggestionsSection()
+                    .padding(.top, 18)
             }
             .padding(.horizontal, 32)
             .padding(.vertical, 22)

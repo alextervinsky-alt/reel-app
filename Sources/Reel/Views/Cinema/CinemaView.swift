@@ -178,7 +178,7 @@ struct CinemaView: View {
                 }
                 .buttonStyle(CinemaButtonStyle(focused: bar.index == items.firstIndex(of: .back)))
             } else {
-                CinemaChip(title: "For You", symbol: "sparkles", isOn: tab == .home,
+                CinemaChip(title: "Home", symbol: "house", isOn: tab == .home,
                            focused: bar.index == items.firstIndex(of: .tab(.home))) { show(.home) }
                 let count = model.tonightItems.count
                 CinemaChip(title: count == 0 ? "Tonight" : "Tonight · \(count)", symbol: "moon", isOn: tab == .tonight,

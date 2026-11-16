@@ -160,7 +160,7 @@ struct ListPage: View {
                         Button {
                             model.addToWishlist(missing)
                         } label: {
-                            Label("Add \(missing.count) to Wishlist", systemImage: "star")
+                            Label("Add \(missing.count) to Watchlist", systemImage: "bookmark")
                         }
                         .buttonStyle(SecondaryCapsuleStyle())
                         .help("Every film on this list that you don't own and haven't seen")
@@ -173,7 +173,7 @@ struct ListPage: View {
 
     private func statsLine(_ progress: ListProgress) -> String {
         var parts = ["\(progress.seen) seen", "\(progress.owned) in your library"]
-        if progress.wishlisted > 0 { parts.append("\(progress.wishlisted) on your wishlist") }
+        if progress.wishlisted > 0 { parts.append("\(progress.wishlisted) on your Watchlist") }
         return parts.joined(separator: "  ·  ")
     }
 
@@ -338,8 +338,8 @@ struct ListRow: View {
             }
             if item == nil {
                 let wished = model.isWishlisted(tmdbID)
-                IconToggle(symbol: "star", onSymbol: "star.fill", isOn: wished,
-                           help: wished ? "On your wishlist" : "Add to wishlist", onColor: .yellow) {
+                IconToggle(symbol: "bookmark", onSymbol: "bookmark.fill", isOn: wished,
+                           help: wished ? "On your Watchlist" : "Add to Watchlist", onColor: .yellow) {
                     if let art { model.toggleWishlist(PreviewFilm(film, art: art)) }
                 }
                 .disabled(art == nil)
@@ -458,7 +458,7 @@ struct SetProgressHeader: View {
                 Button {
                     model.addToWishlist(missing.map { PreviewFilm($0).wishlistEntry })
                 } label: {
-                    Label("Add \(missing.count) Missing to Wishlist", systemImage: "star")
+                    Label("Add \(missing.count) Missing to Watchlist", systemImage: "bookmark")
                 }
                 .buttonStyle(SecondaryCapsuleStyle())
             }
