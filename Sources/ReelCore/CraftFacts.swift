@@ -274,14 +274,13 @@ public enum CraftFactReader {
     /// A sentence's clauses, split where a new statement starts (", while", "; ", " but ").
     static func clausesOf(_ lower: String) -> [String] {
         var clauses: [String] = []
-        var rest = Substring(lower)
+        var rest = lower
         let pattern = #",? (?:while|whereas|but|although|though|with the exception that) |; |, and "#
-        while let range = String(rest).patternRange(pattern) {
-            let text = String(rest)
-            clauses.append(String(text[..<range.lowerBound]))
-            rest = Substring(text[range.upperBound...])
+        while let range = rest.patternRange(pattern) {
+            clauses.append(String(rest[..<range.lowerBound]))
+            rest = String(rest[range.upperBound...])
         }
-        clauses.append(String(rest))
+        clauses.append(rest)
         return clauses
     }
 
