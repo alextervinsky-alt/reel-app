@@ -69,6 +69,23 @@ final class CraftFactReaderTests: XCTestCase {
         XCTAssertEqual(facts.shotOn, [.blackAndWhite])
     }
 
+    func testPrimarilyIsTheWholeFilm() {
+        let facts = read(article("The film was shot primarily in the anamorphic format on 35 mm film, with key sequences filmed on 65 mm."))
+        XCTAssertEqual(facts.facts.filter { $0.row == .format }.map(\.value), ["65 mm film", "35 mm film", "Anamorphic"])
+        XCTAssertEqual(facts.inPart, [], "35 mm and anamorphic are the film's format; 65 mm is in part but named once as film")
+        XCTAssertTrue(facts.facts.first { $0.value == "65 mm film" }?.inPart == true)
+    }
+
+    func testAPartlyUsedStockIsNotTheFormat() {
+        let facts = read(article("Harbour Lights is the first film to be partially shot on Kodak's Ektachrome reversal stock."))
+        XCTAssertTrue(facts.shotOn.isEmpty)
+    }
+
+    func testDigitalCamerasSaidInWords() {
+        let facts = read(article("The film was subsequently shot with Arri Alexa 65 digital cameras."))
+        XCTAssertEqual(facts.shotOn, [.digital])
+    }
+
     func testCategoriesThatSayWhatItWasShotOn() {
         let facts = CraftFactReader.read(article: "Harbour Lights is a film.", title: "Harbour Lights", articleTitle: "Harbour Lights",
                                          quick: nil, categories: ["2019 films", "Films shot in 16 mm film", "Black-and-white films",

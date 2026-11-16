@@ -475,8 +475,9 @@ public struct WikipediaClient: Sendable {
     static func cinematographyHonours(won: [String], nominated: [String]) -> [Honour] {
         func forTheCamera(_ name: String) -> Bool {
             let lowered = name.lowercased()
-            // Not "Virtual Cinematography" (the effects team's).
-            return ["cinematograph", "photography", "camerimage", "golden frog"].contains { lowered.contains($0) }
+            // Not "Virtual Cinematography" (the effects team's), and not a prize given by
+            // "Cinematographic Writers" for something else (1.11).
+            return ["cinematography", "cinematographer", "photography", "camerimage", "golden frog"].contains { lowered.contains($0) }
                 && !lowered.contains("virtual")
         }
         var seen = Set<String>()

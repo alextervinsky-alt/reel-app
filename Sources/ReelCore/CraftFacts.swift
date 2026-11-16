@@ -194,6 +194,9 @@ public enum CraftFactReader {
     static let formats: [Rule] = [
         Rule(pattern: #"\b(?:shot|filmed|photographed|lensed|captured)\b[^.;]{0,40}\b(?:digitally|on digital|in digital|with digital cameras?|on (?:high-definition|hd) video)\b"#,
              value: "Digital", shotOn: .digital),
+        // "shot with Arri Alexa 65 digital cameras": the sentence says digital in words.
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,70}\bdigital (?:cinema |motion picture )?cameras?\b"#,
+             value: "Digital", shotOn: .digital),
         Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\bwith imax (?:film )?cameras?\b|\b(?:shot|filmed|photographed)\b[^.;]{0,30}\b(?:on|in) imax\b|\bimax (?:film )?cameras? (?:were|was) used\b"#,
              value: "IMAX", shotOn: .imax),
         Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:the )?(?:5-perf |five-perf )?65 ?mm\b|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) 65-millimet"#,
@@ -262,7 +265,13 @@ public enum CraftFactReader {
             let clauses = clausesOf(lower)
             for rule in formats where lower.patternRange(rule.pattern) != nil {
                 let clause = clauses.first { $0.patternRange(rule.pattern) != nil }
-                let part = clause.map(isPartly) ?? sentencePart
+                // A stock used for part of the film ("partially shot on Kodak's Ektachrome") says
+                // nothing about the format of the rest: left out.
+                if rule.shotOn == .film, (clause ?? lower).patternRange(#"ektachrome|reversal|stock"#) != nil,
+                   isPartly(clause ?? lower) { continue }
+                // "shot primarily on 35 mm": the whole film's format, whatever else the clause says.
+                let mainly = (clause ?? lower).patternRange(#"\b(?:primarily|mainly|mostly|principally|predominantly|largely)\b"#) != nil
+                let part = !mainly && (clause.map(isPartly) ?? sentencePart)
                 guard seenValues.insert(rule.value).inserted else { continue }
                 facts.append(.init(row: .format, value: rule.value, source: "Wikipedia", link: link, sentence: sentence, inPart: part))
                 if let kind = rule.shotOn {
@@ -284,7 +293,11 @@ public enum CraftFactReader {
             facts.append(.init(row: .award, value: honour.name + (honour.won ? " (won)" : " (nominated)"), source: wikidata))
         }
         let order: [CraftFacts.Row] = [.format, .aspectRatio, .colour, .camera, .lenses, .award]
-        facts.sort { (order.firstIndex(of: $0.row) ?? 9) < (order.firstIndex(of: $1.row) ?? 9) }
+        // By row, keeping the order they were found in within a row.
+        facts = facts.enumerated().sorted {
+            let a = order.firstIndex(of: $0.element.row) ?? 9, b = order.firstIndex(of: $1.element.row) ?? 9
+            return a != b ? a < b : $0.offset < $1.offset
+        }.map(\.element)
         return CraftFacts(readAt: now, facts: facts, shotOn: shotOn, inPart: inPart)
     }
 
@@ -292,7 +305,7 @@ public enum CraftFactReader {
     static func clausesOf(_ lower: String) -> [String] {
         var clauses: [String] = []
         var rest = lower
-        let pattern = #",? (?:while|whereas|but|although|though|with the exception that) |; |, and "#
+        let pattern = #",? (?:while|whereas|but|although|though|with the exception that) |; |, and |, with "#
         while let range = rest.patternRange(pattern) {
             clauses.append(String(rest[..<range.lowerBound]))
             rest = String(rest[range.upperBound...])
@@ -342,7 +355,8 @@ public enum CraftFactReader {
         var result: [String] = []
         for section in FunFactExtractor.sections(from: article) where isProductionSection(section.path) {
             for sentence in ReceptionAnalyzer.sentences(in: section.text) {
-                guard sentence.count <= 400 else { continue }
+                // A whole sentence, as Wikipedia wrote it (one cut short would be quoted wrongly).
+                guard sentence.count <= 400, let first = sentence.first, first.isUppercase || first.isNumber else { continue }
                 var kept = sentence
                 for cut in [" rather than ", " instead of ", " as opposed to ", " but not ", " except for "] {
                     if let range = kept.range(of: cut, options: .caseInsensitive) { kept = String(kept[..<range.lowerBound]) }
@@ -355,6 +369,7 @@ public enum CraftFactReader {
                     || lower.contains("the movie") || lower.contains("filming") || lower.contains("principal photography")
                     || lower.contains("the production") || lower.contains("the picture")
                 guard aboutThis else { continue }
+                kept = kept.trimmingCharacters(in: CharacterSet(charactersIn: " ,;:"))
                 result.append(kept.hasSuffix(".") ? kept : kept + ".")
             }
         }
