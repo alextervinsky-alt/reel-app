@@ -1010,9 +1010,14 @@ struct PosterCard: View, Equatable {
     private var poster: some View {
         Poster(path: item.main.tmdb?.posterPath, title: item.main.displayTitle, cornerRadius: 12)
             .overlay(alignment: .bottom) {
-                if lifted { PosterHoverRatings(film: item.main, runtime: item.runtime).transition(.opacity) }
+                // Rounded at the bottom like the poster; only this card, only while lifted (the
+                // poster itself comes framed, so the card isn't clipped while scrolling, 1.11).
+                if lifted {
+                    PosterHoverRatings(film: item.main, runtime: item.runtime)
+                        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12, style: .continuous))
+                        .transition(.opacity)
+                }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .topTrailing) {
                 // Under the pointer: add to (or take off) tonight's shortlist in one click.
                 if lifted {

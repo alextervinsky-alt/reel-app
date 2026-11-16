@@ -98,27 +98,47 @@ struct Poster: View {
     var monochrome = false
 
     var body: some View {
-        Color.clear
-            .aspectRatio(2.0 / 3.0, contentMode: .fit)
-            .overlay {
-                CachedImage(path: path, kind: kind, monochrome: monochrome) {
-                    ZStack {
-                        LinearGradient(colors: [Color(white: 0.17), Color(white: 0.1)], startPoint: .top, endPoint: .bottom)
-                        if !title.isEmpty {
-                            Text(title)
-                                .font(.system(size: 14, weight: .semibold))
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(Color.white.opacity(0.6))
-                                .padding(12)
-                        }
-                    }
+        if kind.isPoster {
+            // The image comes framed (2:3, rounded, its hairline drawn in; see `ImageStore.framedPoster`):
+            // nothing to clip or outline while a grid of them scrolls (1.11).
+            Color.clear
+                .aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .overlay {
+                    CachedImage(path: path, kind: kind, monochrome: monochrome) { placeholder }
+                }
+        } else {
+            Color.clear
+                .aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .overlay {
+                    CachedImage(path: path, kind: kind, monochrome: monochrome) { placeholder }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(Theme.hairline)
+                )
+        }
+    }
+
+    /// Before the image arrives (or without one): the title on a dark card, framed like a poster.
+    private var placeholder: some View {
+        let corner = kind.isPoster ? nil : cornerRadius
+        return GeometryReader { box in
+            let radius = corner ?? box.size.width * ImageStore.posterCorner
+            ZStack {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(white: 0.17), Color(white: 0.1)], startPoint: .top, endPoint: .bottom))
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Theme.hairline)
+                if !title.isEmpty {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.white.opacity(0.6))
+                        .padding(12)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Theme.hairline)
-            )
+        }
     }
 }
 

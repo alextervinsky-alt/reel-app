@@ -18,6 +18,9 @@ enum ImageKind {
         }
     }
 
+    /// Posters (any size): decoded framed, see `ImageStore.framedPoster`.
+    var isPoster: Bool { self == .poster || self == .thumbnail }
+
     /// Images are decoded at the size they are shown, which keeps memory use low.
     var maxPixels: Int {
         switch self {
@@ -177,7 +180,14 @@ final class ImageStore: @unchecked Sendable {
         let rect = CGRect(x: 0, y: 0, width: source.width, height: source.height)
         guard let context = CGContext(data: nil, width: source.width, height: source.height, bitsPerComponent: 8,
                                       bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),
-                                      bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+                                      bitmapInfo: kind.isPoster ? CGImageAlphaInfo.premultipliedLast.rawValue : CGImageAlphaInfo.none.rawValue)
+        else { return nil }
+        // A framed poster keeps its rounded corners: drawn and dimmed only within them.
+        if kind.isPoster {
+            let radius = rect.width * Self.posterCorner
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            context.clip()
+        }
         context.draw(source, in: rect)
         context.setFillColor(gray: 0, alpha: 0.45)
         context.fill(rect)
@@ -191,7 +201,7 @@ final class ImageStore: @unchecked Sendable {
         let base = lock.withLock { folder }
         let file = base?.appendingPathComponent(key)
         if let file, let stored = try? Data(contentsOf: file) {
-            if let decoded = Self.decode(stored, maxPixels: kind.maxPixels) {
+            if let decoded = Self.decode(stored, kind) {
                 Self.markUsed(file)
                 memory(for: kind).setObject(decoded, forKey: key as NSString, cost: decoded.cost)
                 return decoded
@@ -212,7 +222,7 @@ final class ImageStore: @unchecked Sendable {
         await gate.leave()
         // Offline or timed out: worth trying again later.
         guard let (data, response) = downloaded, let status = (response as? HTTPURLResponse)?.statusCode else { return nil }
-        guard status == 200, let decoded = Self.decode(data, maxPixels: kind.maxPixels) else {
+        guard status == 200, let decoded = Self.decode(data, kind) else {
             // Not there, or broken: not worth asking again (a server error might pass).
             if status < 500 { lock.withLock { _ = missing.insert(key) } }
             return nil
@@ -221,6 +231,46 @@ final class ImageStore: @unchecked Sendable {
         if let file { try? data.write(to: file, options: .atomic) }
         memory(for: kind).setObject(decoded, forKey: key as NSString, cost: decoded.cost)
         return decoded
+    }
+
+    /// Posters come framed (1.11): cut to 2:3, with rounded corners and the hairline drawn into
+    /// the picture once, so a grid of them needn't clip and outline every poster on every frame.
+    static func decode(_ data: Data, _ kind: ImageKind) -> DecodedImage? {
+        guard let decoded = decode(data, maxPixels: kind.maxPixels) else { return nil }
+        guard kind.isPoster, let framed = framedPoster(decoded.cgImage) else { return decoded }
+        return DecodedImage(cgImage: framed)
+    }
+
+    /// The corner radius of a framed poster, as a share of its width (12 points on a poster 170
+    /// points wide, as the grid's cards had it).
+    static let posterCorner: CGFloat = 0.07
+
+    static func framedPoster(_ source: CGImage) -> CGImage? {
+        // 2:3, from the middle (TMDB's posters nearly always are already).
+        var width = source.width
+        var height = source.height
+        if height * 2 > width * 3 { height = width * 3 / 2 } else if height * 2 < width * 3 { width = height * 2 / 3 }
+        guard width > 8, height > 8,
+              let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        else { return nil }
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        let radius = CGFloat(width) * posterCorner
+        let shape = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        context.addPath(shape)
+        context.clip()
+        context.interpolationQuality = .high
+        let drawn = CGRect(x: (CGFloat(width) - CGFloat(source.width)) / 2, y: (CGFloat(height) - CGFloat(source.height)) / 2,
+                           width: CGFloat(source.width), height: CGFloat(source.height))
+        context.draw(source, in: drawn)
+        // The hairline: 1 point at the size it's shown (white at 8%, as `Theme.hairline`).
+        let line = max(1, CGFloat(width) / 170)
+        context.setStrokeColor(CGColor(gray: 1, alpha: 0.08))
+        context.setLineWidth(line * 2)
+        context.addPath(shape)
+        context.strokePath()
+        return context.makeImage()
     }
 
     static func decode(_ data: Data, maxPixels: Int) -> DecodedImage? {
