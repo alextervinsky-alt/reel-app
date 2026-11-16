@@ -324,7 +324,7 @@ public struct WikipediaClient: Sendable {
         }
         var text: String?
         var categories: [String] = []
-        if let article, let page = try await self.article(title: article) {
+        if let article, let page = try await articlePage(title: article) {
             text = page.text
             categories = page.categories
         }
@@ -550,12 +550,12 @@ public struct WikipediaClient: Sendable {
     }
 
     func extract(title: String) async throws -> String? {
-        try await article(title: title)?.text
+        try await articlePage(title: title)?.text
     }
 
     /// The article's text and its categories (the visible ones: "Films shot in 16 mm film"), in one
     /// request.
-    func article(title: String) async throws -> (text: String, categories: [String])? {
+    func articlePage(title: String) async throws -> (text: String, categories: [String])? {
         let result: Extracts = try await get("https://en.wikipedia.org/w/api.php", [
             "action": "query", "prop": "extracts|categories", "explaintext": "1", "exsectionformat": "wiki",
             "clshow": "!hidden", "cllimit": "max", "redirects": "1", "titles": title, "format": "json",
