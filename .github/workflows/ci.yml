@@ -190,6 +190,7 @@ jobs:
           start=$(date +%s)
           swift build -c release --arch arm64 > build.log 2>&1; code=$?
           grep -E "error:" build.log | sort -u | head -40 | while read -r l; do echo "::error::$l"; done
+          [ $code -ne 0 ] && grep -v "^\[" build.log | tail -12 | while read -r l; do echo "::warning::$l"; done
           echo "::notice::Release build took $(( $(date +%s) - start )) s, $(grep -c 'warning:' build.log) warnings"
           exit $code
       - name: Measure the gates with the sample library
