@@ -361,7 +361,7 @@ enum ScreenRenderer {
                         .overlay { CachedImage(path: shownItems[index].main.tmdb?.posterPath, kind: .poster) { Color.gray } }
                 },
                 grid("Poster") { index in Poster(path: shownItems[index].main.tmdb?.posterPath, title: shownItems[index].main.displayTitle, cornerRadius: 12) },
-                grid("the real card") { index in PosterCard(item: shownItems[index]).equatable() },
+                grid("the real card") { index in PosterCard(item: shownItems[index]).equatable().environment(ScrollState()) },
             ]
             lines += await ScrollTiming.run(tests, model: model, log: log)
             GridBisect.flags = []
