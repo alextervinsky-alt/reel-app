@@ -26,7 +26,7 @@ jobs:
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests --skip LiveAcclaimTests 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveAcclaimTests --skip LiveCraftFactsCheck 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
@@ -93,6 +93,31 @@ jobs:
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
           fi
           exit $fail
+
+  craft-check:
+    # The facts sheet read live for 30 well-known films, for the hand check (spec §7.8). The
+    # results go to the throwaway review-1.11 branch (public titles only).
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[craft-check]')
+    permissions:
+      contents: write
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read the 30 films
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          REEL_CRAFT_CHECK: /tmp/craft-check.json
+        run: swift test --filter LiveCraftFactsCheck 2>&1 | grep -E "CRAFT\||error|failed|passed" | head -20
+      - name: Keep the results on review-1.11
+        run: |
+          apt-get update -qq && apt-get install -y -qq git >/dev/null
+          git config --global --add safe.directory "$PWD"
+          git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
+          git fetch -q origin review-1.11 && git checkout -q -B results FETCH_HEAD
+          mkdir -p review-results && cp /tmp/craft-check.json "review-results/craft-check-${GITHUB_SHA::7}.json"
+          git add review-results && git commit -qm "review-1.11: craft facts check results (public titles, measurement only) [skip ci]"
+          git push -q origin HEAD:review-1.11
 
   mac-measure:
     # 1.11 work in progress: the app must build, and the smoothness gates are measured (spec §9.3):
