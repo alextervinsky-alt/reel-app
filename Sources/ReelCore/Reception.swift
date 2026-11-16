@@ -172,6 +172,9 @@ public enum ReceptionAnalyzer {
                     let signs = Set(found.map(\.sign))
                     // Praise and complaint in the same part: in doubt, neither.
                     guard signs.count == 1, let sign = signs.first else { continue }
+                    // A complaint about films in general ("a lot of movies lately feel bloated").
+                    if sign < 0, clause.lowercased().range(of: #"\b(?:a lot of|many|most|other|some|these|those|all the|recent)\s+(?:\w+\s+)?(?:movies|films)\b"#,
+                                                          options: .regularExpression) != nil { continue }
                     // The sentiment model can only veto: a "superb" in a bitter part, or a
                     // complaint word in a glowing one, is left out.
                     if !review.isCritic {
@@ -325,7 +328,7 @@ public enum ReceptionAnalyzer {
         let lowerClause = clause.lowercased()
         if lowerClause.range(of: notFaults, options: .regularExpression) != nil { return [] }
         // Wishes, conditions and what might be: nothing said about this film as it is.
-        if lowerClause.range(of: #"^(?:if|unless|when)\b|\b(?:would (?:have )?lov\w*|would have liked to see|i wish|i hope|hopefully|might)\b"#,
+        if lowerClause.range(of: #"^(?:if|unless|when)\b|\b(?:would (?:have )?lov\w*|i'd love|i’d love|would have liked to see|i wish|i hope|hopefully|might)\b"#,
                              options: .regularExpression) != nil { return [] }
         // The words, with whether each is written as a name.
         let tokens: [(word: String, name: Bool)] = clause
@@ -365,7 +368,7 @@ public enum ReceptionAnalyzer {
         guard !aspectAt.isEmpty || aboutTheFilm else { return [] }
         let negators: Set<String> = ["not", "never", "hardly", "without", "nor", "no", "nothing", "none", "neither", "barely", "less", "despite", "spite"]
         func denied(_ i: Int) -> Bool {
-            let before = words[max(0, i - 4)..<i]
+            let before = words[max(0, i - 5)..<i]
             let phrase = " " + before.joined(separator: " ")
             if [" not only", " not just", " no less", " not merely"].contains(where: phrase.contains) { return false }
             if before.contains(where: { negators.contains($0) || $0.hasSuffix("n't") }) { return true }

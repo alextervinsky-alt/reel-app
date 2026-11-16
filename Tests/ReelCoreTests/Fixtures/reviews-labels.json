@@ -1184,6 +1184,66 @@
    "aspect": "Acting",
    "quote": "Timothée Chalamet gives a strong performance in the lead role.",
    "right": true
+  },
+  {
+   "film": "Poor Things",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "I’d love to say I have no words because that’s what I believe many people feel, but because I love to analyze, I can find the exact words to describe this movie: an understanding, confusing, sorted chaos.",
+   "right": false,
+   "note": "mixed, mostly praise"
+  },
+  {
+   "film": "Killers of the Flower Moon",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "I can confirm that the film never drags its feet for too long; there are times when it slows down, but this is only during the film's opening hour.",
+   "right": false,
+   "note": "says it never drags"
+  },
+  {
+   "film": "Suicide Squad",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "So finally, it's not a bad film or boring, but it just did not have the midas touch that all the superhero films had.",
+   "right": false,
+   "note": "says it is not boring"
+  },
+  {
+   "film": "Morbius",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "A lot of movies that I’ve watched lately have felt bloated and too long for the material.",
+   "right": false,
+   "note": "about other films"
+  },
+  {
+   "film": "Napoleon",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Way too many unnecessary scenes that slowed the pace down.",
+   "right": true
+  },
+  {
+   "film": "Argylle",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "The website's consensus reads: \"Argylle gets some mileage out of its silly, energetic spin on the spy thriller, but ultimately wears out its welcome with a convoluted plot and overlong runtime.\"",
+   "right": true
+  },
+  {
+   "film": "Argylle",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Cringe worthy nonsense, loaded down with puerile premise after puerile premise, predictable, done to death action and irritating characterisations.",
+   "right": true
+  },
+  {
+   "film": "Wonka",
+   "kind": "dislike",
+   "aspect": "Originality",
+   "quote": "At times it’s charming, at times a bit predictable, but always pleasant.",
+   "right": true
   }
  ]
 }
