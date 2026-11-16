@@ -86,6 +86,15 @@ final class CraftFactReaderTests: XCTestCase {
         XCTAssertEqual(facts.shotOn, [.digital])
     }
 
+    func testTheRemainderAndSectionsArePartAndPluralModelsAreNamedOnce() {
+        let facts = read(article("The film was shot on 65 mm film. The remainder of the film was shot on 35mm using Panavision Millennium XL2s cameras."))
+        XCTAssertEqual(facts.facts.first { $0.value == "35 mm film" }?.inPart, true)
+        XCTAssertEqual(facts.facts.first { $0.row == .camera }?.value, "Panavision Millennium XL2")
+        let irishman = read(article("The picture was primarily shot on 35 mm film, and with RED Heliums for sections shot on digital."))
+        XCTAssertEqual(irishman.facts.first { $0.value == "Digital" }?.inPart, true)
+        XCTAssertEqual(irishman.facts.first { $0.value == "35 mm film" }?.inPart, false)
+    }
+
     func testCategoriesThatSayWhatItWasShotOn() {
         let facts = CraftFactReader.read(article: "Harbour Lights is a film.", title: "Harbour Lights", articleTitle: "Harbour Lights",
                                          quick: nil, categories: ["2019 films", "Films shot in 16 mm film", "Black-and-white films",

@@ -178,6 +178,7 @@ public enum CraftFactReader {
                          "minutes of", "the opening", "the final", "the prologue", "the epilogue", "flashback", "second unit",
                          "test", "rehearsal", "some shots", "several shots", "certain shots", "a shot", "additional", "segments",
                          "segment", "some of the", "much of the", "most of the", "except", "while the rest", "mixed", "combination",
+                         "sections", "section", "the remainder", "the rest of", "remaining", "a handful",
                          "alongside", "as well as", "both"]
 
     static let partlyPattern = #"\b(?:"# + partly.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|") + #")\b"#
@@ -283,7 +284,9 @@ public enum CraftFactReader {
             guard shotWith else { continue }
             for (row, pattern) in [(CraftFacts.Row.camera, cameraPattern), (.lenses, lensPattern)] {
                 guard let range = sentence.patternRange(pattern) else { continue }
-                let name = String(sentence[range]).trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+                var name = String(sentence[range]).trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+                // "Millennium XL2s", "Arricam STs": the plural of a model, named once.
+                if name.patternRange(#"[A-Z0-9]s$"#) != nil { name.removeLast() }
                 guard name.count >= 3, seenValues.insert(name.lowercased()).inserted else { continue }
                 facts.append(.init(row: row, value: name, source: "Wikipedia", link: link, sentence: sentence, inPart: sentencePart))
             }
