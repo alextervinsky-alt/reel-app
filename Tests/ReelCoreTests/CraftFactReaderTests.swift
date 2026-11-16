@@ -95,6 +95,15 @@ final class CraftFactReaderTests: XCTestCase {
         XCTAssertEqual(irishman.facts.first { $0.value == "35 mm film" }?.inPart, false)
     }
 
+    func testMostAndBothAreTheWholeFilmAndLensesAreNotTheFormat() {
+        let most = read(article("Most of the film was shot with an Aaton 35-III camera."))
+        XCTAssertEqual(most.facts.first { $0.row == .camera }?.inPart, false)
+        let both = read(article("Harbour Lights was shot on 35 mm film using both the Arricam LT and the Arricam ST."))
+        XCTAssertEqual(both.inPart, [])
+        let lenses = read(article("Harbour Lights was shot on Super 16 mm film using 35 mm format lenses."))
+        XCTAssertEqual(lenses.facts.filter { $0.row == .format }.map(\.value), ["16 mm film"])
+    }
+
     func testCategoriesThatSayWhatItWasShotOn() {
         let facts = CraftFactReader.read(article: "Harbour Lights is a film.", title: "Harbour Lights", articleTitle: "Harbour Lights",
                                          quick: nil, categories: ["2019 films", "Films shot in 16 mm film", "Black-and-white films",

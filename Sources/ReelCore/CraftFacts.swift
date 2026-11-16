@@ -177,9 +177,9 @@ public enum CraftFactReader {
                          "sequences", "sequence", "portions", "portion", "parts of", "part of the film", "partially", "partly",
                          "minutes of", "the opening", "the final", "the prologue", "the epilogue", "flashback", "second unit",
                          "test", "rehearsal", "some shots", "several shots", "certain shots", "a shot", "additional", "segments",
-                         "segment", "some of the", "much of the", "most of the", "except", "while the rest", "mixed", "combination",
+                         "segment", "some of the", "except", "while the rest", "mixed", "combination",
                          "sections", "section", "the remainder", "the rest of", "remaining", "a handful",
-                         "alongside", "as well as", "both"]
+                         "alongside", "as well as"]
 
     static let partlyPattern = #"\b(?:"# + partly.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|") + #")\b"#
 
@@ -204,7 +204,7 @@ public enum CraftFactReader {
              value: "65 mm film", shotOn: .film),
         Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:super ?)?16 ?mm\b|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) (?:super )?16-millimet"#,
              value: "16 mm film", shotOn: .film),
-        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:the )?(?:super ?)?35 ?mm\b|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) 35-millimet"#,
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:the )?(?:super ?)?35 ?mm\b(?! (?:format )?lens)|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) 35-millimet"#,
              value: "35 mm film", shotOn: .film),
         Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,30}\b(?:on (?:celluloid|film stock|kodak|eastman|fujifilm|film)\b)"#,
              value: "Film", shotOn: .film),
@@ -271,7 +271,7 @@ public enum CraftFactReader {
                 if rule.shotOn == .film, (clause ?? lower).patternRange(#"ektachrome|reversal|stock"#) != nil,
                    isPartly(clause ?? lower) { continue }
                 // "shot primarily on 35 mm": the whole film's format, whatever else the clause says.
-                let mainly = (clause ?? lower).patternRange(#"\b(?:primarily|mainly|mostly|principally|predominantly|largely)\b"#) != nil
+                let mainly = (clause ?? lower).patternRange(#"\b(?:primarily|mainly|mostly|principally|predominantly|largely|most of the film|much of the film)\b"#) != nil
                 let part = !mainly && (clause.map(isPartly) ?? sentencePart)
                 guard seenValues.insert(rule.value).inserted else { continue }
                 facts.append(.init(row: .format, value: rule.value, source: "Wikipedia", link: link, sentence: sentence, inPart: part))
@@ -288,7 +288,8 @@ public enum CraftFactReader {
                 // "Millennium XL2s", "Arricam STs": the plural of a model, named once.
                 if name.patternRange(#"[A-Z0-9]s$"#) != nil { name.removeLast() }
                 guard name.count >= 3, seenValues.insert(name.lowercased()).inserted else { continue }
-                facts.append(.init(row: row, value: name, source: "Wikipedia", link: link, sentence: sentence, inPart: sentencePart))
+                let mainly = lower.patternRange(#"\b(?:primarily|mainly|mostly|principally|predominantly|largely|most of the film|much of the film)\b"#) != nil
+                facts.append(.init(row: row, value: name, source: "Wikipedia", link: link, sentence: sentence, inPart: sentencePart && !mainly))
             }
         }
         // A format both stated in full and in part (film and digital): kept as each sentence said.
