@@ -102,4 +102,45 @@ final class ReceptionTests: XCTestCase {
         XCTAssertEqual(ReceptionAnalyzer.sentences(in: "He called it \"a small, perfect gem.\" The rest of the cast is just as good here.").first,
                        "He called it \"a small, perfect gem.\"")
     }
+
+    // MARK: - 1.11 (spec §6.4): fewer but right
+
+    /// The kinds of wrong dislike found in 1.10 (scorecard 5.6), in made-up sentences.
+    func testPraiseOtherFilmsAndPlotsAreNotDislikes() {
+        let reviews = [
+            "Not a single line of dialogue is wasted in this one.",
+            "Nothing about this felt boring like people said it would.",
+            "In spite of a few complaints the plot holds together well.",
+            "His performance in ‘The Other Picture’ was far weaker than anything here.",
+            "Why does everyone say the ending is disappointing?",
+            "A lot of films I've seen lately feel bloated and far too long.",
+            "The story follows a poor family who move into a big house.",
+        ].map { ReviewText(text: $0, rating: 8) }
+        let summary = ReceptionAnalyzer.summarize(reviews, title: "Example", year: 2020, sentiment: { _ in 0 })
+        XCTAssertEqual(summary?.disliked ?? [], [], "\(summary?.disliked.map(\.quote) ?? [])")
+    }
+
+    /// What a complaint is about is the aspect next to it, not every aspect in the sentence.
+    func testAComplaintIsAboutTheAspectNextToIt() {
+        let found = ReceptionAnalyzer.judgements(in: "It's an incredibly boring and lazy style of writing.", startsSentence: true)
+        XCTAssertEqual(Set(found.map(\.aspect)), ["Story"])
+        XCTAssertEqual(found.map(\.sign), [-1, -1])
+        XCTAssertEqual(ReceptionAnalyzer.judgements(in: "Critics praised the score and faulted nothing", startsSentence: true).map(\.aspect), ["Music and sound"])
+        XCTAssertEqual(ReceptionAnalyzer.judgements(in: "It was ranked above Toy Story by the magazine", startsSentence: true), [])
+        XCTAssertEqual(ReceptionAnalyzer.judgements(in: "The acting is not good", startsSentence: true).map(\.sign), [-1])
+    }
+
+    /// Quotes are one whole sentence; a review's paragraphs never run together.
+    func testQuotesAreWholeSentences() {
+        XCTAssertTrue(ReceptionAnalyzer.isQuotable("The score is superb from the first scene to the last."))
+        XCTAssertFalse(ReceptionAnalyzer.isQuotable("the score is superb from the first scene to the last."), "starts mid-sentence")
+        XCTAssertFalse(ReceptionAnalyzer.isQuotable("The score is superb from the first scene to the last"), "no full stop")
+        XCTAssertFalse(ReceptionAnalyzer.isQuotable("He wrote, \"Worst of all, the score is superb and loud."), "a quotation left open")
+        let text = ReceptionAnalyzer.clean("The acting is superb throughout the whole film.\r\n\r\nThe ending, though, is a real letdown for me.")
+        XCTAssertEqual(ReceptionAnalyzer.sentences(in: text).count, 2)
+        let summary = ReceptionAnalyzer.summarize([ReviewText(text: "The acting is superb throughout the whole film.\r\n\r\nThe story is weak and predictable at the end of it.", rating: 6)],
+                                                  sentiment: { _ in 0 })
+        XCTAssertEqual(summary?.liked.first?.quote, "The acting is superb throughout the whole film.")
+        XCTAssertEqual(summary?.disliked.first?.quote, "The story is weak and predictable at the end of it.")
+    }
 }

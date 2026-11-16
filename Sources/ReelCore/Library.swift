@@ -267,7 +267,9 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// 10: dislikes only when said in words (not a sentence's tone); Did You Know? not cut at
     ///     "No." or "St.", and no fact that starts with a "he" or "she" it can't say who is.
     /// 11 (1.10.7): the camera, lighting, colour and VFX crew are kept (`CraftCrew`).
-    public static let currentInfoVersion = 11
+    /// 12 (1.11): likes and dislikes read again with the 1.11 rules (a judgement in words about one
+    ///     aspect of this film, whole-sentence quotes; spec §6.4).
+    public static let currentInfoVersion = 12
 
     public init(
         driveID: String, relativePath: String, fileName: String, size: Int64, modified: Date?,
