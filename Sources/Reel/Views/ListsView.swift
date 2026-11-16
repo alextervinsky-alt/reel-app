@@ -30,9 +30,9 @@ struct ListsView: View {
                 StartHereSection(preparing: preparing) { preview = $0 }
                 YourProgressSection()
                 canonSection
-                ForEach([AwardList.Family.festivals, .awards, .cinematography], id: \.self) { family in
-                    awardsSection(family)
-                }
+                awardsSection(.festivals)
+                awardsSection(.awards)
+                awardsSection(.cinematography)
                 IMDbSection(columns: cardColumns)
                 setsSection
             }
@@ -56,11 +56,20 @@ struct ListsView: View {
             preparing = false
             // Three posters per card.
             if let client = model.tmdb {
-                let firsts = AwardList.allCases.flatMap { lists.films(for: .award($0)).filter { $0.isWinner }.prefix(3) }
-                    + SightAndSound.films.prefix(3) + DirectorsPoll.films.prefix(3) + AFIList.films.prefix(3)
-                await lists.resolve(firsts, using: client)
+                await lists.resolve(cardPosters(lists), using: client)
             }
         }
+    }
+
+    /// The first three films of each card, for its posters.
+    private func cardPosters(_ lists: ListsStore) -> [ListFilm] {
+        var films: [ListFilm] = []
+        for award in AwardList.allCases {
+            films += lists.films(for: .award(award)).filter { $0.isWinner }.prefix(3)
+        }
+        let polls: [[ListFilm]] = [SightAndSound.films, DirectorsPoll.films, AFIList.films]
+        for poll in polls { films += poll.prefix(3) }
+        return films
     }
 
     // MARK: Complete the set
