@@ -14,6 +14,13 @@ struct SettingsView: View {
     @AppStorage("showDiagnostics") private var showDiagnostics = false
     /// The size of the old reading logs, when they're still there.
     @State private var oldReadings: Int64?
+    @State private var scrollStats: [ScrollLine] = []
+
+    private struct ScrollLine: Identifiable {
+        let page: String
+        let stat: ScrollFrames.Stat
+        var id: String { page }
+    }
 
     var body: some View {
         Form {
@@ -216,6 +223,22 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if showDiagnostics, !scrollStats.isEmpty {
+                Section {
+                    ForEach(scrollStats) { stat in
+                        LabeledContent(stat.page) {
+                            Text("\(stat.stat.missed) of \(stat.stat.frames.formatted()) frames missed at \(stat.stat.hertz) Hz")
+                                .monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Scrolling")
+                } footer: {
+                    Text("Frames this screen showed while you scrolled, since Reel opened, and how many came late. Under 1 in 100 feels smooth.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             if showDiagnostics, oldReadings != nil {
                 Section {
                     LabeledContent("Shot On Readings (from Reel 1.10)") {
@@ -243,6 +266,7 @@ struct SettingsView: View {
             timings = model.timings.map { Timing(id: $0.key, time: $0.value) }.sorted { $0.id < $1.id }
             cacheSize = await model.imageCacheSize()
             oldReadings = model.oldReadingsSize()
+            scrollStats = model.scrollStats.map { ScrollLine(page: $0.key, stat: $0.value) }.sorted { $0.page < $1.page }
         }
     }
 

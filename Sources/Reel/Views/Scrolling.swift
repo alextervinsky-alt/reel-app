@@ -12,6 +12,8 @@ final class ScrollState {
     @ObservationIgnored var waiting: (id: UUID, lift: () -> Void)?
     /// The poster under the pointer, for Space (Quick Look).
     @ObservationIgnored var pointed: LibraryItem?
+    /// The page, for counting its frames while it scrolls (Settings › Diagnostics).
+    @ObservationIgnored var name = "Other pages"
 
     /// The scroll views moving now (a page, and a row scrolled inside it).
     @ObservationIgnored private var moving: Set<UUID> = []
@@ -29,6 +31,8 @@ final class ScrollState {
             endHover = nil
         }
         let stopped = !now && isScrolling
+        if now && !isScrolling { ScrollFrames.shared.start(page: name, model: model) }
+        if stopped { ScrollFrames.shared.stop() }
         isScrolling = now
         model.userIsScrolling = now
         if stopped {

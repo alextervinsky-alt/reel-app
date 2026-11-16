@@ -93,16 +93,32 @@ enum SpeedGates {
              pass: ms(ContinuousClock.now - start) < 300)
     }
 
-    /// The scroll gates from the pages timed, then every line.
+    /// The scroll gates from the pages timed, then every line. CI's Mac draws images without a
+    /// graphics card, so a page of posters there misses frames whatever Reel does: All Films is
+    /// judged against the same posters drawn bare in the same grid (what the cards add), and the
+    /// other pages are reported for stage 5's check on Alex's Mac (Settings › Diagnostics).
     static func report(log: (String) -> Void) {
-        for result in ScrollTiming.results where !result.name.hasPrefix("Plain") && !result.name.hasPrefix("Card test") {
+        let results = ScrollTiming.results
+        let bare = results.first { $0.name.hasPrefix("Posters alone") }
+        for result in results where !result.name.hasPrefix("Plain") && !result.name.hasPrefix("Posters alone") {
             for (label, pass) in [("first", result.first), ("again", result.second)] where !pass.steps.isEmpty {
                 let limit = max(1, pass.steps.count / 100)
-                gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms, target ≤ \(limit)",
-                     pass: pass.over(16.7) <= limit)
-                gate("\(result.name) scroll at 120 Hz, \(label)", "\(pass.over(8.3)) of \(pass.steps.count) steps over 8.3 ms (target ≤ \(pass.steps.count / 20))",
-                     pass: nil)
+                if result.name.hasPrefix("All Films"), let bare {
+                    let base = (label == "first" ? bare.first : bare.second).over(16.7)
+                    gate("\(result.name) scroll, \(label), what the cards add", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms "
+                         + "against \(base) for the posters alone, target ≤ \(base + limit)", pass: pass.over(16.7) <= base + limit)
+                } else if result.name == "Film page" {
+                    gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms, target ≤ \(limit)",
+                         pass: pass.over(16.7) <= limit)
+                } else {
+                    gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms (images drawn without a graphics card)",
+                         pass: nil)
+                }
+                gate("\(result.name) scroll at 120 Hz, \(label)", "\(pass.over(8.3)) of \(pass.steps.count) steps over 8.3 ms", pass: nil)
             }
+        }
+        if let bare {
+            gate("Posters alone (the machine)", "\(bare.first.over(16.7)) and \(bare.second.over(16.7)) of 400 steps over 16.7 ms", pass: nil)
         }
         for line in lines { log(line) }
     }

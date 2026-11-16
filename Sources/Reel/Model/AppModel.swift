@@ -292,6 +292,8 @@ final class AppModel {
     @ObservationIgnored var saveTasks: [SaveTarget: Task<Void, Never>] = [:]
     @ObservationIgnored var lastSafetyCopyDay = ""
     @ObservationIgnored var lastSettingsCopyDay = ""
+    /// Frames shown and missed while scrolling, this session, by page (Settings › Diagnostics).
+    @ObservationIgnored var scrollStats: [String: ScrollFrames.Stat] = [:]
     /// Each open film page's film, observed on its own (see `filmEntry`).
     @ObservationIgnored var filmBoxes: [String: FilmBox] = [:]
     /// The last shelves worked out (see `shelfItems`).

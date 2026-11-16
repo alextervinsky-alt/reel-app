@@ -319,12 +319,19 @@ enum ScreenRenderer {
             model.setFilms(copies(of: model.films, count: 500, drives: [drive.id]), urgent: true)
             for path in model.films.compactMap({ $0.tmdb?.posterPath }) { _ = await ImageStore.shared.image(path, .poster) }
             lines += await ScrollTiming.run([ScrollTiming.Page(name: "All Films, 500 films", view: AnyView(RootView()))], model: model, log: log)
-            // What each part of a poster card costs (diagnostics, not gates).
-            for (variant, name) in [(3, "poster only"), (4, "poster without its rounded clip"), (5, "poster image only, nothing loaded")] {
-                GridExperiment.variant = variant
-                lines += await ScrollTiming.run([ScrollTiming.Page(name: "Card test: \(name)", view: AnyView(RootView()))], model: model, log: log)
-            }
-            GridExperiment.variant = 0
+            // The same posters as bare images in the same grid: what drawing them costs this machine
+            // (CI's Mac has no graphics card, so images are drawn by its processors). The cards'
+            // own cost is All Films' less this.
+            let images = model.items.compactMap { item in item.main.tmdb?.posterPath.flatMap { ImageStore.shared.cached($0, .poster) } }
+            let bare = AnyView(ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 168, maximum: 205), spacing: 22)], spacing: 30) {
+                    ForEach(images.indices, id: \.self) { index in
+                        Image(decorative: images[index].cgImage, scale: 1).resizable().aspectRatio(2 / 3, contentMode: .fill)
+                    }
+                }
+                .padding(32)
+            }.background(Theme.background))
+            lines += await ScrollTiming.run([ScrollTiming.Page(name: "Posters alone (the machine)", view: bare)], model: model, log: log)
         }
         try? (lines.joined(separator: "\n") + "\n").write(to: output.appendingPathComponent("scroll.txt"), atomically: true, encoding: .utf8)
     }
