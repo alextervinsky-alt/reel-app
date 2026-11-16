@@ -93,8 +93,8 @@ enum SpeedGates {
              pass: ms(ContinuousClock.now - start) < 300)
     }
 
-    /// The scroll gates from the pages timed, then every line. CI's Mac draws images without a
-    /// graphics card, so a page of posters there misses frames whatever Reel does: All Films is
+    /// The scroll gates from the pages timed, then every line. CI's virtual Mac is slow at drawing
+    /// new images, so a page of posters there misses frames whatever Reel does: All Films is
     /// judged against the same posters drawn bare in the same grid (what the cards add), and the
     /// other pages are reported for stage 5's check on Alex's Mac (Settings › Diagnostics).
     static func report(log: (String) -> Void) {
@@ -111,7 +111,7 @@ enum SpeedGates {
                     gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms, target ≤ \(limit)",
                          pass: pass.over(16.7) <= limit)
                 } else {
-                    gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms (images drawn without a graphics card)",
+                    gate("\(result.name) scroll, \(label)", "\(pass.over(16.7)) of \(pass.steps.count) steps over 16.7 ms (pages of images: judged on the Mac)",
                          pass: nil)
                 }
                 gate("\(result.name) scroll at 120 Hz, \(label)", "\(pass.over(8.3)) of \(pass.steps.count) steps over 8.3 ms", pass: nil)

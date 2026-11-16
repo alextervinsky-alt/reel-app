@@ -320,7 +320,7 @@ enum ScreenRenderer {
             for path in model.films.compactMap({ $0.tmdb?.posterPath }) { _ = await ImageStore.shared.image(path, .poster) }
             lines += await ScrollTiming.run([ScrollTiming.Page(name: "All Films, 500 films", view: AnyView(RootView()))], model: model, log: log)
             // The same posters as bare images in the same grid: what drawing them costs this machine
-            // (CI's Mac has no graphics card, so images are drawn by its processors). The cards'
+            // (CI's virtual Mac is slow at drawing new images, whatever draws them). The cards'
             // own cost is All Films' less this.
             let images = model.items.compactMap { item in item.main.tmdb?.posterPath.flatMap { ImageStore.shared.cached($0, .poster) } }
             let bare = AnyView(ScrollView {
