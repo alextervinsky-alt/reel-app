@@ -32,7 +32,7 @@ final class CraftFactReaderTests: XCTestCase {
     func testPartOfTheFilmIsMarked() {
         let facts = read(article("The film was shot digitally, while some scenes were shot with IMAX cameras."))
         XCTAssertEqual(Set(facts.shotOn), [.digital, .imax])
-        XCTAssertTrue(facts.inPart.contains(.imax))
+        XCTAssertEqual(facts.inPart, [.imax], "digital is the whole film; IMAX only some scenes")
         XCTAssertEqual(facts.label(for: .imax), "IMAX (in part)")
     }
 

@@ -239,8 +239,13 @@ public enum CraftFactReader {
         var seenValues = Set<String>()
         for sentence in statements(in: article ?? "", title: title) {
             let lower = sentence.lowercased()
-            let part = isPartly(lower)
+            let sentencePart = isPartly(lower)
+            // "In part" is judged in the clause that says it ("shot digitally, while some scenes
+            // were shot with IMAX cameras": only IMAX is in part).
+            let clauses = clausesOf(lower)
             for rule in formats where lower.patternRange(rule.pattern) != nil {
+                let clause = clauses.first { $0.patternRange(rule.pattern) != nil }
+                let part = clause.map(isPartly) ?? sentencePart
                 guard seenValues.insert(rule.value).inserted else { continue }
                 facts.append(.init(row: .format, value: rule.value, source: "Wikipedia", link: link, sentence: sentence, inPart: part))
                 if let kind = rule.shotOn {
@@ -254,7 +259,7 @@ public enum CraftFactReader {
                 guard let range = sentence.patternRange(pattern) else { continue }
                 let name = String(sentence[range]).trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
                 guard name.count >= 3, seenValues.insert(name.lowercased()).inserted else { continue }
-                facts.append(.init(row: row, value: name, source: "Wikipedia", link: link, sentence: sentence, inPart: part))
+                facts.append(.init(row: row, value: name, source: "Wikipedia", link: link, sentence: sentence, inPart: sentencePart))
             }
         }
         // A format both stated in full and in part (film and digital): kept as each sentence said.
@@ -264,6 +269,20 @@ public enum CraftFactReader {
         let order: [CraftFacts.Row] = [.format, .aspectRatio, .colour, .camera, .lenses, .award]
         facts.sort { (order.firstIndex(of: $0.row) ?? 9) < (order.firstIndex(of: $1.row) ?? 9) }
         return CraftFacts(readAt: now, facts: facts, shotOn: shotOn, inPart: inPart)
+    }
+
+    /// A sentence's clauses, split where a new statement starts (", while", "; ", " but ").
+    static func clausesOf(_ lower: String) -> [String] {
+        var clauses: [String] = []
+        var rest = Substring(lower)
+        let pattern = #",? (?:while|whereas|but|although|though|with the exception that) |; |, and "#
+        while let range = String(rest).patternRange(pattern) {
+            let text = String(rest)
+            clauses.append(String(text[..<range.lowerBound]))
+            rest = Substring(text[range.upperBound...])
+        }
+        clauses.append(String(rest))
+        return clauses
     }
 
     /// "colour" → "Colour", "black-and-white" → "Black and white".
