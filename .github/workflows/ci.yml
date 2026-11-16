@@ -109,6 +109,7 @@ jobs:
           swift test --filter LiveListsCheck > lists.log 2>&1 || true
           grep -E "LISTS\|" lists.log | while read -r l; do echo "::notice::$l"; done
           grep -E "error:|failed" lists.log | head -8 | while read -r l; do echo "::warning::$l"; done
+          echo "::notice::$(tail -4 lists.log | tr '\n' ' ' | cut -c1-900)"
 
   review-eval:
     # What the Reviews rules show for the stored public films, kept on review-1.11 to be read.
