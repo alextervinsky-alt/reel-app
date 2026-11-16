@@ -14,6 +14,17 @@ final class LiveCraftFactsCheck: XCTestCase {
         ("Past Lives", 2023), ("Poor Things", 2023), ("Killers of the Flower Moon", 2023), ("Nomadland", 2020), ("Tár", 2022),
     ]
 
+    /// A second 30, not looked at while the rules were set: the held-out check.
+    static let heldOut: [(String, Int)] = [
+        ("The Master", 2012), ("Phantom Thread", 2017), ("There Will Be Blood", 2007), ("No Country for Old Men", 2007),
+        ("Children of Men", 2006), ("Gravity", 2013), ("Birdman", 2014), ("The Tree of Life", 2011), ("Drive", 2011),
+        ("Her", 2013), ("Skyfall", 2012), ("Sicario", 2015), ("Prisoners", 2013), ("Gone Girl", 2014),
+        ("The Favourite", 2018), ("Portrait of a Lady on Fire", 2019), ("Cold War", 2018), ("Ida", 2013), ("Nebraska", 2013),
+        ("Little Women", 2019), ("The Irishman", 2019), ("Once Upon a Time in Hollywood", 2019), ("Uncut Gems", 2019),
+        ("The Power of the Dog", 2021), ("Licorice Pizza", 2021), ("Everything Everywhere All at Once", 2022),
+        ("The Zone of Interest", 2023), ("Aftersun", 2022), ("The Holdovers", 2023), ("Challengers", 2024),
+    ]
+
     struct Row: Encodable {
         let row: String
         let value: String
@@ -38,7 +49,8 @@ final class LiveCraftFactsCheck: XCTestCase {
         }
         let tmdb = TMDBClient(token: token)
         var films: [Film] = []
-        for (title, year) in Self.films {
+        let set = env["REEL_CRAFT_SET"] == "held-out" ? Self.heldOut : Self.films
+        for (title, year) in set {
             guard let hit = try await tmdb.searchMovies(query: title, year: year).first else { continue }
             let details = try await tmdb.movieDetails(id: hit.id)
             guard let findings = try? await WikipediaClient().findings(imdbID: details.imdbID, title: details.title, year: details.year),
