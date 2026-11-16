@@ -271,7 +271,7 @@ public enum ReceptionAnalyzer {
         "ridiculous", "laughable", "mediocre", "subpar", "sub-par", "unmemorable", "uninteresting", "paper-thin", "thin",
         "lifeless", "soulless", "hollow", "empty", "abrupt", "rushed", "dumb", "stupid", "silly", "overdone", "overwrought",
         "uninspired", "unfunny", "jarring", "clumsy", "lackluster", "lacklustre", "tiresome", "dragging", "dullness",
-        "problem", "problems", "issue", "issues", "worse", "awkward", "sloppy", "mess", "cringe-worthy", "fail",
+        "problem", "problems", "issue", "issues", "worse", "awkward", "sloppy", "mess", "cringe-worthy",
     ]
 
     /// Words that judge only what they stand right next to ("poor acting", not "a poor family").
@@ -309,11 +309,11 @@ public enum ReceptionAnalyzer {
     }()
 
     /// "lacking in sexism", "no shortage of": a fault word that praises.
-    static let notFaults = #"\b(?:lack(?:s|ing)?(?: in| of| any)? (?:sexism|clich[eé]s?|pretension|filler|fat|gore)|no problems?|no issues?|not a (?:single )?(?:dull|boring|wasted)|without (?:a|any) (?:dull|boring|wasted)|to a fault|bad guys?|dragged (?:along|in|into|to))\b"#
+    static let notFaults = #"\b(?:lack(?:s|ing)?(?: in| of| any)? (?:sexism|clich[eé]s?|pretension|filler|fat|gore)|no problems?|no issues?|not a (?:single )?(?:dull|boring|wasted)|without (?:a|any) (?:dull|boring|wasted))\b"#
 
     /// Critics as Wikipedia tells it, said to have praised or faulted something, by their words.
     static let praiseVerbs = #"^(?:prais\w*|laud\w*|applaud\w*|acclaim\w*|admired|admires|admiring|commend\w*|hail\w*|complimen\w*|highlight\w*|celebrat\w*|appreciat\w*)$"#
-    static let faultVerbs = #"^(?:critici[sz]\w*|fault(?:ed|s|ing)?|panned|derid\w*|complain\w*|dislik\w*|lament\w*|bemoan\w*|weakness\w*|flaws?|flawed|marred|disappoint(?:ed|ing|ment|s)?)$"#
+    static let faultVerbs = #"^(?:critici[sz]\w*|fault\w*|panned|derid\w*|complain\w*|dislik\w*|lament\w*|bemoan\w*|weakness\w*|flaws?|flawed|marred|disappoint(?:ed|ing|ment|s)?)$"#
 
     struct Judgement: Equatable {
         let aspect: String
@@ -328,7 +328,7 @@ public enum ReceptionAnalyzer {
         let lowerClause = clause.lowercased()
         if lowerClause.range(of: notFaults, options: .regularExpression) != nil { return [] }
         // Wishes, conditions and what might be: nothing said about this film as it is.
-        if lowerClause.range(of: #"\b(?:if|unless|would|could|should|might|may|i'd|i’d|wish|hope|hopefully|supposed to|expected|expecting)\b"#,
+        if lowerClause.range(of: #"^(?:if|unless|when)\b|\b(?:would (?:have )?lov\w*|i'd love|i’d love|would have liked to see|i wish|i hope|hopefully|might)\b"#,
                              options: .regularExpression) != nil { return [] }
         // The words, with whether each is written as a name.
         let tokens: [(word: String, name: Bool)] = clause
@@ -406,9 +406,7 @@ public enum ReceptionAnalyzer {
             // The aspect it's about: an aspect word close by ("boring characters"), else within five
             // words ("the score of this film is superb"), else its own ("it drags"), else the one
             // its complaint names. A critic's "praised…" looks ahead only, at what was praised.
-            // Next to it: two words at most ("the acting is superb", "superb acting"); a critic's
-            // verb four ("praised the film's score").
-            let reach = verb ? 4 : 2
+            let reach = verb ? 6 : (tight.contains(words[i]) ? 2 : 5)
             // "…received praise", "…drew criticism": the nouns look back too.
             let looksBack = !verb || ["praise", "acclaim", "criticism", "criticisms", "complaints", "flaws", "flaw"].contains(words[i])
             let others = aspectAt.filter { !judging.contains($0.index) && (($0.index < i && looksBack) || $0.index >= i + length) }
@@ -420,8 +418,7 @@ public enum ReceptionAnalyzer {
                 aspect = near.aspect
             } else if let own {
                 aspect = own
-            } else if sign < 0, !verb, aboutTheFilm, let cue = cueAspects.first(where: { matches($0.cue.split(separator: " ").map(String.init), at: i) }),
-                      cue.aspect != "Dialogue", cue.aspect != "Atmosphere", cue.cue != "messy" {
+            } else if sign < 0, !verb, aboutTheFilm, let cue = cueAspects.first(where: { matches($0.cue.split(separator: " ").map(String.init), at: i) }) {
                 aspect = cue.aspect
             }
             if let aspect { found.append(Judgement(aspect: aspect, sign: sign)) }
