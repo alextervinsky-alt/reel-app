@@ -1244,6 +1244,912 @@
    "aspect": "Originality",
    "quote": "At times it’s charming, at times a bit predictable, but always pleasant.",
    "right": true
+  },
+  {
+   "film": "Gravity",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Great story, great cast and performances, great direction, FX, photography, care for the details, OST and editing.",
+   "right": true
+  },
+  {
+   "film": "Gravity",
+   "kind": "like",
+   "aspect": "Effects",
+   "quote": "Technically it was very good with nice special effects.",
+   "right": true
+  },
+  {
+   "film": "Birdman or (The Unexpected Virtue of Ignorance)",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "We already know that Norton is a fantastic actor in his previous work, but in this movie his performance could be descried has stellar and insanely good.",
+   "right": true
+  },
+  {
+   "film": "Birdman or (The Unexpected Virtue of Ignorance)",
+   "kind": "like",
+   "aspect": "Characters",
+   "quote": "Michael Keaton is fantastic as the protagonist and gives a performance that would have given his career a huge revival (his squeal is my highlight of the film).",
+   "right": false,
+   "note": "acting, not the character"
+  },
+  {
+   "film": "Birdman or (The Unexpected Virtue of Ignorance)",
+   "kind": "dislike",
+   "aspect": "Humour",
+   "quote": "It supposed to be a comedy, but I didn't even find it funny.",
+   "right": true
+  },
+  {
+   "film": "Birdman or (The Unexpected Virtue of Ignorance)",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "I started watching it & I couldn't last longer than 30 minutes, it was so boring & uninteresting that I fell asleep.",
+   "right": true
+  },
+  {
+   "film": "Her",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "The cast is great, specially Joaquim Phoenix, which is a great actor.",
+   "right": true
+  },
+  {
+   "film": "Her",
+   "kind": "like",
+   "aspect": "Humour",
+   "quote": "The site's critical consensus reads, \"Sweet, soulful, and smart, Spike Jonze's Her uses its just-barely-sci-fi scenario to impart wryly funny wisdom about the state of modern human relationships.\"",
+   "right": true
+  },
+  {
+   "film": "Her",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "J. R. Jones of the Chicago Reader gave the film 2 out of 4 stars, praising the performances of Phoenix and Johansson, but also criticizing Phoenix's character, calling him an \"idiot\".",
+   "right": true
+  },
+  {
+   "film": "Her",
+   "kind": "dislike",
+   "aspect": "Ending",
+   "quote": "Todd McCarthy of The Hollywood Reporter called it \"a probing, inquisitive work of a very high order\", although he expressed disappointment that the ending is more conventional than the rest of the film.",
+   "right": true
+  },
+  {
+   "film": "Skyfall",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Phenomenal acting all-around elevates an extraordinarily impactful character work, culminating in an emotionally powerful third act.",
+   "right": true
+  },
+  {
+   "film": "Skyfall",
+   "kind": "like",
+   "aspect": "Action",
+   "quote": "All the Bondian trappings are still here, exotic locales, gorgeous women, speeding vehicles, fights, stupendous stunts, bizarre lairs and balls out machismo.",
+   "right": false,
+   "note": "a list, not a judgement"
+  },
+  {
+   "film": "Skyfall",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "Kim Newman also praised Mendes's direction of the action sequences.",
+   "right": true
+  },
+  {
+   "film": "Skyfall",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "The story is rich and delves further into the character of a bond than ever before.",
+   "right": true
+  },
+  {
+   "film": "Skyfall",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "Perhaps these people like the shallow characters, who care little for the safety of the innocent people in the world, yes, I said it.",
+   "right": true
+  },
+  {
+   "film": "Skyfall",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Which makes this as dull as watching a pot boil.",
+   "right": true
+  },
+  {
+   "film": "Gone Girl",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Good cast and decent story, although the end is not very convincing.",
+   "right": true
+  },
+  {
+   "film": "Gone Girl",
+   "kind": "like",
+   "aspect": "Visuals",
+   "quote": "With seamless editing, a memorable score, and fantastic camera work, Gone Girl is technically magnificent, but it's Gillian Flynn's debut screenplay that steals the spotlight.",
+   "right": true
+  },
+  {
+   "film": "Gone Girl",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "The Vulture's critics praised the direction, screenplay, editing, score, visual style, and acting, particularly from Pike, Affleck, Tyler Perry, Carrie Coon, and Missi Pyle.",
+   "right": true
+  },
+  {
+   "film": "Gone Girl",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "Boasting jaw-dropping twists, including an utterly shocking third act and respective ending, Flynn's narrative is incredibly engaging due to its remarkable structure and puzzling mystery, never losing an inch of excitement or interest.",
+   "right": true
+  },
+  {
+   "film": "Gone Girl",
+   "kind": "dislike",
+   "aspect": "Direction",
+   "quote": "The website's critical consensus reads: \"Dark, intelligent, and stylish to a fault, Gone Girl plays to director David Fincher's sick strengths while bringing the best out of stars Ben Affleck and Rosamund Pike.\"",
+   "right": false,
+   "note": "praise (to a fault)"
+  },
+  {
+   "film": "Gone Girl",
+   "kind": "dislike",
+   "aspect": "Ending",
+   "quote": "In this film, he directs skillfully, but not without debatable choices: for me, the story's most important twist all comes too soon, and the ending is lazy, overly sudden, and makes it feel like the film was cut short before the end.",
+   "right": true
+  },
+  {
+   "film": "Prisoners",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "One of the few in the last years with great performances by Jackman, Gyllenhaal and Dano.",
+   "right": true
+  },
+  {
+   "film": "Prisoners",
+   "kind": "like",
+   "aspect": "Tension",
+   "quote": "This heavy film is not for everyone but for those that enjoy suspenseful crime cinema, this is one of the absolute best.",
+   "right": true
+  },
+  {
+   "film": "Prisoners",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Prisoners is a largely generic revenge / suspense / mystery \"they have my kid\" tale with a predictable plot that gives itself away too early.",
+   "right": true
+  },
+  {
+   "film": "The Irishman",
+   "kind": "like",
+   "aspect": "Visuals",
+   "quote": "This isn’t telling one story, but a number of stories spanning decades that just so happen to involve the same group of dangerous gangsters, sharing the same threads of beautiful cinematography, great visual effects and patient editing.",
+   "right": true
+  },
+  {
+   "film": "The Irishman",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "He also praised the performances of De Niro and Pacino, stating that The Irishman is one of Scorsese's \"most satisfying films in decades\".",
+   "right": true
+  },
+  {
+   "film": "The Irishman",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "Nevertheless, the acting is universally superb, the directing is more contemplative than we've seen from Scorsese in a while, Thelma Schoonmaker's editing is predictably awesome, and Rodrigo Prieto's cinematography is flawless.",
+   "right": false,
+   "note": "the praise is the editing"
+  },
+  {
+   "film": "The Irishman",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "The best editing (Thelma Schoonmaker) of the year makes the runtime smoother, but it still drags on for too long.",
+   "right": true
+  },
+  {
+   "film": "The Irishman",
+   "kind": "dislike",
+   "aspect": "Acting",
+   "quote": "In terms of the acting, the closest we get to a poor performance is Pacino, who portrays Hoffa as if he was playing, well, Al Pacino.",
+   "right": true
+  },
+  {
+   "film": "Once Upon a Time in... Hollywood",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "The movie isn’t for everyone, of course, but it’s a fun ride back to the past with fantastic performances, hilarious comedy and beautiful aesthetics.",
+   "right": true
+  },
+  {
+   "film": "Once Upon a Time in... Hollywood",
+   "kind": "like",
+   "aspect": "Atmosphere",
+   "quote": "The soundtrack, however, is one of the film’s strongest elements, blending iconic tracks that perfectly fit the era and mood.",
+   "right": false,
+   "note": "the music, not the atmosphere"
+  },
+  {
+   "film": "Once Upon a Time in... Hollywood",
+   "kind": "like",
+   "aspect": "Dialogue",
+   "quote": "An entertaining movie filled with fantastic performances and gripping dialogue.",
+   "right": true
+  },
+  {
+   "film": "Once Upon a Time in... Hollywood",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "But if you love filmmaking and you have knowledge of its techniques, you’ll love it even more.",
+   "right": false,
+   "note": "a condition"
+  },
+  {
+   "film": "Once Upon a Time in... Hollywood",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Tarantino uses his large runtime to place tons of references to that period, and that’s one of the reasons the first act of the movie drags.",
+   "right": true
+  },
+  {
+   "film": "Once Upon a Time in... Hollywood",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "That’s the second issue I have with the first act: it takes too long to establish its characters, and there’s no apparent objective within the story.",
+   "right": true
+  },
+  {
+   "film": "Everything Everywhere All at Once",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "This 2022 release features a superb cast, a fascinating story and some top notch visuals.",
+   "right": true
+  },
+  {
+   "film": "Everything Everywhere All at Once",
+   "kind": "like",
+   "aspect": "Humour",
+   "quote": "Hilarious, beautiful, hard-hitting, empathetic, and kinetic filmmaking.",
+   "right": true
+  },
+  {
+   "film": "Everything Everywhere All at Once",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "David Ehrlich of IndieWire called the film an \"orgiastic work of slaphappy genius\", praising the direction and performances, particularly Yeoh's, calling it the \"greatest performance that Michelle Yeoh has ever given\".",
+   "right": true
+  },
+  {
+   "film": "Everything Everywhere All at Once",
+   "kind": "like",
+   "aspect": "Effects",
+   "quote": "The production design, lighting, costuming, VFX, etc., are all outstanding and are just a joy to watch.",
+   "right": true
+  },
+  {
+   "film": "Everything Everywhere All at Once",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Bloated nonsense, overlong and meaningless.",
+   "right": true
+  },
+  {
+   "film": "The Holdovers",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "The powerful performances by the central leads, storytelling that feels personal, and the charming chemistry between the characters make this a wonderful Christmas film.",
+   "right": true
+  },
+  {
+   "film": "The Holdovers",
+   "kind": "like",
+   "aspect": "Characters",
+   "quote": "Loved the pacing, loved the tempo of the reveal, and loved the character arches.",
+   "right": true
+  },
+  {
+   "film": "The Holdovers",
+   "kind": "like",
+   "aspect": "Humour",
+   "quote": "Funny and poignant in equal measure.",
+   "right": true
+  },
+  {
+   "film": "The Holdovers",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "A shockingly faultless screenplay from David Hemingson exponentially attacks the viewers' hearts through a truly profound yet bittersweet study of the vital need for human connection.",
+   "right": false,
+   "note": "praise (faultless)"
+  },
+  {
+   "film": "Challengers",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "I do think the three main actors do a good job, and I'll gladly watch them in something else in the future.",
+   "right": true
+  },
+  {
+   "film": "Challengers",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "Overall, Challengers is a well-made film with a compelling story and strong performances.",
+   "right": true
+  },
+  {
+   "film": "Challengers",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "This movie is a must-watch for anyone interested in a nuanced and emotionally rich narrative, as well as for those who appreciate high-quality filmmaking.",
+   "right": true
+  },
+  {
+   "film": "Challengers",
+   "kind": "like",
+   "aspect": "Themes",
+   "quote": "The plot of Challengers revolves around the complex relationships between the three main characters, exploring themes of love, rivalry, and redemption.",
+   "right": false,
+   "note": "plot summary"
+  },
+  {
+   "film": "Challengers",
+   "kind": "dislike",
+   "aspect": "Action",
+   "quote": "This is why I find stories about real human emotions to be so much more exciting than the latest, generic action retread.",
+   "right": false,
+   "note": "other films"
+  },
+  {
+   "film": "Challengers",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Perhaps it's the poor writing, or the lack of any real protagonist, as the two who are supposedly our protagonists are really willing victims, so it's hard to feel for them.",
+   "right": true
+  },
+  {
+   "film": "Whiplash",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Fantastic movie with a good cast with an impressive Miles Teller and a yet even more impressive J.K. Simmons.",
+   "right": true
+  },
+  {
+   "film": "Whiplash",
+   "kind": "like",
+   "aspect": "Music and sound",
+   "quote": "The directing and the writing in this was just....perfect. Damien Chazelle gave this movie style and passion to tell a story about two strong music buffs battling out and he freaking nailed it.",
+   "right": false,
+   "note": "aspect wrong"
+  },
+  {
+   "film": "Whiplash",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "Decent script, great directing, selection of the repertoire and performances.",
+   "right": true
+  },
+  {
+   "film": "Whiplash",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "Amber Wilkinson of The Daily Telegraph praised the direction and editing, writing: \"Chazelle's film has a sharp and gripping rhythm, with shots beautifully edited by Tom Cross... often cutting to the crash of Andrew's drums.\"",
+   "right": true
+  },
+  {
+   "film": "Whiplash",
+   "kind": "dislike",
+   "aspect": "Humour",
+   "quote": "See the film if you want to be current, but please decide for yourself from watching it and don't believe the hype about its 'genius' or 'brilliance.' It is not either of those things; it's a poorly written, sad joke.",
+   "right": false,
+   "note": "aspect wrong (joke)"
+  },
+  {
+   "film": "The Shape of Water",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "The Shape of Water was acclaimed by critics, who lauded its acting, screenplay, direction, visuals, production design, and musical score.",
+   "right": true
+  },
+  {
+   "film": "The Shape of Water",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "It's not perfect, but it's a memorable and heartfelt story that stays with you long after it ends.",
+   "right": true
+  },
+  {
+   "film": "The Shape of Water",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "Reed's review was criticized for referring to Hawkins's mute character as \"mentally handicapped\" and for falsely crediting actor Benicio del Toro (spelled Benecio) as the film's director.",
+   "right": false,
+   "note": "about a review"
+  },
+  {
+   "film": "The Shape of Water",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "The R-Rated Family Movie schtick always came off as silly or had a story too dull to carry its own weight.",
+   "right": true
+  },
+  {
+   "film": "The Whale",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "But despite my minor complaints, the movie is carried by fantastic performances, amazing cinematography and intense emotions that will leave many viewers pleased with their experience, but will not be for everyone.",
+   "right": true
+  },
+  {
+   "film": "The Whale",
+   "kind": "dislike",
+   "aspect": "Ending",
+   "quote": "The ending was something else and abrupt but idk what else I was expecting.",
+   "right": true
+  },
+  {
+   "film": "Elvis",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Elvis features a glorious, electrifying, iconic performance from Austin Butler that will deservedly guarantee him all the awards of the year.",
+   "right": true
+  },
+  {
+   "film": "Elvis",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "It is a true story told brilliantly and creatively that only Baz, in his unique artistic way, could have delivered.",
+   "right": true
+  },
+  {
+   "film": "Elvis",
+   "kind": "dislike",
+   "aspect": "Atmosphere",
+   "quote": "Nevertheless, the frenetic, choppy editing and the restless camera movements rather come off as a messy, confusing, headache-inducing atmosphere instead of elements that elevate the overall piece.",
+   "right": true
+  },
+  {
+   "film": "Elvis",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Good moments but WAY too long.",
+   "right": true
+  },
+  {
+   "film": "Spectre",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Fortunately, the jaw-dropping action set pieces elevate the overall film, which also benefits from gorgeous cinematography (Hoyte van Hoytema) and exceptional acting across the board.",
+   "right": true
+  },
+  {
+   "film": "Spectre",
+   "kind": "like",
+   "aspect": "Action",
+   "quote": "Spectre has plenty of style, class, action, and spectacular moments but the film lacks the passion and zeal of Casino Royale or Skyfall.",
+   "right": true
+  },
+  {
+   "film": "Spectre",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "It ended up feeling like they were trying to be confusing for the sake of being confusing, and didn't know how to make it all feel confusing for the sake of being mysterious.",
+   "right": true
+  },
+  {
+   "film": "Spectre",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "And even so, Skyfall wasn’t the best of the new Bond films by any measure – dragging on for much too long.",
+   "right": false,
+   "note": "another film"
+  },
+  {
+   "film": "Batman v Superman: Dawn of Justice",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Action packed, along with good actors and actresses.",
+   "right": true
+  },
+  {
+   "film": "Batman v Superman: Dawn of Justice",
+   "kind": "like",
+   "aspect": "Visuals",
+   "quote": "The visuals were awesome, the story was unpredictable, well developed characters, cleverly composed scenes, wonderful stunt sequences and the film's overall tone was kind of dark and gloomy, a very satisfying superhero film.",
+   "right": true
+  },
+  {
+   "film": "Batman v Superman: Dawn of Justice",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Unfortunately, the appearance of the wily Wonder Woman during the tail end of the second half is too little and too late for her welcomed presence to rescue the film’s clunky pacing.",
+   "right": true
+  },
+  {
+   "film": "Batman v Superman: Dawn of Justice",
+   "kind": "dislike",
+   "aspect": "Action",
+   "quote": "Yes, it's not a villain that is there because you need one to fight the bad guys, it's yet another consequence of Kryptonians coming to earth.",
+   "right": false,
+   "note": "a defence"
+  },
+  {
+   "film": "Batman v Superman: Dawn of Justice",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Snyder undertakes a convoluted production and tries to sell it as a sophisticated meeting of the misplaced minds between two embattled entities embroiled in uncertainty and super-sized cynicism.",
+   "right": true
+  },
+  {
+   "film": "Wonder Woman 1984",
+   "kind": "like",
+   "aspect": "Action",
+   "quote": "In short: it looks fantastic and the action is in perfect WONDER WOMAN style.",
+   "right": true
+  },
+  {
+   "film": "Wonder Woman 1984",
+   "kind": "like",
+   "aspect": "Characters",
+   "quote": "Barbara follows the \"lonely, insignificant, no one cares about me\" archetype, and Wiig does a surprisingly remarkable job in portraying this character, but the script is what really makes her shine.",
+   "right": true
+  },
+  {
+   "film": "Wonder Woman 1984",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "My summary would be the following… good cast, entertaining in parts, not much action over two hours, takes huge liberties with Diana and her abilities, massive gaps in logic even for a comic movie.",
+   "right": true
+  },
+  {
+   "film": "Wonder Woman 1984",
+   "kind": "dislike",
+   "aspect": "Dialogue",
+   "quote": "The film is also very cheesy, with sequences that can be considered lame and dull.",
+   "right": false,
+   "note": "aspect wrong"
+  },
+  {
+   "film": "Doctor Strange in the Multiverse of Madness",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "A colossal work of incredible CGI, in which the script is quite lost, and the actors do a good job playing characters they already know well.",
+   "right": true
+  },
+  {
+   "film": "Doctor Strange in the Multiverse of Madness",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "The website's critical consensus reads, \"Doctor Strange in the Multiverse of Madness labors under the weight of the sprawling MCU, but Sam Raimi's distinctive direction casts an entertaining spell.\"",
+   "right": true
+  },
+  {
+   "film": "Doctor Strange in the Multiverse of Madness",
+   "kind": "like",
+   "aspect": "Music and sound",
+   "quote": "It does look and sound great on a big screen, though, and I am now warming to the star in the role (and his intuitive flying cape).",
+   "right": true
+  },
+  {
+   "film": "Doctor Strange in the Multiverse of Madness",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "But the messy connection to WANDAVISION, the underwritten America Chavez, and the CGI-heavy seams of a turbulent COVID-era production keep it from being the movie it could have been.",
+   "right": true
+  },
+  {
+   "film": "Thor: Love and Thunder",
+   "kind": "like",
+   "aspect": "Humour",
+   "quote": "His mission soon puts him on a collision course with Gorr and The Mighty Thor (Natalie Portman) who being his ex and wielding his former weapon causes more than a few funny and awkward moments.",
+   "right": false,
+   "note": "plot summary"
+  },
+  {
+   "film": "Thor: Love and Thunder",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "I loved Taika Waititi's direction in Ragnarok, and the cast is amazing.",
+   "right": true
+  },
+  {
+   "film": "Thor: Love and Thunder",
+   "kind": "like",
+   "aspect": "Action",
+   "quote": "What it does offer is a good mix of action and humor with enjoyable characters old and new and establishes scenarios for the MCU going forward.",
+   "right": true
+  },
+  {
+   "film": "Thor: Love and Thunder",
+   "kind": "like",
+   "aspect": "Characters",
+   "quote": "Gorr is my favourite villain so far.",
+   "right": true
+  },
+  {
+   "film": "Thor: Love and Thunder",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Bad humor, characters teleporting all over the place, terrible plot.",
+   "right": true
+  },
+  {
+   "film": "Transformers: The Last Knight",
+   "kind": "like",
+   "aspect": "Effects",
+   "quote": "I enjoyed the special effects, the robots, even the lousy jokes.",
+   "right": true
+  },
+  {
+   "film": "Transformers: The Last Knight",
+   "kind": "like",
+   "aspect": "Visuals",
+   "quote": "Yoshida grudgingly praised the \"visual and sonic imagination\" shown by the filmmakers.",
+   "right": true
+  },
+  {
+   "film": "Transformers: The Last Knight",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "It's another entry that lasts for just short of 150 minutes, which is again too long.",
+   "right": true
+  },
+  {
+   "film": "Transformers: The Last Knight",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "Rebecca Farley of Refinery29 and Dana Schwartz of Marie Claire were critical of the underdeveloped female characters.",
+   "right": true
+  },
+  {
+   "film": "Transformers: The Last Knight",
+   "kind": "dislike",
+   "aspect": "Humour",
+   "quote": "So many attempts at humour falling flat on their faces and smashing all of their teeth on the floor.",
+   "right": true
+  },
+  {
+   "film": "Jurassic World Dominion",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Maggie Boccella of Collider praised their acting but was also critical of the writing.",
+   "right": true
+  },
+  {
+   "film": "Jurassic World Dominion",
+   "kind": "like",
+   "aspect": "Effects",
+   "quote": "Fantastic movie, with great special effects, wonderful story and plot and awesome actors!",
+   "right": true
+  },
+  {
+   "film": "Jurassic World Dominion",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "The story has become weak and lacks events that attract the viewer, and illogical imagination has been introduced excessively, which we are not used to in the old series.",
+   "right": true
+  },
+  {
+   "film": "Jurassic World Dominion",
+   "kind": "dislike",
+   "aspect": "Dialogue",
+   "quote": "Michael Phillips of the Chicago Tribune gave the film two out of four stars, describing Dominion as the franchise's weakest entry, criticizing its dialogue and calling Owen and Claire \"thinly conceived\".",
+   "right": true
+  },
+  {
+   "film": "The Little Mermaid",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Halle Bailey served a very good performance with a lot of charisma and passion, she also has an impressive voice.",
+   "right": true
+  },
+  {
+   "film": "The Little Mermaid",
+   "kind": "like",
+   "aspect": "Characters",
+   "quote": "Casting Awkwafina as the voice of know-it-all seagull Scuttle is inspired, and she creates an updated version of the character that’s the perfect fit for the film.",
+   "right": true
+  },
+  {
+   "film": "The Little Mermaid",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "The new films are too long, too monotone, too bland and full of photorealistic talking animals that range from boring to horrifying.",
+   "right": false,
+   "note": "the new films in general"
+  },
+  {
+   "film": "The Little Mermaid",
+   "kind": "dislike",
+   "aspect": "Visuals",
+   "quote": "She did, however, criticize the visual effects, but said that they were \"far better than the oft-maligned trailers would lead you to believe.\"",
+   "right": true
+  },
+  {
+   "film": "Aquaman and the Lost Kingdom",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Yahya Abdul-Mateen II's character is one I can barely remember, but the actor himself is good - I am a fan.",
+   "right": true
+  },
+  {
+   "film": "Aquaman and the Lost Kingdom",
+   "kind": "like",
+   "aspect": "Effects",
+   "quote": "Of course it looks good, loads of quality CGI and visual effects, but the story is light and overly strung out for two hours that really did feel more like two days at times.",
+   "right": true
+  },
+  {
+   "film": "Aquaman and the Lost Kingdom",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Nevertheless, the overreliance on exposition, a messy narrative structure, and other minor yet questionable decisions detract from the overall cohesiveness of the story.",
+   "right": true
+  },
+  {
+   "film": "Aquaman and the Lost Kingdom",
+   "kind": "dislike",
+   "aspect": "Action",
+   "quote": "Furthermore, she also called the set pieces \"derivative\" and thought the humor negatively impacted the film's emotional moments.",
+   "right": true
+  },
+  {
+   "film": "The Marvels",
+   "kind": "like",
+   "aspect": "Characters",
+   "quote": "Writing for The Hollywood Reporter, Lovia Gyarkye praised DaCosta's direction as \"kinetic\", and felt that the directing and the \"intimate storytelling style\" lets audiences see the main characters from \"new and entertaining vantage points\".",
+   "right": false,
+   "note": "praise of the direction"
+  },
+  {
+   "film": "The Marvels",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "Also the space between Mrs Marvel are too long to remind of the character.",
+   "right": false,
+   "note": "unclear"
+  },
+  {
+   "film": "Rebel Moon - Part One: A Child of Fire",
+   "kind": "like",
+   "aspect": "Action",
+   "quote": "Hell, even Sofia Boutella can literally kick ass, if you give her some good action scenes.",
+   "right": false,
+   "note": "a condition"
+  },
+  {
+   "film": "Rebel Moon - Part One: A Child of Fire",
+   "kind": "dislike",
+   "aspect": "Effects",
+   "quote": "Despite grappling with shallow writing and occasional subpar CGI, Rebel Moon successfully held my interest, kept me entertained, and left me willing to give Part Two a chance.",
+   "right": true
+  },
+  {
+   "film": "Rebel Moon - Part One: A Child of Fire",
+   "kind": "dislike",
+   "aspect": "Originality",
+   "quote": "I like the genre and I didn't hate the film, but it's disappointingly derivative and - well, you've just seen it all before.",
+   "right": true
+  },
+  {
+   "film": "Rebel Moon - Part One: A Child of Fire",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Generally speaking the trio of Snyder (too ambitious), Kurt Johnstad (300 - is ok) and Shay Hatten (John Wick 3 and 4... that almost don't have story) isn't a good choice.",
+   "right": false,
+   "note": "other films"
+  },
+  {
+   "film": "Borderlands",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "As a result a good number of performances feel more than a little awkward.",
+   "right": false,
+   "note": "a good number of awkward performances"
+  },
+  {
+   "film": "Borderlands",
+   "kind": "like",
+   "aspect": "Effects",
+   "quote": "The aesthetic choices, from the set design to the visual effects, fail to create a compelling or immersive world.",
+   "right": false,
+   "note": "a complaint"
+  },
+  {
+   "film": "Borderlands",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "I think there's too many characters and not enough time to explore each character.",
+   "right": true
+  },
+  {
+   "film": "Borderlands",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "The lack of a coherent plot makes it difficult to stay invested, and the film quickly becomes tedious.",
+   "right": true
+  },
+  {
+   "film": "Joker: Folie à Deux",
+   "kind": "like",
+   "aspect": "Direction",
+   "quote": "I loved the direction he took.",
+   "right": true
+  },
+  {
+   "film": "Joker: Folie à Deux",
+   "kind": "dislike",
+   "aspect": "Action",
+   "quote": "It lacks an action part where the Joker and Harley Quinn drown the city in chaos.",
+   "right": true
+  },
+  {
+   "film": "Joker: Folie à Deux",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "The result is a convoluted, overlong, often-uninteresting offering that’s heavy on style but weak on substance and not especially interesting.",
+   "right": true
+  },
+  {
+   "film": "Kraven the Hunter",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "I thought the story was good, the acting was fine and the special effects were done well and more grounded and gritty than your normal super hero movies.",
+   "right": true
+  },
+  {
+   "film": "Red One",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "'Red One' is perhaps slightly overlong and I didn't sense much chemistry between the cast, though those onscreen still give enjoyable performances and the plot is suitably entertaining whilst giving the necessary Xmas vibes.",
+   "right": true
+  },
+  {
+   "film": "Red One",
+   "kind": "dislike",
+   "aspect": "Originality",
+   "quote": "While the actors clearly enjoy playing off each other, the story itself is expectedly generic, relying heavily on predictable holiday tropes.",
+   "right": true
+  },
+  {
+   "film": "Red One",
+   "kind": "dislike",
+   "aspect": "Dialogue",
+   "quote": "Dialogue lacks wit or charm, with most performances coming across as forced, almost like actors reciting homework.",
+   "right": true
+  },
+  {
+   "film": "Red One",
+   "kind": "dislike",
+   "aspect": "Effects",
+   "quote": "The cinematography, sadly, doesn't help either, with over-reliance on weak CGI and clumsy action sequences that fail to impress.",
+   "right": true
+  },
+  {
+   "film": "Red One",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "There are still some jokes aimed at the cold-hearted adult who will inevitably be dragged along on the family cinema outing.",
+   "right": false,
+   "note": "dragged along = taken along"
+  },
+  {
+   "film": "Interstellar",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Some scenes dragged on while others were cut far shorter.",
+   "right": true
+  },
+  {
+   "film": "Killers of the Flower Moon",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "Needlessly long, boring and utterly useless Oscar bait.",
+   "right": true
   }
  ]
 }
