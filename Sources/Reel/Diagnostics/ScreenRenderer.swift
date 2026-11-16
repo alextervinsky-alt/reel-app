@@ -332,12 +332,38 @@ enum ScreenRenderer {
                 .padding(32)
             }.background(Theme.background))
             lines += await ScrollTiming.run([ScrollTiming.Page(name: "Posters alone (the machine)", view: bare)], model: model, log: log)
-            // Where the grid's time goes (diagnostics, session 3).
-            for (flags, name) in [(GridBisect.noPointer, "no pointer tracker"), (.noWarm, "no read-ahead"), (.noLink, "no link"),
-                                  ([.noLink, .noWarm, .noPointer], "none of the three")] {
-                GridBisect.flags = flags
-                lines += await ScrollTiming.run([ScrollTiming.Page(name: "Grid test: \(name)", view: AnyView(RootView()))], model: model, log: log)
+            // Where the grid's time goes (diagnostics, session 3): the bare posters with one part
+            // of a card added at a time, then the real card in the same plain grid.
+            let shownItems = Array(model.items.prefix(images.count))
+            func grid(_ name: String, @ViewBuilder _ cell: @escaping (Int) -> some View) -> ScrollTiming.Page {
+                ScrollTiming.Page(name: "Grid test: " + name, view: AnyView(ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 168, maximum: 205), spacing: 22)], spacing: 30) {
+                        ForEach(images.indices, id: \.self) { cell($0) }
+                    }
+                    .padding(32)
+                }.background(Theme.background)))
             }
+            func image(_ index: Int) -> some View {
+                Image(decorative: images[index].cgImage, scale: 1).resizable().aspectRatio(2 / 3, contentMode: .fill)
+            }
+            let tests: [ScrollTiming.Page] = [
+                grid("rounded clip") { image($0).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)) },
+                grid("hairline") { image($0).overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline)) },
+                grid("two lines of text") { index in
+                    VStack(alignment: .leading, spacing: 9) {
+                        image(index)
+                        Text(shownItems[index].main.displayTitle).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+                        Text("2019 · 2h 12m · Bong Joon Ho").font(.system(size: 12)).lineLimit(1)
+                    }
+                },
+                grid("loaded through CachedImage") { index in
+                    Color.clear.aspectRatio(2 / 3, contentMode: .fit)
+                        .overlay { CachedImage(path: shownItems[index].main.tmdb?.posterPath, kind: .poster) { Color.gray } }
+                },
+                grid("Poster") { index in Poster(path: shownItems[index].main.tmdb?.posterPath, title: shownItems[index].main.displayTitle, cornerRadius: 12) },
+                grid("the real card") { index in PosterCard(item: shownItems[index]).equatable() },
+            ]
+            lines += await ScrollTiming.run(tests, model: model, log: log)
             GridBisect.flags = []
         }
         try? (lines.joined(separator: "\n") + "\n").write(to: output.appendingPathComponent("scroll.txt"), atomically: true, encoding: .utf8)
