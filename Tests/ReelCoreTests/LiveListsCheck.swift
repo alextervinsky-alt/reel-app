@@ -13,7 +13,7 @@ final class LiveListsCheck: XCTestCase {
         guard env["REEL_LISTS_CHECK"] != nil, let token = env["TMDB_TOKEN"], !token.isEmpty else {
             throw XCTSkip("REEL_LISTS_CHECK and TMDB_TOKEN not set")
         }
-        let new: [AwardList] = [.oscarDocumentary, .veniceGrandJury, .berlinGrandJury, .baftaCinematography, .europeanCinematography]
+        let new: [AwardList] = [.oscarDocumentary, .veniceGrandJury, .berlinGrandJury, .europeanCinematography]
         for award in new {
             let films = (try? await WikidataLists().films(award)) ?? []
             let winners = films.filter(\.isWinner)

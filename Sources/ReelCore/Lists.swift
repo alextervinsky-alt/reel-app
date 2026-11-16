@@ -181,7 +181,9 @@ public enum AwardList: String, CaseIterable, Codable, Sendable, Identifiable {
     case palmeDOr, goldenLion, goldenBear, goldenLeopard, baftaBestFilm, cesarBestFilm, europeanFilm
     case criterion
     // 1.11: checked on Wikidata to have winners for at least 80% of the award's years (spec §8.2).
-    case oscarDocumentary, veniceGrandJury, berlinGrandJury, baftaCinematography, europeanCinematography
+    // (BAFTA for Best Cinematography was checked too and left out: as Reel reads Wikidata, it has
+    // winners for 29 of the award's 62 years, under the 70% rule.)
+    case oscarDocumentary, veniceGrandJury, berlinGrandJury, europeanCinematography
 
     /// Where the list sits on the Lists page.
     public enum Family: String, CaseIterable, Sendable {
@@ -193,7 +195,7 @@ public enum AwardList: String, CaseIterable, Codable, Sendable, Identifiable {
         case .oscarBestPicture, .oscarDirector, .oscarInternational, .oscarAnimated, .oscarDocumentary,
              .baftaBestFilm, .cesarBestFilm, .europeanFilm: .awards
         case .palmeDOr, .goldenLion, .goldenBear, .goldenLeopard, .veniceGrandJury, .berlinGrandJury: .festivals
-        case .oscarCinematography, .baftaCinematography, .europeanCinematography: .cinematography
+        case .oscarCinematography, .europeanCinematography: .cinematography
         case .criterion: .canon
         }
     }
@@ -218,7 +220,6 @@ public enum AwardList: String, CaseIterable, Codable, Sendable, Identifiable {
         case .oscarDocumentary: "Oscar for Best Documentary"
         case .veniceGrandJury: "Venice Grand Jury Prize"
         case .berlinGrandJury: "Berlinale Silver Bear Grand Jury Prize"
-        case .baftaCinematography: "BAFTA for Best Cinematography"
         case .europeanCinematography: "European Film Award for Best Cinematographer"
         }
     }
@@ -241,7 +242,6 @@ public enum AwardList: String, CaseIterable, Codable, Sendable, Identifiable {
         case .oscarDocumentary: "The Academy Award for Best Documentary Feature"
         case .veniceGrandJury: "The Venice Film Festival's second prize, after the Golden Lion"
         case .berlinGrandJury: "The Berlin Film Festival's second prize, after the Golden Bear"
-        case .baftaCinematography: "The films behind the British Academy's award for Best Cinematography"
         case .europeanCinematography: "The films behind the European Film Academy's award for the year's cinematography"
         }
     }
@@ -271,7 +271,6 @@ public enum AwardList: String, CaseIterable, Codable, Sendable, Identifiable {
         case .oscarDocumentary: "Academy Awards"
         case .veniceGrandJury: "Venice"
         case .berlinGrandJury: "Berlinale"
-        case .baftaCinematography: "BAFTA"
         case .europeanCinematography: "European Film Awards"
         }
     }
@@ -292,11 +291,10 @@ public enum AwardList: String, CaseIterable, Codable, Sendable, Identifiable {
         case .cesarBestFilm: "César Award for Best Film"
         case .europeanFilm: "European Film Award for Best Film"
         case .criterion: "The Criterion Collection spine number"
-        // As Wikidata names them (checked 16 Nov 2026: Q111332, Q944480, Q664212, Q778870, Q1377733).
+        // As Wikidata names them (checked 16 Nov 2026: Q111332, Q944480, Q664212, Q1377733).
         case .oscarDocumentary: "Academy Award for Best Documentary Feature Film"
         case .veniceGrandJury: "Grand Jury Prize of the Venice Film Festival"
         case .berlinGrandJury: "Silver Bear Grand Jury Prize"
-        case .baftaCinematography: "BAFTA Award for Best Cinematography"
         case .europeanCinematography: "European Film Award for Best Cinematographer"
         }
     }
@@ -671,7 +669,7 @@ public enum ListConsensus {
             case .oscarInternational: 0.9
             case .oscarDirector, .goldenLeopard, .veniceGrandJury: 0.8
             case .baftaBestFilm, .oscarAnimated, .berlinGrandJury: 0.7
-            case .oscarCinematography, .cesarBestFilm, .europeanFilm, .criterion, .oscarDocumentary, .baftaCinematography: 0.6
+            case .oscarCinematography, .cesarBestFilm, .europeanFilm, .criterion, .oscarDocumentary: 0.6
             case .europeanCinematography: 0.5
             }
         }
@@ -778,7 +776,6 @@ public enum ListConsensus {
             case .oscarDocumentary: "Oscar, Documentary"
             case .veniceGrandJury: "Venice Grand Jury"
             case .berlinGrandJury: "Berlin Grand Jury"
-            case .baftaCinematography: "BAFTA for Cinematography"
             case .europeanCinematography: "EFA for Cinematography"
             default: award.title
             }

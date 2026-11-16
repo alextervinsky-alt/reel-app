@@ -254,12 +254,11 @@ final class ListsTests: XCTestCase {
 
     func testEveryAwardListHasAPlaceAndIsFoundBySearch() {
         XCTAssertEqual(AwardList.allCases.filter { $0.family == .cinematography },
-                       [.oscarCinematography, .baftaCinematography, .europeanCinematography])
+                       [.oscarCinematography, .europeanCinematography])
         let venice = ListSearch.reelLists(for: "Venice")
         XCTAssertTrue(venice.contains(.award(.goldenLion)) && venice.contains(.award(.veniceGrandJury)), "\(venice)")
         XCTAssertEqual(ListSearch.reelLists(for: "documentary"), [.award(.oscarDocumentary)])
-        XCTAssertEqual(Set(ListSearch.reelLists(for: "cinematography")), [.award(.oscarCinematography), .award(.baftaCinematography),
-                                                                          .award(.europeanCinematography)])
+        XCTAssertEqual(Set(ListSearch.reelLists(for: "cinematography")), [.award(.oscarCinematography), .award(.europeanCinematography)])
         XCTAssertTrue(ListSearch.reelLists(for: "festivals").contains(.award(.palmeDOr)))
         XCTAssertEqual(Set(ListSearch.reelLists(for: "directors poll")), [.directorsPoll])
         XCTAssertTrue(ListSearch.reelLists(for: "canon").contains(.afi))
