@@ -1,5 +1,11 @@
 {
  "gated": [],
+ "floors": {
+  "b": {
+   "like": 0.83,
+   "dislike": 0.76
+  }
+ },
  "labels": [
   {
    "film": "Oppenheimer",

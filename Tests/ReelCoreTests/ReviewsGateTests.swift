@@ -34,6 +34,9 @@ final class ReviewsGateTests: XCTestCase {
     struct Labels: Decodable {
         /// Sets whose result must reach the bar.
         let gated: [String]
+        /// What shipped, so it can't quietly get worse: the least share right, by set and kind
+        /// (Alex chose on 16 Nov to ship the 1.11 rules under the 95% bar).
+        var floors: [String: [String: Double]]?
         let labels: [Label]
     }
 
@@ -90,6 +93,12 @@ final class ReviewsGateTests: XCTestCase {
             let filmsShowing = Set(shown.map(\.film)).count
             print("REVIEWS| set \(set.uppercased()): \(films.count) films, \(filmsShowing) show something; \(line("like")); \(line("dislike")); "
                   + "\(missing) parts with no stored score")
+            for (kind, floor) in labelFile.floors?[set] ?? [:] {
+                let all = shown.filter { $0.kind == kind }
+                XCTAssertTrue(all.allSatisfy { $0.right != nil }, "set \(set): every shown \(kind) is read (label the new ones)")
+                let right = all.filter { $0.right == true }.count
+                XCTAssertGreaterThanOrEqual(Double(right), floor * Double(all.count), "set \(set): \(kind)s right")
+            }
             if labelFile.gated.contains(set) {
                 for kind in ["like", "dislike"] {
                     let all = shown.filter { $0.kind == kind }
