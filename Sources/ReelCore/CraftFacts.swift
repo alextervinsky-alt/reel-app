@@ -222,11 +222,25 @@ public enum CraftFactReader {
     /// - Parameters:
     ///   - article: the plain text of the film's own English article (sections marked "== … ==").
     ///   - title: the film's title, to tell a sentence about this film.
-    public static func read(article: String?, title: String, articleTitle: String?, quick: QuickFacts?, now: Date = Date()) -> CraftFacts {
+    public static func read(article: String?, title: String, articleTitle: String?, quick: QuickFacts?,
+                            categories: [String] = [], now: Date = Date()) -> CraftFacts {
         var facts: [CraftFacts.Fact] = []
         var shotOn: [ShotOn] = []
         var inPart = Set<ShotOn>()
         let wikidata = "Wikidata"
+        // The article's categories that say what it was shot on (editors' statements about the
+        // principal photography, one per film): "Films shot in 16 mm film".
+        var seenValues = Set<String>()
+        for category in categories {
+            guard let fact = categoryFact(category) else { continue }
+            guard seenValues.insert(fact.value).inserted else { continue }
+            facts.append(.init(row: .format, value: fact.value, source: "Wikipedia category",
+                               link: URL(string: "https://en.wikipedia.org/wiki/Category:" + category.replacingOccurrences(of: " ", with: "_")
+                                   .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!),
+                               inPart: fact.partly(categories)))
+            if !shotOn.contains(fact.shotOn) { shotOn.append(fact.shotOn) }
+            if fact.partly(categories) { inPart.insert(fact.shotOn) }
+        }
         for ratio in quick?.aspectRatios ?? [] where !ratio.isEmpty {
             facts.append(.init(row: .aspectRatio, value: ratio, source: wikidata))
         }
@@ -240,7 +254,6 @@ public enum CraftFactReader {
             URL(string: "https://en.wikipedia.org/wiki/" + title.replacingOccurrences(of: " ", with: "_")
                 .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)
         }
-        var seenValues = Set<String>()
         for sentence in statements(in: article ?? "", title: title) {
             let lower = sentence.lowercased()
             let sentencePart = isPartly(lower)
@@ -286,6 +299,31 @@ public enum CraftFactReader {
         }
         clauses.append(rest)
         return clauses
+    }
+
+    struct CategoryFact {
+        let value: String
+        let shotOn: ShotOn
+        /// In part when another category says so ("Films partially in color" for black and white).
+        let partlyWhen: String?
+        func partly(_ categories: [String]) -> Bool { partlyWhen.map { categories.contains($0) } ?? false }
+    }
+
+    /// What a category says: "Films shot in 16 mm film", "Films shot in 65 mm", "Black-and-white
+    /// films". IMAX's categories aren't used (they hold films shot partly with IMAX cameras without
+    /// saying which).
+    static func categoryFact(_ category: String) -> CategoryFact? {
+        if category == "Black-and-white films" {
+            return CategoryFact(value: "Black and white", shotOn: .blackAndWhite, partlyWhen: "Films partially in color")
+        }
+        if category.patternRange(#"^Films shot (?:digitally|on digital video|with digital cameras)$"#) != nil {
+            return CategoryFact(value: "Digital", shotOn: .digital, partlyWhen: nil)
+        }
+        if let range = category.patternRange(#"(?<=^Films shot (?:in|on) )(?:Super )?\d+ ?mm(?= film$|$)"#) {
+            let gauge = category[range].replacingOccurrences(of: "mm", with: " mm").replacingOccurrences(of: "  ", with: " ")
+            return CategoryFact(value: gauge + " film", shotOn: .film, partlyWhen: nil)
+        }
+        return nil
     }
 
     /// "colour" → "Colour", "black-and-white" → "Black and white".

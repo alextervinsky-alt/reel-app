@@ -69,6 +69,18 @@ final class CraftFactReaderTests: XCTestCase {
         XCTAssertEqual(facts.shotOn, [.blackAndWhite])
     }
 
+    func testCategoriesThatSayWhatItWasShotOn() {
+        let facts = CraftFactReader.read(article: "Harbour Lights is a film.", title: "Harbour Lights", articleTitle: "Harbour Lights",
+                                         quick: nil, categories: ["2019 films", "Films shot in 16 mm film", "Black-and-white films",
+                                                                  "Films partially in color", "IMAX films"])
+        XCTAssertEqual(facts.facts.map(\.value), ["16 mm film", "Black and white"])
+        XCTAssertEqual(facts.shotOn, [.film, .blackAndWhite])
+        XCTAssertEqual(facts.inPart, [.blackAndWhite], "partly in colour")
+        XCTAssertEqual(facts.facts.first?.source, "Wikipedia category")
+        XCTAssertNil(CraftFactReader.categoryFact("Films shot in Morocco"))
+        XCTAssertEqual(CraftFactReader.categoryFact("Films shot in 65mm")?.value, "65 mm film")
+    }
+
     func testANonEnglishArticleOrNoneGivesWikidataOnly() {
         let facts = CraftFactReader.read(article: nil, title: "Harbour Lights", articleTitle: nil, quick: nil)
         XCTAssertTrue(facts.facts.isEmpty)
