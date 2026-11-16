@@ -1,0 +1,1017 @@
+[
+  {
+    "aspect" : "Acting",
+    "film" : "Oppenheimer",
+    "kind" : "like",
+    "quote" : "The superb direction and exceptional performances by Cillian Murphy, Robert Downey Jr. and others draw you into the story, making you feel as though you are right there in the midst of it all.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Oppenheimer",
+    "kind" : "like",
+    "quote" : "This film takes you on an exhilarating journey through history, skillfully weaving together captivating storytelling and breathtaking visuals.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Oppenheimer",
+    "kind" : "like",
+    "quote" : "Empire's Dan Jolin labeled it a \"masterfully constructed character study\", taking particular note of Murphy's performance and van Hoytema's IMAX cinematography.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Music and sound",
+    "film" : "Oppenheimer",
+    "kind" : "like",
+    "quote" : "The picture’s production values are all top shelf, especially its brilliant cinematography, stirring original score and superb sound quality, an element that truly leaves audiences with a bona fide visceral experience.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Oppenheimer",
+    "kind" : "dislike",
+    "quote" : "Though at times the pace of this thing helps to keep it enthralling, it is too long - at times it really does plod along.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Oppenheimer",
+    "kind" : "dislike",
+    "quote" : "Hugely unnecessary character development and unnecessary dramatisation.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Parasite",
+    "kind" : "like",
+    "quote" : "It's one of the best original stories of the last few years, and it's written in such a brilliant manner, with beautiful visual storytelling instead of the overused exposition.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Tension",
+    "film" : "Parasite",
+    "kind" : "like",
+    "quote" : "In ten minutes, the tone goes from funny to dramatic to suspenseful to scary to absolute tragedy... and it all feels incredibly realistic.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "Parasite",
+    "kind" : "like",
+    "quote" : "And the comedy is actually hilarious and well written with the execution being sold on the actors.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Music and sound",
+    "film" : "Parasite",
+    "kind" : "like",
+    "quote" : "I'm in love with the score, I gasped several times at the impressive cinematography, and the editing is perfect.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Parasite",
+    "kind" : "dislike",
+    "quote" : "Not a single line of dialogue is wasted.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Parasite",
+    "kind" : "dislike",
+    "quote" : "Parasite is a brilliant psychological thriller that explores class disparity through the story of a poor family who deceitfully infiltrates a wealthy household.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Joker",
+    "kind" : "like",
+    "quote" : "The delivery is great thanks to the spectacular performance.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Music and sound",
+    "film" : "Joker",
+    "kind" : "like",
+    "quote" : "Great score, great cinematography, great pacing... it's all just utterly superb and makes for a spectacular watch.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Joker",
+    "kind" : "like",
+    "quote" : "Sher paints the screen with so many gorgeous shots, especially with his close-ups on Phoenix, where the latter is able to shine.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Joker",
+    "kind" : "like",
+    "quote" : "It's a dark, brutal, violent, emotionally powerful origin of a villain who I feel disturbingly empathetic towards.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Originality",
+    "film" : "Joker",
+    "kind" : "dislike",
+    "quote" : "While praising Phoenix's performance and the first act, he criticized the film's political plot developments and overall found it too derivative of various Scorsese films.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Joker",
+    "kind" : "dislike",
+    "quote" : "It is a technical marvel, featuring a career-defining performance that is impossible to look away from, yet it is wrapped in a narrative that feels as shallow as it is provocative.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Atmosphere",
+    "film" : "Blade Runner 2049",
+    "kind" : "like",
+    "quote" : "Soundtracks & atmosphere are really good & it's well shot, however story is confusing & everything is all over the place.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Blade Runner 2049",
+    "kind" : "like",
+    "quote" : "The acting was great, it really was.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Intensity",
+    "film" : "Blade Runner 2049",
+    "kind" : "dislike",
+    "quote" : "To me personally however, this movie is much too dark and depressing for my taste.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Dune",
+    "kind" : "like",
+    "quote" : "‘Dune’s massive scope tends to overshadow its storyline and characters, but in return we get a great cast and stunning visuals, leaving us hoping the second chapter will be able to live up to the expectations.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Atmosphere",
+    "film" : "Dune",
+    "kind" : "like",
+    "quote" : "There is an incredible atmosphere present in this film.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Dune",
+    "kind" : "like",
+    "quote" : "He also lauded Fraser's cinematography and Zimmer's score, calling the film \"blockbuster filmmaking in the Christopher Nolan mould\", and praising Chalamet and Ferguson's performances.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Dune",
+    "kind" : "like",
+    "quote" : "Ben Travis of Empire praised the writing and direction, feeling it helped properly establish elements of worldbuilding.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Ending",
+    "film" : "Dune",
+    "kind" : "dislike",
+    "quote" : "He lauded the role of women in the story and the directing of the action sequences, although he disliked the \"abrupt, unsatisfying\" ending.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Dune",
+    "kind" : "dislike",
+    "quote" : "This, unfortunately results in very shallow characterization, and the same problem runs throughout the film.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Mad Max: Fury Road",
+    "kind" : "like",
+    "quote" : "Richard Roeper of the Chicago Sun-Times gave the film four out of four and wrote that Theron and Hardy are \"one of the best action duos ever, in one of the best action movies\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Mad Max: Fury Road",
+    "kind" : "like",
+    "quote" : "The photography is really good too but, in the end, it is quite repeating itself from beginning to end and the stormy OST is exhausting.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Mad Max: Fury Road",
+    "kind" : "like",
+    "quote" : "Mad Max: Fury Road personifies madness from the frantic camerawork to the editing style to Tom Hardy’s wild-eyed performance making this film intense, heart-pounding, and unpredictable.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Effects",
+    "film" : "Mad Max: Fury Road",
+    "kind" : "like",
+    "quote" : "The stunt work and visual effects deserve praise all to themselves.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Mad Max: Fury Road",
+    "kind" : "dislike",
+    "quote" : "Mick LaSalle of the San Francisco Chronicle wrote a mixed review, praising the cinematography and Theron's performance, but describing the film as a \"long, dull chase\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Mad Max: Fury Road",
+    "kind" : "dislike",
+    "quote" : "Just last year, John Wick showed us that you can get away with a pretty thin premise, if you work hard enough on building a thick, palpable world.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Direction",
+    "film" : "La La Land",
+    "kind" : "like",
+    "quote" : "La La Land received widespread critical acclaim, with high praise directed towards Chazelle's direction and screenplay, cinematography, music, the performances of Gosling and Stone and their chemistry.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "La La Land",
+    "kind" : "like",
+    "quote" : "Ryan Gosling is probably one of my favourite actors around right now, in the argument at least, and he is very good here.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "La La Land",
+    "kind" : "like",
+    "quote" : "In addition the cinematography  is simply excellent.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "La La Land",
+    "kind" : "dislike",
+    "quote" : "It is a little light on story, not that it isn't entertaining - it is.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Inception",
+    "kind" : "like",
+    "quote" : "The acting is also wonderful, Leo DiCaprio, who was the first actor to accept the offer to play in the film, has done an amazing job.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Inception",
+    "kind" : "like",
+    "quote" : "My favorite part was Joseph Gordon's fight scene.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Inception",
+    "kind" : "like",
+    "quote" : "Nolan's vision is brought to life through stunning cinematography by Wally Pfister and groundbreaking visual effects.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Inception",
+    "kind" : "dislike",
+    "quote" : "It was all very confusing to me.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Interstellar",
+    "kind" : "like",
+    "quote" : "From its breathtaking visuals to the captivating performances, the film had me hooked from start to finish.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Interstellar",
+    "kind" : "like",
+    "quote" : "The performances were brilliant, The cinematography was breathtaking and hard to look away.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Emotion",
+    "film" : "Interstellar",
+    "kind" : "like",
+    "quote" : "I believe it was Quentin Tarantino who once said movies and music go hand in hand; that a moving image complimented by the right piece of music can create art.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Interstellar",
+    "kind" : "like",
+    "quote" : "The remaining cast was having less scope which were like the guest appearances that was widened a little broader, but was perfectly fitted for the story.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Interstellar",
+    "kind" : "dislike",
+    "quote" : "Not sure if longer than boring or more boring than long.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Interstellar",
+    "kind" : "dislike",
+    "quote" : "Claudia Puig of USA Today praised the visual spectacle and powerful themes, while criticizing the \"dull\" dialogue and \"tedious patches inside the space vessel\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Poor Things",
+    "kind" : "like",
+    "quote" : "The superb performances by Stone, Dafoe and Ruffalo are top shelf, contributing to the picture’s whopping 13 Critics Choice Award and 7 Golden Globe Award nominations.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Direction",
+    "film" : "Poor Things",
+    "kind" : "like",
+    "quote" : "Director Yorgos Lanthimos sweeping cinematic spectacular film that explores the life of what it means to be human, a woman, what exactly is life, and what is love.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Poor Things",
+    "kind" : "like",
+    "quote" : "That aside, the visuals are amazing - from the colours to the sets, major props to all those behind the scenes.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "Poor Things",
+    "kind" : "like",
+    "quote" : "But the way that result comes about here represents a truly inspired fusion of genres, including comedy, romance, social commentary and sci-fi, making for one of the most inventive, unusual and hilarious releases of recent years.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Poor Things",
+    "kind" : "dislike",
+    "quote" : "In spite of moral complaints the plot is quite coherent eliminating it as such.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Effects",
+    "film" : "Poor Things",
+    "kind" : "dislike",
+    "quote" : "My fear is that the dismal quality of contemporary commercial cinema—acclaimed by critics and consumers alike, both starved for special effects and vacuity—might drag Poor Things into the generic catch-all of the cinematic intelligentsia.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Killers of the Flower Moon",
+    "kind" : "dislike",
+    "quote" : "The movie also suffers from a lack of tension, suspense, and emotion, making it a tedious and forgettable watch.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Killers of the Flower Moon",
+    "kind" : "dislike",
+    "quote" : "It relies on clichéd tropes, wooden performances, and an extremely dull script.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Tenet",
+    "kind" : "like",
+    "quote" : "The film looks incredible, the practical effects in the action scenes are extraordinarily mounted, the cinematography is stunning, and the editing is superb, but there simply isn't anything of note under the shiny veneer.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Music and sound",
+    "film" : "Tenet",
+    "kind" : "like",
+    "quote" : "Honestly, I actually enjoyed the challenging sound design.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Tenet",
+    "kind" : "like",
+    "quote" : "With the help of a remarkable cast (especially Debicki and Pattinson), the definitely intriguing story makes the epic runtime feel a bit shorter, despite some scenes being unnecessary.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Tenet",
+    "kind" : "like",
+    "quote" : "Ludwig Göransson's score is tremendously powerful, and it definitely adds to the magnificent action set pieces, especially in the third act.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Tenet",
+    "kind" : "dislike",
+    "quote" : "Bad overloaded script with characters and a story whose only purpose is to serve the pretentious plot line.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Originality",
+    "film" : "Tenet",
+    "kind" : "dislike",
+    "quote" : "On the other hand, Kenneth Branagh plays a cliche Russian bad guy with generic motivations who feels way too formulaic for such a ground-breaking movie.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Tenet",
+    "kind" : "dislike",
+    "quote" : "It also doesn't help to have a generic MacGuffin and a formulaic villain at the core of such an unconventional movie.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Tenet",
+    "kind" : "dislike",
+    "quote" : "Bad dialogue which lacks build-up.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Venom",
+    "kind" : "like",
+    "quote" : "This time, the character of Eddie Brock is beautifully handled, with Tom Hardy offering an impressive performance.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Venom",
+    "kind" : "like",
+    "quote" : "The special effects and the action was very enjoyable to watch.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Effects",
+    "film" : "Venom",
+    "kind" : "like",
+    "quote" : "I also found the pacing and special effects to be more than solid.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "Venom",
+    "kind" : "like",
+    "quote" : "It was funny seeing Tom Hardy being a bit of a pussball, but even he cant help a crap script and an even worse film.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Venom",
+    "kind" : "dislike",
+    "quote" : "Critics generally criticized the film for its dullness, finding its plot messy and tone incoherent.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Venom",
+    "kind" : "dislike",
+    "quote" : "Unfortunately, the movie is drastically brought down by a generic narrative with an incredibly dull first half, an unnecessary focus on uninteresting subplots, and a disappointing amount of paper-thin characters.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Direction",
+    "film" : "Venom",
+    "kind" : "dislike",
+    "quote" : "He also thought that Williams and Slate were wasted in their respective roles in the film, and that Fleischer's direction was \"competent and unmemorable\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "Suicide Squad",
+    "kind" : "like",
+    "quote" : "It's funny that after watching this, I respect MCU more now considering what they were able to do with the more risky project: Guardians of the Galaxy.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Suicide Squad",
+    "kind" : "like",
+    "quote" : "Suicide Squad could have been more if the studio hadn’t interfered in production, but what we got still entertained and debuted some amazing actors bringing these wild characters to life.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Suicide Squad",
+    "kind" : "dislike",
+    "quote" : "The whole end of the world plot was totally generic, uninteresting and unnecessary.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Suicide Squad",
+    "kind" : "dislike",
+    "quote" : "The villain wasn't good, and the movements were weird, and not in a good way.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Suicide Squad",
+    "kind" : "dislike",
+    "quote" : "It's an incredibly boring and lazy style of writing.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Justice League",
+    "kind" : "like",
+    "quote" : "Richard Roeper of the Chicago Sun-Times gave the film 3.5 out of 4 stars, praising the cast, especially Gadot, and saying \"It's a putting-the-band-together origins movie, executed with great fun and energy.\"",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Justice League",
+    "kind" : "like",
+    "quote" : "The action in the film is good but it often plays out like a video game.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Effects",
+    "film" : "Justice League",
+    "kind" : "dislike",
+    "quote" : "He's a rather fake looking CGI creation that lacks depth.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Atmosphere",
+    "film" : "Justice League",
+    "kind" : "dislike",
+    "quote" : "What we’re left with is a DC film badly trying to be a Marvel film and the tone is an inconsistent mess throughout.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Justice League",
+    "kind" : "dislike",
+    "quote" : "The story was a bit rushed, the humor was forced, and it was a bit messy.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Justice League",
+    "kind" : "dislike",
+    "quote" : "The website's consensus reads: \"Justice League leaps over a number of DC movies, but its single bound isn't enough to shed the murky aesthetic, thin characters, and chaotic action that continue to dog the franchise.\"",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Eternals",
+    "kind" : "like",
+    "quote" : "Robert Abele of TheWrap commended the cinematography and felt \"an earnestness to the operatic stakes\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Eternals",
+    "kind" : "like",
+    "quote" : "Charlotte O'Sullivan of the Evening Standard described the film as \"lavish\" and \"ambitious\", and praised the fight sequences as \"astounding, beautifully paced and crammed with detail\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Eternals",
+    "kind" : "dislike",
+    "quote" : "Unfortunately, what now follows is a stunning looking, but really pretty dull series of set-piece scenarios that rather clunkily combine mythology and melodrama, romance and action.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Eternals",
+    "kind" : "dislike",
+    "quote" : "Mark Kennedy of the Associated Press criticized the dialogue and fight scenes, but praised the visual effects and Nanjiani's performance.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "The Flash",
+    "kind" : "like",
+    "quote" : "This is one of his best performances, and one that plays perfectly into his endearing awkwardness and bumbling charm.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "The Flash",
+    "kind" : "like",
+    "quote" : "Come all, let's witness an amazing adventure of action, adventure and sci-fi in the movie \"The Flash\" which will be released on June 16, 2023 in the United States.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Direction",
+    "film" : "The Flash",
+    "kind" : "like",
+    "quote" : "Joshua Yehl of IGN gave the film a seven out of ten, praising Muschietti's direction and its focus on Barry's \"emotional journey\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "The Flash",
+    "kind" : "like",
+    "quote" : "Early reviews generally praised the humor, action sequences, and the performances, but criticized the third act and visual effects.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "The Flash",
+    "kind" : "dislike",
+    "quote" : "An outcome not helped by a rather annoying, lead character.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Effects",
+    "film" : "The Flash",
+    "kind" : "dislike",
+    "quote" : "With a budget of $200 million they were able to deliver the worst possible CGI ever seen, and with it a crumbled plot that wishes for more of everything but Flash.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Morbius",
+    "kind" : "like",
+    "quote" : "To end on a good note, Jared Leto is a great actor and I would love to finally see him in a good movie.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Morbius",
+    "kind" : "like",
+    "quote" : "Chris Bumbray of JoBlo.com gave the film a 6 out of 10 and called it \"a decent enough start for the latest addition to the Sony Spider-Man Universe\" while also praising the cinematography and \"horror aspects\" of the plot.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Morbius",
+    "kind" : "dislike",
+    "quote" : "Weird decision making, boring, pointless dialogue.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Effects",
+    "film" : "Morbius",
+    "kind" : "dislike",
+    "quote" : "Not only is it nonsense, it also looks bad CGI wise.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Morbius",
+    "kind" : "dislike",
+    "quote" : "Horrible premise for his actions, not believable at all.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Don't Look Up",
+    "kind" : "like",
+    "quote" : "At the top end of Netflix' productions this - for a change some decent writing accompanies an on-form cast and i enjoyed it.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Themes",
+    "film" : "Don't Look Up",
+    "kind" : "dislike",
+    "quote" : "Linda Marric of The Jewish Chronicle gave the film 4\/5 stars, writing: \"There is something genuinely endearing about a film that doesn't seem to care one bit about coming across as silly as long as its message is heard\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Babylon",
+    "kind" : "like",
+    "quote" : "Robbie is on excellent form, a truly convincing performance as a character ill-equipped for the journey she is so determined to undertake.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Direction",
+    "film" : "Babylon",
+    "kind" : "like",
+    "quote" : "In his review for the San Francisco Chronicle, Mick LaSalle praised Chazelle's ambition and direction, writing that \"Babylon is what movie love really looks like.\"",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Babylon",
+    "kind" : "dislike",
+    "quote" : "This whole subplot could have been shorten tremendously helping reduce the bloated runtime of the film.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Babylon",
+    "kind" : "dislike",
+    "quote" : "However, I found that the storyline didn't flow smoothly, and at times it felt disjointed and confusing.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Black Adam",
+    "kind" : "like",
+    "quote" : "The action sequences looked amazing and were well done.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Black Adam",
+    "kind" : "dislike",
+    "quote" : "The DCEU is about to get way more convoluted and underwhelming than ever before if this is the future of live action DC films.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Originality",
+    "film" : "Black Adam",
+    "kind" : "dislike",
+    "quote" : "Otherwise the rest of this is about as derivative as it comes.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Black Adam",
+    "kind" : "dislike",
+    "quote" : "Rachel LaBonte of Screen Rant gave the film a 2.5 out of 5 and wrote, \"Though suffering from repetitive plot beats and thin characters, Black Adam is powered by Johnson's performance and its promise of an exciting future.\"",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Black Adam",
+    "kind" : "dislike",
+    "quote" : "The dialogue was pretty bad as well, the scenes constantly switched from serious to comedy causing both aspects to fall flat for me.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Aquaman",
+    "kind" : "like",
+    "quote" : "One of my favorite comic book characters of all time is Mera, and getting to see her in action was fantastic.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Aquaman",
+    "kind" : "like",
+    "quote" : "Here, the acting is great but I just don't feel that extra level of identity.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Aquaman",
+    "kind" : "like",
+    "quote" : "I loved William Defoe's character... and I would have loved MORE interactions between him and other characters.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Aquaman",
+    "kind" : "dislike",
+    "quote" : "The script writer had put some stupid shit in there where he had to play overly dumb at times but on the whole he was a good guy throughout the entire movie.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Aquaman",
+    "kind" : "dislike",
+    "quote" : "There are so many scenarios or lines of dialogue that were incredibly awkward to watch.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Glass",
+    "kind" : "like",
+    "quote" : "The editing is sublime, and I love how Shyamalan uses close-ups to show how remarkable his cast is.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Glass",
+    "kind" : "like",
+    "quote" : "The interactions between these characters are as captivating as they could be, and I couldn't take my eyes off screen.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Direction",
+    "film" : "Glass",
+    "kind" : "like",
+    "quote" : "Every time I offer undeniable proof of masterful filmmaking, I get overwhelmed with questions about his absurd twists and his cringe-worthy dialogues.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Ending",
+    "film" : "Glass",
+    "kind" : "dislike",
+    "quote" : "That said, I left disappointed with its conclusion, but there's still so much to love and praise.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Atmosphere",
+    "film" : "Glass",
+    "kind" : "dislike",
+    "quote" : "If you don't know this by now and you're still waiting for that last climax, you're only setting yourself up for disappointment, when no one asked you to anticipate such unrealistic stuff.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Napoleon",
+    "kind" : "like",
+    "quote" : "The BBC's Nicholas Barber found the film's battle sequences \"spectacular\", and also praised the performances of Kirby and Phoenix.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Napoleon",
+    "kind" : "like",
+    "quote" : "Critics praised the film's epic scale, battle scenes, and Phoenix and Kirby's performances, while some took issue with the length and Scott's \"bloated\" direction.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Napoleon",
+    "kind" : "dislike",
+    "quote" : "French critics had a less enthusiastic view than those from Britain and America, considering Napoleon \"lazy, pointless, boring, migraine-inducing, too short and historically inaccurate\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Napoleon",
+    "kind" : "dislike",
+    "quote" : "The screenplay is also weak on character development, portraying the autocrat as a monodimensional buffoon, someone whom it’s hard to believe could have accomplished so much (for what it’s worth) by being a loutish dolt.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Argylle",
+    "kind" : "like",
+    "quote" : "Brennan Klein of Screen Rant summarised the reviews as mixed, noting the polarised reception of the \"meta\" elements, while the cast received praise.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Argylle",
+    "kind" : "like",
+    "quote" : "Love Dallas in most things but in this she was fine as the author character but so unbelievable as the action spectacular spy.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "Argylle",
+    "kind" : "dislike",
+    "quote" : "All the characters and all the premises are just so stupid, and it looks so bad it's distracting, and it's boring on top of it all.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Argylle",
+    "kind" : "dislike",
+    "quote" : "The website's consensus reads: \"Argylle gets some mileage out of its silly, energetic spin on the spy thriller, but ultimately wears out its welcome with a convoluted plot and overlong runtime.\"",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Madame Web",
+    "kind" : "dislike",
+    "quote" : "Its soulless script, lifeless acting, and overall lack of direction make it a difficult watch.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Madame Web",
+    "kind" : "dislike",
+    "quote" : "The lifeless acting only compounds the problem, making the entire experience miserable.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Dialogue",
+    "film" : "Madame Web",
+    "kind" : "dislike",
+    "quote" : "Lee felt it was \"dumb and schlocky\" and comparable to some of the worst superhero films made, reiterating criticisms of the dialogue as \"unfunny\" and \"inelegant\" and said the action sequences were \"uninvolving\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Action",
+    "film" : "Madame Web",
+    "kind" : "dislike",
+    "quote" : "Action scenes are poorly choreographed and edited with all the tension of a grocery run.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "Megalopolis",
+    "kind" : "like",
+    "quote" : "He further noted the unevenness in the film's evolving styles and visuals and praised the costumes and score.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Megalopolis",
+    "kind" : "dislike",
+    "quote" : "In a negative review, Screen Daily's Tim Grierson said the film was narratively excessive and incoherent, with \"cartoonish performances\" and \"stray ideas and themes that are introduced, then abandoned\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "The Batman",
+    "kind" : "like",
+    "quote" : "The acting was fantastic as well with Zoe Kravitz and Paul Dano offering some standout performances.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Visuals",
+    "film" : "The Batman",
+    "kind" : "like",
+    "quote" : "The cinematography and visuals are stunning.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "The Batman",
+    "kind" : "like",
+    "quote" : "The pacing is very good, the cinematography is brilliant (Gotham looks fantastically bleak!), the story is engrossing and the dialogue is on point.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Pacing",
+    "film" : "The Batman",
+    "kind" : "dislike",
+    "quote" : "Kim Newman of Sight and Sound criticized the film's length and felt the secondary characters were underdeveloped.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "The Batman",
+    "kind" : "dislike",
+    "quote" : "Riddler character also seemed stupid, wearing stupid mask and acting stupid and wasn't intimidating at all, but laughable.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Ending",
+    "film" : "The Batman",
+    "kind" : "dislike",
+    "quote" : "Also, if the movie overall is consistently a bit too much, the ending takes it one notch further on that scale.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Barbie",
+    "kind" : "like",
+    "quote" : "Guided by Greta Gerwig’s direction, Margot Robbie and Ryan Gosling offer standout performances, complemented by memorable songs and stunning set designs, creating an immersive and humorous experience.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "Barbie",
+    "kind" : "like",
+    "quote" : "The Barbie movie is funny, and fun, and moved with deft pace from laughs to moments so engaging you could hear a pin drop in the theatre.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Barbie",
+    "kind" : "dislike",
+    "quote" : "But the story is very weak -- the Gloria\/Sasha tie-in felt ham-fisted and the 'bonding' Barbie has at the end with Ruth makes no sense in the context of the rest of the film.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Wonka",
+    "kind" : "like",
+    "quote" : "It features a strong and well matched ensemble cast and though maybe a little too long, I did enjoy it.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Story",
+    "film" : "Wonka",
+    "kind" : "like",
+    "quote" : "Instead, it offers a captivating narrative, an exceptional cast, and outstanding music.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Characters",
+    "film" : "Wonka",
+    "kind" : "like",
+    "quote" : "The characters are charming, and the casting choices are spot-on.",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Humour",
+    "film" : "Wonka",
+    "kind" : "like",
+    "quote" : "In a 5 out of 5 star review, Peter Bradshaw of The Guardian wrote that the film is \"spectacular, imaginative, sweet-natured and funny\".",
+    "set" : "a"
+  },
+  {
+    "aspect" : "Acting",
+    "film" : "Wonka",
+    "kind" : "dislike",
+    "quote" : "The film completely dies and falls short on this one performance because the character of Noodle is drawn in such a way that her present and future well-being is central to the strength of the story's momentum.",
+    "set" : "a"
+  }
+]
