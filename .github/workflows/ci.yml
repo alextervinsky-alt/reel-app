@@ -128,8 +128,8 @@ jobs:
           grep "GATE FAIL" gates.txt | paste -sd '~' - | sed 's/~/ ¦ /g' | while read -r l; do [ -n "$l" ] && echo "::warning::$l"; done
           grep -v "GATE FAIL" gates.txt | split -l 5 - gate-part-
           for f in gate-part-*; do [ -f "$f" ] && echo "::notice::$(paste -sd '~' "$f" | sed 's/~/ ¦ /g')"; done
-          grep -E "scroll .*pt\): first" screens/progress.txt | sed -E 's/^.*scroll /scroll /' | split -l 3 - scroll-part- || true
-          for f in scroll-part-*; do [ -f "$f" ] && echo "::notice::$(paste -sd '~' "$f" | sed 's/~/ ¦ /g')"; done
+          # Every page's steps over 16.7 and 8.3 ms, first and second pass, in one line.
+          echo "::notice::Scroll: $(grep -E "scroll .*pt\): first" screens/progress.txt | sed -E 's/^.*scroll ([^(]+) \([0-9]+ pt\): first.* ([0-9]+) of ([0-9]+) over 16 ms, ([0-9]+) over 8 ms \| again.* ([0-9]+) of [0-9]+ over 16 ms, ([0-9]+) over 8 ms.*$/\1 \2+\5\/\3x2 (8 ms: \4+\6)/' | paste -sd '~' - | sed 's/~/ ¦ /g')"
           grep -cE "GATE " screens/progress.txt >/dev/null || echo "::warning::No gates were measured: $(tail -3 screens/progress.txt 2>/dev/null)"
 
   mac-build:

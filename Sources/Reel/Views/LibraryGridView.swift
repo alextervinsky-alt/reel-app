@@ -96,21 +96,14 @@ struct LibraryGridView: View {
                     watchedByMonth(shown)
                 } else {
                     let _ = (pointer.items = shown)
-                    let bisect = GridBisect.flags
                     LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 30) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
-                            Group {
-                                if bisect.contains(.noLink) {
-                                    PosterCard(item: item).equatable()
-                                } else {
-                                    card(item)
-                                }
-                            }
-                            .gridCell(index, in: bisect.contains(.noPointer) ? nil : pointer)
-                            .onAppear { if !bisect.contains(.noWarm) { readAhead.warm(at: index, in: shown) } }
+                            card(item)
+                                .gridCell(index, in: pointer)
+                                .onAppear { readAhead.warm(at: index, in: shown) }
                         }
                     }
-                    .modifier(GridPointerIf(on: !bisect.contains(.noPointer), pointer: pointer) { item in posterMenu(item) })
+                    .gridPointer(pointer) { item in posterMenu(item) }
                     .padding(.horizontal, 32)
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -899,25 +892,6 @@ struct PosterHoverRatings: View {
                 LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.88)], startPoint: .top, endPoint: .bottom)
             )
         }
-    }
-}
-
-/// Diagnostics (CI): parts of the grid left out, to time what each costs. Empty in use.
-@MainActor
-struct GridBisect: OptionSet {
-    let rawValue: Int
-    static let noLink = GridBisect(rawValue: 1)
-    static let noWarm = GridBisect(rawValue: 2)
-    static let noPointer = GridBisect(rawValue: 4)
-    static var flags: GridBisect = []
-}
-
-private struct GridPointerIf: ViewModifier {
-    let on: Bool
-    let pointer: GridPointer
-    let menu: (LibraryItem) -> NSMenu?
-    func body(content: Content) -> some View {
-        if on { content.gridPointer(pointer, menu: menu) } else { content }
     }
 }
 
