@@ -103,6 +103,8 @@ public struct ArticleFindings: Sendable {
     public var funFacts: FunFacts
     /// Sentences from the critical-response section, for the reception summary.
     public var criticSentences: [String]
+    /// How it was shot, from the same Wikidata statements and article (1.11, `CraftFactReader`).
+    public var craft: CraftFacts?
 }
 
 public enum FunFactExtractor {
@@ -330,14 +332,15 @@ public struct WikipediaClient: Sendable {
         guard let text else {
             return ArticleFindings(
                 funFacts: FunFacts(facts: [], quick: quick, articleTitle: nil, fetchedAt: now),
-                criticSentences: [])
+                criticSentences: [], craft: CraftFactReader.read(article: nil, title: title, articleTitle: nil, quick: quick, now: now))
         }
         let facts = FunFacts(
             facts: FunFactExtractor.facts(fromExtract: text), quick: quick,
             consensus: FunFactExtractor.consensus(fromExtract: text),
             cinemaScore: FunFactExtractor.cinemaScore(fromExtract: text),
             articleTitle: article, fetchedAt: now)
-        return ArticleFindings(funFacts: facts, criticSentences: FunFactExtractor.criticSentences(fromExtract: text))
+        return ArticleFindings(funFacts: facts, criticSentences: FunFactExtractor.criticSentences(fromExtract: text),
+                               craft: CraftFactReader.read(article: text, title: title, articleTitle: article, quick: quick, now: now))
     }
 
     // MARK: Wikidata

@@ -406,6 +406,8 @@ struct FilmInfo: Sendable {
     let ratings: ExternalRatings?
     let reception: ReceptionSummary?
     let funFacts: FunFacts?
+    /// How it was shot (1.11), from the same Wikidata statements and article as the fun facts.
+    var craftFacts: CraftFacts?
     /// Wikipedia couldn't be reached: the film is refreshed again next launch for its fun facts
     /// and critics' lines.
     let findingsFailed: Bool
@@ -425,6 +427,7 @@ struct FilmInfo: Sendable {
             entry.apply(details, ratings: ratings, ratingsFailed: ratingsFailed, reception: reception)
         }
         if let funFacts { entry.funFacts = funFacts }
+        if let craftFacts { entry.craftFacts = craftFacts }
         if findingsFailed { entry.infoVersion = FilmEntry.currentInfoVersion - 1 }
     }
 }

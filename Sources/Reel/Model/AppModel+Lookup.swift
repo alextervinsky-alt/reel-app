@@ -314,7 +314,7 @@ extension AppModel {
             }
         }
         return FilmInfo(details: full.trimmed(), ratings: ratings, reception: reception, funFacts: findings?.funFacts,
-                        findingsFailed: findings == nil,
+                        craftFacts: findings?.craft, findingsFailed: findings == nil,
                         ratingsFailed: failed, ratingsRefused: refused, ratingsSkipped: !ratingsWanted)
     }
 
@@ -451,13 +451,18 @@ extension AppModel {
         }
         funFactsLoading.insert(details.id)
         defer { funFactsLoading.remove(details.id) }
-        guard var facts = try? await WikipediaClient().findings(imdbID: details.imdbID, title: details.title, year: details.year).funFacts else {
+        guard let findings = try? await WikipediaClient().findings(imdbID: details.imdbID, title: details.title, year: details.year) else {
             return
         }
+        var facts = findings.funFacts
         // Wikidata's part failing this time doesn't lose what it gave before.
         if facts.quick == nil { facts.quick = film.funFacts?.quick }
+        let craft = facts.quick == findings.funFacts.quick ? findings.craft : nil
         mutateFilms { list in
-            for i in list.indices where list[i].tmdb?.id == details.id { list[i].funFacts = facts }
+            for i in list.indices where list[i].tmdb?.id == details.id {
+                list[i].funFacts = facts
+                if let craft { list[i].craftFacts = craft }
+            }
         }
     }
 }

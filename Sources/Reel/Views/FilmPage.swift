@@ -535,7 +535,8 @@ struct FilmFactSheet: View {
     private var shotOnWhy: String {
         guard let facts = film.craftFacts else { return "" }
         return model.shownShotOn(film).compactMap { kind -> String? in
-            guard let fact = facts.facts.first(where: { $0.row == .format && $0.value.localizedCaseInsensitiveContains(kind.title) }) else {
+            let word = kind == .blackAndWhite ? "black" : kind.title
+            guard let fact = facts.facts.first(where: { $0.row == .format && $0.value.localizedCaseInsensitiveContains(word) }) else {
                 return nil
             }
             let said = fact.sentence.map { Spoilers.tellsTheStory($0) ? "" : ": “\($0)”" } ?? ""

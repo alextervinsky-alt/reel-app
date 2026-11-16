@@ -146,3 +146,158 @@ public enum CraftCrew {
         "\"B\" First Assistant Camera", "First Assistant \"B\" Camera",
     ]
 }
+
+// MARK: - Reading the facts
+
+/// Reads a film's facts sheet (1.11, spec §7.3) from what Reel already fetches with the film's
+/// info: Wikidata's statements (ratio, colour, cinematography awards) and the film's own English
+/// Wikipedia article, where only one kind of sentence counts: a plain statement, about this film,
+/// that it was shot on something. Nothing is inferred from a camera's name, a year, a crew member
+/// or another film; a sentence that's unsure, about plans or about another film is left out.
+public enum CraftFactReader {
+    /// Sections where a sentence can say how the film was shot (not its release in IMAX theatres).
+    static func isProductionSection(_ path: [String]) -> Bool {
+        let all = path.joined(separator: " / ").lowercased()
+        let top = path.first?.lowercased() ?? ""
+        let out = ["release", "reception", "box office", "accolade", "award", "home media", "legacy", "marketing", "plot", "cast",
+                   "sequel", "see also", "references", "external", "notes", "soundtrack", "music", "remaster", "restoration"]
+        if out.contains(where: { all.contains($0) }) { return false }
+        return top == "introduction" || top.contains("production") || all.contains("filming") || all.contains("cinematograph")
+            || all.contains("photography") || all.contains("visual style") || all.contains("technical") || all.contains("format")
+    }
+
+    /// Words that make a sentence about plans, tests, other films or exhibition, not the shoot.
+    static let unsure = ["originally", "initially", "planned", "considered", "would have", "wanted to", "hoped", "intended", "proposed",
+                         "debated", "was to be", "were to be", "discussed", "contemplated", "had been", "if ", "unlike", "like his",
+                         "like her", "similar to", "previous", "earlier film", "prior film", "his film", "her film", "sequel", "prequel",
+                         "the original", "remake", "inspired by", "homage", "projected", "projection", "screened", "screening",
+                         "released", "converted", "conversion", "remaster", "restor", "upscal", "transfer"]
+    /// Words that make a sentence true of part of the film only.
+    static let partly = ["some scenes", "several scenes", "certain scenes", "select scenes", "a few scenes", "one scene", "a scene",
+                         "sequences", "sequence", "portions", "portion", "parts of", "part of the film", "partially", "partly",
+                         "minutes of", "the opening", "the final", "the prologue", "the epilogue", "flashback", "second unit",
+                         "test", "rehearsal", "some shots", "several shots", "certain shots", "a shot", "additional", "segments",
+                         "segment", "some of the", "much of the", "most of the", "except", "while the rest", "mixed", "combination",
+                         "alongside", "as well as", "both"]
+
+    static let partlyPattern = #"\b(?:"# + partly.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|") + #")\b"#
+
+    static func isPartly(_ lower: String) -> Bool { lower.patternRange(partlyPattern) != nil }
+
+    struct Rule {
+        let pattern: String
+        let value: String
+        let shotOn: ShotOn?
+    }
+
+    /// What it was shot on, as a sentence says it (the shooting verb is required).
+    static let formats: [Rule] = [
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed|captured)\b[^.;]{0,40}\b(?:digitally|on digital|in digital|with digital cameras?|on (?:high-definition|hd) video)\b"#,
+             value: "Digital", shotOn: .digital),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\bwith imax (?:film )?cameras?\b|\b(?:shot|filmed|photographed)\b[^.;]{0,30}\b(?:on|in) imax\b|\bimax (?:film )?cameras? (?:were|was) used\b"#,
+             value: "IMAX", shotOn: .imax),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:the )?(?:5-perf |five-perf )?65 ?mm\b|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) 65-millimet"#,
+             value: "65 mm film", shotOn: .film),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:super ?)?16 ?mm\b|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) (?:super )?16-millimet"#,
+             value: "16 mm film", shotOn: .film),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,40}\b(?:on|in|using) (?:the )?(?:super ?)?35 ?mm\b|\b(?:shot|filmed|photographed)\b[^.;]{0,40}\b(?:on|in) 35-millimet"#,
+             value: "35 mm film", shotOn: .film),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,30}\b(?:on (?:celluloid|film stock|kodak|eastman|fujifilm|film)\b)"#,
+             value: "Film", shotOn: .film),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,30}\bin black[- ]and[- ]white\b"#,
+             value: "Black and white", shotOn: .blackAndWhite),
+        Rule(pattern: #"\b(?:shot|filmed|photographed|lensed)\b[^.;]{0,50}\banamorphic\b|\banamorphic lenses\b[^.;]{0,30}\b(?:were|was) used\b"#,
+             value: "Anamorphic", shotOn: .anamorphic),
+    ]
+
+    /// Cameras, named as makers sell them; only from a sentence that says it was shot with them.
+    static let cameraPattern = #"\b(?:Arri ?(?:Alexa|Amira|cam)[\w\- ]{0,12}|Arriflex[\w\- ]{0,12}|Panavision (?:Millennium[\w\- ]{0,6}|Panaflex[\w\- ]{0,10}|Platinum|Genesis|DXL\d?)|Sony (?:Venice ?\d?|CineAlta[\w\- ]{0,8}|F65|F55|HDW-F900|FX\d)|RED (?:Epic|Dragon|Helium|Monstro|One|Komodo|V-Raptor|Ranger|Raptor)[\w\- ]{0,10}|Canon (?:C\d{3}|EOS[\w\- ]{0,8})|Blackmagic[\w\- ]{0,16}|IMAX MSM[\w\- ]{0,6}|Phantom (?:Flex|v\d+)[\w\- ]{0,6}|Aaton[\w\- ]{0,10}|Bolex[\w\- ]{0,6})"#
+    static let lensPattern = #"\b(?:Panavision [CEGT]-[Ss]eries|Panavision (?:Primo|Ultra Speed|Super Speed|Sphero|Anamorphic)[\w\- ]{0,8}|Ultra Panavision 70|Cooke (?:S\d|Panchro|Speed Panchro|Anamorphic|Xtal)[\w/\- ]{0,10}|Zeiss (?:Super Speed|Master Prime|Ultra Prime|Supreme)[\w\- ]{0,6}|Hawk[\w\- ]{0,10}anamorphic|Leica Summilux[\w\- ]{0,6}|Canon K35|Kowa[\w\- ]{0,10}|Lomo[\w\- ]{0,10}|Petzval[\w\- ]{0,6})"#
+
+    /// The facts from Wikidata's statements and the article's text.
+    /// - Parameters:
+    ///   - article: the plain text of the film's own English article (sections marked "== … ==").
+    ///   - title: the film's title, to tell a sentence about this film.
+    public static func read(article: String?, title: String, articleTitle: String?, quick: QuickFacts?, now: Date = Date()) -> CraftFacts {
+        var facts: [CraftFacts.Fact] = []
+        var shotOn: [ShotOn] = []
+        var inPart = Set<ShotOn>()
+        let wikidata = "Wikidata"
+        for ratio in quick?.aspectRatios ?? [] where !ratio.isEmpty {
+            facts.append(.init(row: .aspectRatio, value: ratio, source: wikidata))
+        }
+        let colours = (quick?.colour ?? []).map(colourLabel)
+        if !colours.isEmpty {
+            facts.append(.init(row: .colour, value: colours.joined(separator: " and "), source: wikidata))
+            if ShotOn.known(colour: quick?.colour) == [.blackAndWhite] { shotOn.append(.blackAndWhite) }
+        }
+
+        let link = articleTitle.flatMap { title in
+            URL(string: "https://en.wikipedia.org/wiki/" + title.replacingOccurrences(of: " ", with: "_")
+                .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)
+        }
+        var seenValues = Set<String>()
+        for sentence in statements(in: article ?? "", title: title) {
+            let lower = sentence.lowercased()
+            let part = isPartly(lower)
+            for rule in formats where lower.patternRange(rule.pattern) != nil {
+                guard seenValues.insert(rule.value).inserted else { continue }
+                facts.append(.init(row: .format, value: rule.value, source: "Wikipedia", link: link, sentence: sentence, inPart: part))
+                if let kind = rule.shotOn {
+                    if !shotOn.contains(kind) { shotOn.append(kind) }
+                    if part { inPart.insert(kind) } else { inPart.remove(kind) }
+                }
+            }
+            let shotWith = lower.patternRange(#"\b(?:shot|filmed|photographed|lensed)\b"#) != nil
+            guard shotWith else { continue }
+            for (row, pattern) in [(CraftFacts.Row.camera, cameraPattern), (.lenses, lensPattern)] {
+                guard let range = sentence.patternRange(pattern) else { continue }
+                let name = String(sentence[range]).trimmingCharacters(in: .whitespaces.union(.punctuationCharacters))
+                guard name.count >= 3, seenValues.insert(name.lowercased()).inserted else { continue }
+                facts.append(.init(row: row, value: name, source: "Wikipedia", link: link, sentence: sentence, inPart: part))
+            }
+        }
+        // A format both stated in full and in part (film and digital): kept as each sentence said.
+        for honour in quick?.cinematographyHonours ?? [] {
+            facts.append(.init(row: .award, value: honour.name + (honour.won ? " (won)" : " (nominated)"), source: wikidata))
+        }
+        let order: [CraftFacts.Row] = [.format, .aspectRatio, .colour, .camera, .lenses, .award]
+        facts.sort { (order.firstIndex(of: $0.row) ?? 9) < (order.firstIndex(of: $1.row) ?? 9) }
+        return CraftFacts(readAt: now, facts: facts, shotOn: shotOn, inPart: inPart)
+    }
+
+    /// "colour" → "Colour", "black-and-white" → "Black and white".
+    static func colourLabel(_ label: String) -> String {
+        let lower = label.lowercased()
+        if lower.contains("black") && lower.contains("white") { return "Black and white" }
+        if lower == "color" || lower == "colour" { return "Colour" }
+        return label.prefix(1).uppercased() + label.dropFirst()
+    }
+
+    /// The sentences that can state a fact: in a section about the making, about this film (its
+    /// title, "the film", "the movie", "it", "filming", "principal photography"), with nothing
+    /// unsure in them; the part after "rather than" or "instead of" is dropped.
+    static func statements(in article: String, title: String) -> [String] {
+        let name = title.lowercased()
+        var result: [String] = []
+        for section in FunFactExtractor.sections(from: article) where isProductionSection(section.path) {
+            for sentence in ReceptionAnalyzer.sentences(in: section.text) {
+                guard sentence.count <= 400 else { continue }
+                var kept = sentence
+                for cut in [" rather than ", " instead of ", " as opposed to ", " but not ", " except for "] {
+                    if let range = kept.range(of: cut, options: .caseInsensitive) { kept = String(kept[..<range.lowerBound]) }
+                }
+                let lower = kept.lowercased()
+                if unsure.contains(where: { lower.contains($0) }) { continue }
+                // Another film named in it: a year in brackets is how Wikipedia names one.
+                if lower.patternRange(#"\((?:19|20)\d\d(?: film)?\)"#) != nil { continue }
+                let aboutThis = (!name.isEmpty && lower.contains(name)) || lower.hasPrefix("it ") || lower.contains("the film")
+                    || lower.contains("the movie") || lower.contains("filming") || lower.contains("principal photography")
+                    || lower.contains("the production") || lower.contains("the picture")
+                guard aboutThis else { continue }
+                result.append(kept.hasSuffix(".") ? kept : kept + ".")
+            }
+        }
+        return result
+    }
+}
