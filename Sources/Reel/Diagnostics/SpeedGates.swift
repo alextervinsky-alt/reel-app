@@ -100,7 +100,7 @@ enum SpeedGates {
     static func report(log: (String) -> Void) {
         let results = ScrollTiming.results
         let bare = results.first { $0.name.hasPrefix("Posters alone") }
-        for result in results where !result.name.hasPrefix("Plain") && !result.name.hasPrefix("Posters alone") {
+        for result in results where !result.name.hasPrefix("Plain") && !result.name.hasPrefix("Posters alone") && !result.name.hasPrefix("Grid test") {
             for (label, pass) in [("first", result.first), ("again", result.second)] where !pass.steps.isEmpty {
                 let limit = max(1, pass.steps.count / 100)
                 if result.name.hasPrefix("All Films"), let bare {

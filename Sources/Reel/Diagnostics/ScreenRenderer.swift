@@ -332,6 +332,13 @@ enum ScreenRenderer {
                 .padding(32)
             }.background(Theme.background))
             lines += await ScrollTiming.run([ScrollTiming.Page(name: "Posters alone (the machine)", view: bare)], model: model, log: log)
+            // Where the grid's time goes (diagnostics, session 3).
+            for (flags, name) in [(GridBisect.noPointer, "no pointer tracker"), (.noWarm, "no read-ahead"), (.noLink, "no link"),
+                                  ([.noLink, .noWarm, .noPointer], "none of the three")] {
+                GridBisect.flags = flags
+                lines += await ScrollTiming.run([ScrollTiming.Page(name: "Grid test: \(name)", view: AnyView(RootView()))], model: model, log: log)
+            }
+            GridBisect.flags = []
         }
         try? (lines.joined(separator: "\n") + "\n").write(to: output.appendingPathComponent("scroll.txt"), atomically: true, encoding: .utf8)
     }
