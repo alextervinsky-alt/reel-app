@@ -219,4 +219,62 @@ final class ListsTests: XCTestCase {
         XCTAssertEqual(picks.last?.tmdbID, 44012)
         XCTAssertEqual(ListConsensus.summary(picks[0].lists), "Sight & Sound · Palme d'Or · +1")
     }
+
+    // MARK: - 1.11 (spec §8)
+
+    func testANominationAddsAThirdToAFilmAlreadyOnAList() {
+        let lion = [ListFilm(imdbID: "tt1", tmdbID: 1, title: "Roma", year: 2018, note: "Won 2018", won: true)]
+        let picture = [ListFilm(imdbID: "tt1", tmdbID: 1, title: "Roma", year: 2018, note: "Nominated 2019", won: false),
+                       ListFilm(imdbID: "tt2", tmdbID: 2, title: "Only Nominated", year: 2018, note: "Nominated 2019", won: false)]
+        let picks = ListConsensus.gather([(.award(.goldenLion), lion), (.award(.oscarBestPicture), picture)], tmdbIDOf: { _ in nil })
+        XCTAssertEqual(picks.map(\.film.title), ["Roma"], "a film only nominated isn't a pick of its own")
+        XCTAssertEqual(picks[0].lists, [.award(.goldenLion)])
+        XCTAssertEqual(picks[0].nominations, [.award(.oscarBestPicture)])
+        XCTAssertEqual(picks[0].weight, 1.1 + 1.1 / 3, accuracy: 0.001)
+    }
+
+    func testTheBundledPolls() {
+        let directors = DirectorsPoll.poll2022
+        XCTAssertEqual(directors.count, 104, "100 places, twelve films sharing the last")
+        XCTAssertEqual(directors.first?.1, "2001: A Space Odyssey")
+        XCTAssertEqual(directors.filter { $0.0 == 93 }.count, 12)
+        XCTAssertEqual(directors.map(\.0), directors.map(\.0).sorted(), "in rank order")
+        // A shared place is as many places as films: the next rank skips them.
+        var expected = 1
+        for (index, entry) in directors.enumerated() where index == 0 || entry.0 != directors[index - 1].0 {
+            XCTAssertEqual(entry.0, expected, entry.1)
+            expected = entry.0 + directors.filter { $0.0 == entry.0 }.count
+        }
+        XCTAssertEqual(Set(directors.map(\.1)).count, 104, "each film once")
+        let afi = AFIList.list2007
+        XCTAssertEqual(afi.map(\.0), Array(1...100))
+        XCTAssertEqual(Set(afi.map(\.1)).count, 100)
+        XCTAssertEqual(afi.last?.1, "Ben-Hur")
+    }
+
+    func testEveryAwardListHasAPlaceAndIsFoundBySearch() {
+        XCTAssertEqual(AwardList.allCases.filter { $0.family == .cinematography },
+                       [.oscarCinematography, .baftaCinematography, .europeanCinematography])
+        let venice = ListSearch.reelLists(for: "Venice")
+        XCTAssertTrue(venice.contains(.award(.goldenLion)) && venice.contains(.award(.veniceGrandJury)), "\(venice)")
+        XCTAssertEqual(ListSearch.reelLists(for: "documentary"), [.award(.oscarDocumentary)])
+        XCTAssertEqual(Set(ListSearch.reelLists(for: "cinematography")), [.award(.oscarCinematography), .award(.baftaCinematography),
+                                                                          .award(.europeanCinematography)])
+        XCTAssertTrue(ListSearch.reelLists(for: "festivals").contains(.award(.palmeDOr)))
+        XCTAssertEqual(Set(ListSearch.reelLists(for: "directors poll")), [.directorsPoll])
+        XCTAssertTrue(ListSearch.reelLists(for: "canon").contains(.afi))
+        XCTAssertEqual(ListSearch.reelLists(for: "x"), [])
+    }
+
+    func testADecadesMostAcclaimed() {
+        func film(_ id: String, _ year: Int, rating: Double, votes: Int) -> IMDbFilm {
+            IMDbFilm(id: id, title: id, year: year, rating: rating, votes: votes, genres: [])
+        }
+        let films = [film("tt1", 1994, rating: 8.9, votes: 2_000_000), film("tt2", 1999, rating: 8.7, votes: 1_500_000),
+                     film("tt3", 1995, rating: 6.0, votes: 20_000), film("tt4", 2001, rating: 9.0, votes: 3_000_000)]
+        let list = Acclaim.decade(films.filter { $0.year < 2000 }, decade: 1990, prizes: { _ in [:] },
+                                  audience: { _ in (nil, nil) }, critics: { $0 == "tt2" ? CriticScores(metacritic: 99, rottenTomatoes: 99) : nil })
+        XCTAssertEqual(list.map(\.imdbID), ["tt2", "tt1", "tt3"], "the critics' score counts; another decade's film isn't there")
+        XCTAssertEqual(list.first?.note, "Metacritic 99 · IMDb 8.7")
+    }
 }

@@ -35,7 +35,8 @@ struct StartHereStamp: Equatable {
 extension AppModel {
     /// The lists Start Here and the list pages weigh together (IMDb's year lists stay apart).
     private var consensusLists: [(kind: FilmListKind, films: [ListFilm])] {
-        var all: [(kind: FilmListKind, films: [ListFilm])] = [(.sightAndSound, SightAndSound.films)]
+        var all: [(kind: FilmListKind, films: [ListFilm])] = [(.sightAndSound, SightAndSound.films), (.directorsPoll, DirectorsPoll.films),
+                                                               (.afi, AFIList.films)]
         if lists.imdbIsReady { all.append((.imdbAllTime, lists.films(for: .imdbAllTime))) }
         for award in AwardList.allCases { all.append((.award(award), lists.films(for: .award(award)))) }
         return all

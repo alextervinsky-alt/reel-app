@@ -159,8 +159,26 @@ final class ListsStore {
             return awards[award] ?? []
         case .sightAndSound:
             return SightAndSound.films
+        case .directorsPoll:
+            return DirectorsPoll.films
+        case .afi:
+            return AFIList.films
         case .acclaimed(let year):
             return acclaimed[year] ?? []
+        case .acclaimedDecade(let decade):
+            guard case .ready = imdbState, !imdbFilms.isEmpty else { return [] }
+            if let cached = imdbLists[kind] { return cached }
+            // From what's known already: nothing is fetched (spec §8.7).
+            let ofDecade = imdbFilms.filter { $0.year >= decade && $0.year < decade + 10 }
+            let awardLists = AwardList.allCases.map { ($0, awards[$0] ?? []) }
+            let list = Acclaim.decade(ofDecade, decade: decade, prizes: { Acclaim.prizes(awardLists, year: $0) },
+                                      audience: { film in
+                                          let art = self.art[film.id]
+                                          return (art?.voteAverage, art?.voteCount)
+                                      },
+                                      critics: { self.criticScores($0) })
+            imdbLists[kind] = list
+            return list
         case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted:
             guard case .ready = imdbState, !imdbFilms.isEmpty else { return [] }
             if let cached = imdbLists[kind] { return cached }
@@ -197,6 +215,12 @@ final class ListsStore {
         guard !found.isEmpty else { return }
         critics.merge(found) { _, new in new }
         scheduleSave("critics")
+        forgetAcclaimedDecades()
+    }
+
+    /// The decades' most acclaimed are worked out again with the prizes or critics now known.
+    private func forgetAcclaimedDecades() {
+        for kind in imdbLists.keys { if case .acclaimedDecade = kind { imdbLists[kind] = nil } }
     }
 
     func setAcclaimed(_ films: [ListFilm], year: Int) {
@@ -222,7 +246,7 @@ final class ListsStore {
     func isLoading(_ kind: FilmListKind) -> Bool {
         switch kind {
         case .award(let award): awardsLoading.contains(award)
-        case .sightAndSound: false
+        case .sightAndSound, .directorsPoll, .afi: false
         case .acclaimed(let year): acclaimedLoading.contains(year)
         default: imdbState == .preparing || imdbFilmsLoading
         }
@@ -235,8 +259,12 @@ final class ListsStore {
         switch kind {
         case .award(let award):
             await loadAward(award)
-        case .sightAndSound:
+        case .sightAndSound, .directorsPoll, .afi:
             break
+        case .acclaimedDecade:
+            await loadIMDbFilms()
+            startIMDbIfNeeded()
+            await loadAllAwards()
         case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted, .acclaimed:
             await loadIMDbFilms()
             startIMDbIfNeeded()
@@ -281,6 +309,7 @@ final class ListsStore {
             guard !films.isEmpty else { throw URLError(.zeroByteResource) }
             awards[award] = films
             awardsFailed.remove(award)
+            forgetAcclaimedDecades()
             awardsFetchedAt[award.rawValue] = Date()
             scheduleSave("awards")
         } catch {

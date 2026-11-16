@@ -51,11 +51,6 @@ struct ListPage: View {
                 header(progress, films: films)
                 if !films.isEmpty {
                     HStack(spacing: 8) {
-                        if kind.hasNominees {
-                            FilterChip(title: "Winners", isOn: !withNominees) { withNominees = false }
-                            FilterChip(title: "Winners & Nominees", isOn: withNominees) { withNominees = true }
-                            Rectangle().fill(Theme.hairline).frame(width: 1, height: 18).padding(.horizontal, 6)
-                        }
                         ForEach(Filter.allCases) { option in
                             FilterChip(title: option.rawValue, isOn: filter == option) { filter = option }
                         }
@@ -141,6 +136,14 @@ struct ListPage: View {
                 Text(kind.subtitle)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
+                // Nominees too, in plain view (1.11, spec §8.1).
+                if kind.hasNominees, !films.isEmpty || withNominees {
+                    HStack(spacing: 8) {
+                        FilterChip(title: "Winners", isOn: !withNominees) { withNominees = false }
+                        FilterChip(title: "Winners & Nominees", isOn: withNominees) { withNominees = true }
+                    }
+                    .padding(.vertical, 2)
+                }
                 if let note = kind.coverageNote {
                     Label(note, systemImage: "info.circle")
                         .font(.system(size: 12))
@@ -241,6 +244,8 @@ struct ListPage: View {
         } else if case .acclaimed(let year) = kind {
             if let note = film.note { parts.append(note) }
             if let prize = film.imdbID.flatMap({ model.acclaimedPrizes[year]?[$0] }) { parts.append(prize) }
+        } else if case .acclaimedDecade = kind {
+            if let note = film.note { parts.append(note) }
         } else {
             if case .award(let award) = kind, award != .criterion, let note = film.note { parts.append(note) }
             if let vote = model.lists.resolved(film)?.voteAverage, vote > 0 { parts.append("★ " + Format.rating(vote)) }
@@ -266,8 +271,10 @@ struct ListPage: View {
     }
 
     private var isAcclaimed: Bool {
-        if case .acclaimed = kind { return true }
-        return false
+        switch kind {
+        case .acclaimed, .acclaimedDecade: true
+        default: false
+        }
     }
 
     private var isReady: Bool {
@@ -279,7 +286,11 @@ struct ListPage: View {
         switch kind {
         case .imdbYear, .imdbAllTime, .imdbDecade, .imdbGenre, .imdbMostVoted: IMDbDataset.attribution
         case .sightAndSound: "The Sight and Sound critics' poll, 2022 (bfi.org.uk). Posters from TMDB."
+        case .directorsPoll: "The Sight and Sound directors' poll, 2022 (bfi.org.uk). Posters from TMDB."
+        case .afi: "AFI's 100 Years…100 Movies, 10th Anniversary Edition, 2007 (afi.com). Posters from TMDB."
         case .award: "From Wikidata (wikidata.org), free to use under CC0. Posters from TMDB."
+        case .acclaimedDecade: "Ranked by Reel from what's already known: IMDb's ratings and votes, the critics' and TMDB's scores "
+            + "Reel has looked up, and the award lists. " + IMDbDataset.attribution
         case .acclaimed: "Ranked by Reel from critics' scores (Metacritic and Rotten Tomatoes, via OMDb), IMDb's ratings and votes, "
             + "TMDB's ratings and the award lists. " + IMDbDataset.attribution
         }

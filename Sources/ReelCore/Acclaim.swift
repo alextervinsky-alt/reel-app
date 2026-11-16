@@ -122,6 +122,29 @@ public enum Acclaim {
         return best
     }
 
+    /// A decade's most acclaimed (1.11), from what's known already, so working it out fetches
+    /// nothing: each year's best-known films and prize films (as `pool`), with the TMDB audience
+    /// and critics' scores kept from earlier lookups, ranked together.
+    public static func decade(_ films: [IMDbFilm], decade: Int, prizes: (Int) -> [String: (prize: Prize, name: String)],
+                              audience: (IMDbFilm) -> (vote: Double?, votes: Int?), critics: (String) -> CriticScores?,
+                              size: Int = 100) -> [ListFilm] {
+        var candidates: [Candidate] = []
+        for year in decade..<(decade + 10) {
+            let won = prizes(year)
+            for film in pool(films, year: year, awarded: Set(won.keys), size: 60) {
+                let tmdb = audience(film)
+                let scores = critics(film.id)
+                candidates.append(Candidate(film: film, tmdbVote: tmdb.vote, tmdbVotes: tmdb.votes,
+                                            metacritic: scores?.metacritic, rottenTomatoes: scores?.rottenTomatoes,
+                                            prize: won[film.id]?.prize, prizeName: won[film.id]?.name))
+            }
+        }
+        return rank(candidates).prefix(size).map { entry in
+            ListFilm(imdbID: entry.candidate.film.id, tmdbID: nil, title: entry.candidate.film.title, year: entry.candidate.film.year,
+                     note: note(entry.candidate))
+        }
+    }
+
     static func clamp(_ value: Double) -> Double { min(1, max(0, value)) }
 }
 

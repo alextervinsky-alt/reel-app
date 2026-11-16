@@ -26,7 +26,7 @@ jobs:
       - name: Run ReelCore tests (offline)
         run: |
           set +e
-          swift test --skip LiveTMDBTests --skip LiveAcclaimTests --skip LiveReviewsCheck 2>&1 | tee test.log
+          swift test --skip LiveTMDBTests --skip LiveAcclaimTests --skip LiveReviewsCheck --skip LiveListsCheck 2>&1 | tee test.log
           code=${PIPESTATUS[0]}
           if [ $code -ne 0 ]; then
             grep -E "error:|failed|XCTAssert" test.log | head -25 | while read -r l; do echo "::error::${l}"; done
@@ -93,6 +93,22 @@ jobs:
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
           fi
           exit $fail
+
+  lists-check:
+    # The 1.11 lists read live (spec §8.3): new award lists from Wikidata, the bundled polls on TMDB.
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[lists-check]')
+    container: swift:6.0-noble
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read the lists
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+          REEL_LISTS_CHECK: "1"
+        run: |
+          swift test --filter LiveListsCheck > lists.log 2>&1 || true
+          grep -E "LISTS\|" lists.log | while read -r l; do echo "::notice::$l"; done
+          grep -E "error:|failed" lists.log | head -8 | while read -r l; do echo "::warning::$l"; done
 
   review-eval:
     # What the Reviews rules show for the stored public films, kept on review-1.11 to be read.

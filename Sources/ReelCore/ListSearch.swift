@@ -82,6 +82,36 @@ public enum ListSearch {
         public var isEmpty: Bool { themes.isEmpty && series.isEmpty && people.isEmpty && cinema.isEmpty && wikipedia.isEmpty }
     }
 
+    /// Reel's own lists the words name (1.11): by title, by who gives it ("Venice", "BAFTA") and
+    /// by family ("festival", "cinematography", "documentary", "canon", "poll"). Every word must
+    /// be found.
+    public static func reelLists(for query: String) -> [FilmListKind] {
+        let words = query.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+            .filter { $0.count >= 2 }
+            .map { $0.hasSuffix("s") && $0.count > 4 ? String($0.dropLast()) : $0 }
+        guard !words.isEmpty else { return [] }
+        var kinds: [(FilmListKind, String)] = [
+            (.sightAndSound, "sight and sound critics poll canon greatest all time bfi"),
+            (.directorsPoll, "sight and sound directors filmmakers poll canon greatest all time bfi"),
+            (.afi, "afi american film institute 100 years movies canon greatest american"),
+            (.imdbAllTime, "imdb top 250 ranking"),
+            (.imdbMostVoted, "imdb most voted ranking popular"),
+        ]
+        for award in AwardList.allCases {
+            let family = switch award.family {
+            case .awards: "award awards prize"
+            case .festivals: "festival festivals prize award"
+            case .cinematography: "cinematography cinematographer photography camera award"
+            case .canon: "canon collection"
+            }
+            kinds.append((.award(award), "\(award.title) \(award.source) \(award.wikidataLabel) \(family)"))
+        }
+        return kinds.compactMap { kind, extra in
+            let haystack = (kind.title + " " + extra).lowercased()
+            return words.allSatisfy { haystack.contains($0) } ? kind : nil
+        }
+    }
+
     /// The themes worth a list, best match first: the words themselves, then themes starting
     /// with them, then the rest; at most six (each is a list of its own to fetch).
     public static func rank(_ themes: [Theme], for query: String) -> [Theme] {

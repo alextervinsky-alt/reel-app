@@ -344,6 +344,8 @@ extension AppModel {
         if let cached = badgeCache[details.id], cached.version == version { return cached.badges }
         var all: [(kind: FilmListKind, films: [ListFilm])] = AwardList.allCases.map { (.award($0), lists.awards[$0] ?? []) }
         all.append((.sightAndSound, SightAndSound.films))
+        all.append((.directorsPoll, DirectorsPoll.films))
+        all.append((.afi, AFIList.films))
         all.append((.imdbAllTime, lists.films(for: .imdbAllTime)))
         let found = ListBadges.badges(imdbID: details.imdbID, tmdbID: details.id, title: film.displayTitle,
                                       year: film.displayYear, lists: all, tmdbIDOf: { self.lists.tmdbID($0) })

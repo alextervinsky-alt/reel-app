@@ -29,7 +29,10 @@ struct ListsView: View {
                 ListSearchSection()
                 StartHereSection(preparing: preparing) { preview = $0 }
                 YourProgressSection()
-                awardsSection
+                canonSection
+                ForEach([AwardList.Family.festivals, .awards, .cinematography], id: \.self) { family in
+                    awardsSection(family)
+                }
                 IMDbSection(columns: cardColumns)
                 setsSection
             }
@@ -54,7 +57,7 @@ struct ListsView: View {
             // Three posters per card.
             if let client = model.tmdb {
                 let firsts = AwardList.allCases.flatMap { lists.films(for: .award($0)).filter { $0.isWinner }.prefix(3) }
-                    + SightAndSound.films.prefix(3)
+                    + SightAndSound.films.prefix(3) + DirectorsPoll.films.prefix(3) + AFIList.films.prefix(3)
                 await lists.resolve(firsts, using: client)
             }
         }
@@ -126,15 +129,32 @@ struct ListsView: View {
 
     // MARK: Awards
 
-    private var awardsSection: some View {
+    /// The canon: Sight and Sound's two polls, AFI's 100 and the Criterion Collection (1.11, spec §8.6).
+    private var canonSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeading(title: "Critics, Awards & Festivals",
-                           subtitle: "Sight and Sound's critics' poll, and winners and nominees from Wikidata, refreshed weekly")
+            SectionHeading(title: "The Canon",
+                           subtitle: "Critics' and filmmakers' polls of the greatest films, and the Criterion Collection")
             LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 18) {
-                ListCard(kind: .sightAndSound, source: "Sight and Sound · 2022", symbol: "star.square.on.square")
-                ForEach(AwardList.allCases) { award in
-                    ListCard(kind: .award(award), source: award.source,
-                             symbol: award == .criterion ? "square.stack.3d.up" : "laurel.leading")
+                ListCard(kind: .sightAndSound, source: "Sight and Sound · Critics · 2022", symbol: "star.square.on.square")
+                ListCard(kind: .directorsPoll, source: "Sight and Sound · Directors · 2022", symbol: "star.square.on.square")
+                ListCard(kind: .afi, source: "American Film Institute · 2007", symbol: "star.square.on.square")
+                ListCard(kind: .award(.criterion), source: AwardList.criterion.source, symbol: "square.stack.3d.up")
+            }
+        }
+    }
+
+    /// One family of Wikidata's award lists: festivals, awards or cinematography.
+    private func awardsSection(_ family: AwardList.Family) -> some View {
+        let subtitle = switch family {
+        case .festivals: "The top prizes of the great festivals, with the films in competition"
+        case .cinematography: "The films behind the cinematography awards"
+        default: "The film academies' awards, winners and nominees"
+        }
+        return VStack(alignment: .leading, spacing: 16) {
+            SectionHeading(title: family.rawValue, subtitle: subtitle + ". From Wikidata, refreshed weekly")
+            LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 18) {
+                ForEach(AwardList.allCases.filter { $0.family == family }) { award in
+                    ListCard(kind: .award(award), source: award.source, symbol: "laurel.leading")
                 }
             }
         }
@@ -167,7 +187,7 @@ struct YourProgressSection: View {
     }
 
     private var started: [Entry] {
-        let kinds: [FilmListKind] = [.sightAndSound, .imdbAllTime] + AwardList.allCases.map { .award($0) }
+        let kinds: [FilmListKind] = [.sightAndSound, .directorsPoll, .afi, .imdbAllTime] + AwardList.allCases.map { .award($0) }
         return kinds.compactMap { kind -> Entry? in
             let all = model.lists.films(for: kind)
             let films = kind.hasNominees ? all.filter { $0.isWinner } : all
@@ -310,6 +330,7 @@ struct IMDbSection: View {
                     ListCard(kind: .imdbAllTime, source: "IMDb · All time", symbol: "trophy")
                     ListCard(kind: .imdbYear(year), source: "IMDb · \(year)", symbol: "calendar")
                     ListCard(kind: .imdbDecade(decade), source: "IMDb · The \(decade)s", symbol: "clock")
+                    ListCard(kind: .acclaimedDecade(decade), source: "Critics · Audiences · The \(decade)s", symbol: "star.circle")
                     ListCard(kind: .imdbMostVoted, source: "IMDb · Most voted", symbol: "person.3")
                 }
                 genres
@@ -323,7 +344,7 @@ struct IMDbSection: View {
             let lists = model.lists
             // The card only: no critics asked for (the list asks when opened).
             await model.loadAcclaimed(year: year, askCritics: false)
-            let kinds: [FilmListKind] = [.acclaimed(year), .imdbAllTime, .imdbYear(year), .imdbDecade(decade), .imdbMostVoted]
+            let kinds: [FilmListKind] = [.acclaimed(year), .imdbAllTime, .imdbYear(year), .imdbDecade(decade), .acclaimedDecade(decade), .imdbMostVoted]
             await lists.resolve(kinds.flatMap { lists.films(for: $0).prefix(3) }, using: client)
         }
     }
@@ -428,6 +449,8 @@ struct IMDbRankingMenus: View {
         switch kind {
         case .imdbDecade(let decade):
             ChoiceMenu(icon: "clock", options: IMDbChoices.decades, selection: Binding(get: { decade }, set: { kind = .imdbDecade($0) }))
+        case .acclaimedDecade(let decade):
+            ChoiceMenu(icon: "clock", options: IMDbChoices.decades, selection: Binding(get: { decade }, set: { kind = .acclaimedDecade($0) }))
         case .imdbGenre(let genre, let decade):
             HStack(spacing: 8) {
                 ChoiceMenu(icon: "theatermasks", options: IMDbChoices.genres,
@@ -479,8 +502,19 @@ struct ListSearchSection: View {
             .frame(height: 46)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.panel))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline))
+            let own = text.trimmingCharacters(in: .whitespaces).count >= 2 ? ListSearch.reelLists(for: text) : []
+            if !own.isEmpty {
+                group("Reel's Lists", note: nil) {
+                    FlowLayout(spacing: 8) {
+                        ForEach(own, id: \.self) { kind in
+                            NavigationLink(value: ListRoute(kind: kind)) { chip(kind.title, symbol: "list.star") }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
             if let results, !text.isEmpty {
-                if results.isEmpty {
+                if results.isEmpty, own.isEmpty {
                     Text("No lists for “\(searched)”. Try another word: a theme, a place, a time, a person.")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
