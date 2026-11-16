@@ -1,0 +1,902 @@
+[
+  {
+    "article" : "The Master (2012 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The film was shot on 65 mm film using the Panavision System 65 camera.",
+        "source" : "Wikipedia",
+        "value" : "65 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The remainder of the film was shot on 35mm using Panavision Millennium XL2s cameras, often used for scenes that required a \"dirtier\" look.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The remainder of the film was shot on 35mm using Panavision Millennium XL2s cameras, often used for scenes that required a \"dirtier\" look.",
+        "source" : "Wikipedia",
+        "value" : "Panavision Millennium XL2s"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "The Master",
+    "year" : 2012
+  },
+  {
+    "article" : "Phantom Thread",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Phantom Thread",
+    "year" : 2017
+  },
+  {
+    "article" : "There Will Be Blood",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "There Will Be Blood",
+    "year" : 2007
+  },
+  {
+    "article" : "No Country for Old Men",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "No Country for Old Men",
+    "year" : 2007
+  },
+  {
+    "article" : "Children of Men",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Children of Men",
+    "year" : 2006
+  },
+  {
+    "article" : "Gravity (2013 film)",
+    "inPart" : [
+      "film"
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Made on a production budget of $100 million, Gravity was shot digitally using Arri Alexa Classic cameras equipped with wide Arri Master Prime lenses.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : true,
+        "row" : "format",
+        "sentence" : "The final scene, which takes place on Earth, was shot on an Arri 765 camera using 65 mm film to provide the sequence with a visual contrast to the rest of the film.",
+        "source" : "Wikipedia",
+        "value" : "65 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Made on a production budget of $100 million, Gravity was shot digitally using Arri Alexa Classic cameras equipped with wide Arri Master Prime lenses.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa Classic"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+      "digital",
+      "film"
+    ],
+    "title" : "Gravity",
+    "year" : 2013
+  },
+  {
+    "article" : "Birdman (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Birdman or (The Unexpected Virtue of Ignorance)",
+    "year" : 2014
+  },
+  {
+    "article" : "The Tree of Life (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Tree of Life",
+    "year" : 2011
+  },
+  {
+    "article" : "Drive (2011 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Using an Arri Alexa camera, cinematographer Newton Thomas Sigel shot the film digitally.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Using an Arri Alexa camera, cinematographer Newton Thomas Sigel shot the film digitally.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa"
+      }
+    ],
+    "shotOn" : [
+      "digital"
+    ],
+    "title" : "Drive",
+    "year" : 2011
+  },
+  {
+    "article" : "Her (2013 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Her",
+    "year" : 2013
+  },
+  {
+    "article" : "Skyfall",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "It was the first Bond film to be shot digitally.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "digital"
+    ],
+    "title" : "Skyfall",
+    "year" : 2012
+  },
+  {
+    "article" : "Sicario (2015 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Sicario",
+    "year" : 2015
+  },
+  {
+    "article" : "Prisoners (2013 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Prisoners",
+    "year" : 2013
+  },
+  {
+    "article" : "Gone Girl (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Gone Girl",
+    "year" : 2014
+  },
+  {
+    "article" : "The Favourite (2018 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "European Film Award for Best Cinematographer (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Favourite",
+    "year" : 2018
+  },
+  {
+    "article" : "Portrait of a Lady on Fire",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Portrait of a Lady on Fire",
+    "year" : 2019
+  },
+  {
+    "article" : "Cold War (2018 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite"
+    ],
+    "title" : "Cold War",
+    "year" : 2018
+  },
+  {
+    "article" : "Ida (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Ida is filmed in black and white, and uses the now uncommon 4:3 aspect ratio.",
+        "source" : "Wikipedia",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "European Film Award for Best Cinematographer (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite"
+    ],
+    "title" : "Ida",
+    "year" : 2013
+  },
+  {
+    "article" : "Nebraska (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The film was shot with Arri Alexa digital cameras and Panavision C-Series anamorphic lenses.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The film was shot with Arri Alexa digital cameras and Panavision C-Series anamorphic lenses.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa"
+      },
+      {
+        "inPart" : false,
+        "row" : "lenses",
+        "sentence" : "The film was shot with Arri Alexa digital cameras and Panavision C-Series anamorphic lenses.",
+        "source" : "Wikipedia",
+        "value" : "Panavision C-Series"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite",
+      "digital"
+    ],
+    "title" : "Nebraska",
+    "year" : 2013
+  },
+  {
+    "article" : "Little Women (2019 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Little Women",
+    "year" : 2019
+  },
+  {
+    "article" : "The Irishman",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The picture was primarily shot on 35 mm film with Arricam STs and LTs, and with RED Heliums for sections shot on digital, with two IR-capable Arri Alexa Minis as witness-cameras for the de-aging.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The picture was primarily shot on 35 mm film with Arricam STs and LTs, and with RED Heliums for sections shot on digital, with two IR-capable Arri Alexa Minis as witness-cameras for the de-aging.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The picture was primarily shot on 35 mm film with Arricam STs and LTs, and with RED Heliums for sections shot on digital, with two IR-capable Arri Alexa Minis as witness-cameras for the de-aging.",
+        "source" : "Wikipedia",
+        "value" : "Arricam STs"
+      }
+    ],
+    "shotOn" : [
+      "digital",
+      "film"
+    ],
+    "title" : "The Irishman",
+    "year" : 2019
+  },
+  {
+    "article" : "Once Upon a Time in Hollywood",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour and Black and white"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Once Upon a Time in... Hollywood",
+    "year" : 2019
+  },
+  {
+    "article" : "Uncut Gems",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The film was shot by Darius Khondji, primarily on 35 mm film, using vintage anamorphic prime and long zoom lenses.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "Uncut Gems",
+    "year" : 2019
+  },
+  {
+    "article" : "The Power of the Dog (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Director of photography Ari Wegner shot The Power of the Dog using two Arri Alexa LF cameras paired with Panavision Ultra Panatar anamorphic lenses, with a 2.40:1 aspect ratio.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa LF"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Power of the Dog",
+    "year" : 2021
+  },
+  {
+    "article" : "Licorice Pizza",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Anderson and Michael Bauman (sharing a director of photography credit) shot Licorice Pizza on 35 mm film, using older lenses in order to create the film's 1970s texture.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "Licorice Pizza",
+    "year" : 2021
+  },
+  {
+    "article" : "Everything Everywhere All at Once",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Everything Everywhere All at Once",
+    "year" : 2022
+  },
+  {
+    "article" : "The Zone of Interest (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The film was shot on Sony Venice digital cameras equipped with Leica lenses.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The film was shot on Sony Venice digital cameras equipped with Leica lenses.",
+        "source" : "Wikipedia",
+        "value" : "Sony Venice"
+      }
+    ],
+    "shotOn" : [
+      "digital"
+    ],
+    "title" : "The Zone of Interest",
+    "year" : 2023
+  },
+  {
+    "article" : "Aftersun",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Aftersun",
+    "year" : 2022
+  },
+  {
+    "article" : "The Holdovers",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.66:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Holdovers",
+    "year" : 2023
+  },
+  {
+    "article" : "Challengers (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Challengers",
+    "year" : 2024
+  }
+]
