@@ -98,6 +98,21 @@ struct Poster: View {
     var monochrome = false
 
     var body: some View {
+        if GridExperiment.variant == 4 {
+            // Diagnostics (CI): without the rounded clip and the hairline.
+            Color.clear
+                .aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .overlay { CachedImage(path: path, kind: kind, monochrome: monochrome) { Color(white: 0.12) } }
+                .clipped()
+        } else if GridExperiment.variant == 5, let path, let image = ImageStore.shared.cached(path, kind, monochrome: monochrome) {
+            // Diagnostics (CI): the image as it is in memory, nothing loaded.
+            Image(decorative: image.cgImage, scale: 1).resizable().aspectRatio(2.0 / 3.0, contentMode: .fill)
+        } else {
+            framed
+        }
+    }
+
+    private var framed: some View {
         Color.clear
             .aspectRatio(2.0 / 3.0, contentMode: .fit)
             .overlay {

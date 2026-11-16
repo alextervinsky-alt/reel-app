@@ -949,7 +949,7 @@ struct PosterCard: View, Equatable {
         switch GridExperiment.variant {
         case 1: plainCard.contentShape(Rectangle()).modifier(OwnPointer(on: grid == nil, hovering: $hovering, item: item, scroll: scroll) { menu })
         case 2: plainCard
-        case 3: poster
+        case 3, 4, 5: poster
         default: card
         }
     }

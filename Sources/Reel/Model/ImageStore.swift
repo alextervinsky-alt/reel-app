@@ -357,6 +357,15 @@ struct CachedImage<Placeholder: View>: View {
     @State private var loaded: DecodedImage?
     /// Which image `loaded` is (path and look), so a reused view never shows the wrong one.
     @State private var loadedKey: String?
+    /// The image held when it was already in memory as the view appeared: kept here, outside
+    /// the view's state, so holding it doesn't draw the view again (1.11: a new row of posters
+    /// used to be laid out twice as it scrolled in).
+    @State private var held = Held()
+
+    final class Held {
+        var image: DecodedImage?
+        var key: String?
+    }
 
     var body: some View {
         let image = current
@@ -380,8 +389,8 @@ struct CachedImage<Placeholder: View>: View {
             // to start): kept here too, so the view redraws with it and keeps it if memory is
             // trimmed. (Returning without keeping it left the placeholder showing.)
             if let hit = ImageStore.shared.cached(path, kind, monochrome: monochrome) {
-                loaded = hit
-                loadedKey = wanted
+                held.image = hit
+                held.key = wanted
                 return
             }
             // A load can fail (the network not up yet after waking, a slow connection): it's
@@ -414,6 +423,7 @@ struct CachedImage<Placeholder: View>: View {
     private var current: DecodedImage? {
         guard let path else { return nil }
         if loadedKey == wanted, let loaded { return loaded }
+        if held.key == wanted, let image = held.image { return image }
         return ImageStore.shared.cached(path, kind, monochrome: monochrome)
     }
 }

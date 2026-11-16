@@ -320,7 +320,7 @@ enum ScreenRenderer {
             for path in model.films.compactMap({ $0.tmdb?.posterPath }) { _ = await ImageStore.shared.image(path, .poster) }
             lines += await ScrollTiming.run([ScrollTiming.Page(name: "All Films, 500 films", view: AnyView(RootView()))], model: model, log: log)
             // What each part of a poster card costs (diagnostics, not gates).
-            for (variant, name) in [(1, "without the lift"), (2, "titles and poster only"), (3, "poster only")] {
+            for (variant, name) in [(3, "poster only"), (4, "poster without its rounded clip"), (5, "poster image only, nothing loaded")] {
                 GridExperiment.variant = variant
                 lines += await ScrollTiming.run([ScrollTiming.Page(name: "Card test: \(name)", view: AnyView(RootView()))], model: model, log: log)
             }
