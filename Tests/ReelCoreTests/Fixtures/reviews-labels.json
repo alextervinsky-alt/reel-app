@@ -1035,6 +1035,155 @@
    "quote": "The film completely dies and falls short on this one performance because the character of Noodle is drawn in such a way that her present and future well-being is central to the strength of the story's momentum.",
    "right": false,
    "note": "unclear"
+  },
+  {
+   "film": "Parasite",
+   "kind": "like",
+   "aspect": "Tension",
+   "quote": "Even when it briefly delves into the horror territory, it's more suspenseful and scary than most of that genre's flicks nowadays.",
+   "right": true
+  },
+  {
+   "film": "Parasite",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Everyone in the cast is fantastic, but Song Kang-ho is the standout, in my opinion.",
+   "right": true
+  },
+  {
+   "film": "Joker",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "Todd Phillips and Scott Silver developed a brilliant screenplay, but Phoenix elevates it to a whole other level.",
+   "right": true
+  },
+  {
+   "film": "Joker",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "While praising Phoenix's performance and the first act, he criticized the film's political plot developments and overall found it too derivative of various Scorsese films.",
+   "right": true
+  },
+  {
+   "film": "Dune",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "As a result of the bad screenplay, this 2021 version doesn't even carry the socio-political statement it was supposed to have.",
+   "right": true
+  },
+  {
+   "film": "Inception",
+   "kind": "like",
+   "aspect": "Music and sound",
+   "quote": "The film's intricate plot, stunning visuals, and Hans Zimmer's powerful score create an immersive experience that challenges the boundaries of reality.",
+   "right": true
+  },
+  {
+   "film": "Interstellar",
+   "kind": "like",
+   "aspect": "Emotion",
+   "quote": "For those who appreciate thought-provoking science fiction with a strong emotional core, \"Interstellar\" is an absolute must-see.",
+   "right": true
+  },
+  {
+   "film": "Poor Things",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "The narrative takes us on a fantastic tour of European cities, but also on a wonderfully evocative tour of humanity - warts and all.",
+   "right": true
+  },
+  {
+   "film": "Poor Things",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Mick LaSalle at the San Francisco Chronicle called the film \"a 141-minute mistake\", writing, \"Worst of all, it's dishonest.",
+   "right": false,
+   "note": "aspect unclear, quote left open"
+  },
+  {
+   "film": "Suicide Squad",
+   "kind": "like",
+   "aspect": "Humour",
+   "quote": "It goes for subversive, funny and stylish, and it succeeds wildly during the first act.",
+   "right": true
+  },
+  {
+   "film": "Suicide Squad",
+   "kind": "dislike",
+   "aspect": "Characters",
+   "quote": "The characters themselves were boring and uninteresting.",
+   "right": true
+  },
+  {
+   "film": "Eternals",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "There was a lot of rather boring filler material between the actual action or advancement of the story, and a shitload of flashbacks.",
+   "right": true
+  },
+  {
+   "film": "Morbius",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "I think that most of the actors made a good enough job actually.",
+   "right": true
+  },
+  {
+   "film": "Don't Look Up",
+   "kind": "like",
+   "aspect": "Story",
+   "quote": "Linda Marric of The Jewish Chronicle gave the film 4/5 stars, writing: \"There is something genuinely endearing about a film that doesn't seem to care one bit about coming across as silly as long as its message is heard\".",
+   "right": false,
+   "note": "praise; writing is the critic writing"
+  },
+  {
+   "film": "Black Adam",
+   "kind": "dislike",
+   "aspect": "Story",
+   "quote": "Rachel LaBonte of Screen Rant gave the film a 2.5 out of 5 and wrote, \"Though suffering from repetitive plot beats and thin characters, Black Adam is powered by Johnson's performance and its promise of an exciting future.\"",
+   "right": true
+  },
+  {
+   "film": "Black Adam",
+   "kind": "dislike",
+   "aspect": "Effects",
+   "quote": "Very surprised that a triple A title in this age would have subpar CGI at times.",
+   "right": true
+  },
+  {
+   "film": "Aquaman",
+   "kind": "like",
+   "aspect": "Action",
+   "quote": "Grand in scale, this exquisitely gorgeous display of action and spec fx is mesmerizing ...certainly an equal to any Marvel Cinematic Universe production.",
+   "right": true
+  },
+  {
+   "film": "Glass",
+   "kind": "dislike",
+   "aspect": "Pacing",
+   "quote": "The pacing dragged in parts, and some of the twists didn’t pack the punch I hoped for.",
+   "right": true
+  },
+  {
+   "film": "Megalopolis",
+   "kind": "like",
+   "aspect": "Visuals",
+   "quote": "Yet, if you’re determined to see it, in light of the stunning visuals, this is probably a production best viewed on the big screen, but don’t be surprised if you walk away from this one disappointed overall.",
+   "right": true
+  },
+  {
+   "film": "Megalopolis",
+   "kind": "like",
+   "aspect": "Production design",
+   "quote": "He further noted the unevenness in the film's evolving styles and visuals and praised the costumes and score.",
+   "right": true
+  },
+  {
+   "film": "Wonka",
+   "kind": "like",
+   "aspect": "Acting",
+   "quote": "Timothée Chalamet gives a strong performance in the lead role.",
+   "right": true
   }
  ]
 }

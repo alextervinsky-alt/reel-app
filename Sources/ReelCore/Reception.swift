@@ -350,12 +350,17 @@ public enum ReceptionAnalyzer {
             if tokens[i].name && !(i == 0 && startsSentence) { continue }
             // "to see her in action" isn't the action scenes.
             if words[i] == "action", i > 0, words[i - 1] == "in" { continue }
+            // "…, writing: "…"" is a critic writing, not the writing.
+            if words[i] == "writing", i + 1 < words.count, words[i + 1] == "that" || lowerClause.range(of: #"writing[,:]?\s*["“]"#, options: .regularExpression) != nil { continue }
             for entry in aspectIndex[words[i]] ?? [] where matches(entry.parts, at: i) {
                 if entry.aspect == "Music and sound", words[i] == "score",
                    lowerClause.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\bscored?\s+(?:an?\s+)?\d"#, options: .regularExpression) != nil { continue }
                 if !aspectAt.contains(where: { $0.index == i && $0.aspect == entry.aspect }) { aspectAt.append((i, entry.aspect)) }
             }
         }
+        // An aspect word that judges ("boring", "funny") is about itself, never what's next to it:
+        // in "boring and lazy writing" the laziness is the writing's.
+        let judging = Set(aspectAt.map(\.index).filter { praiseIndex[words[$0]] != nil || faultIndex[words[$0]] != nil })
         let aboutTheFilm = words.contains { ["film", "movie", "it", "it's", "this", "picture"].contains($0) }
         guard !aspectAt.isEmpty || aboutTheFilm else { return [] }
         let negators: Set<String> = ["not", "never", "hardly", "without", "nor", "no", "nothing", "none", "neither", "barely", "less", "despite", "spite"]
@@ -401,7 +406,7 @@ public enum ReceptionAnalyzer {
             let reach = verb ? 6 : (tight.contains(words[i]) ? 2 : 5)
             // "…received praise", "…drew criticism": the nouns look back too.
             let looksBack = !verb || ["praise", "acclaim", "criticism", "criticisms", "complaints", "flaws", "flaw"].contains(words[i])
-            let others = aspectAt.filter { ($0.index < i && looksBack) || $0.index >= i + length }
+            let others = aspectAt.filter { !judging.contains($0.index) && (($0.index < i && looksBack) || $0.index >= i + length) }
                 .map { (distance: $0.index < i ? i - $0.index : $0.index - (i + length - 1), aspect: $0.aspect) }
                 .sorted { $0.distance < $1.distance }
             let own = aspectAt.first { $0.index == i }?.aspect
@@ -455,6 +460,8 @@ public enum ReceptionAnalyzer {
         guard opening.first?.isUppercase == true else { return false }
         let closing = text.reversed().drop { "\"”’'".contains($0) }
         guard let last = closing.first, ".!".contains(last) else { return false }
+        // Every quotation in it closed ("…, writing, "Worst of all, it's dishonest." isn't).
+        if text.filter({ $0 == "\"" }).count % 2 == 1 || text.filter({ $0 == "“" }).count != text.filter({ $0 == "”" }).count { return false }
         // Ends on "...": trails off.
         return !text.hasSuffix("..") && !text.hasSuffix("…")
     }
