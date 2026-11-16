@@ -221,6 +221,7 @@ struct RootView: View {
 
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.isSnapshot) private var isSnapshot
     let selection: Shelf
     let onSelect: (Shelf) -> Void
     @State private var showGenres = false
@@ -228,8 +229,49 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+            // Drawn to an image (CI), without the scroll view an image can't show.
+            if isSnapshot {
+                rows
+                Spacer(minLength: 0)
+            } else {
+                ScrollView { rows }
+                    .clipped()
+            }
+            if !model.drives.isEmpty {
+                drivesCard
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 6)
+            }
+            SidebarStatus { onSelect(.newArrivals) }
+            footer
+        }
+        // A floating panel, inset from the window's edges and starting under the window's
+        // close, minimise and full-screen buttons (never behind them).
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.sidebar)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
+                .padding(EdgeInsets(top: 0, leading: 8, bottom: 8, trailing: 2))
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .padding(.leading, 6)
+        .background(Theme.background.ignoresSafeArea())
+        .confirmationDialog(
+            "Remove \(driveToRemove?.name ?? "drive") from Reel?",
+            isPresented: Binding(get: { driveToRemove != nil }, set: { if !$0 { driveToRemove = nil } })
+        ) {
+            Button("Remove", role: .destructive) {
+                if let drive = driveToRemove { model.removeDrive(drive.id) }
+                driveToRemove = nil
+            }
+        } message: {
+            Text("Reel forgets this drive's files. Nothing on the drive is touched, and your notes are kept.")
+        }
+    }
+
+    /// The sections and their rows.
+    private var rows: some View {
+        VStack(alignment: .leading, spacing: 20) {
                     // In the order you use them: choosing tonight's film, your library, finding more.
                     section("Tonight") {
                         if model.tonightItems.isEmpty {
@@ -278,42 +320,10 @@ struct SidebarView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         row(.yearInFilm, "Year in Film", icon: "calendar")
                     }
-                }
-                .padding(.horizontal, 10)
-                .padding(.top, 12)
-                .padding(.bottom, 14)
-            }
-            .clipped()
-            if !model.drives.isEmpty {
-                drivesCard
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 6)
-            }
-            SidebarStatus { onSelect(.newArrivals) }
-            footer
         }
-        // A floating panel, inset from the window's edges and starting under the window's
-        // close, minimise and full-screen buttons (never behind them).
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.sidebar)
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.06)))
-                .padding(EdgeInsets(top: 0, leading: 8, bottom: 8, trailing: 2))
-                .ignoresSafeArea(edges: .bottom)
-        }
-        .padding(.leading, 6)
-        .background(Theme.background.ignoresSafeArea())
-        .confirmationDialog(
-            "Remove \(driveToRemove?.name ?? "drive") from Reel?",
-            isPresented: Binding(get: { driveToRemove != nil }, set: { if !$0 { driveToRemove = nil } })
-        ) {
-            Button("Remove", role: .destructive) {
-                if let drive = driveToRemove { model.removeDrive(drive.id) }
-                driveToRemove = nil
-            }
-        } message: {
-            Text("Reel forgets this drive's files. Nothing on the drive is touched, and your notes are kept.")
-        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
     }
 
     /// The drives at the foot of the sidebar: each with whether it's connected and its free
