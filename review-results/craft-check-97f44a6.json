@@ -1,0 +1,1044 @@
+[
+  {
+    "article" : "Oppenheimer (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.2:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour and Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Van Hoytema used 50 mm and 80 mm Hasselblad lenses when filming on the IMAX MKIV or IMAX MSM 9802 cameras, while scenes shot on the Panavision Panaflex System 65 Studio cameras were shot using Panavision Sphero 65 and Panavision System 65 lenses.",
+        "source" : "Wikipedia",
+        "value" : "IMAX MSM 9802"
+      },
+      {
+        "inPart" : false,
+        "row" : "lenses",
+        "sentence" : "Van Hoytema used 50 mm and 80 mm Hasselblad lenses when filming on the IMAX MKIV or IMAX MSM 9802 cameras, while scenes shot on the Panavision Panaflex System 65 Studio cameras were shot using Panavision Sphero 65 and Panavision System 65 lenses.",
+        "source" : "Wikipedia",
+        "value" : "Panavision Sphero 65"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Oppenheimer",
+    "year" : 2023
+  },
+  {
+    "article" : "Dunkirk (2017 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Cinematographer Hoyte van Hoytema shot the film on IMAX 65 mm and 65 mm large-format film stock.",
+        "source" : "Wikipedia",
+        "value" : "IMAX"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "imax"
+    ],
+    "title" : "Dunkirk",
+    "year" : 2017
+  },
+  {
+    "article" : "Parasite (2019 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "He shot the film with the Arri Alexa 65 and used Angénieux zoom lens.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa 65"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Parasite",
+    "year" : 2019
+  },
+  {
+    "article" : "Roma (2018 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Boston Society of Film Critics Award for Best Cinematography (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite"
+    ],
+    "title" : "Roma",
+    "year" : 2018
+  },
+  {
+    "article" : "The Lighthouse (2019 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "It was shot in black-and-white, with a nearly-square 1.19:1 aspect ratio to express the lighthouse's vertical orientation and isolation of the characters.",
+        "source" : "Wikipedia",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The Lighthouse was shot on 35 mm film using Panavision Panaflex Millennium XL2 cameras with vintage Bausch and Lomb Baltar lenses.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "19:16"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The Lighthouse was shot on 35 mm film using Panavision Panaflex Millennium XL2 cameras with vintage Bausch and Lomb Baltar lenses.",
+        "source" : "Wikipedia",
+        "value" : "Panavision Panaflex Millennium XL2"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite",
+      "film"
+    ],
+    "title" : "The Lighthouse",
+    "year" : 2019
+  },
+  {
+    "article" : "Mank",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "The film was shot in black and white on Fincher's preferred RED digital camera and made reference to the aesthetics of Citizen Kane cinematographer Gregg Toland.",
+        "source" : "Wikipedia",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite"
+    ],
+    "title" : "Mank",
+    "year" : 2020
+  },
+  {
+    "article" : "Belfast (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Belfast was shot digitally using the large format Arri Alexa Mini LF camera and Panavision System 65 lenses.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Black and white"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Belfast was shot digitally using the large format Arri Alexa Mini LF camera and Panavision System 65 lenses.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa Mini LF"
+      }
+    ],
+    "shotOn" : [
+      "blackAndWhite",
+      "digital"
+    ],
+    "title" : "Belfast",
+    "year" : 2021
+  },
+  {
+    "article" : "Joker (2019 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "rejected this due to cost, and the film was subsequently shot with Arri Alexa 65 digital cameras.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa 65"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Joker",
+    "year" : 2019
+  },
+  {
+    "article" : "1917 (2019 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "1917 was the first film to be shot with the Arri Alexa Mini LF digital cinema camera.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa Mini LF"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "1917",
+    "year" : 2019
+  },
+  {
+    "article" : "Blade Runner 2049",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.90:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Blade Runner 2049",
+    "year" : 2017
+  },
+  {
+    "article" : "Dune (2021 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The film was shot for the IMAX format with an IMAX-certified Arri Alexa LF camera and an IMAX-certified Alexa Mini LF prototype, equipped with Panavision's large-format lenses in the Ultra Vista and H-series lineup.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa LF"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Dune",
+    "year" : 2021
+  },
+  {
+    "article" : "Mad Max: Fury Road",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "It was the first project Seale filmed with digital cameras.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "AACTA Award for Best Cinematography (won)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "digital"
+    ],
+    "title" : "Mad Max: Fury Road",
+    "year" : 2015
+  },
+  {
+    "article" : "The Revenant (2015 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Revenant",
+    "year" : 2015
+  },
+  {
+    "article" : "La La Land",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Consequently, the movie was shot on celluloid 4-perf Super 35mm film (not digitally) with Panavision anamorphic lenses in CinemaScope's 2.55:1 aspect ratio,.",
+        "source" : "Wikipedia",
+        "value" : "Film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.55:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "La La Land",
+    "year" : 2016
+  },
+  {
+    "article" : "Moonlight (2016 film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "The two chose to avoid the \"documentary look\" and thus shot the film using widescreen CinemaScope on an Arri Alexa digital camera, which better rendered skin tone.",
+        "source" : "Wikipedia",
+        "value" : "Arri Alexa"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Moonlight",
+    "year" : 2016
+  },
+  {
+    "article" : "Arrival (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Arrival",
+    "year" : 2016
+  },
+  {
+    "article" : "The Social Network",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Social Network",
+    "year" : 2010
+  },
+  {
+    "article" : "Zodiac (film)",
+    "inPart" : [
+      "digital"
+    ],
+    "rows" : [
+      {
+        "inPart" : true,
+        "row" : "format",
+        "sentence" : "The film was not shot entirely digitally, as traditional high-speed film cameras were used for slow-motion murder sequences.",
+        "source" : "Wikipedia",
+        "value" : "Digital"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+      "digital"
+    ],
+    "title" : "Zodiac",
+    "year" : 2007
+  },
+  {
+    "article" : "Collateral (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "American Society of Cinematographers Award for Outstanding Achievement in Cinematography in Theatrical Releases (nominated)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "National Society of Film Critics Award for Best Cinematography (nominated)"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Online Film Critics Society Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Collateral",
+    "year" : 2004
+  },
+  {
+    "article" : "Inception",
+    "inPart" : [
+      "anamorphic",
+      "film"
+    ],
+    "rows" : [
+      {
+        "inPart" : true,
+        "row" : "format",
+        "sentence" : "The film was shot primarily in the anamorphic format on 35 mm film, with key sequences filmed on 65 mm, and aerial sequences in VistaVision.",
+        "source" : "Wikipedia",
+        "value" : "65 mm film"
+      },
+      {
+        "inPart" : true,
+        "row" : "format",
+        "sentence" : "The film was shot primarily in the anamorphic format on 35 mm film, with key sequences filmed on 65 mm, and aerial sequences in VistaVision.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : true,
+        "row" : "format",
+        "sentence" : "The film was shot primarily in the anamorphic format on 35 mm film, with key sequences filmed on 65 mm, and aerial sequences in VistaVision.",
+        "source" : "Wikipedia",
+        "value" : "Anamorphic"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+      "film",
+      "anamorphic"
+    ],
+    "title" : "Inception",
+    "year" : 2010
+  },
+  {
+    "article" : "Interstellar (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Nolan shot Interstellar on 35 mm film in the Panavision anamorphic format and IMAX 70 mm photography.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Nolan shot Interstellar on 35 mm film in the Panavision anamorphic format and IMAX 70 mm photography.",
+        "source" : "Wikipedia",
+        "value" : "Anamorphic"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+      "film",
+      "anamorphic"
+    ],
+    "title" : "Interstellar",
+    "year" : 2014
+  },
+  {
+    "article" : "The Grand Budapest Hotel",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "Yeoman shot The Grand Budapest Hotel on 35 mm film using Kodak Vision3 200T 5213 film stock from a single Arricam Studio camera provided by Arri's Berlin office.",
+        "source" : "Wikipedia",
+        "value" : "35 mm film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "Academy ratio"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.35:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "Yeoman shot The Grand Budapest Hotel on 35 mm film using Kodak Vision3 200T 5213 film stock from a single Arricam Studio camera provided by Arri's Berlin office.",
+        "source" : "Wikipedia",
+        "value" : "Arricam Studio"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (nominated)"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "The Grand Budapest Hotel",
+    "year" : 2014
+  },
+  {
+    "article" : "Lady Bird (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Lady Bird",
+    "year" : 2017
+  },
+  {
+    "article" : "Anora",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "It was shot on Kodak 35 mm film framed in 4-perf widescreen anamorphic using an Arricam LT, with color correction completed via DaVinci Resolve at FotoKem.",
+        "source" : "Wikipedia",
+        "value" : "Film"
+      },
+      {
+        "inPart" : false,
+        "row" : "format",
+        "sentence" : "It was shot on Kodak 35 mm film framed in 4-perf widescreen anamorphic using an Arricam LT, with color correction completed via DaVinci Resolve at FotoKem.",
+        "source" : "Wikipedia",
+        "value" : "Anamorphic"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "camera",
+        "sentence" : "It was shot on Kodak 35 mm film framed in 4-perf widescreen anamorphic using an Arricam LT, with color correction completed via DaVinci Resolve at FotoKem.",
+        "source" : "Wikipedia",
+        "value" : "Arricam LT"
+      }
+    ],
+    "shotOn" : [
+      "film",
+      "anamorphic"
+    ],
+    "title" : "Anora",
+    "year" : 2024
+  },
+  {
+    "article" : "The Brutalist",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.66:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Academy Award for Best Cinematography (won)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "The Brutalist",
+    "year" : 2024
+  },
+  {
+    "article" : "Past Lives (film)",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.85:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Past Lives",
+    "year" : 2023
+  },
+  {
+    "article" : "Poor Things (film)",
+    "inPart" : [
+      "film"
+    ],
+    "rows" : [
+      {
+        "inPart" : true,
+        "row" : "format",
+        "sentence" : "Poor Things is the first feature film to be partially shot on Kodak's 35mm Ektachrome color reversal motion picture film stock since its revival in 2018.",
+        "source" : "Wikipedia",
+        "value" : "Film"
+      },
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "1.66:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+      "film"
+    ],
+    "title" : "Poor Things",
+    "year" : 2023
+  },
+  {
+    "article" : "Killers of the Flower Moon",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "aspectRatio",
+        "source" : "Wikidata",
+        "value" : "2.39:1"
+      },
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Killers of the Flower Moon",
+    "year" : 2023
+  },
+  {
+    "article" : "Nomadland",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      },
+      {
+        "inPart" : false,
+        "row" : "award",
+        "source" : "Wikidata",
+        "value" : "Medal from the Circle of Cinematographic Writers for the best foreign film (nominated)"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "Nomadland",
+    "year" : 2020
+  },
+  {
+    "article" : "Tár",
+    "inPart" : [
+
+    ],
+    "rows" : [
+      {
+        "inPart" : false,
+        "row" : "colour",
+        "source" : "Wikidata",
+        "value" : "Colour"
+      }
+    ],
+    "shotOn" : [
+
+    ],
+    "title" : "TÁR",
+    "year" : 2022
+  }
+]
