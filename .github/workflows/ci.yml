@@ -94,6 +94,34 @@ jobs:
           fi
           exit $fail
 
+  idle-check:
+    # The idle gate (spec §11): Reel's own background work on the sample library, left alone for
+    # an hour after ten minutes to settle: at most one save and no web request.
+    runs-on: macos-15
+    timeout-minutes: 100
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[idle-check]')
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build cache
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: macos15-release-${{ hashFiles('Package.swift') }}-${{ github.sha }}
+          restore-keys: macos15-release-${{ hashFiles('Package.swift') }}-
+      - name: Build the app (release)
+        run: swift build -c release --arch arm64 > build.log 2>&1 || { grep -E "error:" build.log | head -20; exit 1; }
+      - name: Leave it alone for an hour
+        env:
+          TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
+        run: |
+          mkdir -p idle app/Reel.app/Contents/MacOS
+          cp "$(swift build -c release --arch arm64 --show-bin-path)/Reel" app/Reel.app/Contents/MacOS/Reel
+          printf '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.howbizzar.reel.gates</string><key>CFBundleExecutable</key><string>Reel</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>1.11-gates</string></dict></plist>' > app/Reel.app/Contents/Info.plist
+          codesign --force --deep -s - app/Reel.app >/dev/null 2>&1 || true
+          REEL_RENDER_SCREENS="$PWD/idle" REEL_IDLE_MINUTES=60 perl -e 'alarm 5100; exec @ARGV' "$PWD/app/Reel.app/Contents/MacOS/Reel" > app.log 2>&1 || true
+          grep -E "idle check|GATE" idle/progress.txt | sed -E 's/^Screens: //' | while read -r l; do echo "::notice::$l"; done
+          grep -q "GATE " idle/progress.txt || echo "::warning::No idle result: $(tail -3 idle/progress.txt 2>/dev/null)"
+
   lists-check:
     # The 1.11 lists read live (spec §8.3): new award lists from Wikidata, the bundled polls on TMDB.
     runs-on: ubuntu-24.04

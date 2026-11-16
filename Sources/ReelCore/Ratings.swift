@@ -49,6 +49,7 @@ public struct OMDbClient: Sendable {
         components.queryItems = [URLQueryItem(name: "apikey", value: key), URLQueryItem(name: "i", value: imdbID)]
         let request = URLRequest(url: components.url!)
         let (data, status): (Data, Int) = try await withCheckedThrowingContinuation { continuation in
+            ActivityCount.request(request.url)
             session.dataTask(with: request) { data, response, error in
                 if let error = error {
                     continuation.resume(throwing: error)

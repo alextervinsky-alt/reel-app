@@ -156,6 +156,7 @@ public enum JSONStore {
     public static func save<T: Encodable>(_ value: T, to url: URL, permissions: Int? = nil) throws {
         let data = try encode(value)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        ActivityCount.save(url)
         try data.write(to: url, options: .atomic)
         if let permissions {
             try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: url.path)

@@ -218,6 +218,7 @@ final class ImageStore: @unchecked Sendable {
             await gate.leave()
             return loaded
         }
+        ActivityCount.request(url)
         let downloaded = try? await session.data(from: url)
         await gate.leave()
         // Offline or timed out: worth trying again later.

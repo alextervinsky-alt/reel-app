@@ -416,6 +416,7 @@ final class ListsStore {
     nonisolated private static func download(_ url: URL, to destination: URL,
                                              progress: @escaping @Sendable (Double) -> Void) async throws {
         let observer = DownloadObserver(report: progress)
+        ActivityCount.request(url)
         let (file, response) = try await downloadSession.download(from: url, delegate: observer)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         try FileManager.default.moveItem(at: file, to: destination)
@@ -624,6 +625,7 @@ final class ListsStore {
         writer.enqueue {
             guard let data = encode() else { return }
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            ActivityCount.save(url)
             try? data.write(to: url, options: .atomic)
         }
     }

@@ -15,9 +15,9 @@ struct RootView: View {
     @State private var moods: Set<Mood> = []
     @State private var length: LengthBand = .any
     @State private var language: String?
-    /// Poster width in the grids, and posters or a list (for this session).
-    @State private var posterSize = 168.0
-    @State private var asList = false
+    /// Poster width in the grids, and posters or a list: kept between launches (1.11, D13).
+    @AppStorage("posterSize") private var posterSize = 168.0
+    @AppStorage("postersAsList") private var asList = false
     @State private var path = NavigationPath()
     /// The desk's search while Cinema mode has the field (put back when Cinema mode ends).
     @State private var deskSearch = ""

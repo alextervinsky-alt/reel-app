@@ -268,14 +268,12 @@ private struct YearSummary: View {
         if !picks.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Theme.sectionTitle("Highlights")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16, alignment: .top)], alignment: .leading, spacing: 18) {
-                    ForEach(picks, id: \.label) { pick in
-                        opening(pick.film) {
-                            HighlightCard(label: pick.label, title: pick.film.title, detail: pick.detail,
-                                          backdrop: backdropPath(pick.film))
-                        }
-                    }
-                }
+                FillingRows(minimum: 220, spacing: 16, items: picks.map { pick in
+                    AnyView(opening(pick.film) {
+                        HighlightCard(label: pick.label, title: pick.film.title, detail: pick.detail,
+                                      backdrop: backdropPath(pick.film))
+                    })
+                })
             }
         }
     }
@@ -313,19 +311,20 @@ private struct YearSummary: View {
 
     /// How you rated the year (one star to five), and which nights you watched.
     private var starsAndNights: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
-            if summary.starCounts.reduce(0, +) >= 3 {
-                CountChart(title: "Your Stars", labels: (1...5).map { String(repeating: "★", count: $0) }, counts: summary.starCounts,
-                           note: "Every film you rated this year")
-            }
-            if summary.weekdays.reduce(0, +) >= 5 {
-                let calendar = Calendar.current
-                // In the week's own order here (Monday first in Estonia).
-                let order = (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 }
-                CountChart(title: "Your Film Nights", labels: order.map { calendar.shortWeekdaySymbols[$0] },
-                           counts: order.map { summary.weekdays[$0] }, note: "Films watched from your drives, by day of the week")
-            }
+        var panels: [AnyView] = []
+        if summary.starCounts.reduce(0, +) >= 3 {
+            panels.append(AnyView(CountChart(title: "Your Stars", labels: (1...5).map { String(repeating: "★", count: $0) },
+                                             counts: summary.starCounts, note: "Every film you rated this year")))
         }
+        if summary.weekdays.reduce(0, +) >= 5 {
+            let calendar = Calendar.current
+            // In the week's own order here (Monday first in Estonia).
+            let order = (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 }
+            panels.append(AnyView(CountChart(title: "Your Film Nights", labels: order.map { calendar.shortWeekdaySymbols[$0] },
+                                             counts: order.map { summary.weekdays[$0] },
+                                             note: "Films watched from your drives, by day of the week")))
+        }
+        return FillingRows(minimum: 300, spacing: 16, items: panels)
     }
 
     // MARK: You and the critics
@@ -339,10 +338,10 @@ private struct YearSummary: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
-                if !summary.warmerThanMost.isEmpty { gapPanel("You liked more than most", summary.warmerThanMost) }
-                if !summary.coolerThanMost.isEmpty { gapPanel("You liked less than most", summary.coolerThanMost) }
-            }
+            FillingRows(minimum: 300, spacing: 16, items: [
+                summary.warmerThanMost.isEmpty ? nil : AnyView(gapPanel("You liked more than most", summary.warmerThanMost)),
+                summary.coolerThanMost.isEmpty ? nil : AnyView(gapPanel("You liked less than most", summary.coolerThanMost)),
+            ].compactMap { $0 })
         }
     }
 
@@ -387,36 +386,22 @@ private struct YearSummary: View {
         return counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(5).map { Tally(name: $0.key, count: $0.value) }
     }
 
-    @ViewBuilder
     private var tastes: some View {
         let lists = onTheLists
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {
-            if !summary.topGenres.isEmpty {
-                TallyPanel(title: "Genres", tallies: summary.topGenres)
-            }
-            if summary.decades.count > 1 {
-                TallyPanel(title: "Decades", tallies: summary.decades)
-            }
-            if !summary.topDirectors.isEmpty {
-                TallyPanel(title: "Directors you came back to", tallies: summary.topDirectors)
-            }
-            if !summary.topCinematographers.isEmpty {
-                TallyPanel(title: "Cinematographers you came back to", tallies: summary.topCinematographers)
-            }
-            if !summary.topComposers.isEmpty {
-                TallyPanel(title: "Composers you came back to", tallies: summary.topComposers)
-            }
-            if !lists.isEmpty {
-                TallyPanel(title: "On the great lists", tallies: lists)
-            }
-            // Only when the year goes beyond one language.
-            if summary.languageCount > 1 {
-                TallyPanel(title: "Languages", tallies: summary.languages)
-            }
-            if !summary.topActors.isEmpty {
-                TallyPanel(title: "Faces you saw most", tallies: summary.topActors)
-            }
+        var panels: [AnyView] = []
+        func add(_ title: String, _ tallies: [Tally], when shown: Bool = true) {
+            if shown, !tallies.isEmpty { panels.append(AnyView(TallyPanel(title: title, tallies: tallies))) }
         }
+        add("Genres", summary.topGenres)
+        add("Decades", summary.decades, when: summary.decades.count > 1)
+        add("Directors you came back to", summary.topDirectors)
+        add("Cinematographers you came back to", summary.topCinematographers)
+        add("Composers you came back to", summary.topComposers)
+        add("On the great lists", lists)
+        // Only when the year goes beyond one language.
+        add("Languages", summary.languages, when: summary.languageCount > 1)
+        add("Faces you saw most", summary.topActors)
+        return FillingRows(minimum: 300, spacing: 16, items: panels)
     }
 
     // MARK: Every film
@@ -706,6 +691,30 @@ private struct FigureCell: View {
         .padding(.vertical, 14)
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+/// Panels in rows that fill the width (1.11, D8): as many columns as fit, and the last row's
+/// panels share its whole width, so no row ends in a gap.
+struct FillingRows: View {
+    let minimum: CGFloat
+    let spacing: CGFloat
+    let items: [AnyView]
+    @State private var width: CGFloat = 900
+
+    var body: some View {
+        let columns = max(1, min(items.count, Int((width + spacing) / (minimum + spacing))))
+        let rows = stride(from: 0, to: items.count, by: columns).map { Array(items.indices[$0..<min($0 + columns, items.count)]) }
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(rows, id: \.first) { row in
+                HStack(alignment: .top, spacing: spacing) {
+                    ForEach(row, id: \.self) { index in
+                        items[index].frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
 #endif

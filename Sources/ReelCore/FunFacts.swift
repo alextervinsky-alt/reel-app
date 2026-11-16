@@ -190,6 +190,17 @@ public enum FunFactExtractor {
     static let weakStarts = ["he ", "she ", "they ", "it ", "this ", "these ", "his ", "her ", "their ", "its ", "however", "also", "in addition", "for example", "for instance", "in particular"]
 
     /// Whether a sentence makes sense on its own ("For example, he…" doesn't).
+    /// One whole sentence (1.11, D7): it starts with a capital or a number (after any opening
+    /// quotation mark), ends on a full stop, exclamation or question mark (a closing quotation
+    /// mark may follow), and every quotation in it is closed.
+    public static func isWholeSentence(_ sentence: String) -> Bool {
+        let text = sentence.trimmingCharacters(in: .whitespaces)
+        guard let first = text.drop(while: { "\"“‘'(".contains($0) }).first, first.isUppercase || first.isNumber else { return false }
+        guard let last = text.reversed().drop(while: { "\"”’')".contains($0) }).first, ".!?".contains(last) else { return false }
+        if text.hasSuffix("...") || text.hasSuffix("…") { return false }
+        return text.filter { $0 == "\"" }.count % 2 == 0 && text.filter { $0 == "“" }.count == text.filter { $0 == "”" }.count
+    }
+
     public static func standsAlone(_ sentence: String) -> Bool {
         let lower = sentence.lowercased()
         return !weakStarts.contains { lower.hasPrefix($0) }
@@ -590,6 +601,7 @@ enum Wikimedia {
 
     private static func send(_ request: URLRequest, session: URLSession) async throws -> (Data, Int) {
         try await withCheckedThrowingContinuation { continuation in
+            ActivityCount.request(request.url)
             session.dataTask(with: request) { data, response, error in
                 if let error = error {
                     continuation.resume(throwing: error)

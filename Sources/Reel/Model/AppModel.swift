@@ -511,6 +511,13 @@ final class AppModel {
     /// Keeps everything that comes from the web current on its own: film info, ratings, award
     /// lists, IMDb rankings and sets are refreshed now and every six hours while Reel is open
     /// (each only when it's due), even when no drive is connected.
+    /// The idle check (CI, spec §11): the background work a launch starts, on the sample library.
+    func startBackgroundWorkForIdleCheck() {
+        watchEvenings()
+        observeSystem()
+        startWebRefresh()
+    }
+
     private func startWebRefresh() {
         Task { [weak self] in
             while !Task.isCancelled {

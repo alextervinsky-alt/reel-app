@@ -61,6 +61,11 @@ enum ScreenRenderer {
             finish()
             return
         }
+        if let minutes = ProcessInfo.processInfo.environment["REEL_IDLE_MINUTES"].flatMap(Int.init) {
+            await idleCheck(model, minutes: minutes)
+            finish()
+            return
+        }
         await preloadImages(for: model.films)
         log("backdrops framed")
 
@@ -465,6 +470,36 @@ enum ScreenRenderer {
         } else {
             try? Data(line.utf8).write(to: file)
         }
+    }
+
+    /// The idle gate (spec §11): Reel's own background work started as at launch, ten minutes to
+    /// settle (what a launch fetches), then `minutes` left alone: at most one save, and no web
+    /// request (nothing in the schedule falls due within the hour).
+    private static func idleCheck(_ model: AppModel, minutes: Int) async {
+        model.scheduleSave(.library)
+        model.scheduleSave(.notes)
+        model.scheduleSave(.settings)
+        model.startBackgroundWorkForIdleCheck()
+        log("idle check: background work started, settling for 10 minutes")
+        try? await Task.sleep(for: .seconds(600))
+        let settled = ActivityCount.snapshot()
+        log("idle check: while settling \(settled.requests.values.reduce(0, +)) requests \(describe(settled.requests)), "
+            + "\(settled.saves.values.reduce(0, +)) saves \(describe(settled.saves))")
+        ActivityCount.reset()
+        for minute in stride(from: 10, through: minutes, by: 10) {
+            try? await Task.sleep(for: .seconds(600))
+            let now = ActivityCount.snapshot()
+            log("idle check: \(minute) of \(minutes) minutes, \(now.requests.values.reduce(0, +)) requests, \(now.saves.values.reduce(0, +)) saves")
+        }
+        let idle = ActivityCount.snapshot()
+        let requests = idle.requests.values.reduce(0, +), saves = idle.saves.values.reduce(0, +)
+        let verdict = requests == 0 && saves <= 1 ? "GATE PASS" : "GATE FAIL"
+        log("\(verdict) idle for \(minutes) minutes: \(requests) requests \(describe(idle.requests)), \(saves) saves \(describe(idle.saves)), "
+            + "target 0 requests and at most 1 save")
+    }
+
+    private static func describe(_ counts: [String: Int]) -> String {
+        counts.isEmpty ? "" : "(" + counts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + ")"
     }
 
     private static func finish() {

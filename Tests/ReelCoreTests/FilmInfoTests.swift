@@ -119,6 +119,40 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertTrue(MoodClassifier.moods(genres: [], keywords: [], runtime: nil).isEmpty)
     }
 
+    /// 1.11 (D7): Did You Know shows whole sentences only.
+    func testWholeSentences() {
+        XCTAssertTrue(FunFactExtractor.isWholeSentence("The shoot lasted 82 days in New Zealand."))
+        XCTAssertTrue(FunFactExtractor.isWholeSentence("\"We built the whole house,\" the designer said."))
+        XCTAssertTrue(FunFactExtractor.isWholeSentence("1917 was filmed to look like one shot."))
+        XCTAssertFalse(FunFactExtractor.isWholeSentence("and the house was built on a sound stage."), "starts mid-sentence")
+        XCTAssertFalse(FunFactExtractor.isWholeSentence("The house was built on a sound stage"), "no full stop")
+        XCTAssertFalse(FunFactExtractor.isWholeSentence("He said, \"we built the whole house."), "a quotation left open")
+        XCTAssertFalse(FunFactExtractor.isWholeSentence("The house was built on a sound stage…"))
+    }
+
+    /// 1.11 (spec §6, 2.2a): a true story alone isn't inspiring; keywords are whole words; every
+    /// film with genres has a mood.
+    func testMoodsOfTrueStoriesAndEveryFilm() {
+        let gangsters = MoodClassifier.moods(genres: ["Drama", "Crime"], keywords: ["biography", "based on true story", "mafia", "gangster"], runtime: 146)
+        XCTAssertFalse(gangsters.contains(.inspiring), "\(gangsters)")
+        let bomb = MoodClassifier.moods(genres: ["Drama", "History"], keywords: ["biography", "based on true story", "atomic bomb", "physicist"], runtime: 180)
+        XCTAssertFalse(bomb.contains(.inspiring), "\(bomb)")
+        let boxer = MoodClassifier.moods(genres: ["Drama"], keywords: ["sports", "boxing", "based on true story", "underdog"], runtime: 120)
+        XCTAssertTrue(boxer.contains(.inspiring), "\(boxer)")
+        XCTAssertFalse(MoodClassifier.moods(genres: ["Crime"], keywords: ["glove"], runtime: 90).contains(.romantic), "whole words")
+        // A synthetic library of every genre alone and in pairs: none without a mood.
+        let genres = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama", "Family", "Fantasy",
+                      "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"]
+        var without: [String] = []
+        for a in genres {
+            for b in genres where b >= a {
+                let set = a == b ? [a] : [a, b]
+                if MoodClassifier.moods(genres: set, keywords: [], runtime: 100).isEmpty { without.append(set.joined(separator: "+")) }
+            }
+        }
+        XCTAssertEqual(without, [], "films without a mood")
+    }
+
     func testLengthBands() {
         XCTAssertTrue(LengthBand.short.contains(85))
         XCTAssertTrue(LengthBand.standard.contains(120))

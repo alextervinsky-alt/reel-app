@@ -65,35 +65,46 @@ public enum MoodClassifier {
             genres: ["Science Fiction": 1, "Mystery": 1.5],
             keywords: ["twist", "time travel", "dream", "nonlinear", "reality", "simulation", "artificial intelligence", "parallel", "memory", "philosophy", "existential", "psychological", "identity", "paradox", "alternate", "surreal", "cyberpunk"]),
         .moving: Rule(
-            genres: ["Drama": 2],
+            genres: ["Drama": 2, "Documentary": 1],
             keywords: ["grief", "loss", "death", "coming of age", "tragedy", "family", "illness", "sacrifice", "father son", "mother daughter", "loneliness", "friendship"]),
         .epic: Rule(
-            genres: ["Adventure": 1.5, "Fantasy": 1.5, "War": 1.5, "History": 1.5, "Science Fiction": 1],
+            genres: ["Adventure": 1.5, "Fantasy": 1.5, "War": 1.5, "History": 1.5, "Science Fiction": 1, "Western": 1],
             keywords: ["epic", "battle", "kingdom", "empire", "space", "saga", "sword", "viking", "quest", "army", "desert", "galaxy"]),
         .scary: Rule(
             genres: ["Horror": 3],
             keywords: ["supernatural", "ghost", "haunted", "monster", "demon", "slasher", "zombie", "creature", "possession"]),
         .inspiring: Rule(
             genres: ["History": 0.5],
-            keywords: ["sports", "underdog", "biography", "perseverance", "inspirational", "overcoming", "based on true story", "true story"]),
+            keywords: ["sports", "underdog", "perseverance", "inspirational", "overcoming"]),
     ]
 
-    /// Up to three moods, strongest first.
+    /// Inspiring only alongside sport, music or an inspiring keyword (1.11): a true story alone
+    /// is as often a gangster's or a bomb's.
+    static let trueStory = ["biography", "based on true story", "true story"]
+
+    /// Up to three moods, strongest first. A film with genres always gets at least its best
+    /// one (1.11), even when no mood is strong.
     public static func moods(genres: [String], keywords: [String], runtime: Int?) -> [Mood] {
-        let lowered = keywords.map { $0.lowercased() }
-        var scored: [(mood: Mood, score: Double)] = []
+        // Whole words: "love" isn't in "glove", "noir" is in "neo-noir".
+        let lowered = keywords.map { " " + $0.lowercased().replacingOccurrences(of: "-", with: " ") + " " }
+        func has(_ key: String) -> Bool {
+            let word = " " + key.replacingOccurrences(of: "-", with: " ") + " "
+            return lowered.contains { $0.contains(word) }
+        }
+        var all: [(mood: Mood, score: Double)] = []
         for mood in Mood.allCases {
             guard let rule = rules[mood] else { continue }
             var score = genres.reduce(0.0) { $0 + (rule.genres[$1] ?? 0) }
-            let hits = rule.keywords.filter { key in lowered.contains { keyword in keyword.contains(key) } }.count
+            var hits = rule.keywords.filter(has).count
+            if mood == .inspiring, hits > 0 || genres.contains("Music") { hits += trueStory.filter(has).count }
             score += min(Double(hits) * 1.5, 4.5)
             if mood == .epic, let runtime, runtime >= 150 { score += 1.5 }
-            if score >= 2.5 { scored.append((mood, score)) }
+            all.append((mood, score))
         }
-        return scored
-            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.mood.rawValue < $1.mood.rawValue }
-            .prefix(3)
-            .map { $0.mood }
+        let ranked = all.sorted { $0.score != $1.score ? $0.score > $1.score : $0.mood.rawValue < $1.mood.rawValue }
+        let strong = ranked.filter { $0.score >= 2.5 }
+        if strong.isEmpty, let best = ranked.first, best.score > 0 { return [best.mood] }
+        return strong.prefix(3).map { $0.mood }
     }
 }
 

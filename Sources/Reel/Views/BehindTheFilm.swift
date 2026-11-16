@@ -4,7 +4,7 @@ import ReelCore
 
 // MARK: - Behind the Film
 
-/// The film's life off screen, told as a story: five things worth knowing (each with what the
+/// The film's life off screen, told as a story: up to five things worth knowing (each with what the
 /// article says next), the film at a glance, then
 /// its life from the idea to its legacy as numbered chapters, in the order it lived them (the
 /// article's sections regrouped: the idea, the casting, the shoot, design, music, release, how it
@@ -209,7 +209,7 @@ struct BehindTheFilmTab: View {
         var id: String { fact.text }
     }
 
-    /// The five things most worth knowing, the most surprising first (see
+    /// Up to five things most worth knowing (fewer when fewer stand on their own: never padded), the most surprising first (see
     /// `FunFactExtractor.score`): the making of the film before its takings and prizes (one of
     /// those at most), each making sense on its own, at most two of a kind, none from the
     /// introduction (the film page already says it).
@@ -218,6 +218,7 @@ struct BehindTheFilmTab: View {
         let business: Set<String> = ["Release", "Awards"]
         let worths: [(FunFact, Double)] = facts.facts.filter { fact in
             fact.category != "At a glance" && FunFactExtractor.standsAlone(fact.text) && fact.text.count <= 260
+                && FunFactExtractor.isWholeSentence(fact.text)
         }.map { fact in
             (fact, FunFactExtractor.score(fact.text) + (business.contains(fact.category) ? -2.5 : 0))
         }

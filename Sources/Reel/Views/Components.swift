@@ -196,7 +196,8 @@ struct RatingStrip: View {
             if let mc = ratings?.metacritic {
                 RatingBadge(tag: "MC", value: "\(mc)", background: Self.metacriticColor(mc), foreground: .white)
             }
-            if ratings?.imdb == nil, let vote = tmdbVote, vote > 0 {
+            // TMDB only when none of the three is known, as on the posters (1.11, D2).
+            if ratings?.imdb == nil, ratings?.rottenTomatoes == nil, ratings?.metacritic == nil, let vote = tmdbVote, vote > 0 {
                 RatingBadge(tag: "TMDB", value: Format.rating(vote), background: Color(red: 0.01, green: 0.71, blue: 0.89), foreground: .black)
             }
         }

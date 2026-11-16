@@ -549,6 +549,7 @@ public final class TMDBClient: MovieDatabase, @unchecked Sendable {
 
     private func send(_ request: URLRequest) async throws -> (Data, Int) {
         try await withCheckedThrowingContinuation { continuation in
+            ActivityCount.request(request.url)
             let task = session.dataTask(with: request) { data, response, error in
                 if let error = error {
                     continuation.resume(throwing: error)
