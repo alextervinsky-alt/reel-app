@@ -131,10 +131,14 @@ public enum ReceptionAnalyzer {
         "memorable", "powerful", "compelling", "mesmerizing", "mesmerising", "captivating",
     ]
 
-    /// - Parameter sentiment: scores a sentence from -1 (negative) to 1 (positive).
-    /// Always tries to find two likes and two dislikes: aspects mentioned by several people come
-    /// first, then single mentions fill the gap.
-    public static func summarize(_ reviews: [ReviewText], sentiment: (String) -> Double) -> ReceptionSummary? {
+    /// - Parameters:
+    ///   - title, year: the film's, so sentences about other films can be told apart.
+    ///   - sentiment: scores a sentence from -1 (negative) to 1 (positive).
+    /// A like or a dislike is a part of a sentence that judges one aspect of this film in words
+    /// ("the score is superb", "critics faulted the pacing"), with nothing said the other way;
+    /// the sentence's tone alone never makes one, and when in doubt nothing is shown (1.11, spec §6.4).
+    public static func summarize(_ reviews: [ReviewText], title: String? = nil, year: Int? = nil,
+                                 sentiment: (String) -> Double) -> ReceptionSummary? {
         guard !reviews.isEmpty else { return nil }
 
         struct Tally {
@@ -144,8 +148,7 @@ public enum ReceptionAnalyzer {
             /// each point gets one no other point shows).
             var likeQuotes: [(text: String, quality: Double)] = []
             var dislikeQuotes: [(text: String, quality: Double)] = []
-            /// Dislikes that say so in words (a complaint, or a critic said to have faulted it),
-            /// not only by the sentence's tone.
+            /// Dislikes said in so many words (all of them since 1.11).
             var complaints = 0
         }
         func keep(_ quote: (text: String, quality: Double), in quotes: inout [(text: String, quality: Double)]) {
@@ -157,69 +160,35 @@ public enum ReceptionAnalyzer {
         var tallies: [String: Tally] = [:]
 
         for review in reviews {
-            var bias = 0.0
-            if let rating = review.rating {
-                if rating >= 7 { bias = 0.2 } else if rating <= 4 { bias = -0.2 }
-            }
             for sentence in sentences(in: clean(review.text)) {
-                // Scores, rankings and prizes are facts about the film, not opinions about it.
-                if reportsFigures(sentence, critic: review.isCritic) { continue }
+                // Scores, rankings and prizes are facts about the film, not opinions about it;
+                // a sentence about another film, a question or what "people" said is left out.
+                if reportsFigures(sentence, critic: review.isCritic) || aboutSomethingElse(sentence, title: title, year: year) { continue }
+                let quotable = isQuotable(sentence)
                 // Each part of "praised the visuals but faulted the pacing" counts on its own.
-                for clause in clauses(of: sentence) {
-                    let lower = clause.lowercased()
-                    var matched = aspects(in: lower)
-                    // "It's a bit confusing at times": a complaint names its aspect itself.
-                    if matched.isEmpty, let cue = cueAspects.first(where: { word($0.cue, in: lower) != nil }), !negated(cue.cue, in: lower) {
-                        matched = [cue.aspect]
+                for (index, clause) in clauses(of: sentence).enumerated() {
+                    let found = judgements(in: clause, startsSentence: index == 0 && sentence.hasPrefix(clause.prefix(8)))
+                    guard !found.isEmpty else { continue }
+                    let signs = Set(found.map(\.sign))
+                    // Praise and complaint in the same part: in doubt, neither.
+                    guard signs.count == 1, let sign = signs.first else { continue }
+                    // The sentiment model can only veto: a "superb" in a bitter part, or a
+                    // complaint word in a glowing one, is left out.
+                    if !review.isCritic {
+                        let tone = sentiment(clause)
+                        if sign > 0, tone < -0.4 { continue }
+                        if sign < 0, tone > 0.5 { continue }
                     }
-                    guard !matched.isEmpty else { continue }
-
-                    let said = reported(lower)
-                    // Each way of complaining counts ("my only complaint is that it drags");
-                    // denied, it praises ("never boring", "no complaints").
-                    var cues = 0.0
-                    var complains = false
-                    for cue in negativeCues where word(cue, in: lower) != nil {
-                        if negated(cue, in: lower) {
-                            cues += 0.5
-                        } else {
-                            cues -= 0.4
-                            complains = true
-                        }
-                    }
-                    var score: Double
-                    if review.isCritic {
-                        // A critic as Wikipedia tells it: what they're said to have done decides
-                        // ("praised", "faulted"); the sentence's tone alone only when it's clear.
-                        if said != 0 {
-                            score = 0.6 * Double(said)
-                        } else {
-                            score = sentiment(clause)
-                            guard abs(score) >= 0.5 else { continue }
-                        }
-                    } else {
-                        // A warm review's score doesn't soften what it complains about.
-                        score = sentiment(clause) + (complains ? min(bias, 0) : bias) + 0.3 * Double(said)
-                    }
-                    score += max(cues, -0.8)
-                    let words = Set(lower.split(whereSeparator: { !$0.isLetter && $0 != "-" }).map { String($0) })
-                    if !words.isDisjoint(with: positiveCues) { score += 0.2 }
-                    guard abs(score) >= 0.25 else { continue }
-                    // A dislike is said in words: a complaint, a critic said to have faulted it, or a
-                    // viewer who rated it low. The tone of a sentence alone isn't one: "a disquieting
-                    // chiller" and "a performance of grim determination" are praise.
-                    if score < 0, !complains, said >= 0, review.isCritic || (review.rating ?? 10) > 5 { continue }
-
-                    let quality = abs(score) - lengthPenalty(sentence.count)
-                    for aspect in matched {
+                    let quality = (quotable ? 1 : 0) - lengthPenalty(sentence.count) + Double(found.count) * 0.1
+                    for aspect in Set(found.map(\.aspect)) {
                         var t = tallies[aspect] ?? Tally()
-                        if score > 0 {
+                        if sign > 0 {
                             t.like += 1
-                            keep((sentence, quality), in: &t.likeQuotes)
+                            if quotable { keep((sentence, quality), in: &t.likeQuotes) }
                         } else {
                             t.dislike += 1
-                            if complains || said < 0 { t.complaints += 1 }
-                            keep((sentence, quality), in: &t.dislikeQuotes)
+                            t.complaints += 1
+                            if quotable { keep((sentence, quality), in: &t.dislikeQuotes) }
                         }
                         tallies[aspect] = t
                     }
@@ -265,7 +234,7 @@ public enum ReceptionAnalyzer {
             }
             return keys.compactMap { key in
                 guard let tally = tallies[key], let quote = chosen[key] else { return nil }
-                return ReceptionPoint(aspect: key, mentions: mentions(tally), quote: shorten(quote))
+                return ReceptionPoint(aspect: key, mentions: mentions(tally), quote: tidyQuotes(quote))
             }
         }
         let likedPoints = points(liked, quotes: \.likeQuotes, mentions: \.like).prefix(4)
@@ -275,6 +244,175 @@ public enum ReceptionAnalyzer {
         let critics = reviews.count - audience.count
         return ReceptionSummary(liked: Array(likedPoints), disliked: Array(dislikedPoints), reviewCount: audience.count,
                                 averageRating: average, criticCount: critics > 0 ? critics : nil)
+    }
+
+    /// Words that praise what they're near ("superb acting", "the score is stunning").
+    static let praise: [String] = [
+        "great", "good", "excellent", "amazing", "superb", "brilliant", "brilliantly", "stunning", "beautiful", "beautifully",
+        "gorgeous", "wonderful", "wonderfully", "fantastic", "incredible", "outstanding", "impressive", "perfect", "perfectly",
+        "phenomenal", "breathtaking", "masterful", "masterfully", "top-notch", "top notch", "solid", "strong", "effective",
+        "compelling", "captivating", "gripping", "engaging", "engrossing", "mesmerizing", "mesmerising", "memorable",
+        "powerful", "terrific", "flawless", "enjoyable", "enjoyed", "loved", "love", "best", "remarkable", "exceptional",
+        "spectacular", "epic", "awesome", "standout", "stand-out", "stellar", "delightful", "charming", "funny", "hilarious",
+        "touching", "heartfelt", "convincing", "well-written", "well written", "well done", "well-acted", "well acted",
+        "well paced", "well-paced", "shines", "shine", "shone", "excels", "nailed", "thrilling", "suspenseful", "tense",
+        "atmospheric", "haunting", "striking", "vivid", "rich", "sharp", "clever", "witty", "fun", "entertaining",
+        "intense", "immersive", "majestic", "magnificent", "glorious", "sublime", "exquisite", "pitch-perfect",
+        "favorite", "favourite",
+    ]
+
+    /// Words that fault what they're near ("wooden acting", "the plot is a mess").
+    static let fault: [String] = negativeCues + [
+        "bad", "poor", "poorly", "terrible", "awful", "horrible", "worst", "wooden", "flat", "generic", "lazy", "cringe",
+        "cringey", "cringeworthy", "annoying", "unnecessary", "pointless", "nonsensical", "incoherent", "inconsistent",
+        "ridiculous", "laughable", "mediocre", "subpar", "sub-par", "unmemorable", "uninteresting", "paper-thin", "thin",
+        "lifeless", "soulless", "hollow", "empty", "abrupt", "rushed", "dumb", "stupid", "silly", "overdone", "overwrought",
+        "uninspired", "unfunny", "jarring", "clumsy", "lackluster", "lacklustre", "tiresome", "dragging", "dullness",
+        "problem", "problems", "issue", "issues", "worse", "awkward", "sloppy", "mess",
+    ]
+
+    /// "lacking in sexism", "no shortage of": a fault word that praises.
+    static let notFaults = #"\b(?:lack(?:s|ing)?(?: in| of| any)? (?:sexism|clich[eé]s?|pretension|filler|fat|gore)|no problems?|no issues?|not a (?:single )?(?:dull|boring|wasted)|without (?:a|any) (?:dull|boring|wasted))\b"#
+
+    /// Critics as Wikipedia tells it, said to have praised or faulted something, by their words.
+    static let praiseVerbs = #"^(?:prais\w*|laud\w*|applaud\w*|acclaim\w*|admired|admires|admiring|commend\w*|hail\w*|complimen\w*|highlight\w*|celebrat\w*|appreciat\w*)$"#
+    static let faultVerbs = #"^(?:critici[sz]\w*|fault\w*|panned|derid\w*|complain\w*|dislik\w*|lament\w*|bemoan\w*|weakness\w*|flaws?|flawed|marred|disappoint(?:ed|ing|ment|s)?)$"#
+
+    struct Judgement: Equatable {
+        let aspect: String
+        let sign: Int
+    }
+
+    /// What a clause judges, and which way: each praising or faulting word paired with the aspect
+    /// word nearest it (at most five words away). A word denied just before it ("not boring",
+    /// "never dull") judges nothing, except "not good", "not great" and the like, which fault. An
+    /// aspect word written as a name ("Toy Story", "the Story of…") isn't one.
+    static func judgements(in clause: String, startsSentence: Bool) -> [Judgement] {
+        let lowerClause = clause.lowercased()
+        if lowerClause.range(of: notFaults, options: .regularExpression) != nil { return [] }
+        // The words, with whether each is written as a name.
+        let tokens: [(word: String, name: Bool)] = clause
+            .split(whereSeparator: { !$0.isLetter && $0 != "-" && $0 != "'" && $0 != "’" })
+            .map { raw in
+                let word = String(raw)
+                let first = word.first.map { $0.isUppercase } ?? false
+                let rest = word.dropFirst().contains { $0.isLowercase }
+                return (word.lowercased().replacingOccurrences(of: "’", with: "'"), first && rest)
+            }
+        guard !tokens.isEmpty else { return [] }
+        let words = tokens.map(\.word)
+        func matches(_ phrase: String, at i: Int) -> Int? {
+            let parts = phrase.split(separator: " ").map(String.init)
+            guard i + parts.count <= words.count else { return nil }
+            for (k, part) in parts.enumerated() where words[i + k] != part { return nil }
+            return parts.count
+        }
+        // Aspect words, by position.
+        var aspectAt: [(index: Int, aspect: String)] = []
+        for i in words.indices {
+            if tokens[i].name && !(i == 0 && startsSentence) { continue }
+            for aspect in aspects {
+                if aspect.words.contains(where: { matches($0, at: i) != nil }) {
+                    if aspect.name == "Music and sound", words[i] == "score", lowerClause.range(of: #"\bscores?\s+of\s+\d|\bout of \d|\bscored?\s+(?:an?\s+)?\d"#, options: .regularExpression) != nil { continue }
+                    aspectAt.append((i, aspect.name))
+                }
+            }
+        }
+        guard !aspectAt.isEmpty || words.contains(where: { w in cueAspects.contains { $0.cue == w || $0.cue.hasPrefix(w + " ") } }) else { return [] }
+        let negators: Set<String> = ["not", "never", "hardly", "without", "nor", "no", "nothing", "none", "neither", "barely", "less"]
+        func denied(_ i: Int) -> Bool {
+            let before = words[max(0, i - 4)..<i]
+            let phrase = " " + before.joined(separator: " ")
+            if [" not only", " not just", " no less", " not merely"].contains(where: phrase.contains) { return false }
+            return before.contains { negators.contains($0) || $0.hasSuffix("n't") }
+        }
+        let softPraise: Set<String> = ["good", "great", "funny", "convincing", "engaging", "enough", "strong", "effective", "fun", "entertaining"]
+        var found: [Judgement] = []
+        var i = 0
+        while i < words.count {
+            var sign = 0
+            var length = 1
+            var verb = false
+            if let n = praise.lazy.compactMap({ matches($0, at: i) }).first {
+                sign = 1; length = n
+            } else if let n = fault.lazy.compactMap({ matches($0, at: i) }).first {
+                sign = -1; length = n
+            } else if words[i].range(of: praiseVerbs, options: .regularExpression) != nil {
+                sign = 1; verb = true
+            } else if words[i].range(of: faultVerbs, options: .regularExpression) != nil {
+                sign = -1; verb = true
+            }
+            guard sign != 0 else { i += 1; continue }
+            // "a love story", "her best friend": not praise.
+            if i + 1 < words.count, ["love": ["story", "stories", "triangle", "interest", "affair", "scene", "scenes"],
+                                     "best": ["friend", "friends"]][words[i]]?.contains(words[i + 1]) == true {
+                i += 1; continue
+            }
+            if denied(i) {
+                // "not good", "wasn't funny": a complaint; "not boring", "never disappoints": nothing.
+                if sign > 0, softPraise.contains(words[i]) { sign = -1 } else { i += length; continue }
+            }
+            // The aspect it's about: another aspect word close by ("boring characters"), else its own
+            // ("it drags"), else the nearest within five words, else the one its complaint names.
+            let reach = verb ? 6 : 5
+            let others = aspectAt.filter { $0.index < i || $0.index >= i + length }
+                .map { (distance: $0.index < i ? i - $0.index : $0.index - (i + length - 1), aspect: $0.aspect) }
+                .sorted { $0.distance < $1.distance }
+            let own = aspectAt.first { $0.index == i }?.aspect
+            var aspect: String?
+            if let near = others.first, near.distance <= 2 {
+                aspect = near.aspect
+            } else if let own {
+                aspect = own
+            } else if let near = others.first, near.distance <= reach {
+                aspect = near.aspect
+            } else if sign < 0, let cue = cueAspects.first(where: { matches($0.cue, at: i) != nil }) {
+                aspect = cue.aspect
+            }
+            if let aspect { found.append(Judgement(aspect: aspect, sign: sign)) }
+            i += length
+        }
+        return found
+    }
+
+    /// Sentences that aren't about this film, or not someone's own view of it: another film
+    /// named (a short title in quotes, another year, a sequel, the book, "compared to"), a
+    /// question, or what "people" or "the public" are said to think. When in doubt, left out.
+    static func aboutSomethingElse(_ sentence: String, title: String?, year: Int?) -> Bool {
+        let lower = sentence.lowercased()
+        if sentence.hasSuffix("?") || sentence.hasSuffix("?\"") || sentence.hasSuffix("?”") { return true }
+        let others = #"\b(?:sequels?|prequels?|predecessors?|previous (?:films?|movies?|one|entry|entries|instalments?|installments?)|(?:first|last|earlier|original) (?:film|movie|one)|the originals?|original (?:trilogy|series|film|movie)|the (?:books?|novels?|comics?|comic books?|series|miniseries|show|source material)|remakes?|reboots?|solo (?:film|movie)|compared (?:to|with)|comparing|reminiscent of|unlike|in contrast|people said|the public|general public|commentators|online|fans|viewers said|lampoon\w*|sketch|parod\w*|meme)\b"#
+        if lower.range(of: others, options: .regularExpression) != nil { return true }
+        // Another year: another film (its own year, or the next, is this one).
+        if let year, let match = sentence.range(of: #"\b(?:19|20)\d\d\b"#, options: .regularExpression),
+           let other = Int(sentence[match]), abs(other - year) > 1 { return true }
+        // A short title in quotes ("‘Fargo’", "“Shall We Dance”"), not this film's.
+        let quoted = #"[“"‘']([A-Z][^“”"‘’]{0,40}?)[”"’'](?!\w)"#
+        var rest = sentence[...]
+        while let match = rest.range(of: quoted, options: .regularExpression) {
+            let inner = rest[match].dropFirst().dropLast().trimmingCharacters(in: .whitespaces)
+            let parts = inner.split(separator: " ")
+            let small: Set<String> = ["of", "the", "a", "an", "and", "in", "on", "to", "at", "for", "&"]
+            let titleLike = (1...6).contains(parts.count) && !inner.hasSuffix(".") && !inner.hasSuffix(",")
+                && parts.allSatisfy { part in small.contains(part.lowercased()) || part.first.map { $0.isUppercase || $0.isNumber } ?? false }
+            if titleLike, inner.lowercased() != title?.lowercased() { return true }
+            rest = rest[match.upperBound...]
+        }
+        return false
+    }
+
+    /// A quote is one whole sentence: it starts with a capital (or a quote mark and a capital),
+    /// ends on a full stop, exclamation or question mark (a closing quote may follow), and isn't
+    /// too long to read at a glance.
+    static func isQuotable(_ sentence: String) -> Bool {
+        let text = tidyQuotes(sentence)
+        guard (30...240).contains(text.count), !text.contains("\n") else { return false }
+        let opening = text.drop { "\"“‘'".contains($0) }
+        guard opening.first?.isUppercase == true else { return false }
+        let closing = text.reversed().drop { "\"”’'".contains($0) }
+        guard let last = closing.first, ".!".contains(last) else { return false }
+        // Ends on "...": trails off.
+        return !text.hasSuffix("..") && !text.hasSuffix("…")
     }
 
     /// The aspects a clause is about. "Score" is the music only when it isn't a rating ("a
@@ -380,6 +518,9 @@ public enum ReceptionAnalyzer {
             if ch == ">" && inTag { inTag = false; continue }
             if inTag { continue }
             if ch == "*" || ch == "#" || ch == "_" || ch == "\r" { continue }
+            // "\r\n" is one Character: kept as one, it never ended a paragraph (before 1.11 a
+            // quote could run on into the next paragraphs).
+            if ch == "\r\n" { out.append("\n"); continue }
             out.append(ch)
         }
         return out

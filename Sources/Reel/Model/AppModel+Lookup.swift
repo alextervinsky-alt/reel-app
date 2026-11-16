@@ -294,7 +294,7 @@ extension AppModel {
         // (A film without an article gives empty findings; nil means Wikipedia couldn't be reached.)
         var reviews = (full.reviews?.results ?? []).map { ReviewText(text: $0.content, rating: $0.authorDetails?.rating) }
         reviews += (findings?.criticSentences ?? []).map { ReviewText(text: $0, rating: nil, isCritic: true) }
-        let reception = Sentiment.summarize(reviews)
+        let reception = Sentiment.summarize(reviews, title: full.title, year: full.year)
 
         var ratings: ExternalRatings?
         var failed = false

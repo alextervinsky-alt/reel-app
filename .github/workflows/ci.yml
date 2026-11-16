@@ -34,7 +34,7 @@ jobs:
             echo "::notice::$(grep -E 'Executed [0-9]+ tests' test.log | tail -1)"
           fi
           # Measurements on synthetic libraries (UserDataTests, LibraryFormatTests).
-          grep -E "^(DRYRUN|GATE)\| " test.log | sed -E 's/\| / /' | while read -r l; do echo "::notice::${l}"; done
+          grep -E "^(DRYRUN|GATE|REVIEWS)\| " test.log | sed -E 's/\| / /' | while read -r l; do echo "::notice::${l}"; done
           exit $code
 
   live-match:
@@ -93,6 +93,35 @@ jobs:
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
           fi
           exit $fail
+
+  review-eval:
+    # What the Reviews rules show for the stored public films, kept on review-1.11 to be read.
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[review-eval]')
+    permissions:
+      contents: write
+    container: swift:6.0-noble
+    steps:
+      - name: Git
+        run: apt-get update -qq && apt-get install -y -qq git >/dev/null
+      - uses: actions/checkout@v5
+      - name: Show what the rules pick
+        env:
+          REEL_REVIEW_EVAL: /tmp/review-eval.json
+        run: |
+          swift test --filter ReviewsGateTests > eval.log 2>&1 || true
+          grep -E "REVIEWS\|" eval.log | while read -r l; do echo "::notice::$l"; done
+          grep -E "error:|failed" eval.log | head -8 | while read -r l; do echo "::warning::$l"; done
+      - name: Keep the result on review-1.11
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
+          git fetch origin review-1.11 2>&1 | tail -2 || echo "::warning::fetch failed"
+          git checkout -q -B results FETCH_HEAD || echo "::warning::checkout failed"
+          mkdir -p review-results && cp /tmp/review-eval.json "review-results/review-eval-${GITHUB_SHA::7}.json"
+          git add review-results && git commit -qm "review-1.11: what the Reviews rules show (public titles) [skip ci]" || echo "::warning::commit failed"
+          git push origin HEAD:review-1.11 2>&1 | tail -3 | while read -r l; do echo "::notice::push: $l"; done
 
   review-check:
     # Public reviews read live for 30 well-known films on a Mac (Apple's sentiment model), for the
