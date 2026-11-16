@@ -211,8 +211,12 @@ public enum CraftFactReader {
     ]
 
     /// Cameras, named as makers sell them; only from a sentence that says it was shot with them.
-    static let cameraPattern = #"\b(?:Arri ?(?:Alexa|Amira|cam)[\w\- ]{0,12}|Arriflex[\w\- ]{0,12}|Panavision (?:Millennium[\w\- ]{0,6}|Panaflex[\w\- ]{0,10}|Platinum|Genesis|DXL\d?)|Sony (?:Venice ?\d?|CineAlta[\w\- ]{0,8}|F65|F55|HDW-F900|FX\d)|RED (?:Epic|Dragon|Helium|Monstro|One|Komodo|V-Raptor|Ranger|Raptor)[\w\- ]{0,10}|Canon (?:C\d{3}|EOS[\w\- ]{0,8})|Blackmagic[\w\- ]{0,16}|IMAX MSM[\w\- ]{0,6}|Phantom (?:Flex|v\d+)[\w\- ]{0,6}|Aaton[\w\- ]{0,10}|Bolex[\w\- ]{0,6})"#
-    static let lensPattern = #"\b(?:Panavision [CEGT]-[Ss]eries|Panavision (?:Primo|Ultra Speed|Super Speed|Sphero|Anamorphic)[\w\- ]{0,8}|Ultra Panavision 70|Cooke (?:S\d|Panchro|Speed Panchro|Anamorphic|Xtal)[\w/\- ]{0,10}|Zeiss (?:Super Speed|Master Prime|Ultra Prime|Supreme)[\w\- ]{0,6}|Hawk[\w\- ]{0,10}anamorphic|Leica Summilux[\w\- ]{0,6}|Canon K35|Kowa[\w\- ]{0,10}|Lomo[\w\- ]{0,10}|Petzval[\w\- ]{0,6})"#
+    /// Cameras and lenses, named as makers sell them: the maker's name, then up to three model
+    /// words that start with a capital or a digit ("Arri Alexa Mini LF", "Panavision Millennium
+    /// XL2"); only from a sentence that says it was shot with them.
+    static let model = #"(?: [A-Z0-9][A-Za-z0-9\-/]*){0,3}"#
+    static let cameraPattern = #"\b(?:Arri ?(?:Alexa|Amira|cam)|Arriflex|Panavision (?:Millennium|Panaflex|Platinum|Genesis|DXL\d?)|Sony (?:Venice|CineAlta|F65|F55|HDW-F900|FX\d)|RED (?:Epic|Dragon|Helium|Monstro|One|Komodo|V-Raptor|Ranger|Raptor)|Canon (?:C\d{3}|EOS)|Blackmagic|IMAX MSM|Phantom (?:Flex|v\d+)|Aaton|Bolex)"# + model
+    static let lensPattern = #"\b(?:Panavision [CEGT]-[Ss]eries|Panavision (?:Primo|Ultra Speed|Super Speed|Sphero|Anamorphic)|Ultra Panavision 70|Cooke (?:S\d|Panchro|Speed Panchro|Anamorphic|Xtal)|Zeiss (?:Super Speed|Master Prime|Ultra Prime|Supreme)|Hawk|Leica Summilux|Canon K35|Kowa|Lomo|Petzval)"# + model
 
     /// The facts from Wikidata's statements and the article's text.
     /// - Parameters:

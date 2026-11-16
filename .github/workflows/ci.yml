@@ -110,15 +110,20 @@ jobs:
         env:
           TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
           REEL_CRAFT_CHECK: /tmp/craft-check.json
-        run: swift test --filter LiveCraftFactsCheck 2>&1 | grep -E "CRAFT\||error|failed|passed" | head -20
+        run: |
+          swift test --filter LiveCraftFactsCheck > craft.log 2>&1 || true
+          grep -E "CRAFT\|" craft.log | while read -r l; do echo "::notice::$l"; done
+          grep -E "error:|failed" craft.log | head -5 | while read -r l; do echo "::warning::$l"; done
+          ls -la /tmp/craft-check.json || echo "::warning::no results file"
       - name: Keep the results on review-1.11
         run: |
           git config --global --add safe.directory "$PWD"
           git config user.name review-bot; git config user.email review-bot@users.noreply.github.com
-          git fetch -q origin review-1.11 && git checkout -q -B results FETCH_HEAD
+          git fetch origin review-1.11 2>&1 | tail -2 || echo "::warning::fetch failed"
+          git checkout -q -B results FETCH_HEAD || echo "::warning::checkout failed"
           mkdir -p review-results && cp /tmp/craft-check.json "review-results/craft-check-${GITHUB_SHA::7}.json"
-          git add review-results && git commit -qm "review-1.11: craft facts check results (public titles, measurement only) [skip ci]"
-          git push -q origin HEAD:review-1.11
+          git add review-results && git commit -qm "review-1.11: craft facts check results (public titles, measurement only) [skip ci]" || echo "::warning::commit failed"
+          git push origin HEAD:review-1.11 2>&1 | tail -3 | while read -r l; do echo "::notice::push: $l"; done
 
   mac-measure:
     # 1.11 work in progress: the app must build, and the smoothness gates are measured (spec §9.3):
