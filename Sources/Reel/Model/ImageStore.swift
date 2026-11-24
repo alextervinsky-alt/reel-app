@@ -415,9 +415,9 @@ struct CachedImage<Placeholder: View>: View {
     @State private var loaded: DecodedImage?
     /// Which image `loaded` is (path and look), so a reused view never shows the wrong one.
     @State private var loadedKey: String?
-    /// The image held when it was already in memory as the view appeared: kept here, outside
-    /// the view's state, so holding it doesn't draw the view again (1.11: a new row of posters
-    /// used to be laid out twice as it scrolled in).
+    /// The image the view was drawn with from memory: kept here, outside the view's state, so
+    /// holding it doesn't draw the view again (1.11: a new row of posters used to be laid out
+    /// twice as it scrolled in).
     @State private var held = Held()
 
     final class Held {
@@ -444,12 +444,16 @@ struct CachedImage<Placeholder: View>: View {
         .task(id: wanted) {
             // Drawn into an image, it shows what's in memory: a load would only be abandoned.
             guard !isSnapshot, let path, !(loadedKey == wanted && loaded != nil) else { return }
-            // Already in memory (read ahead, or loaded for another view while this one waited
-            // to start): kept here too, so the view redraws with it and keeps it if memory is
-            // trimmed. (Returning without keeping it left the placeholder showing.)
+            // Drawn with it already (it was in memory when the view was drawn): nothing to do,
+            // and no second drawing.
+            if held.key == wanted, held.image != nil { return }
+            // Reached memory after the view was drawn with its placeholder (read ahead, or loaded
+            // for another view while this one waited to start): kept in the view's state, so it
+            // draws again with it. (1.11.0 kept it aside without drawing again, and the posters
+            // read ahead as Reel opened stayed blank.)
             if let hit = ImageStore.shared.cached(path, kind, monochrome: monochrome) {
-                held.image = hit
-                held.key = wanted
+                loaded = hit
+                loadedKey = wanted
                 return
             }
             // A load can fail (the network not up yet after waking, a slow connection): it's
@@ -483,7 +487,12 @@ struct CachedImage<Placeholder: View>: View {
         guard let path else { return nil }
         if loadedKey == wanted, let loaded { return loaded }
         if held.key == wanted, let image = held.image { return image }
-        return ImageStore.shared.cached(path, kind, monochrome: monochrome)
+        // In memory as the view is drawn: held, so it stays if memory is trimmed, and so the
+        // view's load knows it's already drawn.
+        guard let hit = ImageStore.shared.cached(path, kind, monochrome: monochrome) else { return nil }
+        held.image = hit
+        held.key = wanted
+        return hit
     }
 }
 #endif
