@@ -247,6 +247,7 @@ enum ScreenRenderer {
         log("rendered \((try? FileManager.default.contentsOfDirectory(atPath: output.path).count) ?? 0) screens")
         speedCheck(model.films)
         await SpeedGates.filmPages(model)
+        await SpeedGates.postersAppear(model)
         await scrollCheck(model, first: first, output: output)
         SpeedGates.library(model, copies: { copies(of: $0, count: $1, drives: $2) })
         SpeedGates.report(log: log)

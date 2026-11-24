@@ -9,6 +9,51 @@ enum ViewCounts {
     static var filmPage = 0
 }
 
+/// Which images are drawn as their placeholder (only while CI renders): one that has reached
+/// memory and still shows its placeholder seconds later is stuck there.
+@MainActor
+enum PlaceholderWatch {
+    static let isOn = ScreenRenderer.isRequested
+
+    private final class Entry {
+        weak var view: AnyObject?
+        let path: String?
+        let kind: ImageKind
+        let monochrome: Bool
+        let showing: Bool
+
+        init(view: AnyObject, path: String?, kind: ImageKind, monochrome: Bool, showing: Bool) {
+            self.view = view
+            self.path = path
+            self.kind = kind
+            self.monochrome = monochrome
+            self.showing = showing
+        }
+    }
+
+    private static var entries: [ObjectIdentifier: Entry] = [:]
+
+    static func note(_ view: AnyObject, path: String?, kind: ImageKind, monochrome: Bool, showing: Bool) {
+        entries[ObjectIdentifier(view)] = Entry(view: view, path: path, kind: kind, monochrome: monochrome, showing: showing)
+    }
+
+    static func reset() { entries.removeAll() }
+
+    /// Images views still alive are drawing, and how many of those are their placeholder although
+    /// the image is in memory.
+    static func count() -> (shown: Int, stuck: Int, waiting: Int) {
+        var shown = 0, stuck = 0, waiting = 0
+        for entry in entries.values where entry.view != nil {
+            if entry.showing {
+                shown += 1
+            } else if let path = entry.path {
+                if ImageStore.shared.cached(path, entry.kind, monochrome: entry.monochrome) != nil { stuck += 1 } else { waiting += 1 }
+            }
+        }
+        return (shown, stuck, waiting)
+    }
+}
+
 /// The 1.11 smoothness gates (spec §9.3), measured on CI's Mac after the screens: each is a GATE
 /// line saying PASS or FAIL with its number. The 8.3 ms budget is the 120 Hz screen's; CI's
 /// runner has no such screen, so those lines are reported, not required.
@@ -61,6 +106,35 @@ enum SpeedGates {
         let redraws = ViewCounts.filmPage - before
         gate("open film page redrawn when another film changes", "\(redraws) times, target 0", pass: redraws == 0)
         window.close()
+    }
+
+    /// All Films as Reel opens: nothing in memory, the posters in the Image Cache folder, read
+    /// ahead while the grid appears. Every image that has reached memory must be drawn, not its
+    /// placeholder (1.11.0 left the posters read ahead blank on Alex's first launch).
+    static func postersAppear(_ model: AppModel) async {
+        for attempt in 1...2 {
+            ImageStore.shared.forgetMemory()
+            PlaceholderWatch.reset()
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: ScrollTiming.size),
+                                  styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.appearance = NSAppearance(named: .darkAqua)
+            let host = NSHostingView(rootView: RootView()
+                .environment(model)
+                .environment(\.colorScheme, .dark)
+                .frame(width: ScrollTiming.size.width, height: ScrollTiming.size.height))
+            window.contentView = host
+            window.orderFrontRegardless()
+            try? await Task.sleep(for: .seconds(6))
+            host.layoutSubtreeIfNeeded()
+            window.displayIfNeeded()
+            let (shown, stuck, waiting) = PlaceholderWatch.count()
+            gate("posters appear as Reel opens (All Films, nothing in memory, try \(attempt))",
+                 "\(stuck) stuck on the placeholder with the image in memory, target 0 (\(shown) drawn, \(waiting) still loading)",
+                 pass: stuck == 0 && shown > 0)
+            window.close()
+            try? await Task.sleep(for: .seconds(1))
+        }
     }
 
     /// Library.json at 300 films (570 copies, the sample under other ids): what opening it costs on a Mac.

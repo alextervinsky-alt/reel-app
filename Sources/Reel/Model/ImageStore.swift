@@ -314,6 +314,13 @@ final class ImageStore: @unchecked Sendable {
         return await Task.detached(priority: .utility) { CacheMaintenance.size(of: base) }.value
     }
 
+    /// Forgets the decoded images and keeps the files: CI's check of a launch, which starts with
+    /// nothing in memory.
+    func forgetMemory() {
+        small.removeAllObjects()
+        large.removeAllObjects()
+    }
+
     func clear() {
         small.removeAllObjects()
         large.removeAllObjects()
@@ -420,6 +427,7 @@ struct CachedImage<Placeholder: View>: View {
 
     var body: some View {
         let image = current
+        let _ = PlaceholderWatch.isOn ? PlaceholderWatch.note(held, path: path, kind: kind, monochrome: monochrome, showing: image != nil) : ()
         ZStack {
             if let image {
                 // A CGImage draws straight from its pixels; already decoded at display size, so
