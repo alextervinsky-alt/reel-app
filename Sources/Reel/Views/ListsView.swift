@@ -5,11 +5,24 @@ import ReelCore
 
 // MARK: - Lists hub
 
-/// Where to find your next film: Start Here (what the lists agree on, what fits you first),
-/// then the rankings and award lists themselves, and the sets you're collecting, each with how
-/// much of it you own and have seen.
+/// The Lists page's chapters, one at a time under the search (1.11.2, Alex, 26 Nov: every list
+/// kept, in tabs).
+enum ListsChapter: String, CaseIterable, Identifiable {
+    case yours = "Your Lists"
+    case canon = "The Canon"
+    case festivalsAndAwards = "Festivals & Awards"
+    case rankings = "Rankings"
+
+    var id: String { rawValue }
+}
+
+/// Where to find your next film, in chapters: your lists (Start Here, what the lists agree on and
+/// what fits you first; your progress; the sets you're collecting), the canon, festivals and
+/// awards, and the rankings. Search looks through all of them.
 struct ListsView: View {
     @Environment(AppModel.self) private var model
+    /// The chapter last open, kept between launches.
+    @AppStorage("listsChapter") private var chapter: ListsChapter = .yours
     @State private var setKind: FilmSet.Kind = .director
     @State private var preview: PreviewFilm?
     @State private var preparing = true
@@ -27,14 +40,26 @@ struct ListsView: View {
                         .foregroundStyle(.secondary)
                 }
                 ListSearchSection()
-                StartHereSection(preparing: preparing) { preview = $0 }
-                YourProgressSection()
-                canonSection
-                awardsSection(.festivals)
-                awardsSection(.awards)
-                awardsSection(.cinematography)
-                IMDbSection(columns: cardColumns)
-                setsSection
+                Picker("Chapter", selection: $chapter) {
+                    ForEach(ListsChapter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                switch chapter {
+                case .yours:
+                    StartHereSection(preparing: preparing) { preview = $0 }
+                    YourProgressSection()
+                    setsSection
+                case .canon:
+                    canonSection
+                case .festivalsAndAwards:
+                    awardsSection(.festivals)
+                    awardsSection(.awards)
+                    awardsSection(.cinematography)
+                case .rankings:
+                    IMDbSection(columns: cardColumns)
+                }
             }
             .padding(.horizontal, 32)
             .padding(.top, 18)
