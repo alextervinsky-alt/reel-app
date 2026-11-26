@@ -91,6 +91,12 @@ jobs:
           else
             body=$(curl -s "https://www.omdbapi.com/?apikey=$OMDB_KEY&i=tt3896198")
             if echo "$body" | grep -q '"Response":"True"'; then echo "::notice::OMDB_KEY works"; else echo "::error::OMDB_KEY rejected"; fail=1; fi
+            # Which scores OMDb sends (1.11.2: Rotten Tomatoes went missing in Reel). Source names only.
+            for id in tt3896198 tt0133093 tt1375666 tt0816692; do
+              sources=$(curl -s "https://www.omdbapi.com/?apikey=$OMDB_KEY&i=$id" \
+                | python3 -c "import json,sys; print(', '.join(r['Source'] for r in json.load(sys.stdin).get('Ratings', [])) or 'none')" 2>/dev/null)
+              echo "::notice::OMDb $id rating sources: ${sources:-unreadable}"
+            done
           fi
           exit $fail
 
