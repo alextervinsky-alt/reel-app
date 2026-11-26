@@ -4,6 +4,15 @@ A personal Mac app that scans film drives, recognises each film from its file na
 
 Apple Silicon, macOS 15 or later.
 
+## What's new in 1.11.2
+
+- **The sidebar as in 1.10.10, with New Releases.** Recommended, For You and Wishlist are their own rows again, and Explore's shelves are separate rows again (1.11's merge is undone). **New Releases** is a new tab: In Cinemas Now, Coming Soon, **New at Home** (recently in cinemas, now out to stream, rent or buy online) and **New on Blu-ray** (out on disc in the last three months).
+- **Lists in chapters.** Under the search: Your Lists (Start Here, Your Progress, Complete the Set), The Canon, Festivals & Awards, and Rankings. Every list is kept.
+- **Rotten Tomatoes is back.** OMDb no longer sends it, and the refresh of 24 Nov wrote "none" over the stored scores. A refresh now never removes a score it doesn't send, and the Tomatometer comes from Wikidata (its latest dated score) when OMDb has none.
+- **Frames from the Film:** the same stills in another order no longer clear the check.
+- **Settings › Scrolling** counts each page on its own, with the share of frames missed.
+- (1.11.1) Posters read ahead as Reel opens are drawn at once (1.11.0 left the first rows of All Films blank).
+
 ## What's new in 1.11
 
 1.11 keeps the features that work well, makes them better, and makes Reel smoother.
@@ -11,7 +20,6 @@ Apple Silicon, macOS 15 or later.
 - **Your data is safer.** Your Notes now keeps every copy's match (so a rebuilt library never matches a known file again, and your own fixes still win) and the frames you said aren't from the film. Frame removals made before 1.11 are carried over at first launch by running the same on-device check again. A film where that can't be done is skipped, and the count goes to `Migration log.txt` in the Reel folder (counts only). A Your Notes written by a newer Reel opens read-only, and a damaged one shows its newest readable Safety Copy with Restore. Settings.json gets daily Safety Copies too.
 - **A smaller, faster library file.** `Library.json` moves to format 7: each film's info is kept once, not once per copy, so a library with Backup copies is about 40% of the size. On CI, 300 films open in under 0.1 s. It is saved every 30 seconds while film info is being looked up, and once at the end.
 - **Smoother.** One pointer tracker per grid instead of one per poster, posters drawn with their frame once, file names read once, and film pages that redraw only for their own film. Settings › Diagnostics › Scrolling counts the frames shown and missed on each page at the screen's own rate.
-- **A simpler sidebar.** Ten rows: Tonight and New Arrivals; All Films, Unwatched, Watchlist, Favorites, Watched and Genres; Explore and Lists; Year in Film. Recommended is now Tonight's **Suggestions**, For You is the top of **Explore**, and the wishlist is Watchlist's **Not in Your Library**. Cinema mode's first tab is **Home**.
 - **Lists.** New: the Sight and Sound directors' poll (2022), AFI's 100 Years…100 Movies (2007), the Oscar for Best Documentary, Venice's Grand Jury Prize, the Berlinale's Silver Bear Grand Jury Prize, the European Film Award for Best Cinematographer, and the Most Acclaimed of each decade. The Lists page is grouped into The Canon, Festivals, Awards, Cinematography and Rankings, and its search finds Reel's own lists. Winners & Nominees sits under each award list's title, and a nomination now adds a third of its list's weight to a film that's on another list.
 - **Reviews** are read with new rules. A like or dislike needs words that judge one part of the film, with nothing said the other way. Questions, other films, wishes and plot summaries are left out, and quotes are whole sentences that never run into the next paragraph. On 30 well-known films that weren't used to set the rules, 83% of likes and 77% of dislikes were right (1.10: about 75%), short of the 95% aimed for. Each film's reviews are read again once.
 - **Removed:** the Cinematography tab and the Shot on filter. Their facts were right about 94% of the time but found for only a third of films. Frames from the Film moved to Behind the Film, shown when at least four real frames are found. The Shot on and facts you marked Not Right stay in Your Notes as they are. The old readings folder can be moved to the Trash from Settings.
@@ -29,7 +37,7 @@ A scan removes films only when it read the whole drive. When a folder can't be r
 
 ## Tonight
 
-Your shortlist for the evening, compared side by side: year and genres, director and leads, ratings, verdict, premise, end time, moods, subtitles and quality, and the lists each is on. **Decide for Us** picks one, and the shortlist clears itself at 6 in the morning. Below it are five **Suggestions** from your library, picked fresh each launch, with mood chips and New Picks. Each says in one line why it's there. "Not tonight" keeps a film out for two weeks.
+Your shortlist for the evening, compared side by side: year and genres, director and leads, ratings, verdict, premise, end time, moods, subtitles and quality, and the lists each is on. **Decide for Us** picks one, and the shortlist clears itself at 6 in the morning. "Not tonight" keeps a film out for two weeks.
 
 ## A film's page
 
@@ -42,24 +50,30 @@ Spoiler-safe (on by default): until a film is marked watched, review quotes and 
 
 Trailers are the film's own trailers on YouTube, played inside Reel in YouTube's privacy-enhanced player. Films open in IINA, VLC or the default app. Back from the player, Reel asks "Did you finish it?" and then "How was it?".
 
+## Recommended and For You
+
+**Recommended:** five films from your library, picked fresh each launch, with mood chips. **For You:** films you don't have and haven't seen, which people who loved your favourites went on to love, with Because You Loved chips and New Picks.
+
 ## Explore
 
-**For You** comes first: fifteen films you don't have and haven't seen, which people who loved your favourites went on to love, with Because You Loved chips and New Picks. Then In Cinemas, Coming Soon, the **Best of** any year from the source you choose (Most Acclaimed, TMDB or IMDb rating, most popular, award winners, hidden gems), and **More to Explore**. More to Explore is one row mixing three of today's shelves (trending, new at home, a country, a decade, hidden gems, a theme), a new mix each visit. Mood chips narrow every row. Search finds any film. Not for Me keeps a film out of For You and Explore for good.
+Trending This Week, then shelves that change each time Reel opens (Because You Loved, More from a director, a country's cinema, a decade or the hidden gems), and the **Best of** any year from the source you choose (Most Acclaimed, TMDB or IMDb rating, most popular, award winners, hidden gems). Mood chips narrow every row. Search finds any film. Not for Me keeps a film out of For You and Explore for good.
 
-## Watchlist
+## New Releases
 
-Your films to watch first. Then **Not in Your Library**: films you want and don't have yet. When one turns up on your drives, it moves up into the Watchlist.
+In Cinemas Now, Coming Soon, **New at Home** (recent cinema releases now out online in the US, from TMDB's digital release dates) and **New on Blu-ray** (TMDB's disc releases of the last three months, new films and new editions). Films you've seen are left out.
+
+## Wishlist
+
+Films you want and don't have yet. When one turns up on your drives, it leaves the wishlist on its own.
 
 ## Lists
 
-Search for lists by any words: a theme, a series, a person, a country's cinema, a decade, Wikipedia's "List of … films", or one of Reel's own lists. Then:
+Search for lists by any words: a theme, a series, a person, a country's cinema, a decade, Wikipedia's "List of … films", or one of Reel's own lists. Below it, four chapters, the last one open kept between launches:
 
-- **Start Here:** the films the polls, festivals and rankings agree on that you haven't seen, those already on your drives and those worth finding.
-- **Your Progress.**
+- **Your Lists:** Start Here (the films the polls, festivals and rankings agree on that you haven't seen, those already on your drives and those worth finding), Your Progress, and Complete the Set (directors, cinematographers and franchises).
 - **The Canon:** Sight and Sound's critics' and directors' polls, AFI's 100 and the Criterion Collection.
-- **Festivals, Awards and Cinematography:** from Wikidata, refreshed weekly.
+- **Festivals & Awards:** festivals, academy awards and cinematography awards, from Wikidata, refreshed weekly.
 - **Rankings:** the year's and the decade's Most Acclaimed, and IMDb's Top 250, the Top 100 of any year or decade, the most voted, and the best of each genre.
-- **Complete the Set:** directors, cinematographers and franchises.
 
 An award list is added only when Wikidata records its winners for at least 80% of the award's years. 70–80% is shown with a note, and less is left out. Each list shows what you own and have seen.
 
@@ -71,7 +85,7 @@ What you watched each year: films, hours, rewatches, month by month, highlights,
 
 ⇧⌘C turns Reel into a view for the TV: full screen, big targets, and text of 22 points or more. Three tabs:
 
-- **Home:** Tonight, Suggestions, New Arrivals, Like the Films You Loved, the Watchlist, genres, languages, Under 100 Minutes, Acclaimed and Watch Again.
+- **For You:** Tonight, Recommended for You, New Arrivals, Like the Films You Loved, the Watchlist, genres, languages, Under 100 Minutes, Acclaimed and Watch Again.
 - **Tonight:** the shortlist with Decide for Us.
 - **All Films:** with its filters and search.
 
