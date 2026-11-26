@@ -4,6 +4,10 @@ A personal Mac app that scans film drives, recognises each film from its file na
 
 Apple Silicon, macOS 15 or later.
 
+## What's new in 1.11.3
+
+- **Smoother scrolling.** While a page scrolls, macOS asks the window what's under the pointer on every frame; on Alex's Mac answering took half of Reel's main-thread work, as every poster's click, hover and text areas were checked. Posters and cards now answer only while they're under the pointer (the grid and each page know which one is), and a poster clicked before one is lifted opens all the same. On CI's Mac one such check over All Films went from 768 to 259 µs (a window of plain tiles takes 106).
+
 ## What's new in 1.11.2
 
 - **The sidebar as in 1.10.10, with New Releases.** Recommended, For You and Wishlist are their own rows again, and Explore's shelves are separate rows again (1.11's merge is undone). **New Releases** is a new tab: In Cinemas Now, Coming Soon, **New at Home** (recently in cinemas, now out to stream, rent or buy online) and **New on Blu-ray** (out on disc in the last three months).
