@@ -31,7 +31,7 @@ struct NewReleasesView: View {
             .padding(.top, 18)
             .padding(.bottom, 40)
         }
-        .tracksScrolling()
+        .tracksScrolling("New Releases")
         .background(Theme.background)
         .navigationTitle("New Releases")
         .filmPreviewSheet($preview)

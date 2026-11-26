@@ -153,7 +153,7 @@ struct TonightView: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width - 64 } action: { width = $0 }
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("Tonight")
         .background(Theme.background)
         .navigationTitle("Tonight")
         .onAppear { model.startNewEveningIfNeeded() }

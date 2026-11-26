@@ -47,7 +47,7 @@ struct FilmPage: View {
                 }
                 .hoverRegion()
             }
-            .tracksScrolling()
+            .tracksScrolling("Film page")
             .background(Theme.background)
             .ignoresSafeArea(.container, edges: .top)
             .navigationTitle("")

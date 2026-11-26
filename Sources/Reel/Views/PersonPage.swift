@@ -55,7 +55,7 @@ struct PersonPage: View {
             .frame(maxWidth: 1180, alignment: .leading)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("Person page")
         .background(Theme.background)
         .navigationTitle(route.name)
         .filmPreviewSheet($preview)

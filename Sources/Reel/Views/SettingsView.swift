@@ -205,7 +205,8 @@ struct SettingsView: View {
                 Section {
                     ForEach(scrollStats) { stat in
                         LabeledContent(stat.page) {
-                            Text("\(stat.stat.missed) of \(stat.stat.frames.formatted()) frames missed at \(stat.stat.hertz) Hz")
+                            Text("\(stat.stat.missed) of \(stat.stat.frames.formatted()) frames missed at \(stat.stat.hertz) Hz, "
+                                 + (Double(stat.stat.missed) / Double(max(stat.stat.frames, 1))).formatted(.percent.precision(.fractionLength(1))))
                                 .monospacedDigit().foregroundStyle(.secondary)
                         }
                     }

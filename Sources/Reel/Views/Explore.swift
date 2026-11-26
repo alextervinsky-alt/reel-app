@@ -68,7 +68,7 @@ struct ExploreView: View {
             .padding(.bottom, 40)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("Explore")
         .background(Theme.background)
         .navigationTitle("Explore")
         .filmPreviewSheet($preview)
@@ -436,7 +436,7 @@ struct DiscoverListPage: View {
             .padding(.vertical, 22)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("Explore list")
         .background(Theme.background)
         .navigationTitle(list.title)
         .filmPreviewSheet($preview)

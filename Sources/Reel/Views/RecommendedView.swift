@@ -50,7 +50,7 @@ struct RecommendedView: View {
             .frame(maxWidth: 1120, alignment: .leading)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("Recommended")
         .background(Theme.background)
         .navigationTitle("Recommended")
         // Play is right here: VLC gets a head start.

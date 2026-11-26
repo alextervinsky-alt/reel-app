@@ -91,7 +91,7 @@ struct ListPage: View {
             .frame(maxWidth: 1080, alignment: .leading)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("A list")
         .background(Theme.background)
         .navigationTitle(kind.title)
         .filmPreviewSheet($preview)

@@ -51,7 +51,7 @@ struct ForYouView: View {
             .frame(maxWidth: 1120, alignment: .leading)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("For You")
         .background(Theme.background)
         .navigationTitle("For You")
         .filmPreviewSheet($preview)

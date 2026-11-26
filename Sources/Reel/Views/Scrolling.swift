@@ -46,8 +46,10 @@ extension View {
     /// Makes a scrolling page smooth: what's on it doesn't react to the pointer or fade in while it
     /// scrolls, and the library's updates wait until it stops. A row scrolling inside a page shares
     /// the page's state.
-    func tracksScrolling() -> some View {
-        modifier(TracksScrolling())
+    /// - Parameter page: the page's name in Settings › Scrolling (1.11.2: frames missed per page);
+    ///   a row inside a page counts with its page.
+    func tracksScrolling(_ page: String? = nil) -> some View {
+        modifier(TracksScrolling(page: page))
     }
 
     /// `hovering` follows the pointer, except while the page scrolls: a card passing under a still
@@ -155,11 +157,16 @@ private struct TracksScrolling: ViewModifier {
     @Environment(ScrollState.self) private var outer: ScrollState?
     @State private var own = ScrollState()
     @State private var id = UUID()
+    let page: String?
 
     func body(content: Content) -> some View {
         let scroll = outer ?? own
+        let page = outer == nil ? page : nil
         content
-            .onScrollPhaseChange { _, phase in scroll.phaseChanged(scrolling: phase.isScrolling, of: id, model: model) }
+            .onScrollPhaseChange { _, phase in
+                if let page { scroll.name = page }
+                scroll.phaseChanged(scrolling: phase.isScrolling, of: id, model: model)
+            }
             .environment(scroll)
             .onDisappear {
                 if outer == nil { own.pointed = nil }

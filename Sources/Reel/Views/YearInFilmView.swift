@@ -43,7 +43,7 @@ struct YearInFilmView: View {
             if isSnapshot {
                 page.frame(maxHeight: .infinity, alignment: .top)
             } else {
-                ScrollView { page }.tracksScrolling()
+                ScrollView { page }.tracksScrolling("Year in Film")
             }
         }
         .background(Theme.background)

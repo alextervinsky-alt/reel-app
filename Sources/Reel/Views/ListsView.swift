@@ -66,7 +66,7 @@ struct ListsView: View {
             .padding(.bottom, 48)
             .hoverRegion()
         }
-        .tracksScrolling()
+        .tracksScrolling("Lists")
         .background(Theme.background)
         .navigationTitle("Lists")
         .filmPreviewSheet($preview)
