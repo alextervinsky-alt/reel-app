@@ -137,6 +137,44 @@ enum SpeedGates {
         }
     }
 
+    /// What AppKit asks the window on every frame while a page scrolls (where's the cursor, which
+    /// view takes this scroll event): a hit test of the view under the pointer. On Alex's Mac this
+    /// was half the main thread's work while All Films scrolled (sample, 26 Nov: 1,348 of 2,691
+    /// busy samples), as SwiftUI walked every card's click, hover and text areas (1.11.2).
+    static func hitTesting(_ model: AppModel) async {
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: ScrollTiming.size),
+                              styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        let host = NSHostingView(rootView: RootView()
+            .environment(model)
+            .environment(\.colorScheme, .dark)
+            .frame(width: ScrollTiming.size.width, height: ScrollTiming.size.height))
+        window.contentView = host
+        window.orderFrontRegardless()
+        try? await Task.sleep(for: .seconds(6))
+        guard let frame = host.superview else { window.close(); return }
+        // A grid of points over the posters, right of the sidebar.
+        var points: [NSPoint] = []
+        for x in stride(from: 320.0, to: ScrollTiming.size.width - 40, by: 90) {
+            for y in stride(from: 160.0, to: ScrollTiming.size.height - 40, by: 90) { points.append(NSPoint(x: x, y: y)) }
+        }
+        _ = points.map { frame.hitTest($0) }
+        var times: [Double] = []
+        for _ in 0..<5 {
+            for point in points {
+                let start = ContinuousClock.now
+                _ = frame.hitTest(point)
+                times.append(ms(ContinuousClock.now - start) * 1000)
+            }
+        }
+        times.sort()
+        let median = times[times.count / 2], worst = times.last ?? 0
+        gate("hit test over All Films (500 films), as AppKit asks each frame while scrolling",
+             String(format: "median %.0f µs, worst %.0f µs (%d points × 5)", median, worst, points.count), pass: nil)
+        window.close()
+    }
+
     /// Library.json at 300 films (570 copies, the sample under other ids): what opening it costs on a Mac.
     static func library(_ model: AppModel, copies: ([FilmEntry], Int, [String]) -> [FilmEntry]) {
         let drive = model.drives.first?.id ?? "Main"

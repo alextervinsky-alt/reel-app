@@ -249,6 +249,7 @@ enum ScreenRenderer {
         await SpeedGates.filmPages(model)
         await SpeedGates.postersAppear(model)
         await scrollCheck(model, first: first, output: output)
+        await SpeedGates.hitTesting(model)
         SpeedGates.library(model, copies: { copies(of: $0, count: $1, drives: $2) })
         SpeedGates.report(log: log)
         finish()
