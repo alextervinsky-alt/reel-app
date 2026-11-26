@@ -154,24 +154,34 @@ enum SpeedGates {
         window.orderFrontRegardless()
         try? await Task.sleep(for: .seconds(6))
         guard let frame = host.superview else { window.close(); return }
-        // A grid of points over the posters, right of the sidebar.
-        var points: [NSPoint] = []
-        for x in stride(from: 320.0, to: ScrollTiming.size.width - 40, by: 90) {
-            for y in stride(from: 160.0, to: ScrollTiming.size.height - 40, by: 90) { points.append(NSPoint(x: x, y: y)) }
-        }
-        _ = points.map { frame.hitTest($0) }
-        var times: [Double] = []
-        for _ in 0..<5 {
-            for point in points {
-                let start = ContinuousClock.now
-                _ = frame.hitTest(point)
-                times.append(ms(ContinuousClock.now - start) * 1000)
+        // Points over the page right of the sidebar, and apart: the sidebar, the banner, the posters
+        // (in the window's own coordinates, from the bottom).
+        let height = ScrollTiming.size.height
+        func points(x: ClosedRange<Double>, fromTop y: ClosedRange<Double>) -> [NSPoint] {
+            stride(from: x.lowerBound, through: x.upperBound, by: 60).flatMap { px in
+                stride(from: y.lowerBound, through: y.upperBound, by: 60).map { NSPoint(x: px, y: height - $0) }
             }
         }
-        times.sort()
-        let median = times[times.count / 2], worst = times.last ?? 0
+        func median(_ points: [NSPoint]) -> (median: Double, worst: Double) {
+            _ = points.map { frame.hitTest($0) }
+            var times: [Double] = []
+            for _ in 0..<5 {
+                for point in points {
+                    let start = ContinuousClock.now
+                    _ = frame.hitTest(point)
+                    times.append(ms(ContinuousClock.now - start) * 1000)
+                }
+            }
+            times.sort()
+            return (times[times.count / 2], times.last ?? 0)
+        }
+        let page = median(points(x: 320...(ScrollTiming.size.width - 40), fromTop: 160...(height - 40)))
+        let sidebar = median(points(x: 40...200, fromTop: 120...(height - 120)))
+        let banner = median(points(x: 320...(ScrollTiming.size.width - 40), fromTop: 80...300))
+        let posters = median(points(x: 320...(ScrollTiming.size.width - 40), fromTop: 560...(height - 40)))
         gate("hit test over All Films (500 films), as AppKit asks each frame while scrolling",
-             String(format: "median %.0f µs, worst %.0f µs (%d points × 5)", median, worst, points.count), pass: nil)
+             String(format: "median %.0f us, worst %.0f us; sidebar %.0f, banner %.0f, posters %.0f us (medians)",
+                    page.median, page.worst, sidebar.median, banner.median, posters.median), pass: nil)
         window.close()
     }
 
