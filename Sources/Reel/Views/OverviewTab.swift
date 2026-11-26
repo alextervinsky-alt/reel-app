@@ -35,6 +35,13 @@ struct OverviewTab: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: Bool.self) { $0.size.width >= 540 + 48 + 340 } action: { sideBySide = $0 }
+            // What people say, right under the story (1.11.4, Alex: Reviews and Overview are one tab).
+            if details != nil {
+                VStack(alignment: .leading, spacing: 14) {
+                    Theme.sectionTitle("Reviews")
+                    ReceptionTab(film: film)
+                }
+            }
             if let details, !details.topCast.isEmpty { cast(details) }
             if let pair = model.pairing(for: film) {
                 PairItWith(film: film, partner: pair.item, reason: pair.reason)

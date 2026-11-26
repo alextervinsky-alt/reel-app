@@ -15,7 +15,6 @@ struct FilmPage: View {
     @State private var tab: FilmTab = .overview
     @State private var fixing = false
     @State private var showingFile = false
-    @State private var still: StillSelection?
     @State private var preview: PreviewFilm?
 
     var body: some View {
@@ -31,11 +30,7 @@ struct FilmPage: View {
                         Group {
                             switch shownTab(for: film) {
                             case .overview: OverviewTab(film: film) { preview = $0 }
-                            case .reviews: ReceptionTab(film: film)
-                            case .behindTheFilm:
-                                BehindTheFilmTab(film: film) { paths, index in
-                                    still = StillSelection(paths: paths, index: index)
-                                }
+                            case .behindTheFilm: BehindTheFilmTab(film: film)
                             case .extras: ExtrasTab(film: film)
                             }
                         }
@@ -53,9 +48,6 @@ struct FilmPage: View {
             .navigationTitle("")
             .sheet(isPresented: $fixing) { MatchFixer(film: film) }
             .sheet(isPresented: $showingFile) { FileInfoSheet(film: film) }
-            .sheet(item: $still) { selection in
-                StillViewer(paths: selection.paths, index: selection.index)
-            }
             .filmPreviewSheet($preview)
             .onChange(of: filmID) { tab = .overview }
             // The Lists hub's saved data, for the badges under the title (read once per launch).
@@ -79,7 +71,7 @@ struct FilmPage: View {
         FilmTab.allCases.filter { tab in
             switch tab {
             case .overview: true
-            case .reviews, .behindTheFilm: film.tmdb != nil
+            case .behindTheFilm: film.tmdb != nil
             case .extras: model.hasExtras(film)
             }
         }

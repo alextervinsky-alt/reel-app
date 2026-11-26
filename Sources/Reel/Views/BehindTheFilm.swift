@@ -11,12 +11,11 @@ import ReelCore
 /// was received, awards, legacy). Each chapter opens on its best lines, someone's own words set
 /// apart and a fact or two, and opens in place to read the whole of it. What gives the story
 /// away waits under After You Watch until the film is watched. Then where it was filmed, and
-/// where to read more. Frames from the film come first, when at least four were found (1.11).
+/// where to read more. (Frames from the film were shown first in 1.11; Alex, 26 Nov: not needed
+/// here, 1.11.4.)
 struct BehindTheFilmTab: View {
     @Environment(AppModel.self) private var model
     let film: FilmEntry
-    /// Opens a frame full size.
-    var openStill: ([String], Int) -> Void = { _, _ in }
     /// Chapters opened to their full text.
     @State private var opened: Set<String> = []
     /// After You Watch (and facts that give the story away) shown anyway, for this visit.
@@ -31,11 +30,6 @@ struct BehindTheFilmTab: View {
         let content = built.content(film: film, article: article, hiding: hiding)
 
         VStack(alignment: .leading, spacing: 38) {
-            // Shown while they're being checked, then only when four or more are frames from the
-            // film; never an empty heading (1.11, spec F3).
-            if !(film.tmdb?.stillPaths.isEmpty ?? true), film.checkedStills.map({ model.visibleStills(film, checked: $0).count >= 4 }) ?? true {
-                FilmStills(film: film, open: openStill, title: "Frames from the Film", minimum: 4)
-            }
             if !content.toKnow.isEmpty { DidYouKnow(items: content.toKnow) }
             AtAGlance(film: film)
             if content.hiddenFacts > 0, article?.after.isEmpty != false {

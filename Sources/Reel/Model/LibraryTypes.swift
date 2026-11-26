@@ -409,15 +409,16 @@ struct FilmInfo: Sendable {
     }
 }
 
+/// A film page's tabs. What people say is part of Overview (1.11.4, Alex: Reviews and Overview are
+/// one tab).
 enum FilmTab: String, CaseIterable, Identifiable {
-    case overview, reviews, behindTheFilm, extras
+    case overview, behindTheFilm, extras
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .overview: "Overview"
-        case .reviews: "Reviews"
         case .behindTheFilm: "Behind the Film"
         case .extras: "Extras"
         }
