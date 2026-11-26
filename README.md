@@ -4,6 +4,10 @@ A personal Mac app that scans film drives, recognises each film from its file na
 
 Apple Silicon, macOS 15 or later.
 
+## What's new in 1.11.4
+
+- **Rotten Tomatoes for every film,** not just yours: previews in Explore, For You, New Releases and the Wishlist, and the critics' scores behind Most Acclaimed, take the Tomatometer from Wikidata when OMDb has none (one query for many films, each film asked once a session).
+
 ## What's new in 1.11.3
 
 - **Smoother scrolling.** While a page scrolls, macOS asks the window what's under the pointer on every frame; on Alex's Mac answering took half of Reel's main-thread work, as every poster's click, hover and text areas were checked. Posters and cards now answer only while they're under the pointer (the grid and each page know which one is), and a poster clicked before one is lifted opens all the same. On CI's Mac one such check over All Films went from 768 to 259 µs (a window of plain tiles takes 106).

@@ -258,15 +258,13 @@ extension AppModel {
     /// queries for the whole library; each film is asked once a session (one Wikidata lacks is
     /// asked again next launch). Returns how many scores were filled in.
     func fillRottenTomatoes() async -> Int {
-        var seen = Set<String>()
         let wanted = films.compactMap { film -> String? in
-            guard film.ratings != nil, film.ratings?.rottenTomatoes == nil, let id = film.tmdb?.imdbID, !id.isEmpty,
-                  !rottenTomatoesAsked.contains(id), seen.insert(id).inserted else { return nil }
+            guard film.ratings != nil, film.ratings?.rottenTomatoes == nil, let id = film.tmdb?.imdbID, !id.isEmpty else { return nil }
             return id
         }
         guard !wanted.isEmpty else { return 0 }
-        rottenTomatoesAsked.formUnion(wanted)
-        guard let found = try? await WikidataScores.rottenTomatoes(imdbIDs: wanted), !found.isEmpty else { return 0 }
+        let found = await tomatometers(wanted)
+        guard !found.isEmpty else { return 0 }
         var filled = Set<String>()
         mutateFilms { list in
             for i in list.indices {
@@ -277,6 +275,26 @@ extension AppModel {
             }
         }
         return filled.count
+    }
+
+    /// Wikidata's Tomatometer for these films (IMDb ids), each asked once a session in a few
+    /// queries; films not reached are asked again next time. Films you own, previews of films you
+    /// don't, and the critics' scores of Most Acclaimed all come through here (OMDb no longer
+    /// sends Rotten Tomatoes, 1.11.2).
+    func tomatometers(_ imdbIDs: [String]) async -> [String: Int] {
+        var seen = Set<String>()
+        let wanted = imdbIDs.filter { !$0.isEmpty && !rottenTomatoesAsked.contains($0) && seen.insert($0).inserted }
+        if !wanted.isEmpty {
+            rottenTomatoesAsked.formUnion(wanted)
+            if let found = try? await WikidataScores.rottenTomatoes(imdbIDs: wanted) {
+                wikidataTomatometer.merge(found) { _, new in new }
+            } else {
+                rottenTomatoesAsked.subtract(wanted)
+            }
+        }
+        var scores: [String: Int] = [:]
+        for id in imdbIDs { if let score = wikidataTomatometer[id] { scores[id] = score } }
+        return scores
     }
 
     nonisolated static func lookUp(_ job: LookupJob, client: TMDBClient, omdb: OMDbClient?, ratingsWanted: Bool) async -> LookupOutcome {

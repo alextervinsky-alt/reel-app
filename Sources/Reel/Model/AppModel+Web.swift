@@ -123,6 +123,11 @@ extension AppModel {
             let details = try? await client.previewDetails(id: id)
             var ratings: ExternalRatings?
             if let imdbID = details?.imdbID, let omdb { ratings = try? await omdb.ratings(imdbID: imdbID) }
+            // Rotten Tomatoes from Wikidata, as OMDb no longer sends it (1.11.2).
+            if ratings?.rottenTomatoes == nil, let imdbID = details?.imdbID, !imdbID.isEmpty,
+               let score = await self.tomatometers([imdbID])[imdbID] {
+                ratings = ExternalRatings.merged(ExternalRatings(rottenTomatoes: score), over: ratings)
+            }
             return (details, ratings)
         }
         previewTasks[id] = task

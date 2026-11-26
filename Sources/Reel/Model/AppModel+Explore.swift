@@ -229,11 +229,27 @@ extension AppModel {
             }
             lists.keepCriticScores(found)
         }
+        // Rotten Tomatoes from Wikidata where OMDb sent none (it no longer sends it, 1.11.2), for
+        // the films most likely to make the list; known scores are used without asking.
+        var tomatometer = wikidataTomatometer
+        if askCritics {
+            let likely = Acclaim.rank(candidates).prefix(40).map { $0.candidate.film.id }
+            let filled = await tomatometers(likely.filter { lists.criticScores($0)?.rottenTomatoes == nil })
+            tomatometer.merge(filled) { _, new in new }
+            // Kept with OMDb's answer, so the decade's list (made from known scores) has them too.
+            var kept: [String: CriticScores] = [:]
+            for (id, score) in filled {
+                guard let scores = lists.criticScores(id) else { continue }
+                kept[id] = CriticScores(metacritic: scores.metacritic, rottenTomatoes: score)
+            }
+            if !kept.isEmpty { lists.keepCriticScores(kept) }
+        }
         // What the critics said, as far as it's known.
         for index in candidates.indices {
-            guard let scores = lists.criticScores(candidates[index].film.id) else { continue }
-            candidates[index].metacritic = scores.metacritic
-            candidates[index].rottenTomatoes = scores.rottenTomatoes
+            let id = candidates[index].film.id
+            let scores = lists.criticScores(id)
+            if let scores { candidates[index].metacritic = scores.metacritic }
+            if let score = scores?.rottenTomatoes ?? tomatometer[id] { candidates[index].rottenTomatoes = score }
         }
         if askCritics { acclaimedWithCritics.insert(year) }
         let ranked = Acclaim.rank(candidates).prefix(50)
