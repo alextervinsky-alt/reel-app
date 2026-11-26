@@ -991,7 +991,7 @@ final class AppModel {
         var list: [LibraryItem]
         var order = sort
         switch shelf {
-        case .all, .recommended, .forYou, .explore, .lists, .wishlist, .yearInFilm, .tonight: list = items
+        case .all, .recommended, .forYou, .explore, .newReleases, .lists, .wishlist, .yearInFilm, .tonight: list = items
         case .newArrivals:
             list = items.filter { arrivals[$0.id] != nil && !personal.watchedKeys.contains($0.id) }
             order = .added
