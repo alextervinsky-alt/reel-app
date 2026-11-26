@@ -179,6 +179,33 @@ enum SpeedGates {
         let sidebar = median(points(x: 40...200, fromTop: 120...(height - 120)))
         let banner = median(points(x: 320...(ScrollTiming.size.width - 40), fromTop: 80...300))
         let posters = median(points(x: 320...(ScrollTiming.size.width - 40), fromTop: 560...(height - 40)))
+        window.close()
+        // The floor: the same in a window of 600 plain tiles (SwiftUI's own cost on this machine).
+        let plainWindow = NSWindow(contentRect: NSRect(origin: .zero, size: ScrollTiming.size),
+                                   styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        plainWindow.isReleasedWhenClosed = false
+        let plainHost = NSHostingView(rootView: ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 168, maximum: 205), spacing: 22)], spacing: 30) {
+                ForEach(0..<600, id: \.self) { _ in RoundedRectangle(cornerRadius: 12).fill(Color.gray).aspectRatio(2 / 3, contentMode: .fit) }
+            }.padding(32)
+        }.frame(width: ScrollTiming.size.width, height: ScrollTiming.size.height))
+        plainWindow.contentView = plainHost
+        plainWindow.orderFrontRegardless()
+        try? await Task.sleep(for: .seconds(2))
+        var plain = (median: 0.0, worst: 0.0)
+        if let plainFrame = plainHost.superview {
+            _ = (0..<20).map { _ in plainFrame.hitTest(NSPoint(x: 400, y: 400)) }
+            var times: [Double] = []
+            for point in points(x: 320...(ScrollTiming.size.width - 40), fromTop: 160...(height - 40)) {
+                let start = ContinuousClock.now
+                _ = plainFrame.hitTest(point)
+                times.append(ms(ContinuousClock.now - start) * 1000)
+            }
+            times.sort()
+            plain = (times[times.count / 2], times.last ?? 0)
+        }
+        plainWindow.close()
+        gate("hit test over a window of plain tiles (the floor)", String(format: "median %.0f us", plain.median), pass: nil)
         gate("hit test over All Films (500 films), as AppKit asks each frame while scrolling",
              String(format: "median %.0f us, worst %.0f us; sidebar %.0f, banner %.0f, posters %.0f us (medians)",
                     page.median, page.worst, sidebar.median, banner.median, posters.median), pass: nil)
