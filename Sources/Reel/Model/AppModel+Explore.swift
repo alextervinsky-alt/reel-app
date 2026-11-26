@@ -21,7 +21,7 @@ extension AppModel {
     /// The films of an Explore list as shown: none you've seen, only the mood's when one is
     /// chosen, and in this launch's order when the list ranks by quality.
     func exploreFilms(_ list: DiscoverList, mood: Mood?) -> [TMDBMovieSummary] {
-        var films = (discover[list] ?? []).filter { !hasSeen($0.id) && !notForMe.contains($0.id) }
+        var films = (discover[list] ?? []).filter { !hasSeen($0.id) && !notForMe.contains($0.id) && list.keeps($0) }
         // More from a director: the films you don't have yet.
         if case .director = list { films = films.filter { itemsByTMDB[$0.id] == nil } }
         // What people went on to love after one of yours: only the well-liked (TMDB's own list

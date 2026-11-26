@@ -155,7 +155,8 @@ public enum DiscoverList: Hashable, Sendable {
                 URLQueryItem(name: "release_date.lte", value: daysAgo(0)),
                 URLQueryItem(name: "primary_release_date.gte", value: daysAgo(365)),
                 URLQueryItem(name: "sort_by", value: "popularity.desc"),
-                URLQueryItem(name: "vote_count.gte", value: "30"),
+                // Widely seen: the cinema releases, not titles that went straight online.
+                URLQueryItem(name: "vote_count.gte", value: "100"),
                 noAdult,
             ], 3)
         case .newOnBluRay:
@@ -229,6 +230,19 @@ public enum DiscoverList: Hashable, Sendable {
             // Their filmography, not a list of results: see `DirectorFilms`.
             return ("/person/\(id)/movie_credits", [], 1)
         }
+    }
+
+    /// Whether a film TMDB gives for the list belongs in it. Coming Soon is films not out yet: TMDB
+    /// also gives films already out that have another cinema date in the window (a re-release, an
+    /// IMAX run: Star Wars from 1977, a summer film "opening July 31" in November), 1.11.2.
+    public func keeps(_ film: TMDBMovieSummary, today: Date = Date()) -> Bool {
+        guard self == .comingSoon else { return true }
+        let day = DateFormatter()
+        day.dateFormat = "yyyy-MM-dd"
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.timeZone = TimeZone(identifier: "UTC")
+        guard let released = film.releaseDate, released.count >= 10 else { return true }
+        return String(released.prefix(10)) > day.string(from: today)
     }
 
     /// The mood a list keeps to, when it's a mood's own list.

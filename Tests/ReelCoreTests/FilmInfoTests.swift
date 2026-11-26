@@ -305,6 +305,12 @@ final class FilmInfoTests: XCTestCase {
         XCTAssertTrue(disc.query.contains(URLQueryItem(name: "with_release_type", value: "5")))
         XCTAssertTrue(disc.query.contains(URLQueryItem(name: "release_date.gte", value: "2026-07-08")))
         XCTAssertEqual(DiscoverList.newOnBluRay.title, "New on Blu-ray")
+        // Coming Soon: not out yet (a re-release of an old film, or one already out, is left out).
+        XCTAssertTrue(DiscoverList.comingSoon.keeps(TMDBMovieSummary(id: 1, title: "Dune: Part Three", releaseDate: "2026-12-18"), today: today))
+        XCTAssertFalse(DiscoverList.comingSoon.keeps(TMDBMovieSummary(id: 2, title: "Star Wars", releaseDate: "1977-05-25"), today: today))
+        XCTAssertFalse(DiscoverList.comingSoon.keeps(TMDBMovieSummary(id: 3, title: "Today", releaseDate: "2026-10-06"), today: today))
+        XCTAssertTrue(DiscoverList.comingSoon.keeps(TMDBMovieSummary(id: 4, title: "No date"), today: today))
+        XCTAssertTrue(DiscoverList.inCinemas.keeps(TMDBMovieSummary(id: 2, title: "Star Wars", releaseDate: "1977-05-25"), today: today))
         let best = DiscoverList.bestOf(year: 1994).request(today: today)
         XCTAssertEqual(best.pages, 5)
         XCTAssertTrue(best.query.contains(URLQueryItem(name: "primary_release_year", value: "1994")))
