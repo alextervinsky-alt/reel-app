@@ -77,6 +77,7 @@ jobs:
       TMDB_TOKEN: ${{ secrets.TMDB_TOKEN }}
       OMDB_KEY: ${{ secrets.OMDB_KEY }}
     steps:
+      - uses: actions/checkout@v5
       - name: Check API secrets (values are never printed)
         run: |
           fail=0
@@ -98,6 +99,10 @@ jobs:
               echo "::notice::OMDb $id rating sources: ${sources:-unreadable}"
             done
           fi
+          # Rotten Tomatoes on Wikidata, for public sample films (1.11.2). Reported, never failing.
+          python3 scripts/rt-coverage.py 603 27205 680 155 496243 129 120467 324857 545611 872585 419430 194 238 14160 550 13 769 157336 11324 1124 \
+            1018 843 11216 391713 1064213 933260 614934 949 489 598 19995 37165 290098 1417 4935 11423 399055 1100099 915935 1022789 \
+            | sed 's/^/::notice::/' || echo "::warning::RT coverage check failed"
           exit $fail
 
   idle-check:
