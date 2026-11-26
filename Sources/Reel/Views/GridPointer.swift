@@ -30,6 +30,9 @@ final class GridPointer {
 
     /// A poster is lifted under the pointer.
     var isLifted: Bool { current != nil }
+    /// The same, observed by the grid's hit testing alone: while none is lifted (always while it
+    /// scrolls), the grid isn't hit-tested at all.
+    let anyLifted = LiftBox()
 
     func box(_ id: String) -> LiftBox {
         if let box = boxes[id] { return box }
@@ -68,6 +71,7 @@ final class GridPointer {
         guard let hit else { return }
         current = hit.id
         box(hit.id).lifted = true
+        anyLifted.lifted = true
         scroll?.pointed = hit
         scroll?.endHover = { [weak self] in self?.settle() }
     }
@@ -76,6 +80,7 @@ final class GridPointer {
         guard let id = current else { return }
         current = nil
         boxes[id]?.lifted = false
+        anyLifted.lifted = false
         if scroll?.pointed?.id == id { scroll?.pointed = nil }
     }
 
@@ -126,6 +131,8 @@ private struct GridPointerModifier: ViewModifier {
         let pointer = pointer
         let scroll = scroll
         content
+            // While no poster is lifted the posters needn't answer at all (see `hitTestedWhenLifted`).
+            .modifier(HitTestedWhenLifted(box: pointer.anyLifted))
             .environment(\.gridPointer, pointer)
             .coordinateSpace(.named(pointer.space))
             // The whole grid follows the pointer, gaps and posters that aren't hit-tested included.
