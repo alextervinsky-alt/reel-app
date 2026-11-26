@@ -24,6 +24,12 @@ final class GridPointer {
     private var frames: [Int: CGRect] = [:]
     private var boxes: [String: LiftBox] = [:]
     private var current: String?
+    /// Opens a poster clicked while none is lifted (just after a scroll, before the pointer
+    /// moves): the posters only take clicks while lifted (1.11.2, see `HitTestedWhenLifted`).
+    var open: ((LibraryItem) -> Void)?
+
+    /// A poster is lifted under the pointer.
+    var isLifted: Bool { current != nil }
 
     func box(_ id: String) -> LiftBox {
         if let box = boxes[id] { return box }
@@ -97,6 +103,14 @@ extension View {
         modifier(GridPointerModifier(pointer: pointer, menu: menu))
     }
 
+    /// A poster of a pointer grid is hit-tested only while it's lifted (1.11.2). AppKit hit-tests
+    /// the window on every frame while a page scrolls, and SwiftUI then walked every poster's
+    /// click, hover and text areas: half the main thread's work on Alex's Mac. The grid knows the
+    /// poster under the pointer from its position, so the others needn't answer.
+    func hitTestedWhenLifted(_ box: LiftBox?) -> some View {
+        modifier(HitTestedWhenLifted(box: box))
+    }
+
     /// One of the first posters of a pointer grid says where it is (the rest needn't).
     func gridCell(_ index: Int, in pointer: GridPointer?) -> some View {
         modifier(GridCell(index: index, pointer: pointer))
@@ -114,6 +128,8 @@ private struct GridPointerModifier: ViewModifier {
         content
             .environment(\.gridPointer, pointer)
             .coordinateSpace(.named(pointer.space))
+            // The whole grid follows the pointer, gaps and posters that aren't hit-tested included.
+            .contentShape(Rectangle())
             .onContinuousHover(coordinateSpace: .local) { phase in
                 pointer.scroll = scroll
                 switch phase {
@@ -122,9 +138,20 @@ private struct GridPointerModifier: ViewModifier {
                 }
             }
             .overlay {
-                RightClickMenu { point in pointer.item(at: point).flatMap(menu) }
+                RightClickMenu(menu: { point in pointer.item(at: point).flatMap(menu) },
+                               takesClick: { point in !pointer.isLifted && pointer.item(at: point) != nil },
+                               click: { point in if let item = pointer.item(at: point) { pointer.open?(item) } })
             }
             .onDisappear { pointer.settle() }
+    }
+}
+
+/// Observes its poster's own lift only, so lifting one poster redraws nothing else.
+private struct HitTestedWhenLifted: ViewModifier {
+    let box: LiftBox?
+
+    func body(content: Content) -> some View {
+        content.allowsHitTesting(box?.lifted ?? true)
     }
 }
 
@@ -143,23 +170,31 @@ private struct GridCell: ViewModifier {
 
 // MARK: - Right-click
 
-/// A view over the grid that takes right-clicks (and Control-clicks) only, and shows the menu for
-/// the point clicked; every other click goes to the posters below.
+/// A view over the grid that takes right-clicks (and Control-clicks), and shows the menu for the
+/// point clicked; and a click on a poster while none is lifted (it opens it). Every other click
+/// goes to the posters below.
 private struct RightClickMenu: NSViewRepresentable {
     let menu: (CGPoint) -> NSMenu?
+    /// Whether a plain click at the point is this view's (see `GridPointer.open`).
+    let takesClick: (CGPoint) -> Bool
+    let click: (CGPoint) -> Void
 
     func makeNSView(context: Context) -> CatcherView {
         let view = CatcherView()
-        view.menuAt = menu
+        updateNSView(view, context: context)
         return view
     }
 
     func updateNSView(_ view: CatcherView, context: Context) {
         view.menuAt = menu
+        view.takesClick = takesClick
+        view.click = click
     }
 
     final class CatcherView: NSView {
         var menuAt: ((CGPoint) -> NSMenu?)?
+        var takesClick: ((CGPoint) -> Bool)?
+        var click: ((CGPoint) -> Void)?
         override var isFlipped: Bool { true }
 
         private func isMenuClick(_ event: NSEvent?) -> Bool {
@@ -167,8 +202,15 @@ private struct RightClickMenu: NSViewRepresentable {
             return event.type == .rightMouseDown || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
         }
 
+        private func isPlainClick(_ event: NSEvent?) -> Bool {
+            event?.type == .leftMouseDown && event?.modifierFlags.contains(.control) == false
+        }
+
         override func hitTest(_ point: NSPoint) -> NSView? {
-            isMenuClick(NSApp.currentEvent) ? super.hitTest(point) : nil
+            let event = NSApp.currentEvent
+            if isMenuClick(event) { return super.hitTest(point) }
+            if isPlainClick(event), let superview, takesClick?(convert(point, from: superview)) == true { return super.hitTest(point) }
+            return nil
         }
 
         override func menu(for event: NSEvent) -> NSMenu? {
@@ -176,6 +218,10 @@ private struct RightClickMenu: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
+            if isPlainClick(event) {
+                click?(convert(event.locationInWindow, from: nil))
+                return
+            }
             guard let menu = menu(for: event) else { return }
             NSMenu.popUpContextMenu(menu, with: event, for: self)
         }

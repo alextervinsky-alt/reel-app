@@ -90,9 +90,11 @@ struct LibraryGridView: View {
                     watchedByMonth(shown)
                 } else {
                     let _ = (pointer.items = shown)
+                    let _ = (pointer.open = { [path = $path] item in path.wrappedValue.append(FilmRoute(id: item.main.id)) })
                     LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 30) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
                             card(item)
+                                .hitTestedWhenLifted(pointer.box(item.id))
                                 .gridCell(index, in: pointer)
                                 .onAppear { readAhead.warm(at: index, in: shown) }
                         }

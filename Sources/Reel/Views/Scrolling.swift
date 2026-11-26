@@ -141,6 +141,8 @@ private struct HoverRegion: ViewModifier {
         content
             .environment(\.hoverField, field)
             .coordinateSpace(.named(field.space))
+            // The whole region follows the pointer, its cards that aren't hit-tested included.
+            .contentShape(Rectangle())
             .onContinuousHover(coordinateSpace: .local) { phase in
                 field.scroll = scroll
                 switch phase {
@@ -189,6 +191,10 @@ private struct ScrollAwareHover: ViewModifier {
             let id = id
             let changed = changed
             content
+                // Hit-tested only under the pointer (1.11.2): AppKit hit-tests the window on every
+                // frame while a page scrolls, and walking every card's areas was half the main
+                // thread's work on Alex's Mac. The region knows the card under the pointer.
+                .allowsHitTesting(hovering)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(field.space)) } action: { frame in
                     field.place(id, frame: frame, set: { hover.wrappedValue = $0 }, changed: changed)
                 }

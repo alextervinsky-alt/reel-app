@@ -30,6 +30,7 @@ struct NewReleasesView: View {
             .padding(.horizontal, 32)
             .padding(.top, 18)
             .padding(.bottom, 40)
+            .hoverRegion()
         }
         .tracksScrolling("New Releases")
         .background(Theme.background)
