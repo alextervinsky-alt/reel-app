@@ -291,17 +291,25 @@ enum ScreenRenderer {
                 .frame(width: 1240)
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("lists-rankings.png"))
-        // 1.11's structure (spec §5): the sidebar's ten rows, and Tonight's suggestions.
-        render(SidebarView(selection: .tonight) { _ in }
-                .frame(width: 240, height: 860)
+        // 1.11.2's structure (Alex, 26 Nov): the sidebar as in 1.10.10 with New Releases, and the
+        // New Releases rows (the page's own rows, outside its scroll view, as a snapshot draws them).
+        render(SidebarView(selection: .newReleases) { _ in }
+                .frame(width: 240, height: 900)
                 .background(Theme.background),
                model: model, scale: 2, to: output.appendingPathComponent("desk-sidebar.png"))
-        for item in model.recommended { if let path = item.main.tmdb?.backdropPath { _ = await ImageStore.shared.image(path, .backdrop) } }
-        render(SuggestionsSection()
+        for list in NewReleasesView.lists {
+            await model.loadDiscover(list)
+            for film in model.exploreFilms(list, mood: nil).prefix(7) {
+                if let path = film.posterPath { _ = await ImageStore.shared.image(path, .poster) }
+            }
+        }
+        render(VStack(alignment: .leading, spacing: 38) {
+                    ForEach(NewReleasesView.lists, id: \.self) { list in DiscoverRow(list: list) { _ in } }
+                }
                 .padding(32)
-                .frame(width: 1200)
+                .frame(width: 1300)
                 .background(Theme.background),
-               model: model, scale: 2, to: output.appendingPathComponent("tonight-suggestions.png"))
+               model: model, scale: 2, to: output.appendingPathComponent("new-releases.png"))
     }
 
     /// How smoothly the pages scroll (see `ScrollTiming`): a film page, a person's page, Explore,

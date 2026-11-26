@@ -10,9 +10,11 @@ enum Shelf: Hashable {
     /// Films without a full copy on the Backup drive.
     case notOnBackup
     case forYou, explore, lists, wishlist
+    /// In cinemas, coming soon, and newly out online and on Blu-ray (1.11.2).
+    case newReleases
 
     /// Shelves shown as the poster grid (search and filters apply to them).
-    var isLibrary: Bool { ![.forYou, .explore, .lists, .wishlist, .recommended, .yearInFilm, .tonight].contains(self) }
+    var isLibrary: Bool { ![.forYou, .explore, .newReleases, .lists, .wishlist, .recommended, .yearInFilm, .tonight].contains(self) }
 }
 
 enum LibrarySort: String, CaseIterable, Identifiable {

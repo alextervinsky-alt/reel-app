@@ -296,8 +296,15 @@ final class FilmInfoTests: XCTestCase {
         let today = ISO8601DateFormatter().date(from: "2026-10-06T08:00:00Z")!
         let home = DiscoverList.newAtHome.request(today: today)
         XCTAssertEqual(home.path, "/discover/movie")
-        XCTAssertTrue(home.query.contains(URLQueryItem(name: "primary_release_date.gte", value: "2026-05-09")))
-        XCTAssertTrue(home.query.contains(URLQueryItem(name: "primary_release_date.lte", value: "2026-07-08")))
+        // Recently in cinemas, now online: digital releases of the last 60 days, of films out within the year.
+        XCTAssertTrue(home.query.contains(URLQueryItem(name: "with_release_type", value: "4")))
+        XCTAssertTrue(home.query.contains(URLQueryItem(name: "release_date.gte", value: "2026-08-07")))
+        XCTAssertTrue(home.query.contains(URLQueryItem(name: "release_date.lte", value: "2026-10-06")))
+        XCTAssertTrue(home.query.contains(URLQueryItem(name: "primary_release_date.gte", value: "2025-10-06")))
+        let disc = DiscoverList.newOnBluRay.request(today: today)
+        XCTAssertTrue(disc.query.contains(URLQueryItem(name: "with_release_type", value: "5")))
+        XCTAssertTrue(disc.query.contains(URLQueryItem(name: "release_date.gte", value: "2026-07-08")))
+        XCTAssertEqual(DiscoverList.newOnBluRay.title, "New on Blu-ray")
         let best = DiscoverList.bestOf(year: 1994).request(today: today)
         XCTAssertEqual(best.pages, 5)
         XCTAssertTrue(best.query.contains(URLQueryItem(name: "primary_release_year", value: "1994")))

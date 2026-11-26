@@ -2,42 +2,59 @@
 import SwiftUI
 import ReelCore
 
-/// For You, at the top of Explore (1.11, spec §5.2): fifteen films you don't have and haven't
-/// seen, which people who loved your favourites went on to love, each saying which of your films
-/// it follows (see `ExplorePicks`). Fifteen others each time Reel opens; New Picks draws again.
-/// Explore's mood chips narrow it too.
-struct ForYouSection: View {
+/// For You: fifteen films you don't have and haven't seen, which people who loved your
+/// favourites went on to love, each saying which of your films it follows (see `ExplorePicks`).
+/// Fifteen others each time Reel opens; New Picks draws again. Like Recommended, but for films
+/// to find rather than films on your drives.
+struct ForYouView: View {
     @Environment(AppModel.self) private var model
-    let mood: Mood?
-    let onPreview: (PreviewFilm) -> Void
+    @State private var preview: PreviewFilm?
+    @State private var mood: Mood?
     /// "Because you loved": only the picks that follow one of your films.
     @State private var following: String?
 
+    private static let moodChoices = [MoodChoiceCount(choice: .any, count: 0)]
+        + Mood.allCases.map { MoodChoiceCount(choice: .mood($0), count: 0) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .bottom, spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("For You").font(.system(size: 19, weight: .semibold))
-                    Text("Fifteen films you don't have yet, picked from the ones you loved. Fifteen others each time Reel opens.")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if mood == nil, following == nil, model.explorePicks?.isEmpty == false, model.canShuffleExplorePicks {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.25)) { model.shuffleExplorePicks() }
-                    } label: {
-                        Label("New Picks", systemImage: "shuffle")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .bottom, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("For You").font(.system(size: 30, weight: .bold))
+                        Text("Fifteen films you don't have yet, picked from the ones you loved. Fifteen others each time Reel opens.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(SecondaryCapsuleStyle())
-                    .help("Fifteen other films")
+                    Spacer()
+                    if mood == nil, following == nil, model.explorePicks?.isEmpty == false, model.canShuffleExplorePicks {
+                        Button {
+                            withAnimation(.easeOut(duration: 0.25)) { model.shuffleExplorePicks() }
+                        } label: {
+                            Label("New Picks", systemImage: "shuffle")
+                        }
+                        .buttonStyle(SecondaryCapsuleStyle())
+                        .help("Fifteen other films")
+                    }
                 }
+                MoodChips(choices: Self.moodChoices, selected: mood.map { .mood($0) } ?? .any, counted: false) { choice in
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        if case .mood(let chosen) = choice { mood = chosen } else { mood = nil }
+                        following = nil
+                    }
+                }
+                becauseChips
+                content
             }
-            becauseChips
-            content
+            .padding(.horizontal, 32)
+            .padding(.vertical, 22)
+            .frame(maxWidth: 1120, alignment: .leading)
+            .hoverRegion()
         }
-        .frame(maxWidth: 1120, alignment: .leading)
-        .onChange(of: mood) { following = nil }
+        .tracksScrolling()
+        .background(Theme.background)
+        .navigationTitle("For You")
+        .filmPreviewSheet($preview)
         .task {
             await model.lists.prepare()
             await model.loadExplorePicks()
@@ -59,6 +76,7 @@ struct ForYouSection: View {
                             FilterChip(title: title, isOn: following == title) {
                                 withAnimation(.easeOut(duration: 0.25)) {
                                     following = following == title ? nil : title
+                                    mood = nil
                                 }
                             }
                         }
@@ -80,11 +98,11 @@ struct ForYouSection: View {
                                    description: Text("Add your TMDB token in Settings (⌘,)."))
                 .frame(maxWidth: .infinity, minHeight: 320)
         } else if let picks, picks.isEmpty, let mood {
-            Text("None of the films found from the ones you loved are \(mood.title.lowercased()). The \(mood.title) Films row below has more.")
+            Text("None of the films found from the ones you loved are \(mood.title.lowercased()). Explore's \(mood.title) row has more.")
                 .foregroundStyle(.secondary)
                 .frame(minHeight: 120, alignment: .leading)
         } else if let picks {
-            ForYouGrid(picks: picks, onPreview: onPreview)
+            ForYouGrid(picks: picks) { preview = $0 }
         } else {
             HStack(spacing: 10) {
                 if model.explorePicksLoading || !model.explorePicksTried {
@@ -196,8 +214,8 @@ struct ForYouCard: View {
                         Label("Details", systemImage: "info.circle")
                     }
                     .buttonStyle(SecondaryCapsuleStyle())
-                    RoundToggle(symbol: "bookmark", onSymbol: "bookmark.fill", isOn: model.isWishlisted(film.id),
-                                help: model.isWishlisted(film.id) ? "On your Watchlist" : "Add to Watchlist") {
+                    RoundToggle(symbol: "star", onSymbol: "star.fill", isOn: model.isWishlisted(film.id),
+                                help: model.isWishlisted(film.id) ? "On your wishlist" : "Add to Wishlist") {
                         model.toggleWishlist(film)
                     }
                     SeenButton(tmdbID: film.id) { seen in

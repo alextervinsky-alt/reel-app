@@ -40,8 +40,13 @@ public enum DiscoverList: Hashable, Sendable {
     case comingSoon
     /// Most popular this week.
     case trending
-    /// Popular films released three to five months ago: by now out on Blu-ray and digital.
+    /// Recently in cinemas, now out online (to stream, rent or buy): a digital release in the last
+    /// two months of a film first released within the year (1.11.2, Alex: "recently in cinemas,
+    /// now out online").
     case newAtHome
+    /// Out on Blu-ray, DVD or 4K disc in the last three months (TMDB's physical releases), the most
+    /// popular first: new films and new editions of older ones (1.11.2).
+    case newOnBluRay
     /// The best films of one year, by a source (from TMDB; IMDb and award winners come from Lists).
     case bestOf(year: Int, source: BestOfSource = .tmdb)
     /// Well-loved films of one mood, from any time (Explore's mood chips).
@@ -76,6 +81,7 @@ public enum DiscoverList: Hashable, Sendable {
         case .comingSoon: "Coming Soon"
         case .trending: "Trending This Week"
         case .newAtHome: "New at Home"
+        case .newOnBluRay: "New on Blu-ray"
         case .bestOf(let year, _): "Best of \(year)"
         case .mood(let mood): "\(mood.title) Films"
         case .country(let code): "Cinema from \(Self.countries.first { $0.code == code }?.name ?? code)"
@@ -92,7 +98,8 @@ public enum DiscoverList: Hashable, Sendable {
         case .inCinemas: "Playing in cinemas right now"
         case .comingSoon: "Opening in cinemas in the next three months, the most awaited first"
         case .trending: "What everyone is watching this week"
-        case .newAtHome: "Big films from 3–5 months ago, now out on Blu-ray and digital"
+        case .newAtHome: "Recently in cinemas, now out to stream, rent or buy online"
+        case .newOnBluRay: "Out on Blu-ray, 4K and DVD in the last three months, new films and new editions"
         case .bestOf(let year, let source): source.subtitle(year)
         case .mood(let mood): "The best-loved \(mood.title.lowercased()) films, from any time"
         case .country: "Its best-loved films, from any time · a different country each time Reel opens"
@@ -140,11 +147,26 @@ public enum DiscoverList: Hashable, Sendable {
         case .trending:
             return ("/trending/movie/week", [], 2)
         case .newAtHome:
+            // US digital releases (type 4) in the last 60 days, of films first out within the year.
             return ("/discover/movie", [
-                URLQueryItem(name: "primary_release_date.gte", value: daysAgo(150)),
-                URLQueryItem(name: "primary_release_date.lte", value: daysAgo(90)),
+                URLQueryItem(name: "region", value: "US"),
+                URLQueryItem(name: "with_release_type", value: "4"),
+                URLQueryItem(name: "release_date.gte", value: daysAgo(60)),
+                URLQueryItem(name: "release_date.lte", value: daysAgo(0)),
+                URLQueryItem(name: "primary_release_date.gte", value: daysAgo(365)),
                 URLQueryItem(name: "sort_by", value: "popularity.desc"),
-                URLQueryItem(name: "vote_count.gte", value: "100"),
+                URLQueryItem(name: "vote_count.gte", value: "30"),
+                noAdult,
+            ], 3)
+        case .newOnBluRay:
+            // US physical releases (type 5) in the last 90 days.
+            return ("/discover/movie", [
+                URLQueryItem(name: "region", value: "US"),
+                URLQueryItem(name: "with_release_type", value: "5"),
+                URLQueryItem(name: "release_date.gte", value: daysAgo(90)),
+                URLQueryItem(name: "release_date.lte", value: daysAgo(0)),
+                URLQueryItem(name: "sort_by", value: "popularity.desc"),
+                URLQueryItem(name: "vote_count.gte", value: "30"),
                 noAdult,
             ], 3)
         case .bestOf(let year, let source):

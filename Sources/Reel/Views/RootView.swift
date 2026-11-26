@@ -102,11 +102,13 @@ struct RootView: View {
                         WelcomeView()
                     } else {
                         switch shelf {
-                        // 1.11: Recommended is part of Tonight, For You of Explore, the wishlist of
-                        // Watchlist (spec §5); the old places lead there.
-                        case .explore, .forYou: ExploreView(path: $path)
+                        case .forYou: ForYouView()
+                        case .explore: ExploreView(path: $path)
+                        case .newReleases: NewReleasesView()
                         case .lists: ListsView()
-                        case .tonight, .recommended: TonightView()
+                        case .recommended: RecommendedView()
+                        case .tonight: TonightView()
+                        case .wishlist: WishlistView()
                         case .yearInFilm: YearInFilmView()
                         default:
                             // The desk's field doesn't take ⌘F while Cinema mode is over it.
@@ -192,13 +194,7 @@ struct RootView: View {
 
     /// Choosing a sidebar item always lands on that list. All Films works as Home: it also clears
     /// the search and filters.
-    private func select(_ chosen: Shelf) {
-        let newShelf: Shelf = switch chosen {
-        case .recommended: .tonight
-        case .forYou: .explore
-        case .wishlist: .watchlist
-        default: chosen
-        }
+    private func select(_ newShelf: Shelf) {
         path = NavigationPath()
         if newShelf == .all {
             // Random shows other films first each time.
@@ -274,6 +270,7 @@ struct SidebarView: View {
         VStack(alignment: .leading, spacing: 20) {
                     // In the order you use them: choosing tonight's film, your library, finding more.
                     section("Tonight") {
+                        row(.recommended, "Recommended", icon: "wand.and.stars")
                         if model.tonightItems.isEmpty {
                             row(.tonight, "Tonight", icon: "moon")
                         } else {
@@ -285,7 +282,7 @@ struct SidebarView: View {
                     section("Library") {
                         row(.all, "All Films", icon: "film.stack")
                         row(.unwatched, "Unwatched", icon: "eye.slash")
-                        row(.watchlist, "Watchlist", icon: "bookmark", extra: model.count(.wishlist))
+                        row(.watchlist, "Watchlist", icon: "bookmark")
                         row(.favorites, "Favorites", icon: "heart")
                         row(.watched, "Watched", icon: "checkmark.circle")
                     }
@@ -314,10 +311,11 @@ struct SidebarView: View {
                         }
                     }
                     section("Discover") {
+                        row(.forYou, "For You", icon: "sparkles")
                         row(.explore, "Explore", icon: "safari")
+                        row(.newReleases, "New Releases", icon: "ticket")
                         row(.lists, "Lists", icon: "list.number")
-                    }
-                    VStack(alignment: .leading, spacing: 1) {
+                        row(.wishlist, "Wishlist", icon: "star")
                         row(.yearInFilm, "Year in Film", icon: "calendar")
                     }
         }
@@ -379,11 +377,9 @@ struct SidebarView: View {
         }
     }
 
-    /// - Parameter extra: added to the count (Watchlist counts its films you don't own yet too).
-    private func row(_ shelf: Shelf, _ title: String, icon: String?, tint: Color? = nil, highlightCount: Bool = false,
-                     extra: Int = 0) -> some View {
-        let counted = ![.forYou, .explore, .lists, .recommended, .yearInFilm, .tonight].contains(shelf)
-        let count = shelf == .tonight ? model.tonightItems.count : (counted ? model.count(shelf) + extra : nil)
+    private func row(_ shelf: Shelf, _ title: String, icon: String?, tint: Color? = nil, highlightCount: Bool = false) -> some View {
+        let counted = ![.forYou, .explore, .newReleases, .lists, .recommended, .yearInFilm, .tonight].contains(shelf)
+        let count = shelf == .tonight ? model.tonightItems.count : (counted ? model.count(shelf) : nil)
         return SidebarRow(title: title, icon: icon, tint: tint, count: count,
                           countTint: highlightCount && (count ?? 0) > 0 ? Theme.brand : nil,
                           isSelected: selection == shelf) {

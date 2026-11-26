@@ -79,10 +79,8 @@ struct LibraryGridView: View {
                     .padding(.horizontal, 32)
                     .padding(.top, 10)
                 }
-                // The Watchlist's films you don't own yet come after its own (1.11).
-                let wishesBelow = shelf == .watchlist && query.isEmpty && !filtering && !model.wishlist.isEmpty
                 if shown.isEmpty {
-                    emptyState.frame(maxWidth: .infinity, minHeight: wishesBelow ? 160 : 360)
+                    emptyState.frame(maxWidth: .infinity, minHeight: 360)
                 } else if asList {
                     FilmList(items: shown, sort: $sort, sortable: query.isEmpty && shelf != .notOnBackup && shelf != .newArrivals)
                         .padding(.horizontal, 32)
@@ -103,11 +101,6 @@ struct LibraryGridView: View {
                     .padding(.horizontal, 32)
                     .padding(.top, 20)
                     .padding(.bottom, 40)
-                }
-                if wishesBelow {
-                    WishlistSection()
-                        .padding(.horizontal, 32)
-                        .padding(.bottom, 40)
                 }
             }
             .hoverRegion()
@@ -187,7 +180,7 @@ struct LibraryGridView: View {
         switch shelf {
         case .newArrivals:
             if model.cameFromWishlist(item) {
-                return CardNote(text: "From your Watchlist", symbol: "bookmark.fill", tint: Theme.brand)
+                return CardNote(text: "From your wishlist", symbol: "star.fill", tint: Theme.brand)
             }
             return model.arrivals[item.id].map { CardNote(text: Arrivals.label($0, now: Date()), symbol: nil, tint: nil) }
         case .notOnBackup:
@@ -344,13 +337,8 @@ struct LibraryGridView: View {
                 ContentUnavailableView("Everything is on the Backup", systemImage: "checkmark.shield",
                                        description: Text("Every film on your main drive has a full copy on the Backup."))
             case .watchlist:
-                if model.wishlist.isEmpty {
-                    ContentUnavailableView("Nothing on your Watchlist", systemImage: "bookmark",
-                                           description: Text("Use the bookmark button on a film's page, or on a film you don't own yet."))
-                } else {
-                    ContentUnavailableView("None of your Watchlist is in your library yet", systemImage: "bookmark",
-                                           description: Text("When one turns up on your drives, it moves up here."))
-                }
+                ContentUnavailableView("Nothing on your watchlist", systemImage: "bookmark",
+                                       description: Text("Use the bookmark button on a film's page."))
             case .favorites:
                 ContentUnavailableView("No favorites yet", systemImage: "heart",
                                        description: Text("Use the heart button on a film's page."))
@@ -383,6 +371,7 @@ struct LibraryGridView: View {
         case .drive(let id): model.drive(id)?.name ?? "Drive"
         case .forYou: "For You"
         case .explore: "Explore"
+        case .newReleases: "New Releases"
         case .lists: "Lists"
         case .wishlist: "Wishlist"
         }

@@ -63,17 +63,31 @@ final class LiveTMDBTests: XCTestCase {
         XCTAssertFalse(findings.criticSentences.isEmpty)
     }
 
+    /// Rotten Tomatoes from Wikidata (1.11.2), for five public films: their latest Tomatometer.
+    func testWikidataRottenTomatoes() async throws {
+        guard ProcessInfo.processInfo.environment["TMDB_TOKEN"]?.isEmpty == false else { throw XCTSkip("live job only") }
+        let ids = ["tt0110912", "tt1375666", "tt0133093", "tt0816692", "tt6751668"]
+        let scores = try await WikidataScores.rottenTomatoes(imdbIDs: ids)
+        print("::notice::Rotten Tomatoes from Wikidata: " + ids.map { "\($0) \(scores[$0].map { "\($0)%" } ?? "none")" }.joined(separator: ", "))
+        XCTAssertGreaterThanOrEqual(scores.count, 4)
+        XCTAssertTrue(scores.values.allSatisfy { (0...100).contains($0) })
+    }
+
     func testExploreLists() async throws {
         guard let token = ProcessInfo.processInfo.environment["TMDB_TOKEN"], !token.isEmpty else {
             throw XCTSkip("TMDB_TOKEN not set")
         }
         let client = TMDBClient(token: token)
         var counts: [String] = []
-        for list in [DiscoverList.inCinemas, .comingSoon, .trending, .newAtHome, .bestOf(year: 1999), .mood(.feelGood), .mood(.epic)] {
+        for list in [DiscoverList.inCinemas, .comingSoon, .trending, .newAtHome, .newOnBluRay, .bestOf(year: 1999), .mood(.feelGood), .mood(.epic)] {
             let r = list.request()
             let films = try await client.movies(r.path, r.query, pages: r.pages)
             XCTAssertFalse(films.isEmpty, list.title)
             counts.append("\(list.title) \(films.count)")
+            // The two home-release rows (1.11.2): what they hold today, to read by eye.
+            if list == .newAtHome || list == .newOnBluRay {
+                print("::notice::\(list.title): " + films.prefix(12).map { "\($0.title) (\($0.releaseDate?.prefix(4) ?? "?"))" }.joined(separator: ", "))
+            }
         }
         print("::notice::Explore: \(counts.joined(separator: ", "))")
         // More from a director (Bong Joon-ho): only the films they directed.

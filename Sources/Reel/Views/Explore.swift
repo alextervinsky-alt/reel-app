@@ -5,11 +5,11 @@ import ReelCore
 
 // MARK: - Explore
 
-/// Finding new films (1.11, spec §5.2): For You first, then what's in cinemas and coming soon,
-/// the best of any year from the source you choose, and More to Explore, one row mixing a few
-/// shelves (trending, new at home, a country, a decade, hidden gems) differently each visit.
-/// Films you've seen are left out. A mood chip narrows every row to that mood and adds the
-/// best-loved films of the mood from any time.
+/// Finding films: what's trending, the shelves that change each time Reel opens (one of your loved
+/// films', a director's, a country's cinema, a decade or the hidden gems), and the best of any
+/// year from the source you choose. Films you've seen are left out. A mood chip narrows every row
+/// to that mood and adds the best-loved films of the mood from any time. (Picked for You has its
+/// own page, For You; what's in cinemas and newly out at home has New Releases, 1.11.2.)
 struct ExploreView: View {
     @Environment(AppModel.self) private var model
     @Binding var path: NavigationPath
@@ -23,23 +23,8 @@ struct ExploreView: View {
     @State private var searching = false
     @State private var searchFailed = false
 
-    /// This visit's mix for More to Explore (chosen when the page opens).
-    @State private var more: [DiscoverList] = []
-
     private var lists: [DiscoverList] {
-        (mood.map { [DiscoverList.mood($0)] } ?? []) + [.inCinemas, .comingSoon]
-    }
-
-    /// Three of today's other shelves, at random; Because You Loved and More from a director are
-    /// For You's already.
-    private func chooseMore() -> [DiscoverList] {
-        let candidates = [DiscoverList.trending, .newAtHome] + model.exploreShelves.filter { list in
-            switch list {
-            case .because, .director: false
-            default: true
-            }
-        }
-        return Array(candidates.shuffled().prefix(3))
+        (mood.map { [DiscoverList.mood($0)] } ?? []) + [.trending] + model.exploreShelves
     }
 
     private static let moodChoices = [MoodChoiceCount(choice: .any, count: 0)]
@@ -72,14 +57,10 @@ struct ExploreView: View {
                 if !words.isEmpty {
                     searchResults
                 } else {
-                    ForYouSection(mood: mood) { preview = $0 }
                     ForEach(lists, id: \.self) { list in
                         DiscoverRow(list: list, mood: list.mood == nil ? mood : nil) { preview = $0 }
                     }
                     BestOfRow(year: $year, source: $source, mood: mood) { preview = $0 }
-                    if !more.isEmpty {
-                        MoreToExploreRow(sources: more, mood: mood) { preview = $0 }
-                    }
                 }
             }
             .padding(.horizontal, 32)
@@ -93,11 +74,9 @@ struct ExploreView: View {
         .filmPreviewSheet($preview)
         .task { await model.lists.prepare() }
         .task(id: words) { await search() }
-        .onAppear { if more.isEmpty { more = chooseMore() } }
-        // Only the shelves shown are loaded (each kept six hours).
-        .task(id: lists + more) {
+        .task(id: lists) {
             await withTaskGroup(of: Void.self) { group in
-                for list in lists + more {
+                for list in lists {
                     group.addTask { await model.loadDiscover(list) }
                 }
             }
@@ -404,65 +383,6 @@ extension DiscoverRow {
     }
 }
 
-/// More to Explore (1.11): one row drawing from a few of today's shelves, in turns, each film
-/// saying which shelf it's from. A different mix each visit.
-struct MoreToExploreRow: View {
-    @Environment(AppModel.self) private var model
-    let sources: [DiscoverList]
-    var mood: Mood?
-    let onPreview: (PreviewFilm) -> Void
-
-    var body: some View {
-        let films = mixed
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("More to Explore").font(.system(size: 19, weight: .semibold))
-                Text(sources.map(\.title).joined(separator: " · ") + " · a different mix each visit")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            if films.isEmpty {
-                HStack(spacing: 8) {
-                    if sources.contains(where: { model.discoverLoading.contains($0) }) {
-                        ProgressView().controlSize(.small)
-                        Text("Loading…").foregroundStyle(.secondary)
-                    } else {
-                        Text(model.hasToken ? "Nothing more to show right now." : "Connect TMDB in Settings to explore.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(height: 120)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 18) {
-                        ForEach(films, id: \.film.id) { entry in
-                            DiscoverCard(film: PreviewFilm(entry.film), width: 146, reason: entry.from,
-                                         offersNotForMe: true, onPreview: onPreview)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                }
-                .tracksScrolling()
-            }
-        }
-    }
-
-    /// The shelves' films in turns, each once, at most 24.
-    private var mixed: [(film: TMDBMovieSummary, from: String)] {
-        let shelves = sources.map { (films: Array(model.exploreFilms($0, mood: mood).prefix(12)), from: $0.title) }
-        var seen = Set<Int>()
-        var result: [(film: TMDBMovieSummary, from: String)] = []
-        for index in 0..<12 {
-            for shelf in shelves where index < shelf.films.count {
-                let film = shelf.films[index]
-                if seen.insert(film.id).inserted { result.append((film, shelf.from)) }
-            }
-        }
-        return Array(result.prefix(24))
-    }
-}
-
 /// All films of one Explore list.
 struct DiscoverListPage: View {
     @Environment(AppModel.self) private var model
@@ -674,8 +594,8 @@ struct DiscoverCard: View {
             HoverAction(symbol: seen ? "eye.fill" : "eye", isOn: seen, onColor: Theme.brand,
                         help: seen ? "Seen" : "Mark as seen") { model.toggleSeen(film.id) }
             if !owned {
-                HoverAction(symbol: wished ? "bookmark.fill" : "bookmark", isOn: wished, onColor: .yellow,
-                            help: wished ? "On your Watchlist" : "Add to Watchlist") { model.toggleWishlist(film) }
+                HoverAction(symbol: wished ? "star.fill" : "star", isOn: wished, onColor: .yellow,
+                            help: wished ? "On your wishlist" : "Add to wishlist") { model.toggleWishlist(film) }
                 if offersNotForMe {
                     HoverAction(symbol: "hand.thumbsdown", isOn: false, onColor: .white,
                                 help: "Not for me: never suggest it again") { model.setNotForMe(film.id, true) }
@@ -701,7 +621,7 @@ struct DiscoverCard: View {
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(Color.black, Color.yellow)
                 .padding(7)
-                .help("On your Watchlist")
+                .help("On your wishlist")
         } else if model.isSeen(film.id) {
             Image(systemName: "eye.circle.fill")
                 .font(.system(size: 17, weight: .semibold))
@@ -747,30 +667,40 @@ struct HoverAction: View {
 
 // MARK: - Wishlist
 
-/// Watchlist films you don't own yet (the wishlist), under the Watchlist's own (1.11, spec §5.3).
-/// When one turns up on your drives it moves up into the Watchlist, as arrivals always did.
-struct WishlistSection: View {
+struct WishlistView: View {
     @Environment(AppModel.self) private var model
     @State private var preview: PreviewFilm?
 
     var body: some View {
-        if !model.wishlist.isEmpty {
-            VStack(alignment: .leading, spacing: 18) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("Not in Your Library").font(.system(size: 19, weight: .semibold))
+                    Text("Wishlist").font(.system(size: 30, weight: .bold))
                     Text(model.wishlist.count == 1 ? "1 film" : "\(model.wishlist.count) films")
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
-                LazyVGrid(columns: LibraryGridView.columns, alignment: .leading, spacing: 30) {
-                    ForEach(model.wishlist) { wish in
-                        DiscoverCard(film: PreviewFilm(wish)) { preview = $0 }
+                if model.wishlist.isEmpty {
+                    ContentUnavailableView("Your wishlist is empty", systemImage: "star",
+                                           description: Text("Add films you'd like to see from Explore, people pages or More Like This."))
+                        .frame(maxWidth: .infinity, minHeight: 320)
+                } else {
+                    LazyVGrid(columns: LibraryGridView.columns, alignment: .leading, spacing: 30) {
+                        ForEach(model.wishlist) { wish in
+                            DiscoverCard(film: PreviewFilm(wish)) { preview = $0 }
+                        }
                     }
                 }
             }
-            .filmPreviewSheet($preview)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 22)
+            .hoverRegion()
         }
+        .tracksScrolling()
+        .background(Theme.background)
+        .navigationTitle("Wishlist")
+        .filmPreviewSheet($preview)
     }
 }
 
@@ -905,8 +835,8 @@ struct FilmPreview: View {
                 Button {
                     model.toggleWishlist(film)
                 } label: {
-                    Label(model.isWishlisted(film.id) ? "On Watchlist" : "Watchlist",
-                          systemImage: model.isWishlisted(film.id) ? "bookmark.fill" : "bookmark")
+                    Label(model.isWishlisted(film.id) ? "On Wishlist" : "Wishlist",
+                          systemImage: model.isWishlisted(film.id) ? "star.fill" : "star")
                 }
                 .buttonStyle(SecondaryCapsuleStyle())
                 SeenButton(tmdbID: film.id) { seen in
