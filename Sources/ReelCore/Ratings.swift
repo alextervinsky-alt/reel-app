@@ -28,6 +28,81 @@ public struct ExternalRatings: Codable, Equatable, Sendable {
     }
 
     public var isEmpty: Bool { imdb == nil && rottenTomatoes == nil && metacritic == nil }
+
+    /// A fresh answer over the stored one: what the answer lacks is kept as it was (1.11.2: OMDb
+    /// stopped sending Rotten Tomatoes, and the 24 Nov refresh wrote "none" over 143 stored scores).
+    public static func merged(_ fresh: ExternalRatings?, over stored: ExternalRatings?) -> ExternalRatings? {
+        guard let fresh else { return stored }
+        guard let stored else { return fresh }
+        return ExternalRatings(imdb: fresh.imdb ?? stored.imdb, imdbVotes: fresh.imdbVotes ?? stored.imdbVotes,
+                               rottenTomatoes: fresh.rottenTomatoes ?? stored.rottenTomatoes,
+                               metacritic: fresh.metacritic ?? stored.metacritic,
+                               rated: fresh.rated ?? stored.rated, awards: fresh.awards ?? stored.awards)
+    }
+}
+
+/// Rotten Tomatoes' Tomatometer from Wikidata, which OMDb no longer sends (checked on CI, 26 Nov
+/// 2026: IMDb and Metacritic only). Wikidata keeps it as a review score (P444) by Rotten Tomatoes
+/// (P447 = Q105584) determined as the Tomatometer (P459 = Q108403393), often several over the
+/// years: the latest by its date (P585) counts. Free public data (CC0), asked in one query for many
+/// films at a time.
+public enum WikidataScores {
+    static let endpoint = "https://query.wikidata.org/sparql"
+    /// Films per query (the query lists their IMDb ids).
+    public static let batch = 80
+
+    public static func query(imdbIDs: [String]) -> String {
+        let values = imdbIDs.filter { $0.range(of: #"^tt\d+$"#, options: .regularExpression) != nil }.map { "\"\($0)\"" }
+        return """
+        SELECT ?imdb ?score ?date WHERE {
+          VALUES ?imdb { \(values.joined(separator: " ")) }
+          ?film wdt:P345 ?imdb ; p:P444 ?st .
+          ?st ps:P444 ?score ; pq:P447 wd:Q105584 ; pq:P459 wd:Q108403393 ; wikibase:rank ?rank .
+          FILTER(?rank != wikibase:DeprecatedRank)
+          OPTIONAL { ?st pq:P585 ?date }
+        }
+        """
+    }
+
+    struct Answer: Decodable {
+        struct Results: Decodable { let bindings: [[String: Value]] }
+        struct Value: Decodable { let value: String }
+        let results: Results
+    }
+
+    /// IMDb id → Tomatometer percent, the latest dated score of each film ("92%" → 92).
+    public static func parse(_ data: Data) -> [String: Int] {
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: data) else { return [:] }
+        var best: [String: (date: String, score: Int)] = [:]
+        for row in answer.results.bindings {
+            guard let imdb = row["imdb"]?.value, let text = row["score"]?.value,
+                  let score = Int(text.replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)),
+                  (0...100).contains(score) else { continue }
+            // ISO dates sort as text; a score without a date counts as the oldest.
+            let date = row["date"]?.value ?? ""
+            if let known = best[imdb], known.date >= date { continue }
+            best[imdb] = (date, score)
+        }
+        return best.mapValues(\.score)
+    }
+
+    public static func rottenTomatoes(imdbIDs: [String], session: URLSession = TMDBClient.sharedSession) async throws -> [String: Int] {
+        var found: [String: Int] = [:]
+        for start in stride(from: 0, to: imdbIDs.count, by: batch) {
+            let ids = Array(imdbIDs[start..<min(start + batch, imdbIDs.count)])
+            var components = URLComponents(string: endpoint)!
+            components.queryItems = [URLQueryItem(name: "query", value: query(imdbIDs: ids)), URLQueryItem(name: "format", value: "json")]
+            var request = URLRequest(url: components.url!)
+            request.setValue("application/sparql-results+json", forHTTPHeaderField: "Accept")
+            // Wikidata asks every client to say what it is.
+            request.setValue("Reel/1.11 (personal macOS film library app)", forHTTPHeaderField: "User-Agent")
+            ActivityCount.request(request.url)
+            let (data, response) = try await session.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { continue }
+            found.merge(parse(data)) { _, new in new }
+        }
+        return found
+    }
 }
 
 public enum OMDbError: Error {

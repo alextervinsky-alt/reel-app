@@ -230,6 +230,8 @@ final class AppModel {
                                               value: (onDrive: [ListSuggestion], toFind: [ListSuggestion]))?
     @ObservationIgnored var personCache: [Int: TMDBPerson] = [:]
     @ObservationIgnored var discoverLoadedAt: [DiscoverList: Date] = [:]
+    /// IMDb ids whose Rotten Tomatoes score was asked of Wikidata this session (1.11.2).
+    @ObservationIgnored var rottenTomatoesAsked: Set<String> = []
     @ObservationIgnored var similarLoadedAt: [Int: Date] = [:]
     @ObservationIgnored var previewCache: [Int: (details: TMDBMovieDetails?, ratings: ExternalRatings?)] = [:]
     /// Previews being fetched: a second ask for the same film waits for the first.

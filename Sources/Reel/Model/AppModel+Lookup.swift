@@ -243,12 +243,40 @@ extension AppModel {
             }
         } while rerunRequested && stopMessage == nil
 
+        // 4. Rotten Tomatoes from Wikidata where the ratings have none (OMDb no longer sends it, 1.11.2).
+        if stopMessage == nil { work += await fillRottenTomatoes() }
+
         if ratingsWanted && omdb == nil && stopMessage == nil {
             notice = "OMDb didn't accept the ratings key, or today's limit is used up. Ratings will be fetched again tomorrow."
         }
 
         if let stopMessage { notice = stopMessage }
         if work > 0 { ImageStore.shared.maintain(keeping: []) }
+    }
+
+    /// Films whose ratings have no Rotten Tomatoes score get Wikidata's Tomatometer, in a few
+    /// queries for the whole library; each film is asked once a session (one Wikidata lacks is
+    /// asked again next launch). Returns how many scores were filled in.
+    func fillRottenTomatoes() async -> Int {
+        var seen = Set<String>()
+        let wanted = films.compactMap { film -> String? in
+            guard film.ratings != nil, film.ratings?.rottenTomatoes == nil, let id = film.tmdb?.imdbID, !id.isEmpty,
+                  !rottenTomatoesAsked.contains(id), seen.insert(id).inserted else { return nil }
+            return id
+        }
+        guard !wanted.isEmpty else { return 0 }
+        rottenTomatoesAsked.formUnion(wanted)
+        guard let found = try? await WikidataScores.rottenTomatoes(imdbIDs: wanted), !found.isEmpty else { return 0 }
+        var filled = Set<String>()
+        mutateFilms { list in
+            for i in list.indices {
+                guard list[i].ratings != nil, list[i].ratings?.rottenTomatoes == nil,
+                      let id = list[i].tmdb?.imdbID, let score = found[id] else { continue }
+                list[i].ratings?.rottenTomatoes = score
+                filled.insert(id)
+            }
+        }
+        return filled.count
     }
 
     nonisolated static func lookUp(_ job: LookupJob, client: TMDBClient, omdb: OMDbClient?, ratingsWanted: Bool) async -> LookupOutcome {

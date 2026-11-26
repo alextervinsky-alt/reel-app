@@ -423,6 +423,8 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
     /// kept and only the ratings are tried again later (see `ratingsDue`).
     public mutating func apply(_ details: TMDBMovieDetails, ratings: ExternalRatings?, ratingsFailed: Bool = false,
                                reception: ReceptionSummary?, now: Date = Date()) {
+        // Another film (a corrected match): its scores never carry over to this one.
+        if tmdb?.id != details.id { self.ratings = nil }
         applyDetails(details, reception: reception)
         applyRatings(ratings, failed: ratingsFailed, now: now)
     }
@@ -432,7 +434,9 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         if tmdb?.id != details.id {
             funFacts = nil
         }
-        if tmdb?.stillPaths != details.stillPaths { checkedStills = nil }
+        // The same stills in another order (TMDB reorders them) aren't new stills (1.11.2: a reorder
+        // cleared the check on two of Alex's films).
+        if Set(tmdb?.stillPaths ?? []) != Set(details.stillPaths) { checkedStills = nil }
         tmdb = details
         self.reception = reception
         infoVersion = FilmEntry.currentInfoVersion
@@ -462,7 +466,8 @@ public struct FilmEntry: Codable, Identifiable, Equatable, Sendable {
         if failed {
             ratingsDue = self.ratings == nil
         } else {
-            self.ratings = ratings
+            // What the answer lacks is kept (OMDb no longer sends Rotten Tomatoes, 1.11.2).
+            self.ratings = ExternalRatings.merged(ratings, over: self.ratings)
             ratingsDue = false
         }
     }
