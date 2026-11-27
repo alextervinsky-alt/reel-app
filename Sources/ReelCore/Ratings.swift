@@ -128,7 +128,7 @@ public enum WikidataScores {
         var films: [Int: FilmScores] = [:]
         var dates: [String: String] = [:]
         for row in answer.results.bindings {
-            guard let tmdb = row["tmdb"]?.value.flatMap({ Int($0) }) else { continue }
+            guard let tmdb = row["tmdb"].flatMap({ Int($0.value) }) else { continue }
             var film = films[tmdb] ?? FilmScores()
             if film.imdbID == nil, let imdb = row["imdb"]?.value, imdb.hasPrefix("tt") { film.imdbID = imdb }
             if let text = row["score"]?.value, let by = row["by"]?.value {
