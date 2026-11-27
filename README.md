@@ -4,6 +4,10 @@ A personal Mac app that scans film drives, recognises each film from its file na
 
 Apple Silicon, macOS 15 or later.
 
+## What's new in 1.11.5
+
+- **Cards from outside your library under the pointer:** the scores along the bottom of the poster, and Seen, Wishlist and Not for Me down its top right, no longer on top of each other.
+
 ## What's new in 1.11.4
 
 - **A film page in three tabs:** Overview now has what people say (the verdict, the scores, the critics' consensus, what people like and don't) under the story, and Behind the Film no longer opens on frames from the film.

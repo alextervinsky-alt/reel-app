@@ -522,9 +522,12 @@ struct DiscoverCard: View {
     var ratingLine: String?
     let onPreview: (PreviewFilm) -> Void
     @State private var hovering = false
+    /// Drawn as under the pointer (CI's screens only).
+    var drawnHovered = false
 
     var body: some View {
         let owned = model.itemsByTMDB[film.id]
+        let hovering = hovering || drawnHovered
         VStack(alignment: .leading, spacing: 7) {
             opening(owned) {
                 Poster(path: film.posterPath, title: film.title, cornerRadius: 12)
@@ -539,11 +542,14 @@ struct DiscoverCard: View {
                             .transition(.opacity)
                         }
                     }
-                    .overlay(alignment: .topTrailing) { marker(owned: owned != nil) }
+                    // Under the pointer the buttons take the marker's place (they show the same).
+                    .overlay(alignment: .topTrailing) { if !hovering { marker(owned: owned != nil) } }
                     .overlay(alignment: .topLeading) { badgeLabel }
             }
-            // Seen and Wishlist right on the poster: a sibling of the link, so clicks reach them.
-            .overlay(alignment: .bottomTrailing) {
+            // Seen, Wishlist and Not for Me down the poster's top right, clear of the scores along
+            // its bottom (1.11.4, Alex: they sat on top of each other): a sibling of the link, so
+            // clicks reach them.
+            .overlay(alignment: .topTrailing) {
                 if hovering { quickActions(owned: owned != nil) }
             }
             .scaleEffect(hovering ? 1.03 : 1)
@@ -603,7 +609,7 @@ struct DiscoverCard: View {
     private func quickActions(owned: Bool) -> some View {
         let seen = model.isSeen(film.id)
         let wished = model.isWishlisted(film.id)
-        return HStack(spacing: 6) {
+        return VStack(spacing: 6) {
             HoverAction(symbol: seen ? "eye.fill" : "eye", isOn: seen, onColor: Theme.brand,
                         help: seen ? "Seen" : "Mark as seen") { model.toggleSeen(film.id) }
             if !owned {
@@ -615,7 +621,7 @@ struct DiscoverCard: View {
                 }
             }
         }
-        .padding(8)
+        .padding(7)
         .transition(.opacity)
     }
 

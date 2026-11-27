@@ -304,6 +304,20 @@ enum ScreenRenderer {
                 if let path = film.posterPath { _ = await ImageStore.shared.image(path, .poster) }
             }
         }
+        // Cards from outside the library under the pointer, at Explore's row width (1.11.4): the
+        // scores along the bottom, the buttons down the top right.
+        let hovered = Array(model.exploreFilms(.newAtHome, mood: nil).prefix(4))
+        for film in hovered { model.scores.want(film.id) }
+        for _ in 0..<40 where hovered.contains(where: { model.scores.ratings[$0.id] == nil }) { try? await Task.sleep(for: .milliseconds(250)) }
+        log("scores for hovered cards: \(hovered.filter { model.scores.ratings[$0.id] != nil }.count) of \(hovered.count)")
+        render(HStack(alignment: .top, spacing: 18) {
+                    ForEach(hovered, id: \.id) { film in
+                        DiscoverCard(film: PreviewFilm(film), width: 146, offersNotForMe: true, onPreview: { _ in }, drawnHovered: true)
+                    }
+                }
+                .padding(32)
+                .background(Theme.background),
+               model: model, scale: 2, to: output.appendingPathComponent("discover-hover.png"))
         render(VStack(alignment: .leading, spacing: 38) {
                     ForEach(NewReleasesView.lists, id: \.self) { list in DiscoverRow(list: list) { _ in } }
                 }
