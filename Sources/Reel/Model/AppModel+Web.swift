@@ -119,13 +119,25 @@ extension AppModel {
         guard hasToken else { return (nil, nil) }
         let client = TMDBClient(token: token)
         let omdb = omdbClient
+        // The IMDb id from Wikidata, when the card's scores came in: OMDb is asked at the same
+        // time as TMDB instead of after it (1.11.4: a clicked film was slow to show its ratings).
+        let knownIMDb = scores.imdbIDs[id]
         let task = Task { () -> (details: TMDBMovieDetails?, ratings: ExternalRatings?) in
+            let early: Task<ExternalRatings?, Never>? = knownIMDb.flatMap { imdbID in
+                omdb.map { omdb in Task { try? await omdb.ratings(imdbID: imdbID) } }
+            }
             let details = try? await client.previewDetails(id: id)
             var ratings: ExternalRatings?
-            if let imdbID = details?.imdbID, let omdb { ratings = try? await omdb.ratings(imdbID: imdbID) }
-            // Rotten Tomatoes from Wikidata, as OMDb no longer sends it (1.11.2).
-            if ratings?.rottenTomatoes == nil, let imdbID = details?.imdbID, !imdbID.isEmpty,
-               let score = await self.tomatometers([imdbID])[imdbID] {
+            if let early {
+                ratings = await early.value
+            } else if let imdbID = details?.imdbID, let omdb {
+                ratings = try? await omdb.ratings(imdbID: imdbID)
+            }
+            // Rotten Tomatoes: the card's (Wikidata), else asked by IMDb id (OMDb no longer sends it).
+            if ratings?.rottenTomatoes == nil, let known = self.scores.ratings[id]?.rottenTomatoes {
+                ratings = ExternalRatings.merged(ExternalRatings(rottenTomatoes: known), over: ratings)
+            } else if ratings?.rottenTomatoes == nil, let imdbID = details?.imdbID ?? knownIMDb, !imdbID.isEmpty,
+                      let score = await self.tomatometers([imdbID])[imdbID] {
                 ratings = ExternalRatings.merged(ExternalRatings(rottenTomatoes: score), over: ratings)
             }
             return (details, ratings)
@@ -134,6 +146,7 @@ extension AppModel {
         let result = await task.value
         previewTasks[id] = nil
         previewCache[id] = result
+        scores.keep(result.ratings, for: id)
         return result
     }
 

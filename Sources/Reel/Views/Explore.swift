@@ -528,6 +528,17 @@ struct DiscoverCard: View {
         VStack(alignment: .leading, spacing: 7) {
             opening(owned) {
                 Poster(path: film.posterPath, title: film.title, cornerRadius: 12)
+                    .overlay(alignment: .bottom) {
+                        // The scores under the pointer, as on your own posters (1.11.4).
+                        if hovering {
+                            Group {
+                                if let owned { PosterHoverRatings(film: owned.main, runtime: owned.runtime) }
+                                else { DiscoverHoverRatings(id: film.id, tmdbVote: film.voteAverage) }
+                            }
+                            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 12, bottomTrailingRadius: 12, style: .continuous))
+                            .transition(.opacity)
+                        }
+                    }
                     .overlay(alignment: .topTrailing) { marker(owned: owned != nil) }
                     .overlay(alignment: .topLeading) { badgeLabel }
             }
@@ -558,6 +569,8 @@ struct DiscoverCard: View {
             }
         }
         .frame(width: width)
+        // Its scores, asked with the rest of the row as it appears (shown under the pointer).
+        .onAppear { if owned == nil { model.scores.want(film.id) } }
         .scrollAwareHover($hovering)
     }
 
@@ -773,6 +786,7 @@ struct FilmPreview: View {
         }
         .frame(width: 600)
         .task {
+            model.scores.want(film.id)
             let info = await model.previewInfo(for: film.id)
             details = info.details
             ratings = info.ratings
@@ -805,7 +819,8 @@ struct FilmPreview: View {
 
     private var info: some View {
         VStack(alignment: .leading, spacing: 16) {
-            RatingStrip(ratings: ratings, tmdbVote: film.voteAverage ?? details?.voteAverage)
+            // What's known at once (see `ScoreBook`), then OMDb's answer.
+            RatingStrip(ratings: ratings ?? model.scores.ratings[film.id], tmdbVote: film.voteAverage ?? details?.voteAverage)
                 .font(.system(size: 13))
             if let note = film.note, !note.isEmpty {
                 Text(note).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.brand)

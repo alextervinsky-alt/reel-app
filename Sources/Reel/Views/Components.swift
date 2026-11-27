@@ -249,9 +249,22 @@ struct RatingBadge: View {
 /// stay: a little smaller, or on two rows on the smallest posters.
 struct PosterRatings: View {
     @Environment(\.ratingScale) private var scale
-    let film: FilmEntry
+    let ratings: ExternalRatings?
+    let tmdbVote: Double?
     var spacing: CGFloat = 8
     var keepsAll = false
+
+    init(film: FilmEntry, spacing: CGFloat = 8, keepsAll: Bool = false) {
+        self.init(ratings: film.ratings, tmdbVote: film.tmdb?.voteAverage, spacing: spacing, keepsAll: keepsAll)
+    }
+
+    /// A film outside the library (1.11.4).
+    init(ratings: ExternalRatings?, tmdbVote: Double?, spacing: CGFloat = 8, keepsAll: Bool = false) {
+        self.ratings = ratings
+        self.tmdbVote = tmdbVote
+        self.spacing = spacing
+        self.keepsAll = keepsAll
+    }
 
     private struct Score: Identifiable {
         let tag: String
@@ -263,11 +276,11 @@ struct PosterRatings: View {
 
     /// Whether there's anything to show (otherwise whatever it stands in for stays).
     static func has(_ film: FilmEntry) -> Bool {
-        !scores(film).isEmpty
+        !scores(film.ratings, tmdbVote: film.tmdb?.voteAverage).isEmpty
     }
 
     var body: some View {
-        let all = Self.scores(film)
+        let all = Self.scores(ratings, tmdbVote: tmdbVote)
         if !all.isEmpty {
             ViewThatFits(in: .horizontal) {
                 line(all)
@@ -293,8 +306,7 @@ struct PosterRatings: View {
         }
     }
 
-    private static func scores(_ film: FilmEntry) -> [Score] {
-        let r = film.ratings
+    private static func scores(_ r: ExternalRatings?, tmdbVote: Double?) -> [Score] {
         var all: [Score] = []
         if let imdb = r?.imdb {
             all.append(Score(tag: "IMDb", value: Format.rating(imdb), background: RatingStrip.imdbYellow, foreground: .black))
@@ -305,7 +317,7 @@ struct PosterRatings: View {
         if let mc = r?.metacritic {
             all.append(Score(tag: "MC", value: "\(mc)", background: RatingStrip.metacriticColor(mc), foreground: .white))
         }
-        if all.isEmpty, let vote = film.tmdb?.voteAverage, vote > 0 {
+        if all.isEmpty, let vote = tmdbVote, vote > 0 {
             all.append(Score(tag: "TMDB", value: Format.rating(vote), background: Color(red: 0.01, green: 0.71, blue: 0.89),
                              foreground: .black))
         }

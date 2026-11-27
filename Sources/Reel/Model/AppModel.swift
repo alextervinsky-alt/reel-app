@@ -40,6 +40,8 @@ final class AppModel {
     var groupingFixes = GroupingFixes()
     /// IMDb rankings, award lists and sets for the Lists hub.
     let lists: ListsStore
+    /// Scores of films outside the library (1.11.4, see `ScoreBook`).
+    let scores: ScoreBook
     let folder: ReelFolder
 
     /// False until Library.json is read (the window shows nothing, and no drive is scanned, until then).
@@ -333,6 +335,7 @@ final class AppModel {
         let rendering = ScreenRenderer.isRequested
         folder = rendering ? ScreenRenderer.folder : ReelFolder.standard
         lists = ListsStore(folder: folder.listData)
+        scores = ScoreBook(lists: lists)
         // Nothing in Reel uses the system web cache; keep it in memory so no cache folder appears.
         URLCache.shared = URLCache(memoryCapacity: 2_000_000, diskCapacity: 0)
         if !rendering { StorageMigration.run(into: folder) }

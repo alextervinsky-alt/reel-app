@@ -159,6 +159,26 @@ struct PosterHoverRatings: View {
     }
 }
 
+/// The scores of a film outside the library over the bottom of its poster, under the pointer
+/// (1.11.4): Wikidata's and IMDb's, as soon as the card appeared (see `ScoreBook`); TMDB's vote
+/// until they're in.
+struct DiscoverHoverRatings: View {
+    @Environment(AppModel.self) private var model
+    let id: Int
+    let tmdbVote: Double?
+
+    var body: some View {
+        PosterRatings(ratings: model.scores.ratings[id], tmdbVote: tmdbVote, spacing: 7, keepsAll: true)
+            .environment(\.ratingScale, 0.85)
+            .foregroundStyle(Color.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.top, 34)
+            .padding(.bottom, 10)
+            .background(LinearGradient(colors: [Color.black.opacity(0), Color.black.opacity(0.88)], startPoint: .top, endPoint: .bottom))
+    }
+}
+
 /// A card outside the library grid tracks the pointer and has a menu of its own.
 private struct OwnPointer<Menu: View>: ViewModifier {
     let on: Bool

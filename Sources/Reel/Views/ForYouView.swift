@@ -157,7 +157,7 @@ struct ForYouCard: View {
         let film = pick.film
         let cached = model.previewCache[film.id]
         let details = self.details ?? cached.flatMap { $0.details }
-        let ratings = self.ratings ?? cached.flatMap { $0.ratings }
+        let ratings = self.ratings ?? cached.flatMap { $0.ratings } ?? model.scores.ratings[film.id]
         HStack(alignment: .top, spacing: 24) {
             Button { onPreview(film) } label: {
                 FocusedBackdrop(path: film.backdropPath ?? details?.backdropPath)
@@ -234,6 +234,7 @@ struct ForYouCard: View {
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Theme.panel))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hairline))
         .task(id: film.id) {
+            model.scores.want(film.id)
             let info = await model.previewInfo(for: film.id)
             self.details = info.details
             self.ratings = info.ratings

@@ -35,7 +35,9 @@ final class ListsStore {
     private(set) var acclaimed: [Int: [ListFilm]] = [:]
     private(set) var acclaimedLoading: Set<Int> = []
 
-    @ObservationIgnored private var imdbFilms: [IMDbFilm] = []
+    @ObservationIgnored private var imdbFilms: [IMDbFilm] = [] { didSet { imdbIndex = nil } }
+    /// IMDb's films by IMDb id, made on first use (`imdbFilm(_:)`).
+    @ObservationIgnored private var imdbIndex: [String: IMDbFilm]?
     @ObservationIgnored private var imdbLists: [FilmListKind: [ListFilm]] = [:]
     /// The saved copy's format (`IMDbRatingsFile.version`), once it's read.
     @ObservationIgnored private var imdbFormat = IMDbRatingsFile.currentVersion
@@ -325,6 +327,17 @@ final class ListsStore {
                 group.addTask { await self.loadAward(award) }
             }
         }
+    }
+
+    /// A film's IMDb rating and votes from IMDb's own files, once they're in (nil before the first
+    /// download): for the scores of films outside the library (1.11.4).
+    func imdbFilm(_ id: String) async -> IMDbFilm? {
+        await prepare()
+        await loadIMDbFilms()
+        if imdbIndex == nil, !imdbFilms.isEmpty {
+            imdbIndex = Dictionary(imdbFilms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        }
+        return imdbIndex?[id]
     }
 
     private func loadIMDbFilms() async {

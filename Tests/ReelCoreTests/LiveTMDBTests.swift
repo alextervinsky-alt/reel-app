@@ -73,6 +73,21 @@ final class LiveTMDBTests: XCTestCase {
         XCTAssertTrue(scores.values.allSatisfy { (0...100).contains($0) })
     }
 
+    /// Scores of films outside the library by TMDB id (1.11.4): IMDb id, Tomatometer, Metascore.
+    func testWikidataScoresByTMDB() async throws {
+        guard ProcessInfo.processInfo.environment["TMDB_TOKEN"]?.isEmpty == false else { throw XCTSkip("live job only") }
+        let ids = [680, 27205, 603, 157336, 496243, 872585, 545611, 1064213]
+        let start = Date()
+        let films = try await WikidataScores.scores(tmdbIDs: ids)
+        let seconds = Date().timeIntervalSince(start)
+        print("::notice::Wikidata scores by TMDB id in \(String(format: "%.1f", seconds)) s: " + ids.map { id in
+            let f = films[id]
+            return "\(id) \(f?.imdbID ?? "-") RT \(f?.rottenTomatoes.map { "\($0)%" } ?? "-") MC \(f?.metacritic.map(String.init) ?? "-")"
+        }.joined(separator: "; "))
+        XCTAssertGreaterThanOrEqual(films.values.filter { $0.imdbID != nil }.count, 7)
+        XCTAssertGreaterThanOrEqual(films.values.filter { $0.rottenTomatoes != nil }.count, 6)
+    }
+
     func testExploreLists() async throws {
         guard let token = ProcessInfo.processInfo.environment["TMDB_TOKEN"], !token.isEmpty else {
             throw XCTSkip("TMDB_TOKEN not set")

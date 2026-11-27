@@ -7,6 +7,7 @@ Apple Silicon, macOS 15 or later.
 ## What's new in 1.11.4
 
 - **A film page in three tabs:** Overview now has what people say (the verdict, the scores, the critics' consensus, what people like and don't) under the story, and Behind the Film no longer opens on frames from the film.
+- **Scores under the pointer everywhere.** Films outside your library (Explore, New Releases, For You, Lists, Wishlist) show IMDb, Rotten Tomatoes and Metacritic on hover, as your own posters do: asked of Wikidata for a whole row at once as it appears, with IMDb's rating from its own files. A preview shows them at once, and asks OMDb at the same time as TMDB.
 - **Rotten Tomatoes for every film,** not just yours: previews in Explore, For You, New Releases and the Wishlist, and the critics' scores behind Most Acclaimed, take the Tomatometer from Wikidata when OMDb has none (one query for many films, each film asked once a session).
 
 ## What's new in 1.11.3

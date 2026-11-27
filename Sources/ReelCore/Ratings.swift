@@ -86,19 +86,101 @@ public enum WikidataScores {
         return best.mapValues(\.score)
     }
 
+    /// What Wikidata knows of a film by its TMDB id: its IMDb id, Tomatometer and Metascore (1.11.4:
+    /// films outside the library show their scores under the pointer, without OMDb's one request
+    /// per film).
+    public struct FilmScores: Equatable, Sendable {
+        public var imdbID: String?
+        public var rottenTomatoes: Int?
+        public var metacritic: Int?
+
+        public init(imdbID: String? = nil, rottenTomatoes: Int? = nil, metacritic: Int? = nil) {
+            self.imdbID = imdbID
+            self.rottenTomatoes = rottenTomatoes
+            self.metacritic = metacritic
+        }
+    }
+
+    static let rottenTomatoesItem = "Q105584", tomatometer = "Q108403393", metacriticItem = "Q150248"
+
+    public static func query(tmdbIDs: [Int]) -> String {
+        let values = tmdbIDs.filter { $0 > 0 }.map { "\"\($0)\"" }
+        return """
+        SELECT ?tmdb ?imdb ?score ?by ?method ?date WHERE {
+          VALUES ?tmdb { \(values.joined(separator: " ")) }
+          ?film wdt:P4947 ?tmdb .
+          OPTIONAL { ?film wdt:P345 ?imdb }
+          OPTIONAL {
+            ?film p:P444 ?st . ?st ps:P444 ?score ; pq:P447 ?by ; wikibase:rank ?rank .
+            FILTER(?by = wd:\(rottenTomatoesItem) || ?by = wd:\(metacriticItem))
+            FILTER(?rank != wikibase:DeprecatedRank)
+            OPTIONAL { ?st pq:P459 ?method }
+            OPTIONAL { ?st pq:P585 ?date }
+          }
+        }
+        """
+    }
+
+    /// TMDB id → IMDb id, the latest Tomatometer ("92%", determined as the Tomatometer) and the
+    /// latest Metascore ("84/100", or a plain number up to 100; a user score out of 10 isn't one).
+    public static func parseByTMDB(_ data: Data) -> [Int: FilmScores] {
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: data) else { return [:] }
+        var films: [Int: FilmScores] = [:]
+        var dates: [String: String] = [:]
+        for row in answer.results.bindings {
+            guard let tmdb = row["tmdb"]?.value.flatMap({ Int($0) }) else { continue }
+            var film = films[tmdb] ?? FilmScores()
+            if film.imdbID == nil, let imdb = row["imdb"]?.value, imdb.hasPrefix("tt") { film.imdbID = imdb }
+            if let text = row["score"]?.value, let by = row["by"]?.value {
+                let date = row["date"]?.value ?? ""
+                let trimmed = text.trimmingCharacters(in: .whitespaces)
+                if by.hasSuffix("/" + rottenTomatoesItem), row["method"]?.value.hasSuffix("/" + tomatometer) == true,
+                   let score = Int(trimmed.replacingOccurrences(of: "%", with: "")), (0...100).contains(score),
+                   dates["rt\(tmdb)"].map({ $0 < date }) ?? true {
+                    film.rottenTomatoes = score
+                    dates["rt\(tmdb)"] = date
+                }
+                if by.hasSuffix("/" + metacriticItem) {
+                    let parts = trimmed.split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
+                    if let first = parts.first, let score = Int(first), (0...100).contains(score), parts.count == 1 || parts[1] == "100",
+                       dates["mc\(tmdb)"].map({ $0 < date }) ?? true {
+                        film.metacritic = score
+                        dates["mc\(tmdb)"] = date
+                    }
+                }
+            }
+            films[tmdb] = film
+        }
+        return films
+    }
+
+    public static func scores(tmdbIDs: [Int], session: URLSession = TMDBClient.sharedSession) async throws -> [Int: FilmScores] {
+        var found: [Int: FilmScores] = [:]
+        for start in stride(from: 0, to: tmdbIDs.count, by: batch) {
+            let ids = Array(tmdbIDs[start..<min(start + batch, tmdbIDs.count)])
+            guard let data = try await ask(query(tmdbIDs: ids), session: session) else { continue }
+            found.merge(parseByTMDB(data)) { _, new in new }
+        }
+        return found
+    }
+
+    static func ask(_ query: String, session: URLSession) async throws -> Data? {
+        var components = URLComponents(string: endpoint)!
+        components.queryItems = [URLQueryItem(name: "query", value: query), URLQueryItem(name: "format", value: "json")]
+        var request = URLRequest(url: components.url!)
+        request.setValue("application/sparql-results+json", forHTTPHeaderField: "Accept")
+        // Wikidata asks every client to say what it is.
+        request.setValue("Reel/1.11 (personal macOS film library app)", forHTTPHeaderField: "User-Agent")
+        ActivityCount.request(request.url)
+        let (data, response) = try await session.data(for: request)
+        return (response as? HTTPURLResponse)?.statusCode == 200 ? data : nil
+    }
+
     public static func rottenTomatoes(imdbIDs: [String], session: URLSession = TMDBClient.sharedSession) async throws -> [String: Int] {
         var found: [String: Int] = [:]
         for start in stride(from: 0, to: imdbIDs.count, by: batch) {
             let ids = Array(imdbIDs[start..<min(start + batch, imdbIDs.count)])
-            var components = URLComponents(string: endpoint)!
-            components.queryItems = [URLQueryItem(name: "query", value: query(imdbIDs: ids)), URLQueryItem(name: "format", value: "json")]
-            var request = URLRequest(url: components.url!)
-            request.setValue("application/sparql-results+json", forHTTPHeaderField: "Accept")
-            // Wikidata asks every client to say what it is.
-            request.setValue("Reel/1.11 (personal macOS film library app)", forHTTPHeaderField: "User-Agent")
-            ActivityCount.request(request.url)
-            let (data, response) = try await session.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { continue }
+            guard let data = try await ask(query(imdbIDs: ids), session: session) else { continue }
             found.merge(parse(data)) { _, new in new }
         }
         return found
